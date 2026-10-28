@@ -163,6 +163,7 @@ export type DemoState = {
   workOrders: WorkOrder[];
   transfers: Transfer[];
   ratings: Rating[];
+  setup?: { bank?: string; invited: string[]; importedRows: number; completed: boolean };
   notifications: Notification[];
   audit: AuditEntry[];
 };

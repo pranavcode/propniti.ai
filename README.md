@@ -13,6 +13,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sig
 
 | Use case | In the app |
 | --- | --- |
+| AI-native onboarding | New managers import their portfolio from an AppFolio, Buildium, Yardi or spreadsheet rent-roll export (CSV/TSV): AI matches the columns, every row is checked (missing fields, bad rent or dates, duplicates) before import. Or paste free text and AI turns it into rows. Then connect a bank (simulated) and invite owners and vendors. Samples in `public/samples/` |
 | Run more properties per manager | One dashboard: portfolio stats, alerts with one-click actions, live agent activity |
 | Vendor work-order automation | The agent compares invoice line items, totals and job photos with the PO; the manager approves or sends it back; the vendor sees the payout and 1099 status |
 | Track critical events | Overdue rent and lease renewals become alerts; nudges go out on each person's preferred channel |
@@ -95,6 +96,7 @@ src/
     mockAi.ts          rule-based invoice validation and assistant answers
     ledger.ts          trust-account transfers, settlement, owner statements, payouts
     ratings.ts         rating summaries, one-per-job rule, low-rating alerts
+    importer.ts        rent-roll import: CSV parsing, column matching, row checks, merge
     requests.ts        input validation for the public API routes
     guard.ts           per-IP rate limiting for the AI routes
     platform/          host-specific services (Workers AI, rate limiter) with a no-op default

@@ -149,7 +149,7 @@ function AlertRow({ href, tone, title, detail, children }: { href?: string; tone
 function Properties() {
   const { state } = useDemo();
   return (
-    <Card title="Properties">
+    <Card title="Properties" action={<Link href="/onboarding" className="text-[13px] font-medium text-[#6F5337] underline underline-offset-4">Import tenancies</Link>}>
       <Table
         head={["Property", "Type", "Units", "Occupancy", "Owner", "Open work orders"]}
         rows={state.properties.map((p) => [

@@ -148,15 +148,15 @@ export function TenantView() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (issue.trim()) {
+          if (issue.trim().length >= 5) {
             act.reportIssue(me, issue.trim());
             setIssue("");
           }
         }}
         className="flex gap-2"
       >
-        <input value={issue} onChange={(e) => setIssue(e.target.value)} placeholder="e.g. Kitchen sink is leaking" className="min-w-0 flex-1 rounded-full border-0 bg-white/70 px-4 py-2 text-sm ring-1 ring-inset ring-[#1C1917]/12" />
-        <Button type="submit">Submit</Button>
+        <input value={issue} onChange={(e) => setIssue(e.target.value)} maxLength={200} aria-label="Describe the issue" placeholder="e.g. Kitchen sink is leaking" className="min-w-0 flex-1 rounded-full border-0 bg-white/70 px-4 py-2 text-sm ring-1 ring-inset ring-[#1C1917]/12" />
+        <Button type="submit" disabled={issue.trim().length < 5}>Submit</Button>
       </form>
       <div className="mt-4">
         <Table head={["ID", "Issue", "Status"]} rows={myJobs.map((w) => [w.id, w.title, <Badge key="s" tone={statusTone(w.status)}>{w.status}</Badge>])} empty="No requests yet." />
@@ -298,6 +298,11 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
   const [invoiceNumber, setInvoiceNumber] = useState<string | undefined>(wo.submission?.invoiceNumber);
   const canSubmit = wo.status === "In progress" || wo.status === "Changes requested";
   const total = items.reduce((a, i) => a + i.amount, 0);
+  const invoiceProblems = [
+    ...(items.some((i) => !i.description.trim()) ? ["Every line needs a description"] : []),
+    ...(items.some((i) => !Number.isFinite(i.amount) || i.amount < 0) ? ["Amounts must be zero or more"] : []),
+    ...(total <= 0 ? ["The invoice total must be more than $0"] : []),
+  ];
 
   return (
     <Card title={wo.title} action={<span className="flex items-center gap-2"><span className="text-xs font-medium tabular-nums tracking-[0.08em] text-[#78716C]">{wo.id}</span><Badge tone={statusTone(wo.status)}>{wo.status}</Badge></span>}>
@@ -316,7 +321,7 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
             {items.map((it, i) => (
               <div key={i} className="flex gap-2">
                 <input value={it.description} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} className="min-w-0 flex-1 rounded-xl border-0 bg-white/70 px-3 py-1.5 ring-1 ring-inset ring-[#1C1917]/12" />
-                <input type="number" value={it.amount} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, amount: Number(e.target.value) } : x)))} className="w-28 rounded-xl border-0 bg-white/70 px-3 py-1.5 text-right ring-1 ring-inset ring-[#1C1917]/12" />
+                <input type="number" value={Number.isFinite(it.amount) ? it.amount : ""} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, amount: e.target.value === "" ? NaN : Number(e.target.value) } : x)))} min={0} step="0.01" aria-label={`Amount for line ${i + 1}`} className="w-28 rounded-xl border-0 bg-white/70 px-3 py-1.5 text-right ring-1 ring-inset ring-[#1C1917]/12" />
               </div>
             ))}
             <Button variant="secondary" onClick={() => setItems([...items, { description: "Extra item", amount: 0 }])}>Add line</Button>
@@ -324,9 +329,15 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
               <span className="text-xs text-[#78716C]">Photos (one description per line — demo upload)</span>
               <textarea value={photos} onChange={(e) => setPhotos(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border-0 bg-white/70 px-3 py-1.5 ring-1 ring-inset ring-[#1C1917]/12" placeholder="Before: …&#10;After: …" />
             </label>
+            {invoiceProblems.length > 0 && <p className="text-sm text-[#8E4327]" role="alert">{invoiceProblems.join(" · ")}</p>}
             <div className="flex items-center justify-between">
               <span className="font-semibold">Total {money(total)}</span>
-              <Button onClick={() => act.submitInvoice(wo.id, items, photos.split("\n").map((p) => p.trim()).filter(Boolean), invoiceNumber)}>Submit invoice</Button>
+              <Button
+                disabled={invoiceProblems.length > 0}
+                onClick={() => act.submitInvoice(wo.id, items.map((i) => ({ ...i, description: i.description.trim() })), photos.split("\n").map((p) => p.trim()).filter(Boolean), invoiceNumber)}
+              >
+                Submit invoice
+              </Button>
             </div>
           </div>
         ) : wo.submission ? (

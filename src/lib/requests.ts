@@ -56,3 +56,10 @@ export async function parseBody<T extends z.ZodType>(request: Request, schema: T
   if (!parsed.success) return Response.json({ error: "Invalid request", issues: parsed.error.issues.slice(0, 5) }, { status: 400 });
   return parsed.data;
 }
+
+export const ImportMapRequest = z.object({
+  headers: z.array(z.string().max(120)).min(1).max(60),
+  samples: z.array(z.array(z.string().max(300)).max(60)).max(5),
+});
+
+export const ImportParseRequest = z.object({ text: z.string().trim().min(1).max(20_000) });

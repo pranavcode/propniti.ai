@@ -1,0 +1,7 @@
+Property,Unit,Tenant,Status,Rent,Lease From,Lease To,Email,Phone Number,Property Address
+Maple Court Apartments,101,Daniel Ortiz,Current,"$1,425.00",02/01/2026,01/31/2027,dortiz@example.com,(512) 555-0301,"55 Maple Ct, Austin, TX"
+Maple Court Apartments,102,Grace Liu,Current,"$1,395.00",11/15/2025,11/30/2026,grace.liu@example.com,(512) 555-0302,"55 Maple Ct, Austin, TX"
+Maple Court Apartments,201,"Okafor, Chinedu",Current,"$1,510.00",06/01/2026,05/31/2027,chinedu.o@example.com,(512) 555-0303,"55 Maple Ct, Austin, TX"
+Maple Court Apartments,202,Sara Whitfield,Notice,"$1,480.00",08/01/2025,12/05/2026,sara.w@example.com,(512) 555-0304,"55 Maple Ct, Austin, TX"
+Cedar Plaza Retail,Suite A,Bloom Floral Co.,Current,"$3,200.00",03/01/2025,02/28/2028,hello@bloomfloral.example,(512) 555-0310,"900 Cedar Plaza, Austin, TX"
+Cedar Plaza Retail,Suite B,Pixel Repair LLC,Current,"$2,850.00",09/01/2026,08/31/2029,ops@pixelrepair.example,(512) 555-0311,"900 Cedar Plaza, Austin, TX"

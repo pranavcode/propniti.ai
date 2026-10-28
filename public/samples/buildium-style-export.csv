@@ -1,0 +1,6 @@
+Rental name,Unit number,Resident name,Resident email,Rent amount,Lease start date,Lease end date,Owner name
+Lakeview Townhomes,T1,Hannah Pierce,hpierce@example.com,2100,2026-01-01,2026-12-31,Morgan Ellis
+Lakeview Townhomes,T2,Ravi Shah,ravi.shah@example,2150,2026-04-01,2027-03-31,Morgan Ellis
+Lakeview Townhomes,T3,Lena Park,lena.park@example.com,two thousand,2026-05-01,2027-04-30,Morgan Ellis
+Lakeview Townhomes,T3,Lena Park,lena.park@example.com,2075,2026-05-01,2027-04-30,Morgan Ellis
+Lakeview Townhomes,T4,,,1995,2026-07-01,2027-06-30,Morgan Ellis

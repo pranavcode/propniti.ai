@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { TRUST, addTransfer, disburse, settle } from "./ledger";
 import { money } from "./mockAi";
+import { importPortfolio, type ImportRow } from "./importer";
 import { upsertRating } from "./ratings";
 import { DEMO_TODAY, seed } from "./seed";
 import type { DemoState, ExtractedInvoice, LineItem, RatingSubject, ValidationResult, WorkOrder } from "./types";
@@ -25,6 +26,10 @@ type Actions = {
   reportIssue: (tenantId: string, text: string) => void;
   disburseOwner: (ownerId: string) => void;
   rate: (by: string, subject: RatingSubject, stars: number, comment: string, ref?: string) => void;
+  importRows: (rows: ImportRow[], source: string) => void;
+  connectBank: (bank: string) => void;
+  invite: (emails: string[]) => void;
+  finishOnboarding: () => void;
   reset: () => void;
 };
 
@@ -208,6 +213,20 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           const next = { ...s, ratings: upsertRating(s.ratings, { id: uid("r"), by, subject, stars, comment: comment.trim(), ref, ts: stamp() }) };
           return log(next, rater?.name ?? "User", "Rating", `${stars}★ for ${subject.kind} ${subject.id}${ref ? ` (${ref})` : ""}`);
         }),
+      importRows: (rows, source) =>
+        update((s) => {
+          const { state, counts } = importPortfolio(s, rows);
+          const setup = { invited: [], completed: false, ...s.setup, importedRows: (s.setup?.importedRows ?? 0) + counts.tenancies };
+          return log({ ...state, setup }, "Maya Patel", "Portfolio imported", `${counts.tenancies} tenancies, ${counts.properties} new properties from ${source}`);
+        }),
+      connectBank: (bank) =>
+        update((s) => log({ ...s, setup: { invited: [], importedRows: 0, completed: false, ...s.setup, bank } }, "Maya Patel", "Bank connected", `${bank} trust account linked (simulated Plaid)`)),
+      invite: (emails) =>
+        update((s) => {
+          const setup = { importedRows: 0, completed: false, ...s.setup, invited: [...(s.setup?.invited ?? []), ...emails] };
+          return log({ ...s, setup }, "Maya Patel", "Invites sent", `${emails.length} invite(s): ${emails.join(", ")}`);
+        }),
+      finishOnboarding: () => update((s) => ({ ...s, setup: { invited: [], importedRows: 0, ...s.setup, completed: true } })),
       reset: () => update(() => seed()),
     };
   }, [update]);

@@ -27,7 +27,7 @@ export default function Signup() {
         onSubmit={(e) => {
           e.preventDefault();
           setBusy(true);
-          router.push(`/${role}`);
+          router.push(role === "pm" ? "/onboarding" : `/${role}`);
         }}
       >
         <fieldset>
