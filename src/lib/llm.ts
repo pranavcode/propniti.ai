@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { getPlatform } from "@/lib/platform";
-import { checkInvoice, mockAsk, mockValidate } from "./mockAi";
+import { checkInvoice, expectedMentions, mockAsk, mockValidate, portfolioFacts } from "./mockAi";
 import { DEMO_TODAY } from "./seed";
 import type { AiSource, AskResult, DemoState, ExtractResult, ValidationResult, WorkOrder } from "./types";
 
@@ -192,11 +192,18 @@ export async function askAssistant(question: string, state: DemoState): Promise<
       provider,
       AskSchema,
       "assistant_answer",
-      `You are a property manager's assistant. Today is ${DEMO_TODAY}. Answer only from the portfolio JSON provided; ` +
-        "if it doesn't hold the answer, say so. Be brief and specific (names, units, amounts, dates). " +
+      `You are a property manager's assistant. Today is ${DEMO_TODAY}. Answer only from the data provided; ` +
+        "if it doesn't hold the answer, say so. The computed facts are complete: when the question is about them, " +
+        "list every item, not a sample. Be brief and specific (names, units, amounts, dates). " +
         "Suggest up to 3 next actions the agent could take.",
-      `Portfolio data:\n${JSON.stringify(state)}\n\nQuestion: ${question}`,
+      `Computed facts:\n${JSON.stringify(portfolioFacts(state))}\n\nFull portfolio data:\n${JSON.stringify(state)}\n\nQuestion: ${question}`,
     );
+    // Completeness check: if the model left out anyone the facts say belongs in the answer,
+    // show the computed answer instead of a partial one.
+    const missing = expectedMentions(question, state).filter((m) => !out.answer.toLowerCase().includes(m.toLowerCase()));
+    if (missing.length) {
+      return { ...fallback, source: "mock", note: `The ${provider.label} answer left out ${missing.join(", ")}, so the computed answer is shown.` };
+    }
     return { answer: out.answer, suggestedActions: out.suggested_actions, source: provider.source };
   } catch (err) {
     return { ...fallback, source: "mock", note: failNote(provider, err) };

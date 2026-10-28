@@ -108,3 +108,31 @@ export function checkInvoice(inv: ExtractedInvoice): { label: string; ok: boolea
     { label: "Legible enough to trust (confidence 70%+)", ok: inv.confidence >= 0.7 },
   ];
 }
+
+// Facts computed from the data, given to the model so it doesn't have to find them itself.
+export function portfolioFacts(s: DemoState) {
+  const name = (id: string) => s.users.find((u) => u.id === id)?.name ?? id;
+  const prop = (id: string) => s.properties.find((p) => p.id === id)?.name ?? id;
+  return {
+    overdueRent: s.invoices
+      .filter((i) => i.status === "Overdue")
+      .flatMap((i) => {
+        const t = s.tenancies.find((x) => x.id === i.tenancyId);
+        return t ? [{ tenant: name(t.tenantId), home: `${prop(t.propertyId)} ${t.unit}`, amount: i.amount, due: i.due, invoice: i.id }] : [];
+      }),
+    leasesUpForRenewal: s.tenancies
+      .filter((t) => t.status === "Renewal due")
+      .map((t) => ({ tenant: name(t.tenantId), home: `${prop(t.propertyId)} ${t.unit}`, leaseEnds: t.leaseEnd, rent: t.rent })),
+    openWorkOrders: s.workOrders.filter((w) => w.status !== "Paid").map((w) => ({ id: w.id, job: w.title, property: prop(w.propertyId), status: w.status })),
+  };
+}
+
+// What a complete answer must mention for the question types the facts cover.
+export function expectedMentions(question: string, s: DemoState): string[] {
+  const q = question.toLowerCase();
+  const f = portfolioFacts(s);
+  if (/(late|overdue|owe|arrear|unpaid)/.test(q)) return f.overdueRent.map((r) => r.tenant);
+  if (/(lease|renew|expir)/.test(q)) return f.leasesUpForRenewal.map((r) => r.tenant);
+  if (/(work order|repair|maintenance)/.test(q)) return f.openWorkOrders.map((w) => w.id);
+  return [];
+}

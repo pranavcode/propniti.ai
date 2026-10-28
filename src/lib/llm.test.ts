@@ -97,8 +97,15 @@ describe("validateWorkOrder", () => {
 describe("askAssistant", () => {
   it("maps the model's answer and falls back on failure", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "k");
-    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Two tenants.", suggested_actions: ["Nudge"] } });
-    expect(await askAssistant("who is late?", seed())).toEqual({ answer: "Two tenants.", suggestedActions: ["Nudge"], source: "anthropic" });
+    const answer = "Marcus Lee and Aisha Khan are overdue.";
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer, suggested_actions: ["Nudge"] } });
+    expect(await askAssistant("who is late?", seed())).toEqual({ answer, suggestedActions: ["Nudge"], source: "anthropic" });
+
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Marcus Lee is late.", suggested_actions: [] } });
+    const partial = await askAssistant("who is late on rent?", seed());
+    expect(partial.source).toBe("mock");
+    expect(partial.note).toMatch(/left out Aisha Khan/);
+    expect(partial.answer).toContain("Aisha Khan");
 
     anthropicParse.mockRejectedValueOnce(new Error("timeout"));
     const r = await askAssistant("who is late?", seed());
