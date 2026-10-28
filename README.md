@@ -15,6 +15,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sig
 | Vendor work-order automation | The agent compares invoice line items, totals and job photos with the PO; the manager approves or sends it back; the vendor sees the payout and 1099 status |
 | Track critical events | Overdue rent and lease renewals become alerts; nudges go out on each person's preferred channel |
 | Keep the agent honest | Every result has a confidence score and evidence; a rule-based policy check stops the model approving what the rules flag; every payment needs a human |
+| Read invoices with AI | Upload a photo or PDF of an invoice; a vision model extracts vendor, line items and total, checks it adds up, and fills the submission. Sample invoices are in `public/samples/` |
 | Ask your portfolio | "Who is late on rent?" — answers from your data plus suggested next actions |
 | A view per role | Property manager, owner, tenant, maintenance, vendor and admin |
 
@@ -47,7 +48,9 @@ AI features run on **built-in mock results by default** — no key required. To 
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Use Claude (default model `claude-opus-5`, override with `ANTHROPIC_MODEL`) |
 | `OPENAI_API_KEY` | Use OpenAI (default model `gpt-5.5`, override with `OPENAI_MODEL`) |
-| `AI_PROVIDER` | Force `anthropic`, `openai` or `mock` when more than one key is set |
+| `AI_PROVIDER` | Force `anthropic`, `openai`, `workers-ai` or `mock` |
+
+On Cloudflare, **Workers AI** (`@cf/meta/llama-4-scout-17b-16e-instruct`, a vision model) is used automatically when no API key is set — no key or extra setup needed. It reads uploaded invoices, validates them against purchase orders and answers assistant questions.
 
 If a key is set but the call fails (bad key, timeout, refusal), the app falls back to the mock result and says so next to it. The rule-based checks in [`src/lib/mockAi.ts`](src/lib/mockAi.ts) double as the policy check on real model output ([`src/lib/llm.ts`](src/lib/llm.ts)).
 
@@ -87,6 +90,8 @@ src/
     llm.ts             provider selection, real model calls, mock fallback, policy check
     mockAi.ts          rule-based invoice validation and assistant answers
     requests.ts        input validation for the public API routes
+    guard.ts           per-IP rate limiting for the AI routes
+    platform/          host-specific services (Workers AI, rate limiter) with a no-op default
     store.tsx          demo state and actions (browser-local)
     seed.ts            sample portfolio
 ```
@@ -96,7 +101,11 @@ src/
 - Sign-in and sign-up are screens only: no accounts are created and nothing is sent.
 - Payments, SMS, WhatsApp, email and voice are simulated; messages land in each persona's in-app inbox.
 - Demo data lives in each browser; there is no shared database.
-- The AI routes validate and size-cap input but are not rate limited. Add rate limiting before putting a paid API key behind a public deployment.
+- The AI routes are validated, size-capped and rate limited per IP; see [docs/security-review.md](docs/security-review.md) for the full review and known gaps.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability and [docs/security-review.md](docs/security-review.md) for the current review.
 
 ## Contributing
 

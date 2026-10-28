@@ -91,7 +91,26 @@ export type AuditEntry = {
   detail: string;
 };
 
-export type AiSource = "anthropic" | "openai" | "mock";
+export type AiSource = "anthropic" | "openai" | "workers-ai" | "mock";
+
+export type ExtractedInvoice = {
+  isInvoice: boolean;
+  vendor: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  lineItems: LineItem[];
+  total: number;
+  currency: string;
+  confidence: number;
+  issues: string[];
+};
+
+export type ExtractResult = {
+  invoice?: ExtractedInvoice;
+  checks: { label: string; ok: boolean }[];
+  source: AiSource;
+  note?: string;
+};
 
 export type ValidationResult = {
   decision: "approve" | "review" | "reject";

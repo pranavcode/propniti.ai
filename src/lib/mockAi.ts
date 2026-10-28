@@ -1,4 +1,4 @@
-import type { AskResult, DemoState, ValidationResult, WorkOrder } from "./types";
+import type { AskResult, DemoState, ExtractedInvoice, ValidationResult, WorkOrder } from "./types";
 
 export const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n % 1 ? 2 : 0 });
@@ -24,10 +24,11 @@ export function mockValidate(wo: WorkOrder): Omit<ValidationResult, "source" | "
     matched.push(`Invoice total ${money(sub.total)} is under PO total ${money(wo.po.total)}`);
   }
 
-  // Line items match on the text before the first comma ("Labor, 4 h @ $90" -> "Labor"),
+  // Line items match on the text before the first comma, ignoring case ("Labor, 4 h @ $90" -> "labor"),
   // so a changed quantity shows up as a price mismatch rather than an extra item.
   for (const item of sub.items) {
-    const onPo = wo.po.items.find((p) => p.description.split(",")[0] === item.description.split(",")[0]);
+    const key = (d: string) => d.split(",")[0].trim().toLowerCase();
+    const onPo = wo.po.items.find((p) => key(p.description) === key(item.description));
     if (!onPo) issues.push(`Not on PO: ${item.description} (${money(item.amount)})`);
     else if (onPo.amount !== item.amount) issues.push(`${item.description}: ${money(item.amount)} billed vs ${money(onPo.amount)} on PO`);
     else matched.push(`${item.description}: ${money(item.amount)} matches PO`);
@@ -94,4 +95,16 @@ export function mockAsk(question: string, s: DemoState): Omit<AskResult, "source
     answer: `Portfolio: ${s.properties.length} properties, ${occupied}/${units} units occupied (${units ? Math.round((occupied / units) * 100) : 0}%). Try asking "who is late on rent?", "which leases are up for renewal?" or "what work orders are open?"`,
     suggestedActions: [],
   };
+}
+
+// Internal consistency of an invoice read from a document, before it is compared with any PO.
+export function checkInvoice(inv: ExtractedInvoice): { label: string; ok: boolean }[] {
+  const sum = inv.lineItems.reduce((a, i) => a + i.amount, 0);
+  return [
+    { label: "Document is an invoice or bill", ok: inv.isInvoice },
+    { label: "Vendor and invoice number present", ok: !!inv.vendor.trim() && !!inv.invoiceNumber.trim() },
+    { label: "Line items add up to the stated total", ok: inv.lineItems.length > 0 && Math.abs(sum - inv.total) <= Math.max(1, inv.total * 0.01) },
+    { label: "Amounts in US dollars", ok: /^(usd|\$)?$/i.test(inv.currency.trim()) },
+    { label: "Legible enough to trust (confidence 70%+)", ok: inv.confidence >= 0.7 },
+  ];
 }

@@ -101,7 +101,7 @@ export function Table({ head, rows, empty = "Nothing here yet." }: { head: strin
 export function SourceNote({ source, note }: { source: string; note?: string }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <Badge tone={source === "mock" ? "amber" : "blue"}>{source === "mock" ? "Mock AI" : source === "anthropic" ? "Claude" : "OpenAI"}</Badge>
+      <Badge tone={source === "mock" ? "amber" : "blue"}>{{ mock: "Mock AI", anthropic: "Claude", openai: "OpenAI", "workers-ai": "Workers AI" }[source] ?? source}</Badge>
       {note && <span className="text-[#8A6420]">{note}</span>}
     </div>
   );

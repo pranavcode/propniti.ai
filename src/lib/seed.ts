@@ -89,7 +89,7 @@ export function seed(): DemoState {
       },
       {
         id: "WO-1046", propertyId: "p3", unit: "All suites", title: "Quarterly HVAC service, 4 rooftop units", vendorId: "v1", estimatedHours: 6, status: "In progress",
-        po: { number: "PO-5530", items: [{ description: "Service, 4 units @ $150", amount: 600 }], total: 600, photosRequired: 2 },
+        po: { number: "PO-5530", items: [{ description: "Quarterly rooftop unit service, 4 units @ $150", amount: 600 }], total: 600, photosRequired: 2 },
       },
       {
         id: "WO-1044", propertyId: "p1", unit: "Hallway, floor 2", title: "Replace two hallway light fixtures", vendorId: "in-house", assigneeId: "u-m1", estimatedHours: 2, status: "Assigned",

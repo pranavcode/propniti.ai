@@ -3,9 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { money } from "./mockAi";
 import { DEMO_TODAY, seed } from "./seed";
-import type { DemoState, LineItem, ValidationResult, WorkOrder } from "./types";
+import type { DemoState, ExtractedInvoice, LineItem, ValidationResult, WorkOrder } from "./types";
 
-const KEY = "pm-ai-demo-v1";
+// Bump when the seed changes so saved demos from older versions are replaced.
+const KEY = "propniti-demo-v2";
 
 const stamp = () => `${DEMO_TODAY} ${new Date().toTimeString().slice(0, 5)}`;
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
@@ -16,7 +17,8 @@ type Actions = {
   setValidation: (woId: string, v: ValidationResult) => void;
   approveWorkOrder: (woId: string) => void;
   requestChanges: (woId: string) => void;
-  submitInvoice: (woId: string, items: LineItem[], photos: string[]) => void;
+  submitInvoice: (woId: string, items: LineItem[], photos: string[], invoiceNumber?: string) => void;
+  attachDocument: (woId: string, inv: ExtractedInvoice) => void;
   updateJob: (woId: string, status: WorkOrder["status"], photo?: string) => void;
   reportIssue: (tenantId: string, text: string) => void;
   reset: () => void;
@@ -116,16 +118,27 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           if (vendor) next = notify(next, vendor.userId, `${woId} needs changes before payment: ${issues}. Please resubmit.`);
           return log(next, "Maya Patel", "Changes requested", `${woId} sent back to ${vendor?.company}`);
         }),
-      submitInvoice: (woId, items, photos) =>
+      submitInvoice: (woId, items, photos, invoiceNumber) =>
         update((s) => {
           const total = items.reduce((a, i) => a + i.amount, 0);
           const wo = s.workOrders.find((w) => w.id === woId)!;
           const next = setWo(s, woId, {
             status: "Submitted",
             validation: undefined,
-            submission: { invoiceNumber: `INV-${Math.floor(Math.random() * 9000) + 1000}`, items, total, photos },
+            submission: { invoiceNumber: invoiceNumber || `INV-${Math.floor(Math.random() * 9000) + 1000}`, items, total, photos },
           });
           return log(notify(next, "u-pm", `${vendorOf(s, wo)?.company} submitted an invoice for ${woId}: ${money(total)}.`), vendorOf(s, wo)?.company ?? "Vendor", "Invoice submitted", `${woId}: ${money(total)}, ${photos.length} photo(s)`);
+        }),
+      // A paper/PDF invoice read by AI replaces the submitted figures; validation must run again.
+      attachDocument: (woId, inv) =>
+        update((s) => {
+          const wo = s.workOrders.find((w) => w.id === woId)!;
+          const next = setWo(s, woId, {
+            status: "Submitted",
+            validation: undefined,
+            submission: { invoiceNumber: inv.invoiceNumber || "scanned", items: inv.lineItems, total: inv.total, photos: wo.submission?.photos ?? [] },
+          });
+          return log(next, "Agent", "Invoice document read", `${woId}: ${inv.vendor || "vendor"} invoice ${inv.invoiceNumber || ""}, total ${money(inv.total)}`);
         }),
       updateJob: (woId, status, photo) =>
         update((s) => {

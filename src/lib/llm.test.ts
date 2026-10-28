@@ -6,8 +6,10 @@ const anthropicParse = vi.fn();
 const openaiParse = vi.fn();
 vi.mock("@anthropic-ai/sdk", () => ({ default: class { messages = { parse: anthropicParse }; } }));
 vi.mock("openai", () => ({ default: class { responses = { parse: openaiParse }; } }));
+const platform: { ai?: { run: ReturnType<typeof vi.fn>; toMarkdown: ReturnType<typeof vi.fn> } } = {};
+vi.mock("@/lib/platform", () => ({ getPlatform: () => platform }));
 
-const { askAssistant, configuredProvider, validateWorkOrder } = await import("./llm");
+const { askAssistant, configuredProvider, extractInvoice, validateWorkOrder } = await import("./llm");
 const wo = (id: string) => seed().workOrders.find((w) => w.id === id)!;
 
 beforeEach(() => {
@@ -15,6 +17,7 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 afterEach(() => {
+  delete platform.ai;
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   anthropicParse.mockReset();
@@ -37,6 +40,13 @@ describe("configuredProvider", () => {
     vi.stubEnv("AI_PROVIDER", "mock");
     expect(configuredProvider()).toBeNull();
   });
+
+  it("uses Workers AI on Cloudflare when no API key is set", () => {
+    platform.ai = { run: vi.fn(), toMarkdown: vi.fn() };
+    expect(configuredProvider()?.source).toBe("workers-ai");
+    vi.stubEnv("ANTHROPIC_API_KEY", "a");
+    expect(configuredProvider()?.source).toBe("anthropic");
+  });
 });
 
 describe("validateWorkOrder", () => {
@@ -52,7 +62,8 @@ describe("validateWorkOrder", () => {
     anthropicParse.mockRejectedValue(new Error("401 invalid x-api-key"));
     const r = await validateWorkOrder(wo("WO-1041"));
     expect(r.source).toBe("mock");
-    expect(r.note).toMatch(/Anthropic call failed \(401 invalid x-api-key\)/);
+    expect(r.note).toBe("Real AI API not configured: the Anthropic call failed. Showing mock result.");
+    expect(r.note).not.toContain("401"); // provider details stay in server logs
     expect(r.decision).toBe("approve"); // rule-based result still served
   });
 
@@ -93,5 +104,52 @@ describe("askAssistant", () => {
     const r = await askAssistant("who is late?", seed());
     expect(r.source).toBe("mock");
     expect(r.answer).toContain("Marcus Lee");
+  });
+});
+
+describe("extractInvoice", () => {
+  const png = { mime: "image/png", base64: "iVBORw0KGgo=" };
+  const invoice = {
+    is_invoice: true, vendor: "CoolAir HVAC", invoice_number: "CA-88342", invoice_date: "2026-10-27",
+    line_items: [{ description: "Quarterly rooftop unit service", amount: 600 }], total: 600, currency: "USD", confidence: 0.93, issues: [],
+  };
+
+  it("explains it can't read documents without a real model", async () => {
+    const r = await extractInvoice(png);
+    expect(r.invoice).toBeUndefined();
+    expect(r.note).toMatch(/can't be read/);
+  });
+
+  it("reads an image with Workers AI and passes the consistency checks", async () => {
+    platform.ai = { run: vi.fn().mockResolvedValue({ response: JSON.stringify(invoice) }), toMarkdown: vi.fn() };
+    const r = await extractInvoice(png);
+    expect(r.source).toBe("workers-ai");
+    expect(r.invoice?.total).toBe(600);
+    expect(r.checks.every((c) => c.ok)).toBe(true);
+    const [, input] = platform.ai.run.mock.calls[0];
+    expect(JSON.stringify(input)).toContain("data:image/png;base64,");
+  });
+
+  it("flags a total that doesn't match its line items", async () => {
+    platform.ai = { run: vi.fn().mockResolvedValue({ response: { ...invoice, total: 880 } }), toMarkdown: vi.fn() };
+    const r = await extractInvoice(png);
+    expect(r.checks.find((c) => c.label.includes("add up"))?.ok).toBe(false);
+  });
+
+  it("converts PDFs to text before asking the model", async () => {
+    platform.ai = {
+      run: vi.fn().mockResolvedValue({ response: invoice }),
+      toMarkdown: vi.fn().mockResolvedValue([{ data: "# INVOICE CA-88342 ... Total $600.00" }]),
+    };
+    const r = await extractInvoice({ mime: "application/pdf", base64: btoa("%PDF-1.7") });
+    expect(platform.ai.toMarkdown).toHaveBeenCalled();
+    expect(r.invoice?.invoiceNumber).toBe("CA-88342");
+  });
+
+  it("falls back when the model returns malformed output", async () => {
+    platform.ai = { run: vi.fn().mockResolvedValue({ response: "sorry, I can't" }), toMarkdown: vi.fn() };
+    const r = await extractInvoice(png);
+    expect(r.source).toBe("mock");
+    expect(r.invoice).toBeUndefined();
   });
 });

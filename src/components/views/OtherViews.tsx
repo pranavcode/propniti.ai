@@ -6,6 +6,7 @@ import { PERSONAS } from "@/lib/seed";
 import { useDemo } from "@/lib/store";
 import type { LineItem, WorkOrder } from "@/lib/types";
 import { Shell, useAiMode } from "../Shell";
+import { InvoiceUpload } from "../InvoiceUpload";
 import { Badge, Button, Card, Stat, Table, statusTone } from "../ui";
 import { propName, userName, vendorName } from "@/lib/names";
 
@@ -232,6 +233,7 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
   const { state, act } = useDemo();
   const [items, setItems] = useState<LineItem[]>(wo.submission?.items ?? wo.po.items);
   const [photos, setPhotos] = useState<string>((wo.submission?.photos ?? []).join("\n"));
+  const [invoiceNumber, setInvoiceNumber] = useState<string | undefined>(wo.submission?.invoiceNumber);
   const canSubmit = wo.status === "In progress" || wo.status === "Changes requested";
   const total = items.reduce((a, i) => a + i.amount, 0);
 
@@ -241,7 +243,14 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
         <div className="text-[#57534E]">{propName(state, wo.propertyId)} {wo.unit} · PO {wo.po.number} for {money(wo.po.total)} · {wo.po.photosRequired} photo(s) required</div>
         {canSubmit ? (
           <div className="space-y-3 rounded-[1.25rem] bg-[#F6F2EA] p-4 ring-1 ring-[#1C1917]/[0.06]">
-            <div className="text-xs font-semibold text-[#78716C]">Your invoice</div>
+            <InvoiceUpload
+              applyLabel="Fill my invoice from this"
+              onApply={(inv) => {
+                setItems(inv.lineItems);
+                setInvoiceNumber(inv.invoiceNumber || undefined);
+              }}
+            />
+            <div className="text-xs font-semibold text-[#78716C]">Your invoice{invoiceNumber ? ` ${invoiceNumber}` : ""}</div>
             {items.map((it, i) => (
               <div key={i} className="flex gap-2">
                 <input value={it.description} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} className="min-w-0 flex-1 rounded-xl border-0 bg-white/70 px-3 py-1.5 ring-1 ring-inset ring-[#1C1917]/12" />
@@ -255,7 +264,7 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
             </label>
             <div className="flex items-center justify-between">
               <span className="font-semibold">Total {money(total)}</span>
-              <Button onClick={() => act.submitInvoice(wo.id, items, photos.split("\n").map((p) => p.trim()).filter(Boolean))}>Submit invoice</Button>
+              <Button onClick={() => act.submitInvoice(wo.id, items, photos.split("\n").map((p) => p.trim()).filter(Boolean), invoiceNumber)}>Submit invoice</Button>
             </div>
           </div>
         ) : wo.submission ? (

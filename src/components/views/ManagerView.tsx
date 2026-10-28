@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { money } from "@/lib/mockAi";
 import { useDemo } from "@/lib/store";
 import { propName, userName, vendorName } from "@/lib/names";
 import type { AskResult, ValidationResult, WorkOrder } from "@/lib/types";
+import { InvoiceUpload } from "../InvoiceUpload";
 import { Shell } from "../Shell";
 import { Badge, Button, Card, SourceNote, Stat, Table, ValidationCard, statusTone } from "../ui";
 
@@ -57,7 +59,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
               const t = state.tenancies.find((x) => x.id === i.tenancyId)!;
               const name = userName(state, t.tenantId);
               return (
-                <AlertRow key={i.id} tone="red" title={`Rent overdue: ${name}`} detail={`${propName(state, t.propertyId)} ${t.unit} · ${money(i.amount)} due ${i.due}`}>
+                <AlertRow key={i.id} href={`/pm/tenancies/${t.id}`} tone="red" title={`Rent overdue: ${name}`} detail={`${propName(state, t.propertyId)} ${t.unit} · ${money(i.amount)} due ${i.due}`}>
                   <Button variant="secondary" onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, your rent of ${money(i.amount)} was due ${i.due}. Pay in the app, or reply PLAN to set up a payment plan.`, "Maya Patel")}>
                     Nudge tenant
                   </Button>
@@ -67,7 +69,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
             {renewals.map((t) => {
               const name = userName(state, t.tenantId);
               return (
-                <AlertRow key={t.id} tone="amber" title={`Lease renewal: ${name}`} detail={`${propName(state, t.propertyId)} ${t.unit} · ends ${t.leaseEnd}`}>
+                <AlertRow key={t.id} href={`/pm/tenancies/${t.id}`} tone="amber" title={`Lease renewal: ${name}`} detail={`${propName(state, t.propertyId)} ${t.unit} · ends ${t.leaseEnd}`}>
                   <Button variant="secondary" onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, your lease ends ${t.leaseEnd}. We'd love you to stay — renew for 12 months at ${money(t.rent)}/month? Reply YES.`, "Maya Patel")}>
                     Send renewal offer
                   </Button>
@@ -75,7 +77,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
               );
             })}
             {submitted.map((w) => (
-              <AlertRow key={w.id} tone="blue" title={`Invoice to validate: ${w.id}`} detail={`${vendorName(state, w.vendorId)} · ${w.title} · ${money(w.submission?.total ?? 0)} vs PO ${money(w.po.total)}`}>
+              <AlertRow key={w.id} href={`/pm/work-orders/${w.id}`} tone="blue" title={`Invoice to validate: ${w.id}`} detail={`${vendorName(state, w.vendorId)} · ${w.title} · ${money(w.submission?.total ?? 0)} vs PO ${money(w.po.total)}`}>
                 <Button variant="secondary" onClick={() => openWo(w.id)}>Review</Button>
               </AlertRow>
             ))}
@@ -88,7 +90,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
               <li key={a.id} className="text-sm">
                 <div className="text-xs text-[#78716C]">{a.ts} · {a.actor}</div>
                 <div className="font-medium text-[#292524]">{a.action}</div>
-                <div className="text-[#57534E]">{a.detail}</div>
+                <div className="text-[#57534E]">{linkWorkOrders(a.detail)}</div>
               </li>
             ))}
           </ul>
@@ -98,13 +100,24 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
   );
 }
 
-function AlertRow({ tone, title, detail, children }: { tone: "red" | "amber" | "blue"; title: string; detail: string; children: React.ReactNode }) {
+// Turns "WO-1041" mentions in activity text into links to the work order page.
+function linkWorkOrders(text: string) {
+  return text.split(/(WO-\d+)/).map((part, i) =>
+    /^WO-\d+$/.test(part) ? (
+      <Link key={i} href={`/pm/work-orders/${part}`} className="font-medium text-[#6F5337] underline underline-offset-4">{part}</Link>
+    ) : (
+      part
+    ),
+  );
+}
+
+function AlertRow({ href, tone, title, detail, children }: { href: string; tone: "red" | "amber" | "blue"; title: string; detail: string; children: React.ReactNode }) {
   const dot = { red: "bg-[#A4502F]", amber: "bg-[#B7862F]", blue: "bg-[#8A6A45]" }[tone];
   return (
     <li className="flex flex-wrap items-center gap-3 py-3">
       <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-[#1C1917]">{title}</div>
+        <Link href={href} className="text-sm font-medium text-[#1C1917] underline-offset-4 hover:underline">{title}</Link>
         <div className="text-xs text-[#78716C]">{detail}</div>
       </div>
       {children}
@@ -119,7 +132,7 @@ function Properties() {
       <Table
         head={["Property", "Type", "Units", "Occupancy", "Owner", "Open work orders"]}
         rows={state.properties.map((p) => [
-          <div key="n"><div className="font-medium text-[#1C1917]">{p.name}</div><div className="text-xs text-[#78716C]">{p.address}</div></div>,
+          <div key="n"><Link href={`/pm/properties/${p.id}`} className="font-medium text-[#1C1917] underline-offset-4 hover:underline">{p.name}</Link><div className="text-xs text-[#78716C]">{p.address}</div></div>,
           p.type,
           p.units,
           `${p.occupied}/${p.units}`,
@@ -142,7 +155,7 @@ function Tenants() {
           const open = inv.find((i) => i.status === "Overdue") ?? inv.at(-1)!;
           const name = userName(state, t.tenantId);
           return [
-            <span key="n" className="font-medium text-[#1C1917]">{name}</span>,
+            <Link key="n" href={`/pm/tenancies/${t.id}`} className="font-medium text-[#1C1917] underline-offset-4 hover:underline">{name}</Link>,
             `${propName(state, t.propertyId)} ${t.unit}`,
             money(t.rent),
             t.leaseEnd,
@@ -186,7 +199,7 @@ function WorkOrders({ selected, onSelect }: { selected: string; onSelect: (id: s
   );
 }
 
-function WorkOrderDetail({ wo }: { wo: WorkOrder }) {
+export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: boolean }) {
   const { state, act } = useDemo();
   const [busy, setBusy] = useState(false);
 
@@ -208,7 +221,10 @@ function WorkOrderDetail({ wo }: { wo: WorkOrder }) {
       action={<span className="flex items-center gap-2"><span className="text-xs font-medium tabular-nums tracking-[0.08em] text-[#78716C]">{wo.id}</span><Badge tone={statusTone(wo.status)}>{wo.status}</Badge></span>}
     >
       <div className="space-y-4 text-sm">
-        <div className="text-[#57534E]">{propName(state, wo.propertyId)} {wo.unit} · {vendorName(state, wo.vendorId)} · est. {wo.estimatedHours} h</div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[#57534E]">
+          <span>{propName(state, wo.propertyId)} {wo.unit} · {vendorName(state, wo.vendorId)} · est. {wo.estimatedHours} h</span>
+          {!full && <Link href={`/pm/work-orders/${wo.id}`} className="text-[13px] font-medium text-[#6F5337] underline underline-offset-4">Open full page →</Link>}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-[1.25rem] bg-[#F6F2EA] p-4 ring-1 ring-[#1C1917]/[0.06]">
             <div className="text-xs font-semibold text-[#78716C]">Purchase order {wo.po.number}</div>
@@ -237,6 +253,9 @@ function WorkOrderDetail({ wo }: { wo: WorkOrder }) {
             )}
           </div>
         </div>
+        {full && wo.vendorId !== "in-house" && ["In progress", "Submitted", "Changes requested"].includes(wo.status) && (
+          <InvoiceUpload applyLabel="Attach to this work order" onApply={(inv) => act.attachDocument(wo.id, inv)} />
+        )}
         {wo.status === "Submitted" && (
           <Button onClick={validate} disabled={busy}>{busy ? "Validating…" : v ? "Re-run AI validation" : "Run AI validation"}</Button>
         )}

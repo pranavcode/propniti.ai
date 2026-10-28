@@ -26,11 +26,15 @@ export function Shell({
   tabs,
   tab: controlledTab,
   onTab,
+  heading,
+  back,
 }: {
   persona: PersonaId;
   tabs: Tab[];
   tab?: string;
   onTab?: (id: string) => void;
+  heading?: React.ReactNode;
+  back?: { href: string; label: string };
 }) {
   const { state } = useDemo();
   const [ownTab, setOwnTab] = useState(tabs[0].id);
@@ -87,11 +91,21 @@ export function Shell({
       <main className="mx-auto max-w-6xl space-y-6 px-4 pb-28 pt-10">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
+            {back && (
+              <Link href={back.href} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-[#57534E] hover:text-[#1C1917]">
+                <span aria-hidden>←</span> {back.label}
+              </Link>
+            )}
+            <div />
             <span className="inline-flex rounded-full bg-[#1C1917]/[0.04] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-[#57534E] ring-1 ring-[#1C1917]/[0.06]">
               {PERSONAS[persona].label}
             </span>
             <h1 className="mt-4 font-serif text-5xl leading-none tracking-[-0.01em]">
-              Welcome, <em className="text-[#8A6A45]">{me.name.split(" ")[0]}.</em>
+              {heading ?? (
+                <>
+                  Welcome, <em className="text-[#8A6A45]">{me.name.split(" ")[0]}.</em>
+                </>
+              )}
             </h1>
           </div>
           {tabs.length > 1 && (
