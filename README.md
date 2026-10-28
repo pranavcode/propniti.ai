@@ -101,3 +101,7 @@ src/
 ## Contributing
 
 Issues and pull requests are welcome. Please run `npm run lint && npm test` before opening a PR.
+
+## License
+
+[GNU Affero General Public License v3.0](LICENSE). You can use, modify and self-host Propniti; if you run a modified version as a network service, you must publish your changes under the same license.
