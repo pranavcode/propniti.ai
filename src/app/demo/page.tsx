@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Arrow, Bezel, Eyebrow, ease } from "@/components/marketing/parts";
 import { PERSONAS } from "@/lib/seed";
 import type { PersonaId } from "@/lib/types";
+import { Wordmark } from "@/components/Logo";
 
 const names: Record<PersonaId, string> = {
   pm: "Maya Patel",
@@ -17,7 +18,7 @@ export default function Demo() {
     <main className="min-h-[100dvh] bg-[#F6F2EA] px-4 pb-24 pt-8 text-[#1C1917]">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between">
-          <Link href="/" className="font-serif text-3xl leading-none tracking-tight">Propniti</Link>
+          <Link href="/" aria-label="Propniti home"><Wordmark size={32} text="text-3xl" /></Link>
           <Link href="/login" className="rounded-full px-4 py-2 text-[13px] text-[#44403C] ring-1 ring-[#1C1917]/10 hover:bg-white/60">Sign in</Link>
         </div>
         <div className="mt-20 max-w-3xl">

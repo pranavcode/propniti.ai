@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { Bezel } from "./parts";
+import { Wordmark } from "@/components/Logo";
 
 export function AuthShell({ title, subtitle, children, footer }: { title: React.ReactNode; subtitle: string; children: React.ReactNode; footer: React.ReactNode }) {
   return (
     <div className="grid min-h-[100dvh] grid-cols-1 bg-[#F6F2EA] text-[#1C1917] lg:grid-cols-2">
       <div className="flex flex-col px-6 py-8 sm:px-12">
-        <Link href="/" className="font-serif text-3xl leading-none tracking-tight">Propniti</Link>
+        <Link href="/" aria-label="Propniti home"><Wordmark size={32} text="text-3xl" /></Link>
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-12">
           <h1 className="font-serif text-5xl leading-[1] tracking-[-0.01em]">{title}</h1>
           <p className="mt-3 text-[15px] text-[#57534E]">{subtitle}</p>

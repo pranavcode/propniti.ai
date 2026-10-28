@@ -9,6 +9,13 @@ const serif = Instrument_Serif({ variable: "--font-instrument-serif", subsets: [
 export const metadata: Metadata = {
   title: "Propniti — AI property operations",
   description: "AI agents that chase rent, validate vendor invoices and keep every lease on track, with a human approving every payment.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

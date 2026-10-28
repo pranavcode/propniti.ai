@@ -7,6 +7,7 @@ import { useDemo } from "@/lib/store";
 import type { PersonaId } from "@/lib/types";
 import { DemoSwitcher } from "./DemoSwitcher";
 import { Badge } from "./ui";
+import { Wordmark } from "@/components/Logo";
 
 export type Tab = { id: string; label: string; content: React.ReactNode };
 
@@ -52,7 +53,7 @@ export function Shell({
       {inboxOpen && <button aria-label="Close inbox" className="fixed inset-0 z-[5] cursor-default" onClick={() => setInboxOpen(false)} />}
       <header className="sticky top-0 z-10 px-4 pt-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 rounded-full bg-[#FBF9F4]/80 p-1.5 pl-5 shadow-[0_8px_40px_-12px_rgba(28,25,23,0.18)] ring-1 ring-[#1C1917]/[0.06] backdrop-blur-xl">
-          <Link href="/demo" className="font-serif text-2xl leading-none tracking-tight">Propniti</Link>
+          <Link href="/demo" aria-label="Propniti"><Wordmark size={28} /></Link>
           <span className="ml-2 hidden sm:inline">
             <Badge tone={mode?.source === "mock" || !mode ? "amber" : "green"}>AI: {mode ? mode.label : "…"}</Badge>
           </span>

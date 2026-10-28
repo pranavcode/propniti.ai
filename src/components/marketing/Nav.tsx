@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Wordmark } from "@/components/Logo";
 
 const links = [
   ["Product", "#product"],
@@ -18,7 +19,7 @@ export function Nav() {
     <>
       <header className="fixed inset-x-0 top-4 z-30 flex justify-center px-4">
         <div className="flex w-full max-w-3xl items-center gap-2 rounded-full bg-[#FBF9F4]/75 p-1.5 pl-5 shadow-[0_8px_40px_-12px_rgba(28,25,23,0.18)] ring-1 ring-[#1C1917]/[0.06] backdrop-blur-xl">
-          <Link href="/" className="font-serif text-2xl leading-none tracking-tight text-[#1C1917]">Propniti</Link>
+          <Link href="/" className="text-[#1C1917]" aria-label="Propniti home"><Wordmark size={28} /></Link>
           <nav className="ml-6 hidden items-center gap-6 text-[13px] text-[#57534E] md:flex">
             {links.map(([l, h]) => (
               <a key={h} href={h} className={`transition-colors duration-500 ${ease} hover:text-[#1C1917]`}>{l}</a>

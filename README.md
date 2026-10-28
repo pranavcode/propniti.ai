@@ -1,3 +1,5 @@
+<img src="public/favicon.svg" alt="Propniti logo" width="72" height="72">
+
 # Propniti
 
 **AI property operations for US multifamily and commercial portfolios.**
