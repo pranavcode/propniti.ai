@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { money } from "@/lib/mockAi";
+import { ownerStatement } from "@/lib/ledger";
+import { sameSubject } from "@/lib/ratings";
 import { PERSONAS } from "@/lib/seed";
 import { useDemo } from "@/lib/store";
 import type { LineItem, WorkOrder } from "@/lib/types";
 import { Shell, useAiMode } from "../Shell";
 import { InvoiceUpload } from "../InvoiceUpload";
+import { RateBox, RatingBadge, Stars } from "../Ratings";
 import { Badge, Button, Card, Stat, Table, statusTone } from "../ui";
 import { propName, userName, vendorName } from "@/lib/names";
 
@@ -18,7 +21,8 @@ export function OwnerView() {
   const tenancies = state.tenancies.filter((t) => ids.includes(t.propertyId));
   const units = props.reduce((a, p) => a + p.units, 0);
   const occupied = props.reduce((a, p) => a + p.occupied, 0);
-  const payouts = state.payments.filter((p) => p.kind === "Owner payout" && p.payee === userName(state, me));
+  const payouts = state.transfers.filter((t) => t.kind === "Owner payout" && t.to.id === me);
+  const st = ownerStatement(state, me);
   const wos = state.workOrders.filter((w) => ids.includes(w.propertyId));
 
   const overview = (
@@ -26,13 +30,13 @@ export function OwnerView() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Your properties" value={String(props.length)} sub={`${units} units`} />
         <Stat label="Occupancy" value={`${Math.round((occupied / units) * 100)}%`} sub={`${occupied} of ${units}`} />
-        <Stat label="Last payout" value={payouts[0] ? money(payouts[0].amount) : "—"} sub={payouts[0]?.date} />
+        <Stat label="Owed to you" value={money(st.net)} sub="next payout" />
         <Stat label="Open work orders" value={String(wos.filter((w) => w.status !== "Paid").length)} />
       </div>
       <Card title="Your properties">
         <Table
-          head={["Property", "Type", "Occupancy", "Address"]}
-          rows={props.map((p) => [<span key="n" className="font-medium text-[#1C1917]">{p.name}</span>, p.type, `${p.occupied}/${p.units}`, p.address])}
+          head={["Property", "Type", "Occupancy", "Tenant rating", "Address"]}
+          rows={props.map((p) => [<span key="n" className="font-medium text-[#1C1917]">{p.name}</span>, p.type, `${p.occupied}/${p.units}`, <RatingBadge key="r" subject={{ kind: "property", id: p.id }} />, p.address])}
         />
       </Card>
     </>
@@ -55,7 +59,21 @@ export function OwnerView() {
   );
   const statements = (
     <Card title="Payouts">
-      <Table head={["Date", "Amount", "Reference", "Status"]} rows={payouts.map((p) => [p.date, money(p.amount), p.ref, <Badge key="s" tone={statusTone(p.status)}>{p.status}</Badge>])} />
+      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+        {[
+          ["Rent collected", money(st.rent)],
+          ["Management fee (8%)", `− ${money(st.fees)}`],
+          ["Vendor bills", `− ${money(st.vendorBills)}`],
+          ["Owed to you", money(st.net)],
+        ].map(([l, v]) => (
+          <div key={l} className="rounded-2xl bg-[#F6F2EA] p-4 ring-1 ring-[#1C1917]/[0.06]">
+            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#78716C]">{l}</div>
+            <div className="mt-1 text-xl font-medium tabular-nums">{v}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mb-4 text-sm text-[#57534E]">Open statement since your last payout. Your property manager sends it from the trust account by ACH.</p>
+      <Table head={["Date", "Amount", "Reference", "Status"]} rows={payouts.map((p) => [<span key="d" className="whitespace-nowrap tabular-nums">{p.created.slice(0, 10)}</span>, money(p.amount), p.ref, <Badge key="s" tone={statusTone(p.status)}>{p.status}</Badge>])} />
     </Card>
   );
   return (
@@ -86,7 +104,7 @@ export function TenantView() {
         <Stat label="Next payment" value={nextDue ? money(nextDue.amount) : "Paid up"} sub={nextDue ? `due ${nextDue.due}` : undefined} />
         <Stat label="Monthly rent" value={money(t.rent)} />
         <Stat label="Lease ends" value={t.leaseEnd} sub={t.status} />
-        <Stat label="Open requests" value={String(myJobs.filter((w) => w.status !== "Paid").length)} />
+        <Stat label="Open requests" value={String(myJobs.filter((w) => !["Paid", "Approved"].includes(w.status)).length)} />
       </div>
       <Card title="Your tenancy">
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -95,6 +113,12 @@ export function TenantView() {
           <div><dt className="text-[#78716C]">Rent</dt><dd className="font-medium text-[#1C1917]">{money(t.rent)} {t.cadence.toLowerCase()}</dd></div>
           <div><dt className="text-[#78716C]">Status</dt><dd><Badge tone={statusTone(t.status)}>{t.status}</Badge></dd></div>
         </dl>
+      </Card>
+      <Card title="How are we doing?">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <RateBox by={me} subject={{ kind: "pm", id: "u-pm" }} label={`Your property manager, ${userName(state, "u-pm")}`} />
+          <RateBox by={me} subject={{ kind: "property", id: t.propertyId }} label={`Your building, ${propName(state, t.propertyId)}`} />
+        </div>
       </Card>
     </>
   );
@@ -107,10 +131,16 @@ export function TenantView() {
           money(i.amount),
           i.due,
           <Badge key="s" tone={statusTone(i.status)}>{i.status}</Badge>,
-          i.status !== "Paid" ? <Button key="b" onClick={() => act.payInvoice(i.id)}>Pay by bank (ACH)</Button> : "",
+          i.status === "Due" || i.status === "Overdue" ? <Button key="b" onClick={() => act.payInvoice(i.id)}>Pay by bank (ACH)</Button> : i.status === "Processing" ? <span key="p" className="text-xs text-[#78716C]">Clearing…</span> : "",
         ])}
       />
-      <p className="mt-3 text-xs text-[#78716C]">Demo only: no money moves. In production the bank is linked through Plaid and paid by ACH via Stripe.</p>
+      <p className="mt-3 text-xs text-[#78716C]">Simulated: ACH clears in seconds here instead of 1–2 business days, and no money moves. In production the bank is linked through Plaid and paid via Stripe.</p>
+      <h3 className="mb-2 mt-6 font-serif text-xl">Your payments</h3>
+      <Table
+        head={["Date", "Invoice", "Amount", "Status"]}
+        rows={state.transfers.filter((x) => x.kind === "Rent" && x.from.id === me).map((x) => [<span key="d" className="whitespace-nowrap tabular-nums">{x.created.slice(0, 10)}</span>, x.ref, money(x.amount), <Badge key="s" tone={statusTone(x.status)}>{x.status}</Badge>])}
+        empty="No payments yet."
+      />
     </Card>
   );
   const requests = (
@@ -131,6 +161,17 @@ export function TenantView() {
       <div className="mt-4">
         <Table head={["ID", "Issue", "Status"]} rows={myJobs.map((w) => [w.id, w.title, <Badge key="s" tone={statusTone(w.status)}>{w.status}</Badge>])} empty="No requests yet." />
       </div>
+      {myJobs
+        .filter((w) => ["Approved", "Paid"].includes(w.status))
+        .map((w) => {
+          const subject = w.vendorId === "in-house" ? { kind: "maintenance" as const, id: w.assigneeId ?? "u-m1" } : { kind: "vendor" as const, id: w.vendorId };
+          const who = w.vendorId === "in-house" ? userName(state, subject.id) : vendorName(state, w.vendorId);
+          return (
+            <div key={w.id} className="mt-4">
+              <RateBox by={me} subject={subject} refId={w.id} label={`Rate ${who} for ${w.id} · ${w.title}`} />
+            </div>
+          );
+        })}
     </Card>
   );
   return (
@@ -151,8 +192,20 @@ export function MaintenanceView() {
   const jobs = state.workOrders.filter((w) => w.assigneeId === me);
   const [photo, setPhoto] = useState<Record<string, string>>({});
 
+  const mine = state.ratings.filter((r) => sameSubject(r.subject, { kind: "maintenance", id: me }));
   const list = (
     <div className="space-y-4">
+      <Card title="Your rating">
+        <div className="flex flex-wrap items-center gap-4">
+          <RatingBadge subject={{ kind: "maintenance", id: me }} />
+          <span className="text-sm text-[#57534E]">From tenants and your property manager after each job.</span>
+        </div>
+        <ul className="mt-4 space-y-2 text-sm">
+          {mine.slice(0, 3).map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-2"><Stars value={r.stars} size="text-sm" /> “{r.comment || "No comment"}” <span className="text-xs text-[#78716C]">— {userName(state, r.by)}{r.ref ? `, ${r.ref}` : ""}</span></li>
+          ))}
+        </ul>
+      </Card>
       {jobs.map((w) => (
         <Card key={w.id} title={w.title} action={<span className="flex items-center gap-2"><span className="text-xs font-medium tabular-nums tracking-[0.08em] text-[#78716C]">{w.id}</span><Badge tone={statusTone(w.status)}>{w.status}</Badge></span>}>
           <div className="space-y-3 text-sm">
@@ -188,7 +241,8 @@ export function VendorView() {
   const { state } = useDemo();
   const vendor = state.vendors.find((v) => v.userId === PERSONAS.vendor.userId)!;
   const wos = state.workOrders.filter((w) => w.vendorId === vendor.id);
-  const payouts = state.payments.filter((p) => p.kind === "Vendor payout" && p.payee === vendor.company);
+  const payouts = state.transfers.filter((t) => t.kind === "Vendor payout" && t.to.id === vendor.id);
+  const feedback = state.ratings.filter((r) => sameSubject(r.subject, { kind: "vendor", id: vendor.id }));
 
   const orders = (
     <div className="space-y-4">
@@ -203,7 +257,7 @@ export function VendorView() {
         <Stat label="Payout method" value="ACH" sub="via Stripe Connect" />
       </div>
       <Card title="Payouts">
-        <Table head={["Date", "Work order", "Amount", "Status"]} rows={payouts.map((p) => [p.date, p.ref, money(p.amount), <Badge key="s" tone={statusTone(p.status)}>{p.status}</Badge>])} />
+        <Table head={["Date", "Work order", "Amount", "Status"]} rows={payouts.map((p) => [<span key="d" className="whitespace-nowrap tabular-nums">{p.created.slice(0, 10)}</span>, p.ref, money(p.amount), <Badge key="s" tone={statusTone(p.status)}>{p.status}</Badge>])} />
       </Card>
     </>
   );
@@ -214,7 +268,15 @@ export function VendorView() {
         <div><dt className="text-[#78716C]">Trade</dt><dd className="font-medium text-[#1C1917]">{vendor.trade}</dd></div>
         <div><dt className="text-[#78716C]">Contact</dt><dd className="font-medium text-[#1C1917]">{userName(state, vendor.userId)}</dd></div>
         <div><dt className="text-[#78716C]">W-9 on file</dt><dd><Badge tone="green">Yes</Badge></dd></div>
+        <div><dt className="text-[#78716C]">Rating</dt><dd><RatingBadge subject={{ kind: "vendor", id: vendor.id }} /></dd></div>
       </dl>
+      <h3 className="mb-2 mt-6 font-serif text-xl">Feedback</h3>
+      <ul className="space-y-2 text-sm">
+        {feedback.length === 0 && <li className="text-[#78716C]">No feedback yet.</li>}
+        {feedback.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center gap-2"><Stars value={r.stars} size="text-sm" /> “{r.comment || "No comment"}” <span className="text-xs text-[#78716C]">— {userName(state, r.by)}{r.ref ? `, ${r.ref}` : ""}</span></li>
+        ))}
+      </ul>
     </Card>
   );
   return (
@@ -295,7 +357,7 @@ export function AdminView() {
             ["AI provider", <Badge key="a" tone={mode?.source === "mock" ? "amber" : "green"}>{mode?.label ?? "…"}</Badge>, mode?.source === "mock" ? "Set ANTHROPIC_API_KEY or OPENAI_API_KEY to use a real model" : "Live model calls; falls back to mock on any error"],
             ["Scheduled sweep", <Badge key="s" tone="green">Healthy</Badge>, "Every 15 minutes; last run 08:45"],
             ["Messaging (SMS, WhatsApp, voice, email)", <Badge key="m" tone="gray">Simulated</Badge>, "Messages land in each persona's Inbox"],
-            ["Payments", <Badge key="p" tone="gray">Simulated</Badge>, "No money moves in the demo"],
+            ["Payments", <Badge key="p" tone="gray">Simulated</Badge>, "Trust-account ledger; ACH clears in seconds; no money moves"],
           ]}
         />
       </Card>

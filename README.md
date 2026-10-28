@@ -18,6 +18,8 @@ Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sig
 | Track critical events | Overdue rent and lease renewals become alerts; nudges go out on each person's preferred channel |
 | Keep the agent honest | Every result has a confidence score and evidence; a rule-based policy check stops the model approving what the rules flag; every payment needs a human |
 | Read invoices with AI | Upload a photo or PDF of an invoice; a vision model extracts vendor, line items and total, checks it adds up, and fills the submission. Sample invoices are in `public/samples/` |
+| Money through a trust account | Tenant rent clears into the manager's trust account, the 8% management fee is taken automatically, vendor payouts leave on approval, and owners are paid from a statement (rent − fee − vendor bills). Every transfer has an idempotency key and moves Pending → Cleared (simulated ACH, seconds instead of days) |
+| Ratings and feedback | Tenants rate completed jobs, their manager and their building; managers rate vendors and maintenance staff. Averages show on profiles; 1–2 star ratings raise an alert |
 | Ask your portfolio | "Who is late on rent?" — answers from your data plus suggested next actions |
 | A view per role | Property manager, owner, tenant, maintenance, vendor and admin |
 
@@ -91,6 +93,8 @@ src/
   lib/
     llm.ts             provider selection, real model calls, mock fallback, policy check
     mockAi.ts          rule-based invoice validation and assistant answers
+    ledger.ts          trust-account transfers, settlement, owner statements, payouts
+    ratings.ts         rating summaries, one-per-job rule, low-rating alerts
     requests.ts        input validation for the public API routes
     guard.ts           per-IP rate limiting for the AI routes
     platform/          host-specific services (Workers AI, rate limiter) with a no-op default
@@ -101,7 +105,7 @@ src/
 ## Limits of this demo
 
 - Sign-in and sign-up are screens only: no accounts are created and nothing is sent.
-- Payments, SMS, WhatsApp, email and voice are simulated; messages land in each persona's in-app inbox.
+- Payments are a simulated ledger (no money moves); SMS, WhatsApp, email and voice are simulated and land in each persona's in-app inbox.
 - Demo data lives in each browser; there is no shared database.
 - The AI routes are validated, size-capped and rate limited per IP; see [docs/security-review.md](docs/security-review.md) for the full review and known gaps.
 

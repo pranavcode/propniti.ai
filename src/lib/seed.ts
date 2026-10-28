@@ -1,3 +1,4 @@
+import { PM, TRUST, managementFee } from "./ledger";
 import type { DemoState, PersonaId } from "./types";
 
 // Fixed "today" so the mock data reads the same on every visit.
@@ -100,14 +101,33 @@ export function seed(): DemoState {
         po: { number: "PO-5529", items: [{ description: "Labor only", amount: 0 }], total: 0, photosRequired: 1 },
       },
     ],
-    payments: [
-      { id: "pay-1", kind: "Rent", payee: "Jasmine Brooks", amount: 1850, date: "2026-09-30", status: "Received", ref: "INV-2610-01" },
-      { id: "pay-2", kind: "Rent", payee: "Priya Nair", amount: 1950, date: "2026-10-01", status: "Received", ref: "INV-2610-03" },
-      { id: "pay-3", kind: "Rent", payee: "Tom Becker", amount: 1400, date: "2026-10-01", status: "Received", ref: "INV-2610-04" },
-      { id: "pay-4", kind: "Rent", payee: "Northwind Dental (Dr. Kim)", amount: 4200, date: "2026-10-02", status: "Received", ref: "INV-2610-06" },
-      { id: "pay-5", kind: "Owner payout", payee: "Robert Chen", amount: 35200, date: "2026-10-06", status: "Sent", ref: "Sep statement" },
-      { id: "pay-6", kind: "Owner payout", payee: "Linda Alvarez", amount: 21400, date: "2026-10-06", status: "Sent", ref: "Sep statement" },
-      { id: "pay-7", kind: "Vendor payout", payee: "CoolAir HVAC", amount: 1240, date: "2026-09-18", status: "Sent", ref: "WO-1019" },
+    transfers: [
+      // October rent that cleared, with the 8% fee taken from trust.
+      ...([
+        ["INV-2610-01", "u-t1", "Jasmine Brooks", "p1", 1850, "2026-09-30"],
+        ["INV-2610-03", "u-t3", "Priya Nair", "p1", 1950, "2026-10-01"],
+        ["INV-2610-04", "u-t4", "Tom Becker", "p2", 1400, "2026-10-01"],
+        ["INV-2610-06", "u-t6", "Northwind Dental (Dr. Kim)", "p3", 4200, "2026-10-02"],
+      ] as const).flatMap(([inv, tid, tname, pid, amt, date]) => [
+        { id: `tr-${inv}`, key: `rent:${inv}`, kind: "Rent" as const, from: { kind: "tenant" as const, id: tid, name: tname }, to: TRUST, amount: amt, propertyId: pid, ref: inv, status: "Cleared" as const, created: date, cleared: date },
+        { id: `fee-${inv}`, key: `fee:${inv}`, kind: "Management fee" as const, from: TRUST, to: PM, amount: managementFee(amt), propertyId: pid, ref: inv, status: "Cleared" as const, created: date, cleared: date },
+      ]),
+      { id: "tr-sep-v1", key: "vendor:WO-1019", kind: "Vendor payout", from: TRUST, to: { kind: "vendor", id: "v1", name: "CoolAir HVAC" }, amount: 1240, propertyId: "p1", ref: "WO-1019", status: "Cleared", created: "2026-09-18", cleared: "2026-09-19", statement: "sep" },
+      { id: "tr-sep-o1", key: "owner:sep-o1", kind: "Owner payout", from: TRUST, to: { kind: "owner", id: "u-owner1", name: "Robert Chen" }, amount: 35200, propertyId: "p1", ref: "Statement 2026-10-06", status: "Cleared", created: "2026-10-06", cleared: "2026-10-07", statement: "sep" },
+      { id: "tr-sep-o2", key: "owner:sep-o2", kind: "Owner payout", from: TRUST, to: { kind: "owner", id: "u-owner2", name: "Linda Alvarez" }, amount: 21400, propertyId: "p3", ref: "Statement 2026-10-06", status: "Cleared", created: "2026-10-06", cleared: "2026-10-07", statement: "sep" },
+      // Opening balance carried into trust before the demo period.
+      { id: "tr-open", key: "opening", kind: "Rent", from: { kind: "tenant", id: "various", name: "Opening balance (September rent)" }, to: TRUST, amount: 58000, propertyId: "p1", ref: "Opening balance", status: "Cleared", created: "2026-09-30", cleared: "2026-09-30", statement: "sep" },
+    ],
+    ratings: [
+      { id: "r1", by: "u-t1", subject: { kind: "pm", id: "u-pm" }, stars: 5, comment: "Replies the same day, every time.", ts: "2026-10-20 18:02" },
+      { id: "r2", by: "u-t2", subject: { kind: "pm", id: "u-pm" }, stars: 3, comment: "Good, but the parking gate took weeks to fix.", ts: "2026-10-11 09:40" },
+      { id: "r3", by: "u-t1", subject: { kind: "property", id: "p1" }, stars: 5, comment: "Quiet, clean and well kept.", ts: "2026-10-20 18:03" },
+      { id: "r4", by: "u-t3", subject: { kind: "property", id: "p1" }, stars: 4, comment: "Lovely unit; the gym is often closed.", ts: "2026-10-15 12:10" },
+      { id: "r5", by: "u-t6", subject: { kind: "property", id: "p3" }, stars: 4, comment: "Great location for our patients.", ts: "2026-10-03 08:30" },
+      { id: "r6", by: "u-t2", subject: { kind: "maintenance", id: "u-m1" }, stars: 5, comment: "Fixed the leak the same afternoon.", ref: "WO-1033", ts: "2026-10-09 17:45" },
+      { id: "r7", by: "u-t4", subject: { kind: "maintenance", id: "u-m1" }, stars: 4, comment: "Friendly and tidy.", ref: "WO-1036", ts: "2026-09-29 14:20" },
+      { id: "r8", by: "u-pm", subject: { kind: "vendor", id: "v1" }, stars: 5, comment: "On time, invoice matched the PO.", ref: "WO-1019", ts: "2026-09-19 10:00" },
+      { id: "r9", by: "u-pm", subject: { kind: "vendor", id: "v2" }, stars: 2, comment: "Arrived three hours late; added charges not on the PO.", ref: "WO-1031", ts: "2026-10-05 16:15" },
     ],
     notifications: [
       { id: "n1", userId: "u-t2", channel: "SMS", message: "Hi Marcus, your October rent of $1,725 is overdue. Pay in the app or reply HELP.", ts: "2026-10-27 09:00" },

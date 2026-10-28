@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { money } from "@/lib/mockAi";
+import { MANAGEMENT_FEE_RATE, ownerStatement, trustBalance } from "@/lib/ledger";
+import { lowRatings, ratingSummary } from "@/lib/ratings";
 import { useDemo } from "@/lib/store";
 import { propName, userName, vendorName } from "@/lib/names";
-import type { AskResult, ValidationResult, WorkOrder } from "@/lib/types";
+import type { AskResult, DemoState, RatingSubject, ValidationResult, WorkOrder } from "@/lib/types";
 import { InvoiceUpload } from "../InvoiceUpload";
+import { RateBox, RatingBadge, Stars } from "../Ratings";
 import { Shell } from "../Shell";
 import { Badge, Button, Card, SourceNote, Stat, Table, ValidationCard, statusTone } from "../ui";
 
@@ -27,6 +30,8 @@ export function ManagerView() {
         { id: "properties", label: "Properties", content: <Properties /> },
         { id: "tenants", label: "Tenants", content: <Tenants /> },
         { id: "work-orders", label: "Work orders", content: <WorkOrders selected={selectedWo} onSelect={setSelectedWo} /> },
+        { id: "payments", label: "Payments", content: <Payments /> },
+        { id: "ratings", label: "Ratings", content: <Ratings /> },
         { id: "assistant", label: "Assistant", content: <Assistant /> },
       ]}
     />
@@ -43,6 +48,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
   const overdue = state.invoices.filter((i) => i.status === "Overdue");
   const renewals = state.tenancies.filter((t) => t.status === "Renewal due");
   const submitted = state.workOrders.filter((w) => w.status === "Submitted");
+  const low = lowRatings(state.ratings);
 
   return (
     <>
@@ -50,7 +56,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
         <Stat label="Properties" value={String(state.properties.length)} sub={`${units} units`} />
         <Stat label="Occupancy" value={`${Math.round((occupied / units) * 100)}%`} sub={`${occupied} of ${units} units`} />
         <Stat label="October rent collected" value={money(collected)} sub={`of ${money(billed)} billed`} />
-        <Stat label="Needs attention" value={String(overdue.length + renewals.length + submitted.length)} sub="alerts below" />
+        <Stat label="Needs attention" value={String(overdue.length + renewals.length + submitted.length + low.length)} sub="alerts below" />
       </div>
       <div className="grid gap-6 lg:grid-cols-5">
         <Card title="Alerts and quick actions" className="lg:col-span-3">
@@ -81,7 +87,18 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
                 <Button variant="secondary" onClick={() => openWo(w.id)}>Review</Button>
               </AlertRow>
             ))}
-            {overdue.length + renewals.length + submitted.length === 0 && <li className="py-3 text-sm text-[#78716C]">All clear.</li>}
+            {low.map((r) => (
+              <AlertRow
+                key={r.id}
+                href={state.workOrders.some((w) => w.id === r.ref) ? `/pm/work-orders/${r.ref}` : undefined}
+                tone="red"
+                title={`Low rating: ${r.stars}★ for ${subjectName(state, r.subject)}`}
+                detail={`${userName(state, r.by)}${r.ref ? ` · ${r.ref}` : ""} · “${r.comment}”`}
+              >
+                <span />
+              </AlertRow>
+            ))}
+            {overdue.length + renewals.length + submitted.length + low.length === 0 && <li className="py-3 text-sm text-[#78716C]">All clear.</li>}
           </ul>
         </Card>
         <Card title="Agent activity" className="lg:col-span-2">
@@ -111,13 +128,17 @@ function linkWorkOrders(text: string) {
   );
 }
 
-function AlertRow({ href, tone, title, detail, children }: { href: string; tone: "red" | "amber" | "blue"; title: string; detail: string; children: React.ReactNode }) {
+function AlertRow({ href, tone, title, detail, children }: { href?: string; tone: "red" | "amber" | "blue"; title: string; detail: string; children: React.ReactNode }) {
   const dot = { red: "bg-[#A4502F]", amber: "bg-[#B7862F]", blue: "bg-[#8A6A45]" }[tone];
   return (
     <li className="flex flex-wrap items-center gap-3 py-3">
       <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
       <div className="min-w-0 flex-1">
-        <Link href={href} className="text-sm font-medium text-[#1C1917] underline-offset-4 hover:underline">{title}</Link>
+        {href ? (
+          <Link href={href} className="text-sm font-medium text-[#1C1917] underline-offset-4 hover:underline">{title}</Link>
+        ) : (
+          <div className="text-sm font-medium text-[#1C1917]">{title}</div>
+        )}
         <div className="text-xs text-[#78716C]">{detail}</div>
       </div>
       {children}
@@ -229,9 +250,9 @@ export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: bo
           <div className="rounded-[1.25rem] bg-[#F6F2EA] p-4 ring-1 ring-[#1C1917]/[0.06]">
             <div className="text-xs font-semibold text-[#78716C]">Purchase order {wo.po.number}</div>
             <ul className="mt-2 space-y-1">
-              {wo.po.items.map((i) => <li key={i.description} className="flex justify-between gap-2"><span>{i.description}</span><span className="tabular-nums">{money(i.amount)}</span></li>)}
+              {wo.po.items.map((i) => <li key={i.description} className="flex justify-between gap-2"><span>{i.description}</span><span className="whitespace-nowrap tabular-nums">{money(i.amount)}</span></li>)}
             </ul>
-            <div className="mt-2 flex justify-between border-t border-[#1C1917]/[0.06] pt-2 font-semibold"><span>Total</span><span className="tabular-nums">{money(wo.po.total)}</span></div>
+            <div className="mt-2 flex justify-between border-t border-[#1C1917]/[0.06] pt-2 font-semibold"><span>Total</span><span className="whitespace-nowrap tabular-nums">{money(wo.po.total)}</span></div>
             <div className="mt-1 text-xs text-[#78716C]">{wo.po.photosRequired} photo(s) required</div>
           </div>
           <div className="rounded-[1.25rem] bg-[#F6F2EA] p-4 ring-1 ring-[#1C1917]/[0.06]">
@@ -239,9 +260,9 @@ export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: bo
             {wo.submission ? (
               <>
                 <ul className="mt-2 space-y-1">
-                  {wo.submission.items.map((i) => <li key={i.description} className="flex justify-between gap-2"><span>{i.description}</span><span className="tabular-nums">{money(i.amount)}</span></li>)}
+                  {wo.submission.items.map((i) => <li key={i.description} className="flex justify-between gap-2"><span>{i.description}</span><span className="whitespace-nowrap tabular-nums">{money(i.amount)}</span></li>)}
                 </ul>
-                <div className="mt-2 flex justify-between border-t border-[#1C1917]/[0.06] pt-2 font-semibold"><span>Total</span><span className="tabular-nums">{money(wo.submission.total)}</span></div>
+                <div className="mt-2 flex justify-between border-t border-[#1C1917]/[0.06] pt-2 font-semibold"><span>Total</span><span className="whitespace-nowrap tabular-nums">{money(wo.submission.total)}</span></div>
                 <div className="mt-2 space-y-1">
                   {wo.submission.photos.map((p) => (
                     <div key={p} className="flex items-center gap-2 text-xs text-[#57534E]"><span className="grid h-8 w-10 place-items-center rounded bg-[#1C1917]/10 text-[10px] text-[#78716C]">photo</span>{p}</div>
@@ -260,6 +281,7 @@ export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: bo
           <Button onClick={validate} disabled={busy}>{busy ? "Validating…" : v ? "Re-run AI validation" : "Run AI validation"}</Button>
         )}
         {v && <ValidationCard v={v} />}
+        {wo.status === "Paid" && <PaidPanel wo={wo} />}
         {canDecide && (
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => act.approveWorkOrder(wo.id)}>
@@ -315,5 +337,118 @@ function Assistant() {
         ))}
       </div>
     </Card>
+  );
+}
+
+const subjectName = (s: DemoState, subject: RatingSubject) =>
+  subject.kind === "vendor" ? vendorName(s, subject.id) : subject.kind === "property" ? propName(s, subject.id) : userName(s, subject.id);
+
+function PaidPanel({ wo }: { wo: WorkOrder }) {
+  const { state } = useDemo();
+  const payout = state.transfers.find((t) => t.kind === "Vendor payout" && t.ref === wo.id);
+  const subject: RatingSubject | null =
+    wo.vendorId !== "in-house" ? { kind: "vendor", id: wo.vendorId } : wo.assigneeId ? { kind: "maintenance", id: wo.assigneeId } : null;
+  return (
+    <div className="space-y-3">
+      {payout && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[#44403C]">
+          Payout {money(payout.amount)} to {payout.to.name} <Badge tone={statusTone(payout.status)}>{payout.status}</Badge>
+          {payout.status === "Pending" && <span className="text-xs text-[#78716C]">ACH in progress (simulated: clears in seconds)</span>}
+        </div>
+      )}
+      {subject && <RateBox by="u-pm" subject={subject} label={`Rate ${subjectName(state, subject)} for this job`} refId={wo.id} />}
+    </div>
+  );
+}
+
+function Payments() {
+  const { state, act } = useDemo();
+  const bal = trustBalance(state);
+  const owners = state.users.filter((u) => u.role === "Owner");
+  const party = (p: { name: string }) => p.name;
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Trust account" value={money(bal.cleared)} sub="cleared balance" />
+        <Stat label="Available" value={money(bal.available)} sub="after pending payouts" />
+        <Stat label="Incoming" value={money(bal.pendingIn)} sub="rent clearing" />
+        <Stat label="Outgoing" value={money(bal.pendingOut)} sub="payouts clearing" />
+      </div>
+      <Card title="Owner statements">
+        <p className="mb-4 text-sm text-[#57534E]">
+          Cleared rent, less the {Math.round(MANAGEMENT_FEE_RATE * 100)}% management fee and vendor bills on each owner&apos;s properties, since their last payout.
+        </p>
+        <Table
+          head={["Owner", "Rent collected", "Management fee", "Vendor bills", "Owed", ""]}
+          rows={owners.map((o) => {
+            const st = ownerStatement(state, o.id);
+            return [
+              <span key="n" className="font-medium text-[#1C1917]">{o.name}</span>,
+              money(st.rent),
+              `− ${money(st.fees)}`,
+              `− ${money(st.vendorBills)}`,
+              <span key="o" className="font-medium tabular-nums">{money(st.net)}</span>,
+              <Button key="b" onClick={() => act.disburseOwner(o.id)} disabled={st.net <= 0 || st.net > bal.available}>
+                Pay owner
+              </Button>,
+            ];
+          })}
+        />
+      </Card>
+      <Card title="Transfers">
+        <Table
+          head={["Date", "Type", "From → To", "Amount", "Status", "Ref"]}
+          rows={[...state.transfers].sort((a, b) => (a.created < b.created ? 1 : -1)).map((t) => [
+            <span key="d" className="whitespace-nowrap tabular-nums">{t.created.slice(0, 10)}</span>,
+            t.kind,
+            `${party(t.from)} → ${party(t.to)}`,
+            <span key="a" className="whitespace-nowrap tabular-nums">{money(t.amount)}</span>,
+            <Badge key="s" tone={statusTone(t.status)}>{t.status}</Badge>,
+            t.ref,
+          ])}
+        />
+      </Card>
+    </>
+  );
+}
+
+function Ratings() {
+  const { state } = useDemo();
+  const subjects: RatingSubject[] = [
+    { kind: "pm", id: "u-pm" },
+    ...state.properties.map((p) => ({ kind: "property" as const, id: p.id })),
+    ...state.users.filter((u) => u.role === "Maintenance").map((u) => ({ kind: "maintenance" as const, id: u.id })),
+    ...state.vendors.map((v) => ({ kind: "vendor" as const, id: v.id })),
+  ];
+  const kindLabel = { pm: "Property manager", property: "Property", maintenance: "Maintenance", vendor: "Vendor" };
+  return (
+    <>
+      <Card title="Ratings by subject">
+        <Table
+          head={["Who or what", "Type", "Rating", "Latest feedback"]}
+          rows={subjects.map((sub) => {
+            const r = ratingSummary(state.ratings, sub);
+            return [
+              <span key="n" className="font-medium text-[#1C1917]">{subjectName(state, sub)}</span>,
+              kindLabel[sub.kind],
+              <RatingBadge key="r" subject={sub} />,
+              r.latest ? `“${r.latest.comment || "No comment"}” — ${userName(state, r.latest.by)}` : "—",
+            ];
+          })}
+        />
+      </Card>
+      <Card title="All feedback">
+        <Table
+          head={["When", "From", "About", "Stars", "Comment"]}
+          rows={state.ratings.map((r) => [
+            <span key="w" className="whitespace-nowrap tabular-nums">{r.ts.slice(0, 10)}</span>,
+            userName(state, r.by),
+            `${subjectName(state, r.subject)}${r.ref ? ` · ${r.ref}` : ""}`,
+            <Stars key="s" value={r.stars} />,
+            r.comment || "—",
+          ])}
+        />
+      </Card>
+    </>
   );
 }

@@ -46,7 +46,7 @@ export type Invoice = {
   amount: number;
   generated: string;
   due: string;
-  status: "Paid" | "Due" | "Overdue";
+  status: "Paid" | "Processing" | "Due" | "Overdue";
 };
 
 export type LineItem = { description: string; amount: number };
@@ -65,14 +65,39 @@ export type WorkOrder = {
   validation?: ValidationResult;
 };
 
-export type Payment = {
+export type PartyKind = "tenant" | "trust" | "pm" | "owner" | "vendor";
+export type Party = { kind: PartyKind; id: string; name: string };
+
+export type TransferKind = "Rent" | "Management fee" | "Vendor payout" | "Owner payout";
+
+export type Transfer = {
   id: string;
-  kind: "Rent" | "Vendor payout" | "Owner payout";
-  payee: string;
+  // Idempotency key: one live transfer per key (e.g. "rent:INV-2611-01").
+  key: string;
+  kind: TransferKind;
+  from: Party;
+  to: Party;
   amount: number;
-  date: string;
-  status: "Pending" | "Sent" | "Received";
+  propertyId: string;
   ref: string;
+  status: "Pending" | "Cleared" | "Returned";
+  created: string;
+  settlesAt?: number;
+  cleared?: string;
+  // Owner payout this item was included in; unset = still on the owner's open statement.
+  statement?: string;
+};
+
+export type RatingSubject = { kind: "maintenance" | "vendor" | "pm" | "property"; id: string };
+
+export type Rating = {
+  id: string;
+  by: string;
+  subject: RatingSubject;
+  stars: number;
+  comment: string;
+  ref?: string;
+  ts: string;
 };
 
 export type Notification = {
@@ -136,7 +161,8 @@ export type DemoState = {
   tenancies: Tenancy[];
   invoices: Invoice[];
   workOrders: WorkOrder[];
-  payments: Payment[];
+  transfers: Transfer[];
+  ratings: Rating[];
   notifications: Notification[];
   audit: AuditEntry[];
 };

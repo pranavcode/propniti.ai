@@ -35,9 +35,9 @@ export function Badge({ tone = "gray", children }: { tone?: Tone; children: Reac
 }
 
 export function statusTone(status: string): Tone {
-  if (["Paid", "Received", "Sent", "Active", "Approved"].includes(status)) return "green";
-  if (["Overdue", "Changes requested"].includes(status)) return "red";
-  if (["Due", "Renewal due", "Submitted", "Pending"].includes(status)) return "amber";
+  if (["Paid", "Received", "Sent", "Active", "Approved", "Cleared"].includes(status)) return "green";
+  if (["Overdue", "Changes requested", "Returned"].includes(status)) return "red";
+  if (["Due", "Renewal due", "Submitted", "Pending", "Processing"].includes(status)) return "amber";
   if (["In progress", "Assigned"].includes(status)) return "blue";
   return "gray";
 }

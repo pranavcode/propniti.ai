@@ -5,6 +5,7 @@ import { money } from "@/lib/mockAi";
 import { propName, userName, vendorName } from "@/lib/names";
 import { useDemo } from "@/lib/store";
 import { Shell } from "../Shell";
+import { RatingBadge } from "../Ratings";
 import { Badge, Button, Card, Stat, Table, statusTone } from "../ui";
 import { WorkOrderDetail } from "./ManagerView";
 
@@ -77,7 +78,7 @@ export function TenancyPage({ id }: { id: string }) {
                 <Card title="Tenancy" className="lg:col-span-2">
                   <dl className="space-y-3 text-sm">
                     <div><dt className="text-[#78716C]">Home</dt><dd><Link href={`/pm/properties/${t.propertyId}`} className={link}>{propName(state, t.propertyId)}</Link> {t.unit}</dd></div>
-                    <div><dt className="text-[#78716C]">Lease</dt><dd className="tabular-nums">{t.leaseStart} to {t.leaseEnd}</dd></div>
+                    <div><dt className="text-[#78716C]">Lease</dt><dd className="whitespace-nowrap tabular-nums">{t.leaseStart} to {t.leaseEnd}</dd></div>
                     <div><dt className="text-[#78716C]">Contact</dt><dd>{tenant.email} · {tenant.phone}</dd></div>
                     <div><dt className="text-[#78716C]">Prefers</dt><dd>{tenant.channel}</dd></div>
                     <div><dt className="text-[#78716C]">ID verified</dt><dd><Badge tone={tenant.idVerified ? "green" : "amber"}>{tenant.idVerified ? "Verified" : "Pending"}</Badge></dd></div>
@@ -138,6 +139,7 @@ export function PropertyPage({ id }: { id: string }) {
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                   <div><dt className="text-[#78716C]">Address</dt><dd>{p.address}</dd></div>
                   <div><dt className="text-[#78716C]">Owner</dt><dd>{userName(state, p.ownerId)}</dd></div>
+                  <div><dt className="text-[#78716C]">Tenant rating</dt><dd><RatingBadge subject={{ kind: "property", id: p.id }} /></dd></div>
                 </dl>
               </Card>
               <Card title="Tenancies">
