@@ -73,12 +73,18 @@ export function mockValidate(wo: WorkOrder): Omit<ValidationResult, "source" | "
   };
 }
 
+// The question types the computed facts answer. mockAsk, isFactQuestion and expectedMentions
+// share them, so every question routed to computed figures gets an answer built from them.
+const OVERDUE_Q = /(late|overdue|owe|arrear|unpaid)/i;
+const LEASE_Q = /(lease|renew|expir)/i;
+const WORK_Q = /(work order|vendor|repair|invoice|po\b|maintenance)/i;
+
 export function mockAsk(question: string, s: DemoState): Omit<AskResult, "source" | "note"> {
   const q = question.toLowerCase();
   const name = (id: string) => s.users.find((u) => u.id === id)?.name ?? id;
   const prop = (id: string) => s.properties.find((p) => p.id === id)?.name ?? id;
 
-  if (/(late|overdue|owe|arrear|unpaid)/.test(q)) {
+  if (OVERDUE_Q.test(q)) {
     const rows = s.invoices
       .filter((i) => i.status === "Overdue")
       .flatMap((i) => {
@@ -90,7 +96,7 @@ export function mockAsk(question: string, s: DemoState): Omit<AskResult, "source
       suggestedActions: rows.length ? ["Send a reminder to each tenant on their preferred channel", "Offer a payment plan if 15+ days late"] : [],
     };
   }
-  if (/(lease|renew|expir)/.test(q)) {
+  if (LEASE_Q.test(q)) {
     const rows = s.tenancies
       .filter((t) => t.status === "Renewal due")
       .map((t) => `${name(t.tenantId)} (${prop(t.propertyId)} ${t.unit}): lease ends ${t.leaseEnd}, rent ${money(t.rent)}`);
@@ -99,7 +105,7 @@ export function mockAsk(question: string, s: DemoState): Omit<AskResult, "source
       suggestedActions: rows.length ? ["Send renewal offers at current rent", "Schedule a voice-call follow-up in 7 days if no reply"] : [],
     };
   }
-  if (/(work order|vendor|repair|invoice|po\b|maintenance)/.test(q)) {
+  if (WORK_Q.test(q)) {
     const rows = s.workOrders
       .filter((w) => !["Payment pending", "Paid", "Completed"].includes(w.status))
       .map((w) => `${w.id} ${w.title} (${prop(w.propertyId)}): ${w.status}`);
@@ -147,7 +153,7 @@ export function portfolioFacts(s: DemoState) {
 }
 
 // Questions the computed facts answer; their figures never come from model text.
-export const isFactQuestion = (question: string) => /(late|overdue|owe|arrear|unpaid|lease|renew|expir|work order|repair|maintenance)/i.test(question);
+export const isFactQuestion = (question: string) => [OVERDUE_Q, LEASE_Q, WORK_Q].some((r) => r.test(question));
 
 // What a complete answer must mention for the question types the facts cover.
 export function expectedMentions(question: string, s: DemoState): string[] {
@@ -155,8 +161,8 @@ export function expectedMentions(question: string, s: DemoState): string[] {
   const f = portfolioFacts(s);
   // Names and the figures that go with them: an answer with the right names but wrong amounts or dates fails.
   const amt = (n: number) => n.toLocaleString("en-US");
-  if (/(late|overdue|owe|arrear|unpaid)/.test(q)) return f.overdueRent.flatMap((r) => [r.tenant, amt(r.amount)]);
-  if (/(lease|renew|expir)/.test(q)) return f.leasesUpForRenewal.flatMap((r) => [r.tenant, r.leaseEnds]);
-  if (/(work order|repair|maintenance)/.test(q)) return f.openWorkOrders.map((w) => w.id);
+  if (OVERDUE_Q.test(q)) return f.overdueRent.flatMap((r) => [r.tenant, amt(r.amount)]);
+  if (LEASE_Q.test(q)) return f.leasesUpForRenewal.flatMap((r) => [r.tenant, r.leaseEnds]);
+  if (WORK_Q.test(q)) return f.openWorkOrders.map((w) => w.id);
   return [];
 }

@@ -33,7 +33,7 @@ export function DemoSwitcher({ persona }: { persona: PersonaId }) {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className={`flex items-center gap-3 rounded-full bg-[#1C1917] py-2 pl-2 pr-4 text-[13px] text-[#F6F2EA] shadow-[0_16px_40px_-16px_rgba(28,25,23,0.6)] ring-1 ring-white/10 transition-transform duration-500 ${ease} active:scale-[0.97]`}
+        className={`flex items-center gap-3 whitespace-nowrap rounded-full bg-[#1C1917] py-2 pl-2 pr-4 text-[13px] text-[#F6F2EA] shadow-[0_16px_40px_-16px_rgba(28,25,23,0.6)] ring-1 ring-white/10 transition-transform duration-500 ${ease} active:scale-[0.97]`}
       >
         <span className="rounded-full bg-[#D6B88F] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#1C1917]">Demo</span>
         Viewing as {PERSONAS[persona].label.toLowerCase()}

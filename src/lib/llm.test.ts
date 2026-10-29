@@ -120,6 +120,14 @@ describe("askAssistant", () => {
     expect((await askAssistant("who is overdue?", paidUp)).answer).toBe("No overdue invoices.");
   });
 
+  it("uses computed figures for vendor and invoice questions too", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "No vendor jobs are open.", suggested_actions: [] } });
+    const r = await askAssistant("which vendors have open jobs?", seed());
+    expect(r.answer).toMatch(/^\d+ open work orders:/);
+    expect(r.answer).toContain("WO-1041");
+  });
+
   it("uses the model's own answer for other questions, and falls back on failure", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "k");
     anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Three properties.", suggested_actions: [] } });
