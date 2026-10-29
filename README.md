@@ -39,12 +39,39 @@ npm run dev          # http://localhost:3000
 | --- | --- |
 | `npm run dev` | Next.js dev server |
 | `npm test` | Unit tests (Vitest) |
+| `npm run test:coverage` | Unit tests with a coverage report (`coverage/index.html`) |
 | `npm run lint` | ESLint |
 | `npm run build` | Next.js production build |
 | `npm run dev:vinext` | Dev server on the Cloudflare Workers runtime (run `npm run db:migrate:local` once first) |
 | `npm run db:migrate:local` | Apply `migrations/` to the local D1 database used by `dev:vinext` |
 | `npm run build:vinext` | Cloudflare Workers build |
 | `npm run deploy:vinext` | Deploy to Cloudflare Workers |
+
+## Tests and coverage
+
+86 tests in 11 files run on every push in CI. They cover the money, invoice-checking, import, ratings, request-validation and rate-limit rules, the AI provider choice, and the server storage. The storage tests run the real migrations on SQLite, plus one test on a local D1 database (Miniflare). They include rent with the 8% fee, vendor approval, owner payout, refusal when trust is short, and two identical requests at once (a double-click) creating one payment.
+
+Coverage of the business logic and API routes (`npm run test:coverage`):
+
+| Area | Lines | Branches |
+| --- | --- | --- |
+| Ledger and payments (`ledger.ts`, `server/money.ts`) | 100% | 89% |
+| Rent-roll import (`importer.ts`) | 100% | 94% |
+| Ratings (`ratings.ts`) | 100% | 100% |
+| Request schemas (`requests.ts`) | 100% | 86% |
+| Workspaces and midnight reset (`server/workspace.ts`) | 100% | 89% |
+| Database reads and writes (`server/repo.ts`, `platform/sqlite.ts`) | 98% | 91% |
+| Rate limits and body caps (`guard.ts`) | 97% | 84% |
+| Invoice rules and assistant facts (`mockAi.ts`) | 86% | 79% |
+| Store actions on the server (`server/actions.ts`) | 72% | 52% |
+| AI provider calls (`llm.ts`) | 72% | 61% |
+| AI routes (`app/api/ai/*`) | 59% | 39% |
+| **All logic and API code** | **81%** | **75%** |
+
+Not covered by unit tests:
+- The React screens and the browser store (`store.tsx`). These were checked end to end in a browser with Playwright before each deploy; those scripts are not in this repo yet.
+- Some thin route files (for example reset, ratings and onboarding). Their logic in `server/actions.ts` is partly tested.
+- The `import-map`, `import-parse` and `status` AI routes, and the live calls to Anthropic, OpenAI and Workers AI (tests use mocks).
 
 ## AI providers
 
