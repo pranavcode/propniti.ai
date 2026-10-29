@@ -8,3 +8,35 @@
 @keyframes marquee {
   to { transform: translateX(-50%); }
 }
+
+/* Docs pages (/docs/*): rendered markdown. */
+.doc-prose { color: #44403C; font-size: 1rem; line-height: 1.75; }
+.doc-prose > :first-child { margin-top: 0; }
+.doc-prose :is(p, ul, ol) { margin: 1.1rem 0; }
+.doc-prose :is(p, li) { overflow-wrap: break-word; }
+.doc-prose :is(h2, h3) { position: relative; color: #1C1917; font-family: var(--font-serif); font-weight: 400; letter-spacing: -0.01em; scroll-margin-top: 7rem; }
+.doc-prose h2 { margin: 4.5rem 0 1rem; font-size: clamp(2rem, 4vw, 2.75rem); line-height: 1.05; }
+.doc-prose h3 { margin: 2.75rem 0 0.75rem; font-size: 1.75rem; line-height: 1.15; }
+.doc-prose .doc-num { margin-right: 0.15em; font-family: var(--font-sans); font-size: 0.5em; font-weight: 500; letter-spacing: 0.08em; vertical-align: 0.35em; color: #8A6A45; font-variant-numeric: tabular-nums; }
+.doc-prose .doc-anchor { margin-left: 0.35em; font-family: var(--font-sans); font-size: 0.55em; color: #A8A29E; text-decoration: none; opacity: 0; transition: opacity 0.2s; }
+.doc-prose :is(h2, h3):hover .doc-anchor, .doc-prose .doc-anchor:focus-visible { opacity: 1; }
+.doc-prose a:not(.doc-anchor, .doc-zoom) { color: #1C1917; text-decoration: underline; text-decoration-color: rgba(138, 106, 69, 0.45); text-underline-offset: 3px; }
+.doc-prose a:not(.doc-anchor, .doc-zoom):hover { text-decoration-color: #8A6A45; }
+.doc-prose strong { color: #1C1917; font-weight: 600; }
+.doc-prose code { border-radius: 0.375rem; background: rgba(28, 25, 23, 0.05); padding: 0.1em 0.35em; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; overflow-wrap: break-word; }
+.doc-prose ul { list-style: disc; padding-left: 1.4rem; }
+.doc-prose ol { list-style: decimal; padding-left: 1.6rem; }
+.doc-prose li { margin: 0.4rem 0; padding-left: 0.2rem; }
+.doc-prose li::marker { color: #8A6A45; font-variant-numeric: tabular-nums; }
+.doc-prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4rem; }
+.doc-prose input[type="checkbox"] { margin-right: 0.6rem; accent-color: #8A6A45; vertical-align: -0.1em; }
+.doc-prose .doc-zoom { display: block; margin: 1.75rem 0; overflow: hidden; border-radius: 1rem; background: #FFFDF8; box-shadow: 0 0 0 1px rgba(28, 25, 23, 0.07), 0 24px 60px -30px rgba(28, 25, 23, 0.25); cursor: zoom-in; }
+.doc-prose .doc-zoom img { display: block; width: 100%; height: auto; }
+.doc-prose .doc-diagram { overflow-x: auto; padding: 1rem; }
+.doc-prose .doc-diagram img { min-width: 600px; }
+.doc-prose .doc-table { margin: 1.75rem 0; overflow-x: auto; border-radius: 1rem; background: #FFFDF8; box-shadow: 0 0 0 1px rgba(28, 25, 23, 0.07); }
+.doc-prose table { width: 100%; border-collapse: collapse; font-size: 0.875rem; line-height: 1.55; }
+.doc-prose th { background: #F3EEE5; padding: 0.7rem 0.9rem; text-align: left; font-weight: 600; color: #1C1917; vertical-align: bottom; }
+.doc-prose td { border-top: 1px solid rgba(28, 25, 23, 0.08); padding: 0.7rem 0.9rem; vertical-align: top; }
+.doc-prose :is(th, td) { min-width: 8rem; }
+.doc-prose :is(th, td):first-child { min-width: 5rem; }

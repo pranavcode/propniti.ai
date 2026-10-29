@@ -35,6 +35,8 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     rules: {
+      // Docs markdown is bundled as text (import x from "./doc.md?raw"); Vite does this natively.
+      "*.md": { condition: { query: "?raw" }, type: "text" },
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
