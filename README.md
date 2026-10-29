@@ -24,7 +24,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sig
 | Ask your portfolio | "Who is late on rent?" — answers from your data plus suggested next actions |
 | A view per role | Property manager, owner, tenant, maintenance, vendor and admin |
 
-The demo keeps its data in the browser (`localStorage`), so each visitor gets their own sandbox. Use the **Demo** control at the bottom of the app to switch roles; Admin → *Reset demo data* starts over.
+Each visitor gets a private copy of the demo, stored on the server (Cloudflare D1, or SQLite in Docker) and found by an HttpOnly cookie. It is deleted at midnight Pacific time (`DEMO_RESET_TZ` in `src/lib/seed.ts`). Use the **Demo** control at the bottom of the app to switch roles; Admin → *Reset demo data* starts over.
 
 ## Quick start
 
@@ -41,7 +41,8 @@ npm run dev          # http://localhost:3000
 | `npm test` | Unit tests (Vitest) |
 | `npm run lint` | ESLint |
 | `npm run build` | Next.js production build |
-| `npm run dev:vinext` | Dev server on the Cloudflare Workers runtime |
+| `npm run dev:vinext` | Dev server on the Cloudflare Workers runtime (run `npm run db:migrate:local` once first) |
+| `npm run db:migrate:local` | Apply `migrations/` to the local D1 database used by `dev:vinext` |
 | `npm run build:vinext` | Cloudflare Workers build |
 | `npm run deploy:vinext` | Deploy to Cloudflare Workers |
 
@@ -68,6 +69,8 @@ The app runs on any host; nothing in the application code depends on one cloud.
 
 ```bash
 npx cf auth login
+npx cf d1 create --name propniti                 # once; put the id in cloudflare.config.ts (DB binding)
+npx cf d1 migrations apply <database-id>         # schema from migrations/
 npm run deploy:vinext
 npx wrangler secret put ANTHROPIC_API_KEY   # optional
 ```
@@ -78,15 +81,18 @@ Edit `cloudflare.config.ts` to change the Worker name or custom domains. On the 
 
 ```bash
 docker build -t propniti .
-docker run -p 3000:3000 -e ANTHROPIC_API_KEY=... propniti
+docker run -p 3000:3000 -v propniti-data:/data -e ANTHROPIC_API_KEY=... propniti
 ```
+
+Demo data is a SQLite file at `DATABASE_PATH` (default `/data/propniti.db`), created and migrated on first start. Expired demo workspaces are cleaned up as new ones are created.
 
 ## Project layout
 
 ```
 src/
   app/                 routes: marketing (/), auth (/login, /signup, /forgot-password),
-                       demo picker (/demo), one route per role, /api/ai/*
+                       demo picker (/demo), one route per role, /api/ai/*,
+                       demo data routes (/api/state, /api/work-orders/*, …)
   components/
     marketing/         landing page and auth building blocks
     views/             screens for each role
@@ -99,9 +105,15 @@ src/
     ratings.ts         rating summaries, one-per-job rule, low-rating alerts
     importer.ts        rent-roll import: CSV parsing, column matching, row checks, merge
     requests.ts        input validation for the public API routes
-    guard.ts           per-IP rate limiting for the AI routes
-    platform/          host-specific services (Workers AI, rate limiter) with a no-op default
-    store.tsx          demo state and actions (browser-local)
+    guard.ts           per-IP rate limiting
+    platform/          host-specific services: D1 or SQLite, Workers AI, rate limiters
+    store.tsx          demo state in the browser; every action calls the API
+  server/
+    workspace.ts       per-visitor workspace: cookie, midnight expiry, reset
+    money.ts           rent, vendor payouts, owner payouts and settlement as guarded SQL batches
+    actions.ts         the other demo actions
+    repo.ts            rows ↔ demo state
+migrations/            D1 / SQLite schema
     seed.ts            sample portfolio
 ```
 
@@ -109,7 +121,7 @@ src/
 
 - Sign-in and sign-up are screens only: no accounts are created and nothing is sent.
 - Payments are a simulated ledger (no money moves); SMS, WhatsApp, email and voice are simulated and land in each persona's in-app inbox.
-- Demo data lives in each browser; there is no shared database.
+- Demo workspaces are anonymous and short-lived: anyone holding the cookie can act as any persona in that workspace.
 - The AI routes are validated, size-capped and rate limited per IP; see [docs/security-review.md](docs/security-review.md) for the full review and known gaps.
 
 ## Security
