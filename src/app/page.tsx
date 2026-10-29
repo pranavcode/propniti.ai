@@ -2,7 +2,7 @@
 import { Nav } from "@/components/marketing/Nav";
 import { Reveal } from "@/components/marketing/Reveal";
 import { Bezel, Eyebrow, PillLink } from "@/components/marketing/parts";
-import { Wordmark } from "@/components/Logo";
+import { SiteFooter } from "@/components/marketing/Footer";
 
 const grain =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
@@ -266,20 +266,7 @@ export default function Landing() {
         </Reveal>
       </section>
 
-      <footer className="bg-[#1C1917] px-4 pb-10 text-[#A8A29E]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-end gap-6 border-t border-white/10 pt-10 text-sm">
-          <div>
-            <div className="text-[#F6F2EA]"><Wordmark size={36} text="text-4xl" /></div>
-            <div className="mt-2">AI property operations for US portfolios.</div>
-          </div>
-          <div className="ml-auto flex gap-6">
-            <a href="/login" className="hover:text-[#F6F2EA]">Sign in</a>
-            <a href="/signup" className="hover:text-[#F6F2EA]">Get started</a>
-            <a href="/demo" className="hover:text-[#F6F2EA]">Demo</a>
-          </div>
-          <div className="w-full text-xs text-[#78716C]">© 2026 Propniti</div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

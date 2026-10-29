@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/Logo";
 
+// Section links are absolute so they also work from other pages (e.g. /docs).
 const links = [
-  ["Product", "#product"],
-  ["How it works", "#how"],
-  ["Who it's for", "#who"],
-  ["Trust", "#trust"],
+  ["Product", "/#product"],
+  ["How it works", "/#how"],
+  ["Who it's for", "/#who"],
+  ["Trust", "/#trust"],
+  ["Docs", "/docs"],
 ];
 
 const ease = "ease-[cubic-bezier(0.32,0.72,0,1)]";

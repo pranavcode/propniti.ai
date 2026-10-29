@@ -144,6 +144,12 @@ migrations/            D1 / SQLite schema
     seed.ts            sample portfolio
 ```
 
+## Docs
+
+`/docs` publishes snapshots of the product specification, solution architecture and prototype walkthrough (Claude Docs). They are unlisted: every docs page sends `robots: noindex, nofollow`. The text lives in `content/docs/*.md` and the images in `public/docs/<slug>/`; pages render the markdown with `marked` at build or request time, with no call to claude.ai.
+
+To refresh a snapshot: read each doc's body node in full with the Claude Docs tools and save the XML, download its images (each `blob` maps to an artifact asset), render any diagram widgets to SVG, then run `node scripts/docs-import.mjs <manifest.json>` (the manifest format is at the top of the script). Update `SNAPSHOT_DATE` in `src/lib/docs.ts` and run `npm test`, which checks every anchor, doc link and image.
+
 ## Limits of this demo
 
 - Sign-in and sign-up are screens only: no accounts are created and nothing is sent.
