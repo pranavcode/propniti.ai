@@ -51,7 +51,13 @@ export function parseCsv(text: string): string[][] {
       if (c === '"' && text[i + 1] === '"') {
         field += '"';
         i++;
-      } else if (c === '"') quoted = false;
+      } else if (c === '"') {
+        quoted = false;
+        const nextChar = text[i + 1];
+        if (nextChar !== undefined && nextChar !== delim && nextChar !== "\n" && nextChar !== "\r") {
+          throw new Error(`Text follows a closing quote on row ${rows.length + 1}, so the file can't be read reliably.`);
+        }
+      }
       else field += c;
     } else if (c === '"') {
       if (field.trim()) throw new Error(`A quote (") appears in the middle of a value on row ${rows.length + 1}, so the file can't be read reliably.`);

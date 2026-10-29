@@ -146,6 +146,9 @@ export function portfolioFacts(s: DemoState) {
   };
 }
 
+// Questions the computed facts answer; their figures never come from model text.
+export const isFactQuestion = (question: string) => /(late|overdue|owe|arrear|unpaid|lease|renew|expir|work order|repair|maintenance)/i.test(question);
+
 // What a complete answer must mention for the question types the facts cover.
 export function expectedMentions(question: string, s: DemoState): string[] {
   const q = question.toLowerCase();

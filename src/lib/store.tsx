@@ -6,11 +6,10 @@ import { money } from "./mockAi";
 import { importPortfolio, type ImportRow } from "./importer";
 import { submissionKey } from "./names";
 import { upsertRating } from "./ratings";
+import { STORAGE_KEY, loadSaved } from "./migrate";
 import { DEMO_TODAY, seed } from "./seed";
 import type { DemoState, ExtractedInvoice, LineItem, RatingSubject, ValidationResult, WorkOrder } from "./types";
 
-// Bump when the seed changes so saved demos from older versions are replaced.
-const KEY = "propniti-demo-v4";
 
 const stamp = () => `${DEMO_TODAY} ${new Date().toTimeString().slice(0, 5)}`;
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
@@ -42,37 +41,42 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   // Each viewer keeps their own copy of the demo in this browser.
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(KEY);
+      const saved = loadSaved(localStorage);
       // Load after hydration so server and client render the same seed first.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved) setState(JSON.parse(saved));
+      if (saved) setState(saved);
     } catch {}
   }, []);
 
-  // Persist only real changes, so an idle tab never writes its stale copy over another tab's work.
-  // Each change applies to the newest saved copy (another tab may have saved since) and bumps rev.
+  // Updaters stay pure (React may run them twice): the newest saved copy is read once before
+  // the update, and saving happens in the effect below. A change bumps rev; no change, no write.
   const update = useCallback((fn: (s: DemoState) => DemoState) => {
+    let stored: DemoState | null = null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      stored = raw ? (JSON.parse(raw) as DemoState) : null;
+    } catch {}
     setState((prev) => {
-      let base = prev;
-      try {
-        const raw = localStorage.getItem(KEY);
-        const stored = raw ? (JSON.parse(raw) as DemoState) : null;
-        if (stored && (stored.rev ?? 0) > (prev.rev ?? 0)) base = stored;
-      } catch {}
+      const base = stored && (stored.rev ?? 0) > (prev.rev ?? 0) ? stored : prev;
       const changed = fn(base);
-      if (changed === base) return base;
-      const next = { ...changed, rev: (base.rev ?? 0) + 1 };
-      try {
-        localStorage.setItem(KEY, JSON.stringify(next));
-      } catch {}
-      return next;
+      return changed === base ? base : { ...changed, rev: (base.rev ?? 0) + 1 };
     });
   }, []);
+
+  // Save after each change; skip when the saved copy is already this revision or newer.
+  useEffect(() => {
+    if (!state.rev) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const savedRev = raw ? ((JSON.parse(raw) as DemoState).rev ?? 0) : 0;
+      if (savedRev < state.rev) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {}
+  }, [state]);
 
   // Pick up changes made in other tabs.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== KEY || !e.newValue) return;
+      if (e.key !== STORAGE_KEY || !e.newValue) return;
       try {
         setState(JSON.parse(e.newValue));
       } catch {}
@@ -245,7 +249,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           return log({ ...s, setup }, "Maya Patel", "Invites sent", `${emails.length} invite(s): ${emails.join(", ")}`);
         }),
       finishOnboarding: () => update((s) => ({ ...s, setup: { invited: [], importedRows: 0, ...s.setup, completed: true } })),
-      reset: () => update(() => seed()),
+      reset: () =>
+        update((s) => ({ ...seed(), rev: s.rev })),
     };
   }, [update]);
 

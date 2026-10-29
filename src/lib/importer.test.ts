@@ -16,6 +16,7 @@ describe("parseCsv", () => {
   it("rejects unclosed or mid-value quotes and flags rows of the wrong width", () => {
     expect(() => parseCsv('a,b\n"oops,1\n2,3')).toThrow(/unclosed quote/);
     expect(() => parseCsv('a,b\nx"y,1')).toThrow(/middle of a value/);
+    expect(() => parseCsv('a,b\n"12"34,1')).toThrow(/closing quote/);
     expect(widthProblems([["a", "b"], ["1", "2", "3"]])).toEqual(["Row 2 has 3 columns but the header has 2"]);
     expect(widthProblems([["a", "b"], ["1"]])).toEqual(["Row 2 has 1 columns but the header has 2"]);
   });

@@ -113,6 +113,13 @@ describe("askAssistant", () => {
     expect(r.note).toMatch(/computed/);
   });
 
+  it("uses computed figures even when nothing is overdue", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    const paidUp = { ...seed(), invoices: seed().invoices.map((i) => ({ ...i, status: "Paid" as const })) };
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Marcus owes $9,999.", suggested_actions: [] } });
+    expect((await askAssistant("who is overdue?", paidUp)).answer).toBe("No overdue invoices.");
+  });
+
   it("uses the model's own answer for other questions, and falls back on failure", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "k");
     anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Three properties.", suggested_actions: [] } });

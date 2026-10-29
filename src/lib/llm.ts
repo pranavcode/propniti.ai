@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { getPlatform } from "@/lib/platform";
-import { checkInvoice, expectedMentions, mockAsk, mockValidate, portfolioFacts } from "./mockAi";
+import { checkInvoice, isFactQuestion, mockAsk, mockValidate, portfolioFacts } from "./mockAi";
 import { IMPORT_FIELDS, applyMapping, guessMapping, parseCsv, type ImportRow, type Mapping } from "./importer";
 import { DEMO_TODAY } from "./seed";
 import type { AiSource, AskResult, DemoState, ExtractResult, ValidationResult, WorkOrder } from "./types";
@@ -211,7 +211,7 @@ export async function askAssistant(question: string, state: DemoState): Promise<
     // For questions the computed facts cover (overdue rent, renewals, open work orders), the figures
     // always come from the facts; the model only contributes suggested actions. Model text can't
     // misstate a balance or date, even if portfolio data tries to steer it.
-    if (expectedMentions(question, state).length) {
+    if (isFactQuestion(question)) {
       return { answer: fallback.answer, suggestedActions: out.suggested_actions.slice(0, 3), source: provider.source, note: "Figures computed from your data; suggestions by AI." };
     }
     return { answer: out.answer, suggestedActions: out.suggested_actions.slice(0, 3), source: provider.source };

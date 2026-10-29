@@ -28,11 +28,12 @@ The app has no real accounts, money movement or stored personal data, so the mai
 
 ## Independent review
 
-An independent automated review (OpenAI Codex, 2026-10-29) reported 24 issues (4 high, 18 medium, 2 low, none critical). All were fixed and covered by regression tests, including: invoices that didn't add up being approved; vendor payouts overdrawing trust; double approval inflating vendor totals; spoofable client IPs off Cloudflare; body limits applied after buffering; stale tabs overwriting saved data; stale validation results; re-imports duplicating tenancies; ID collisions on import; and an explicit `AI_PROVIDER` silently falling through to another provider.
+An independent automated review (OpenAI Codex, 2026-10-29) reported 24 issues (4 high, 18 medium, 2 low, none critical). Two follow-up passes by the same reviewer confirmed the fixes; remaining partial items are listed under Known gaps. Fixes are covered by regression tests, including: invoices that didn't add up being approved; vendor payouts overdrawing trust; double approval inflating vendor totals; spoofable client IPs off Cloudflare; body limits applied after buffering; stale tabs overwriting saved data; stale validation results; re-imports duplicating tenancies; ID collisions on import; and an explicit `AI_PROVIDER` silently falling through to another provider.
 
 ## Known gaps
 
 - **No authentication.** Sign-in screens are UI only. Before real data, add an identity provider, server-side sessions and role checks on every route.
+- **Demo state has no cross-tab lock.** Each change applies to the newest saved copy and bumps a revision, but two tabs acting in the same instant can still overwrite each other (localStorage has no locking). A production ledger lives server-side.
 - **Money rules run in the browser.** The ledger, approvals and payouts are a client-side simulation; a production ledger must enforce them server-side.
 - **Client-held demo state.** The assistant receives the portfolio snapshot from the browser. With real data, load it server-side from the signed-in user's scope instead.
 - **`'unsafe-inline'` in the CSP.** Required by the current framework hydration. Move to nonce-based CSP when supported by the runtime.
