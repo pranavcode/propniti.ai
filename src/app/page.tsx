@@ -65,7 +65,7 @@ export default function Landing() {
           </Reveal>
           <Reveal delay={360}>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-              <PillLink href="/demo">Try the live demo</PillLink>
+              <PillLink href="/pm">Try the live demo</PillLink>
               <PillLink href="/signup" dark={false}>Get started</PillLink>
             </div>
             <p className="mt-4 text-xs text-[#78716C]">Runs on sample data. No sign-up needed.</p>
@@ -261,7 +261,7 @@ export default function Landing() {
           </h2>
           <p className="mx-auto mt-6 max-w-md text-[#A8A29E]">Sign in as a manager, owner, tenant, vendor or maintenance tech on a sample portfolio.</p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
-            <PillLink href="/demo" dark={false}>Try the live demo</PillLink>
+            <PillLink href="/pm" dark={false}>Try the live demo</PillLink>
           </div>
         </Reveal>
       </section>
