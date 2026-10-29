@@ -49,7 +49,7 @@ npm run dev          # http://localhost:3000
 
 ## Tests and coverage
 
-86 tests in 11 files run on every push in CI. They cover the money, invoice-checking, import, ratings, request-validation and rate-limit rules, the AI provider choice, and the server storage. The storage tests run the real migrations on SQLite, plus one test on a local D1 database (Miniflare). They include rent with the 8% fee, vendor approval, owner payout, refusal when trust is short, and two identical requests at once (a double-click) creating one payment.
+87 tests in 11 files run on every push in CI. They cover the money, invoice-checking, import, ratings, request-validation and rate-limit rules, the AI provider choice, and the server storage. The storage tests run the real migrations on SQLite, plus one test on a local D1 database (Miniflare). They include rent with the 8% fee, vendor approval, owner payout, refusal when trust is short, and two identical requests at once (a double-click) creating one payment.
 
 Coverage of the business logic and API routes (`npm run test:coverage`):
 
