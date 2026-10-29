@@ -42,7 +42,7 @@ export function RateBox(props: RateBoxProps) {
 }
 
 function RateForm({ by, subject, label, refId }: RateBoxProps) {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const existing = state.ratings.find((r) => r.by === by && sameSubject(r.subject, subject) && r.ref === refId);
   const [stars, setStars] = useState(existing?.stars ?? 0);
   const [comment, setComment] = useState(existing?.comment ?? "");
@@ -87,7 +87,7 @@ function RateForm({ by, subject, label, refId }: RateBoxProps) {
         className="w-full rounded-xl border-0 bg-white/70 px-3 py-2 text-sm ring-1 ring-inset ring-[#1C1917]/12"
       />
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={!stars}>{existing ? "Update rating" : "Submit rating"}</Button>
+        <Button type="submit" disabled={!stars || busy}>{existing ? "Update rating" : "Submit rating"}</Button>
         {saved && <span className="text-sm text-[#4A6340]">✓ Saved</span>}
         {!stars && <span className="text-xs text-[#78716C]">Pick 1–5 stars</span>}
       </div>

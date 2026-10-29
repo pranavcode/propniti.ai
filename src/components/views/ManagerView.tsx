@@ -39,7 +39,7 @@ export function ManagerView() {
 }
 
 function Dashboard({ openWo }: { openWo: (id: string) => void }) {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const units = state.properties.reduce((a, p) => a + p.units, 0);
   const occupied = state.properties.reduce((a, p) => a + p.occupied, 0);
   const oct = state.invoices.filter((i) => i.due === "2026-10-01");
@@ -66,7 +66,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
               const name = userName(state, t.tenantId);
               return (
                 <AlertRow key={i.id} href={`/pm/tenancies/${t.id}`} tone="red" title={`Rent overdue: ${name}`} detail={`${propName(state, t.propertyId)} ${t.unit} · ${money(i.amount)} due ${i.due}`}>
-                  <Button variant="secondary" onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, your rent of ${money(i.amount)} was due ${i.due}. Pay in the app, or reply PLAN to set up a payment plan.`, "Maya Patel")}>
+                  <Button variant="secondary" disabled={busy} onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, your rent of ${money(i.amount)} was due ${i.due}. Pay in the app, or reply PLAN to set up a payment plan.`, "Maya Patel")}>
                     Nudge tenant
                   </Button>
                 </AlertRow>
@@ -76,7 +76,7 @@ function Dashboard({ openWo }: { openWo: (id: string) => void }) {
               const name = userName(state, t.tenantId);
               return (
                 <AlertRow key={t.id} href={`/pm/tenancies/${t.id}`} tone="amber" title={`Lease renewal: ${name}`} detail={`${propName(state, t.propertyId)} ${t.unit} · ends ${t.leaseEnd}`}>
-                  <Button variant="secondary" onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, your lease ends ${t.leaseEnd}. We'd love you to stay — renew for 12 months at ${money(t.rent)}/month? Reply YES.`, "Maya Patel")}>
+                  <Button variant="secondary" disabled={busy} onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, your lease ends ${t.leaseEnd}. We'd love you to stay — renew for 12 months at ${money(t.rent)}/month? Reply YES.`, "Maya Patel")}>
                     Send renewal offer
                   </Button>
                 </AlertRow>
@@ -166,7 +166,7 @@ function Properties() {
 }
 
 function Tenants() {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   return (
     <Card title="Tenancies">
       <Table
@@ -182,7 +182,7 @@ function Tenants() {
             t.leaseEnd,
             <Badge key="s" tone={statusTone(t.status)}>{t.status}</Badge>,
             <span key="i">{open.id} <Badge tone={statusTone(open.status)}>{open.status}</Badge></span>,
-            <Button key="b" variant="secondary" onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, reminder: ${open.id} for ${money(open.amount)} is ${open.status.toLowerCase()} (due ${open.due}).`, "Maya Patel")}>
+            <Button key="b" variant="secondary" disabled={busy} onClick={() => act.nudge(t.tenantId, `Hi ${name.split(" ")[0]}, reminder: ${open.id} for ${money(open.amount)} is ${open.status.toLowerCase()} (due ${open.due}).`, "Maya Patel")}>
               Nudge
             </Button>,
           ];
@@ -221,7 +221,7 @@ function WorkOrders({ selected, onSelect }: { selected: string; onSelect: (id: s
 }
 
 export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: boolean }) {
-  const { state, act } = useDemo();
+  const { state, act, busy: saving } = useDemo();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -295,10 +295,10 @@ export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: bo
         {canDecide && (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => act.approveWorkOrder(wo.id)} disabled={!fundsOk}>
+              <Button onClick={() => act.approveWorkOrder(wo.id)} disabled={saving || !fundsOk}>
                 {v.decision === "approve" && v.confidence >= 0.85 ? "Approve & pay (one tap)" : "Approve & pay anyway"} · {money(wo.submission!.total)}
               </Button>
-              <Button variant="danger" onClick={() => act.requestChanges(wo.id)}>Send back to vendor</Button>
+              <Button variant="danger" disabled={saving} onClick={() => act.requestChanges(wo.id)}>Send back to vendor</Button>
             </div>
             {!fundsOk && <p className="text-sm text-[#8E4327]" role="alert">The trust account has {money(available)} available, not enough for this payout. Collect rent or wait for transfers to clear.</p>}
           </div>
@@ -383,7 +383,7 @@ function PaidPanel({ wo }: { wo: WorkOrder }) {
 }
 
 function Payments() {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const bal = trustBalance(state);
   const owners = state.users.filter((u) => u.role === "Owner");
   const party = (p: { name: string }) => p.name;
@@ -409,7 +409,7 @@ function Payments() {
               `− ${money(st.fees)}`,
               `− ${money(st.vendorBills)}`,
               <span key="o" className="font-medium tabular-nums">{money(st.net)}</span>,
-              <Button key="b" onClick={() => act.disburseOwner(o.id)} disabled={st.net <= 0 || st.net > bal.available}>
+              <Button key="b" onClick={() => act.disburseOwner(o.id)} disabled={busy || st.net <= 0 || st.net > bal.available}>
                 Pay owner
               </Button>,
             ];

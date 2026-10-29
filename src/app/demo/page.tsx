@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Arrow, Bezel, Eyebrow, ease } from "@/components/marketing/parts";
-import { PERSONAS } from "@/lib/seed";
+import { DEMO_RESET_ZONE_NAME, PERSONAS } from "@/lib/seed";
 import type { PersonaId } from "@/lib/types";
 import { Wordmark } from "@/components/Logo";
 
@@ -27,7 +27,7 @@ export default function Demo() {
             Who do you want <em className="text-[#8A6A45]">to be?</em>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-[#57534E]">
-            Everything you do is shared across personas in this browser. Approve a vendor invoice as the property manager, then switch to the vendor to see the payout land.
+            Your demo data is private to you and resets at midnight {DEMO_RESET_ZONE_NAME}. Everything you do is shared across personas: approve a vendor invoice as the property manager, then switch to the vendor to see the payout land.
           </p>
         </div>
         <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

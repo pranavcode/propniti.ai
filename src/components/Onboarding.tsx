@@ -25,7 +25,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 }
 
 export function Onboarding() {
-  const { state, act } = useDemo();
+  const { state, act, busy: saving } = useDemo();
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -206,7 +206,7 @@ export function Onboarding() {
             <div className="flex flex-wrap gap-3">
               <Button variant="secondary" onClick={() => setStep(0)}>Back</Button>
               <Button
-                disabled={!valid.length || missingRequired.length > 0}
+                disabled={saving || !valid.length || missingRequired.length > 0}
                 onClick={() => {
                   act.importRows(valid.map((c) => c.row), draft.source);
                   setImported({ rows: valid.length, skipped: checks.length - valid.length });
@@ -230,7 +230,7 @@ export function Onboarding() {
               ) : (
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {BANKS.map((b) => (
-                    <button key={b} onClick={() => act.connectBank(b)} className="rounded-2xl bg-[#F6F2EA] px-4 py-3 text-left text-sm ring-1 ring-[#1C1917]/[0.08] transition-colors hover:bg-white">
+                    <button key={b} disabled={saving} onClick={() => act.connectBank(b)} className="rounded-2xl bg-[#F6F2EA] px-4 py-3 text-left text-sm ring-1 ring-[#1C1917]/[0.08] transition-colors hover:bg-white">
                       {b}
                     </button>
                   ))}
@@ -273,7 +273,7 @@ export function Onboarding() {
 }
 
 function InviteStep({ owners, onBack, onNext }: { owners: { id: string; name: string; email: string }[]; onBack: () => void; onNext: () => void }) {
-  const { act } = useDemo();
+  const { act, busy } = useDemo();
   const [emails, setEmails] = useState<Record<string, string>>(Object.fromEntries(owners.map((o) => [o.id, o.email])));
   const [vendors, setVendors] = useState("");
   const [sent, setSent] = useState(0);
@@ -302,7 +302,7 @@ function InviteStep({ owners, onBack, onNext }: { owners: { id: string; name: st
       <div className="flex flex-wrap gap-3">
         <Button variant="secondary" onClick={onBack}>Back</Button>
         <Button
-          disabled={!list.length || bad.length > 0}
+          disabled={busy || !list.length || bad.length > 0}
           onClick={() => {
             act.invite(list);
             setSent(list.length);

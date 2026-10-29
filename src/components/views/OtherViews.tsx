@@ -4,7 +4,7 @@ import { useState } from "react";
 import { money } from "@/lib/mockAi";
 import { ownerStatement, vendorPaidYtd } from "@/lib/ledger";
 import { sameSubject } from "@/lib/ratings";
-import { PERSONAS } from "@/lib/seed";
+import { DEMO_RESET_ZONE_NAME, PERSONAS } from "@/lib/seed";
 import { useDemo } from "@/lib/store";
 import type { LineItem, WorkOrder } from "@/lib/types";
 import { Shell, useAiMode } from "../Shell";
@@ -90,7 +90,7 @@ export function OwnerView() {
 }
 
 export function TenantView() {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const me = PERSONAS.tenant.userId;
   const t = state.tenancies.find((x) => x.tenantId === me)!;
   const invoices = state.invoices.filter((i) => i.tenancyId === t.id).sort((a, b) => (a.due < b.due ? 1 : -1));
@@ -131,7 +131,7 @@ export function TenantView() {
           money(i.amount),
           i.due,
           <Badge key="s" tone={statusTone(i.status)}>{i.status}</Badge>,
-          i.status === "Due" || i.status === "Overdue" ? <Button key="b" onClick={() => act.payInvoice(i.id)}>Pay by bank (ACH)</Button> : i.status === "Processing" ? <span key="p" className="text-xs text-[#78716C]">Clearing…</span> : "",
+          i.status === "Due" || i.status === "Overdue" ? <Button key="b" disabled={busy} onClick={() => act.payInvoice(i.id)}>Pay by bank (ACH)</Button> : i.status === "Processing" ? <span key="p" className="text-xs text-[#78716C]">Clearing…</span> : "",
         ])}
       />
       <p className="mt-3 text-xs text-[#78716C]">Simulated: ACH clears in seconds here instead of 1–2 business days, and no money moves. In production the bank is linked through Plaid and paid via Stripe.</p>
@@ -156,7 +156,7 @@ export function TenantView() {
         className="flex gap-2"
       >
         <input value={issue} onChange={(e) => setIssue(e.target.value)} maxLength={200} aria-label="Describe the issue" placeholder="e.g. Kitchen sink is leaking" className="min-w-0 flex-1 rounded-full border-0 bg-white/70 px-4 py-2 text-sm ring-1 ring-inset ring-[#1C1917]/12" />
-        <Button type="submit" disabled={issue.trim().length < 5}>Submit</Button>
+        <Button type="submit" disabled={busy || issue.trim().length < 5}>Submit</Button>
       </form>
       <div className="mt-4">
         <Table head={["ID", "Issue", "Status"]} rows={myJobs.map((w) => [w.id, w.title, <Badge key="s" tone={statusTone(w.status)}>{w.status}</Badge>])} empty="No requests yet." />
@@ -187,7 +187,7 @@ export function TenantView() {
 }
 
 export function MaintenanceView() {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const me = PERSONAS.maintenance.userId;
   const jobs = state.workOrders.filter((w) => w.assigneeId === me);
   const [photo, setPhoto] = useState<Record<string, string>>({});
@@ -215,17 +215,17 @@ export function MaintenanceView() {
             ) : null}
             {isOpenWorkOrder(w) && (
               <div className="flex flex-wrap items-center gap-2">
-                {w.status === "Assigned" && <Button onClick={() => act.updateJob(w.id, "In progress")}>Start job</Button>}
+                {w.status === "Assigned" && <Button disabled={busy} onClick={() => act.updateJob(w.id, "In progress")}>Start job</Button>}
                 <input
                   value={photo[w.id] ?? ""}
                   onChange={(e) => setPhoto({ ...photo, [w.id]: e.target.value })}
                   placeholder="Describe the photo (demo upload)"
                   className="min-w-0 flex-1 rounded-full border-0 bg-white/70 px-4 py-1.5 text-sm ring-1 ring-inset ring-[#1C1917]/12"
                 />
-                <Button variant="secondary" disabled={!photo[w.id]} onClick={() => { act.updateJob(w.id, w.status, photo[w.id]); setPhoto({ ...photo, [w.id]: "" }); }}>
+                <Button variant="secondary" disabled={busy || !photo[w.id]} onClick={() => { act.updateJob(w.id, w.status, photo[w.id]); setPhoto({ ...photo, [w.id]: "" }); }}>
                   Add photo
                 </Button>
-                {w.status === "In progress" && <Button onClick={() => act.updateJob(w.id, "Completed")}>Mark complete</Button>}
+                {w.status === "In progress" && <Button disabled={busy} onClick={() => act.updateJob(w.id, "Completed")}>Mark complete</Button>}
               </div>
             )}
           </div>
@@ -293,7 +293,7 @@ export function VendorView() {
 }
 
 function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const [items, setItems] = useState<LineItem[]>(wo.submission?.items ?? wo.po.items);
   const [photos, setPhotos] = useState<string>((wo.submission?.photos ?? []).join("\n"));
   const [invoiceNumber, setInvoiceNumber] = useState<string | undefined>(wo.submission?.invoiceNumber);
@@ -334,7 +334,7 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
             <div className="flex items-center justify-between">
               <span className="font-semibold">Total {money(total)}</span>
               <Button
-                disabled={invoiceProblems.length > 0}
+                disabled={busy || invoiceProblems.length > 0}
                 onClick={() => act.submitInvoice(wo.id, items.map((i) => ({ ...i, description: i.description.trim() })), photos.split("\n").map((p) => p.trim()).filter(Boolean), invoiceNumber)}
               >
                 Submit invoice
@@ -350,7 +350,7 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
 }
 
 export function AdminView() {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const mode = useAiMode();
   const users = (
     <Card title="Users">
@@ -374,8 +374,8 @@ export function AdminView() {
         />
       </Card>
       <Card title="Demo data">
-        <p className="mb-3 text-sm text-[#57534E]">Changes are saved in this browser only. Reset to start the demo over.</p>
-        <Button variant="danger" onClick={act.reset}>Reset demo data</Button>
+        <p className="mb-3 text-sm text-[#57534E]">Your demo data is private to you and resets at midnight {DEMO_RESET_ZONE_NAME}. Reset now to start the demo over.</p>
+        <Button variant="danger" disabled={busy} onClick={act.reset}>Reset demo data</Button>
       </Card>
     </>
   );

@@ -166,8 +166,6 @@ export type DemoState = {
   transfers: Transfer[];
   ratings: Rating[];
   setup?: { bank?: string; invited: string[]; importedRows: number; completed: boolean };
-  // Incremented on every saved change; lets tabs detect a newer saved copy.
-  rev?: number;
   notifications: Notification[];
   audit: AuditEntry[];
 };

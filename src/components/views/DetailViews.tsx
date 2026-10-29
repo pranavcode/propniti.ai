@@ -48,7 +48,7 @@ export function WorkOrderPage({ id }: { id: string }) {
 }
 
 export function TenancyPage({ id }: { id: string }) {
-  const { state, act } = useDemo();
+  const { state, act, busy } = useDemo();
   const t = state.tenancies.find((x) => x.id === id);
   if (!t) return <NotFound what="tenancy" />;
   const tenant = state.users.find((u) => u.id === t.tenantId)!;
@@ -85,12 +85,12 @@ export function TenancyPage({ id }: { id: string }) {
                   </dl>
                   <div className="mt-5 flex flex-wrap gap-2">
                     {open && (
-                      <Button onClick={() => act.nudge(tenant.id, `Hi ${first}, reminder: ${open.id} for ${money(open.amount)} is ${open.status.toLowerCase()} (due ${open.due}).`, "Maya Patel")}>
+                      <Button disabled={busy} onClick={() => act.nudge(tenant.id, `Hi ${first}, reminder: ${open.id} for ${money(open.amount)} is ${open.status.toLowerCase()} (due ${open.due}).`, "Maya Patel")}>
                         Send rent reminder
                       </Button>
                     )}
                     {t.status === "Renewal due" && (
-                      <Button variant="secondary" onClick={() => act.nudge(tenant.id, `Hi ${first}, your lease ends ${t.leaseEnd}. Renew for 12 months at ${money(t.rent)}/month? Reply YES.`, "Maya Patel")}>
+                      <Button variant="secondary" disabled={busy} onClick={() => act.nudge(tenant.id, `Hi ${first}, your lease ends ${t.leaseEnd}. Renew for 12 months at ${money(t.rent)}/month? Reply YES.`, "Maya Patel")}>
                         Send renewal offer
                       </Button>
                     )}
