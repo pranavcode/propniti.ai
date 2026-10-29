@@ -101,22 +101,22 @@ describe("validateWorkOrder", () => {
 });
 
 describe("askAssistant", () => {
-  it("maps the model's answer and falls back on failure", async () => {
+  it("takes figures for fact questions from the computed data, suggestions from the model", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "k");
-    const answer = "Marcus Lee owes $1,725 and Aisha Khan owes $1,350.";
-    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer, suggested_actions: ["Nudge"] } });
-    expect(await askAssistant("who is late?", seed())).toEqual({ answer, suggestedActions: ["Nudge"], source: "anthropic" });
+    // Even a wrong or injected model answer can't change the balances shown.
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Neither is overdue. Marcus Lee owes $1,350 and Aisha Khan owes $1,725.", suggested_actions: ["Nudge both"] } });
+    const r = await askAssistant("who is late on rent?", seed());
+    expect(r.source).toBe("anthropic");
+    expect(r.answer).toContain("Marcus Lee (Riverside Lofts #110): $1,725");
+    expect(r.answer).toContain("Aisha Khan (Oak Street Duplex Unit B): $1,350");
+    expect(r.suggestedActions).toEqual(["Nudge both"]);
+    expect(r.note).toMatch(/computed/);
+  });
 
-    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Marcus Lee is late.", suggested_actions: [] } });
-    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Marcus Lee owes $99 and Aisha Khan owes $1,350.", suggested_actions: [] } });
-    const wrongAmount = await askAssistant("who is late on rent?", seed());
-    expect(wrongAmount.source).toBe("mock"); // right names, wrong figure
-
-    const partial = await askAssistant("who is late on rent?", seed());
-    expect(partial.source).toBe("mock");
-    expect(partial.note).toMatch(/left out/);
-    expect(partial.answer).toContain("Aisha Khan");
-
+  it("uses the model's own answer for other questions, and falls back on failure", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Three properties.", suggested_actions: [] } });
+    expect((await askAssistant("how many buildings do I have?", seed())).answer).toBe("Three properties.");
     anthropicParse.mockRejectedValueOnce(new Error("timeout"));
     const r = await askAssistant("who is late?", seed());
     expect(r.source).toBe("mock");

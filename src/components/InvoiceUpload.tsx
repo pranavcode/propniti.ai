@@ -11,6 +11,7 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   // Free the preview's memory when it's replaced or the component goes away.
   useEffect(() => () => {
@@ -20,6 +21,7 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
   async function upload(file: File) {
     setError(null);
     setResult(null);
+    setConfirmed(false);
     if (file.size > 4 * 1024 * 1024) {
       setPreview(null);
       return setError("File too large (max 4 MB).");
@@ -42,8 +44,9 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
 
   const inv = result?.invoice;
   const passed = result?.checks.filter((c) => c.ok).length ?? 0;
-  // Legibility is advisory; any other failed check means the figures can't be trusted.
+  // Any failed check blocks; low legibility can be overridden only after the user confirms the figures.
   const blocking = result?.checks.filter((c) => !c.ok && !c.label.startsWith("Legible")) ?? [];
+  const lowLegibility = !!result?.checks.some((c) => !c.ok && c.label.startsWith("Legible"));
   return (
     <div className="space-y-4 rounded-[1.25rem] bg-[#F6F2EA] p-5 ring-1 ring-[#1C1917]/[0.06]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -89,7 +92,13 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
                       {inv.issues.map((i) => <li key={i} className="text-[#8E4327]">✗ {i}</li>)}
                     </ul>
                   </div>
-                  <Button onClick={() => onApply(inv)} disabled={blocking.length > 0 || inv.lineItems.length === 0}>{applyLabel}</Button>
+                  {lowLegibility && blocking.length === 0 && (
+                    <label className="flex items-start gap-2 text-xs text-[#8A6420]">
+                      <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" />
+                      The document is hard to read. I&apos;ve checked these figures against it.
+                    </label>
+                  )}
+                  <Button onClick={() => onApply(inv)} disabled={blocking.length > 0 || inv.lineItems.length === 0 || (lowLegibility && !confirmed)}>{applyLabel}</Button>
                   {blocking.length > 0 && <p className="text-xs text-[#8E4327]">Fix the failed checks with the vendor before using this invoice.</p>}
                 </>
               )}

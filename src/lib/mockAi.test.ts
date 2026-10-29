@@ -44,6 +44,16 @@ describe("mockValidate", () => {
     expect(badSum.issues.join()).toMatch(/PO item not on invoice: Labor/);
   });
 
+  it("compares line groups one-to-one and requires the lines to add up to the cent", () => {
+    const base = byId("WO-1041");
+    // One "Labor" line can't cover two PO labor lines.
+    const wo = { ...base, po: { ...base.po, items: [{ description: "Labor, day 1", amount: 300 }, { description: "Labor, day 2", amount: 335 }], total: 635 } };
+    const r = mockValidate({ ...wo, submission: { ...base.submission!, items: [{ description: "Labor, both days", amount: 300 }, { description: "Motor", amount: 335 }], total: 635 } });
+    expect(r.decision).toBe("review");
+    const cents = mockValidate({ ...base, submission: { ...base.submission!, total: 629 } });
+    expect(cents.issues.join()).toMatch(/add up to \$635, not the stated total \$629/);
+  });
+
   it("asks for review when nothing has been submitted", () => {
     const r = mockValidate(byId("WO-1043"));
     expect(r.decision).toBe("review");

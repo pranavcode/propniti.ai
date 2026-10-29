@@ -10,7 +10,7 @@ import { DEMO_TODAY, seed } from "./seed";
 import type { DemoState, ExtractedInvoice, LineItem, RatingSubject, ValidationResult, WorkOrder } from "./types";
 
 // Bump when the seed changes so saved demos from older versions are replaced.
-const KEY = "propniti-demo-v3";
+const KEY = "propniti-demo-v4";
 
 const stamp = () => `${DEMO_TODAY} ${new Date().toTimeString().slice(0, 5)}`;
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
@@ -50,10 +50,18 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Persist only real changes, so an idle tab never writes its stale copy over another tab's work.
+  // Each change applies to the newest saved copy (another tab may have saved since) and bumps rev.
   const update = useCallback((fn: (s: DemoState) => DemoState) => {
     setState((prev) => {
-      const next = fn(prev);
-      if (next === prev) return prev;
+      let base = prev;
+      try {
+        const raw = localStorage.getItem(KEY);
+        const stored = raw ? (JSON.parse(raw) as DemoState) : null;
+        if (stored && (stored.rev ?? 0) > (prev.rev ?? 0)) base = stored;
+      } catch {}
+      const changed = fn(base);
+      if (changed === base) return base;
+      const next = { ...changed, rev: (base.rev ?? 0) + 1 };
       try {
         localStorage.setItem(KEY, JSON.stringify(next));
       } catch {}

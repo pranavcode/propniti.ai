@@ -13,9 +13,14 @@ describe("parseCsv", () => {
     expect(parseCsv("a\tb\n1\t2")).toEqual([["a", "b"], ["1", "2"]]);
     expect(parseCsv("Property\tAddress, line 1\tUnit\nA\t1 Main St\t2")[0]).toEqual(["Property", "Address, line 1", "Unit"]);
   });
-  it("rejects an unclosed quote and flags rows wider than the header", () => {
+  it("rejects unclosed or mid-value quotes and flags rows of the wrong width", () => {
     expect(() => parseCsv('a,b\n"oops,1\n2,3')).toThrow(/unclosed quote/);
+    expect(() => parseCsv('a,b\nx"y,1')).toThrow(/middle of a value/);
     expect(widthProblems([["a", "b"], ["1", "2", "3"]])).toEqual(["Row 2 has 3 columns but the header has 2"]);
+    expect(widthProblems([["a", "b"], ["1"]])).toEqual(["Row 2 has 1 columns but the header has 2"]);
+  });
+  it("prefers tabs when tabs and commas tie on the header line", () => {
+    expect(parseCsv("Property\tAddress, line 1\nA\t1 Main St")[0]).toEqual(["Property", "Address, line 1"]);
   });
 });
 
@@ -78,6 +83,10 @@ describe("validateRows + importPortfolio", () => {
     const once = importPortfolio(seed(), rows).state;
     const recheck = validateRows(rows, existingUnitKeys(once));
     expect(recheck.every((c) => c.errors.some((e) => e.startsWith("Already in your portfolio")))).toBe(true);
+    // Even if stale rows reach the import step, nothing is duplicated.
+    const twice = importPortfolio(once, rows);
+    expect(twice.counts.tenancies).toBe(0);
+    expect(twice.state.tenancies.length).toBe(once.tenancies.length);
   });
 
   it("gives distinct IDs to names that slug the same, and types retail as commercial", () => {

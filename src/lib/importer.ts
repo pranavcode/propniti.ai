@@ -34,7 +34,7 @@ function detectDelimiter(text: string): "," | "\t" {
     else if (!quoted && c === ",") commas++;
     else if (!quoted && c === "\t") tabs++;
   }
-  return tabs > commas ? "\t" : ",";
+  return tabs > 0 && tabs >= commas ? "\t" : ",";
 }
 
 // RFC 4180 CSV: quoted fields, escaped quotes, commas and newlines inside quotes. Tabs work too.
@@ -53,7 +53,10 @@ export function parseCsv(text: string): string[][] {
         i++;
       } else if (c === '"') quoted = false;
       else field += c;
-    } else if (c === '"') quoted = true;
+    } else if (c === '"') {
+      if (field.trim()) throw new Error(`A quote (") appears in the middle of a value on row ${rows.length + 1}, so the file can't be read reliably.`);
+      quoted = true;
+    }
     else if (c === delim) {
       row.push(field);
       field = "";
@@ -71,10 +74,10 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-// Rows with more cells than the header usually mean a broken export.
+// Rows with a different number of cells than the header usually mean a broken export.
 export function widthProblems(table: string[][]): string[] {
   const width = table[0]?.length ?? 0;
-  return table.slice(1).flatMap((r, i) => (r.length > width ? [`Row ${i + 2} has ${r.length} columns but the header has ${width}`] : []));
+  return table.slice(1).flatMap((r, i) => (r.length !== width ? [`Row ${i + 2} has ${r.length} columns but the header has ${width}`] : []));
 }
 
 // Header names other tools use for each field. The AI mapping handles anything not listed.
@@ -199,6 +202,9 @@ export function importPortfolio(s: DemoState, rows: ImportRow[], pmChannel: User
     }
     return owner.id;
   };
+  // Re-check against the portfolio at import time, not just in the preview, so stale rows can't duplicate.
+  const existing = existingUnitKeys(s);
+  rows = rows.filter((r) => !existing.has(unitKey(r.property, r.unit)));
   rows.forEach((row, j) => {
     const i = s.tenancies.length + j; // keeps IDs unique across repeated imports
     const pname = row.property!.trim();

@@ -24,27 +24,34 @@ export function mockValidate(wo: WorkOrder): Omit<ValidationResult, "source" | "
     matched.push(`Invoice total ${money(sub.total)} is under PO total ${money(wo.po.total)}`);
   }
 
+  // Lines are grouped by the text before the first comma, ignoring case ("Labor, 4 h @ $90" -> "labor"),
+  // and each group is compared with the PO group of the same name, so one invoice line can't
+  // stand in for several PO lines and a changed quantity shows as a price mismatch.
   const key = (d: string) => d.split(",")[0].trim().toLowerCase();
-  // Line items match on the text before the first comma, ignoring case ("Labor, 4 h @ $90" -> "labor"),
-  // so a changed quantity shows up as a price mismatch rather than an extra item.
-  for (const item of sub.items) {
-    const onPo = wo.po.items.find((p) => key(p.description) === key(item.description));
-    if (!onPo) issues.push(`Not on PO: ${item.description} (${money(item.amount)})`);
-    else if (onPo.amount !== item.amount) issues.push(`${item.description}: ${money(item.amount)} billed vs ${money(onPo.amount)} on PO`);
-    else matched.push(`${item.description}: ${money(item.amount)} matches PO`);
+  const group = (items: { description: string; amount: number }[]) => {
+    const m = new Map<string, { label: string; amount: number }>();
+    for (const i of items) {
+      const k = key(i.description);
+      const g = m.get(k);
+      m.set(k, { label: g?.label ?? i.description, amount: (g?.amount ?? 0) + i.amount });
+    }
+    return m;
+  };
+  const poGroups = group(wo.po.items);
+  const subGroups = group(sub.items);
+  for (const [k, g] of subGroups) {
+    const po = poGroups.get(k);
+    if (!po) issues.push(`Not on PO: ${g.label} (${money(g.amount)})`);
+    else if (Math.abs(po.amount - g.amount) > 0.005) issues.push(`${g.label}: ${money(g.amount)} billed vs ${money(po.amount)} on PO`);
+    else matched.push(`${g.label}: ${money(g.amount)} matches PO`);
   }
+  for (const [k, g] of poGroups) if (!subGroups.has(k)) issues.push(`PO item not on invoice: ${g.label}`);
 
-  // Money invariants: an invoice must have lines, no negative amounts, and add up to its total.
+  // Money invariants: lines present, nothing negative, and lines add up to the stated total to the cent.
   if (sub.items.length === 0) issues.push("Invoice has no line items");
   if (sub.total < 0 || sub.items.some((i) => i.amount < 0)) issues.push("Invoice contains negative amounts");
   const sum = sub.items.reduce((a, i) => a + i.amount, 0);
-  if (sub.items.length && Math.abs(sum - sub.total) > Math.max(1, Math.abs(sub.total) * 0.01)) {
-    issues.push(`Line items add up to ${money(sum)}, not the stated total ${money(sub.total)}`);
-  }
-  // Every PO item should be billed; a missing one usually means the wrong job or partial work.
-  for (const p of wo.po.items) {
-    if (!sub.items.some((i) => key(i.description) === key(p.description))) issues.push(`PO item not on invoice: ${p.description}`);
-  }
+  if (sub.items.length && Math.abs(sum - sub.total) > 0.005) issues.push(`Line items add up to ${money(sum)}, not the stated total ${money(sub.total)}`);
 
   if (sub.photos.length >= wo.po.photosRequired) {
     matched.push(`${sub.photos.length} of ${wo.po.photosRequired} required photos provided`);
