@@ -17,7 +17,8 @@
 // The H1 title and the date/author byline are dropped: the page renders its own title and snapshot line.
 // Links to "#<block id>" become "#<heading slug>", using the same slug rules as src/lib/docs.ts.
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -110,10 +111,13 @@ function inline(rs, resolveHref) {
   return out;
 }
 
-const pngSize = (file) => {
-  const b = readFileSync(file);
-  return [b.readUInt32BE(16), b.readUInt32BE(20)];
-};
+// Screenshots are resized to 1600px wide WebP so pages stay light; returns the new [width, height].
+const webReady = (file, out) =>
+  execFileSync(
+    process.execPath,
+    ["-e", 'require("sharp")(process.argv[1]).resize({ width: 1600, withoutEnlargement: true }).webp({ quality: 80 }).toFile(process.argv[2]).then((i) => console.log(i.width, i.height))', file, out],
+    { cwd: root, encoding: "utf8" },
+  ).trim().split(" ").map(Number);
 const svgSize = (file) => {
   const m = readFileSync(file, "utf8").match(/<svg[^>]*\swidth="(\d+)"[^>]*\sheight="(\d+)"/);
   if (!m) throw new Error(`${file}: svg needs width and height`);
@@ -152,9 +156,8 @@ function convert(manifest) {
     const file = manifest.media?.[blob];
     if (!file) throw new Error(`${slug}: no file for media ${blob}`);
     imageNo++;
-    const name = `${String(imageNo).padStart(2, "0")}-${slugify(m.attrs.alt ?? "image").split("-").slice(0, 6).join("-")}${extname(file)}`;
-    copyFileSync(file, join(outDir, name));
-    return image(m.attrs.alt ?? "", `/docs/${slug}/${name}`, pngSize(file));
+    const name = `${String(imageNo).padStart(2, "0")}-${slugify(m.attrs.alt ?? "image").split("-").slice(0, 6).join("-")}.webp`;
+    return image(m.attrs.alt ?? "", `/docs/${slug}/${name}`, webReady(file, join(outDir, name)));
   };
   const embed = (e) => {
     const node = e.attrs.ref.replace(/^node\//, "");
