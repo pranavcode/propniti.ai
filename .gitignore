@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Cloudflare local secrets
 .dev.vars*
+
+# local demo database (Node / next dev)
+/.data/

@@ -11,6 +11,7 @@
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
     "deploy:vinext": "vinext-cloudflare deploy",
+    "db:migrate:local": "cf d1 migrations apply 00000000-0000-4000-8000-000000000000 --local --persist-to .cloudflare/state",
     "test": "vitest run"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "cf": "^1.0.0-beta.24",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "miniflare": "5.20261023.1-beta",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.3.0",
