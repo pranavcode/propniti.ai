@@ -7,7 +7,7 @@ import { seedStatements } from "./seedSql";
 // Each visitor gets a private copy of the demo, found by a random id in an HttpOnly cookie.
 export const COOKIE = "pn_ws";
 const ID = /^[A-Za-z0-9_-]{22,64}$/;
-const CREATE_LIMIT = 5;
+const CREATE_LIMIT = 30;
 const CREATE_WINDOW_MS = 3_600_000;
 const SWEEP_BATCH = 50;
 

@@ -128,7 +128,10 @@ export async function approveWorkOrder(db: Db, ws: string, s: DemoState, woId: s
     auditStmt(db, ws, ts, "Maya Patel", "Payment approved", `${woId}: ${money(amount)} to ${vendor.company} by ACH`, done),
     auditStmt(db, ws, ts, "Maya Patel", "Approval refused", `${woId}: ${error}`, transferMissing(id), true),
   ]);
-  return insert.meta.changes ? { status: 200 } : { status: 409, error };
+  if (insert.meta.changes) return { status: 200 };
+  // A double click's losing request saw the job as Submitted; report what actually happened.
+  const approved = await db.prepare("SELECT 1 FROM transfers WHERE workspace_id = ?1 AND key = 'vendor:' || ?2 AND status <> 'Returned'").bind(ws, woId).first();
+  return { status: 409, error: approved ? `${woId} is already approved` : error };
 }
 
 // Pays an owner their statement balance from trust and closes the statement (ledger.disburse).

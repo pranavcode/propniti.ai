@@ -131,6 +131,7 @@ describe("money", () => {
     const s = await view(db, ws, T0);
     const approvals = await Promise.all([approveWorkOrder(db, ws, s, "WO-1041", T0), approveWorkOrder(db, ws, s, "WO-1041", T0)]);
     expect(approvals.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(approvals).toContainEqual({ status: 409, error: "WO-1041 is already approved" });
     const pays = await Promise.all([payInvoice(db, ws, s, "INV-2611-02", T0), payInvoice(db, ws, s, "INV-2611-02", T0)]);
     expect(pays.map((r) => r.status).sort()).toEqual([200, 409]);
     const s2 = await view(db, ws, T0);
@@ -278,7 +279,7 @@ describe("workspaces", () => {
   it("limits how many a network can create in an hour", async () => {
     const db = openSqlite(":memory:");
     const make = () => resolveWorkspace(db, new Request("http://x", { headers: { "cf-connecting-ip": "9.9.9.9" } }), T0, true, true);
-    for (let i = 0; i < 5; i++) expect(await make()).not.toBeInstanceOf(Response);
+    for (let i = 0; i < 30; i++) expect(await make()).not.toBeInstanceOf(Response);
     expect(((await make()) as Response).status).toBe(429);
   });
 });
