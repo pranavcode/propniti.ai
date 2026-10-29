@@ -11,7 +11,7 @@
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
     "deploy:vinext": "vinext-cloudflare deploy",
-    "db:migrate:local": "cf d1 migrations apply 00000000-0000-4000-8000-000000000000 --local --persist-to .cloudflare/state",
+    "db:migrate:local": "cf d1 migrations apply 3d4ff9d5-eb1e-4970-b73e-004ba9124fd8 --local --persist-to .cloudflare/state",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

@@ -22,8 +22,7 @@ export default defineConfig({
       // Per-IP cap on the routes that change demo data.
       WRITE_RATE_LIMITER: bindings.rateLimit({ namespace: "1002", simple: { limit: 60, period: 60 } }),
       // Demo workspaces and their data. Schema: migrations/*.sql.
-      // TODO: replace with the real id from `cf d1 create propniti` before deploying.
-      DB: bindings.d1({ name: "propniti", id: "00000000-0000-4000-8000-000000000000" }),
+      DB: bindings.d1({ name: "propniti", id: "3d4ff9d5-eb1e-4970-b73e-004ba9124fd8" }),
       // Optional AI settings; unset = mock data. Set with `npx wrangler secret put <NAME>`.
       ANTHROPIC_API_KEY: bindings.secret(),
       OPENAI_API_KEY: bindings.secret(),
