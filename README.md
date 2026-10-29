@@ -39,11 +39,35 @@ npm run dev          # http://localhost:3000
 | --- | --- |
 | `npm run dev` | Next.js dev server |
 | `npm test` | Unit tests (Vitest) |
+| `npm run test:coverage` | Unit tests with a coverage report (`coverage/index.html`) |
 | `npm run lint` | ESLint |
 | `npm run build` | Next.js production build |
 | `npm run dev:vinext` | Dev server on the Cloudflare Workers runtime |
 | `npm run build:vinext` | Cloudflare Workers build |
 | `npm run deploy:vinext` | Deploy to Cloudflare Workers |
+
+## Tests and coverage
+
+61 unit tests in 9 files run on every push in CI. They cover the money, invoice-checking, import, ratings, request-validation and rate-limit rules, plus the AI provider choice and three of the six AI routes.
+
+Coverage of the business logic and API routes (`npm run test:coverage`):
+
+| Area | Lines | Branches |
+| --- | --- | --- |
+| Ledger and payments (`ledger.ts`) | 100% | 91% |
+| Rent-roll import (`importer.ts`) | 100% | 93% |
+| Ratings (`ratings.ts`) | 100% | 100% |
+| Request schemas (`requests.ts`) | 100% | 100% |
+| Saved-data upgrade (`migrate.ts`) | 100% | 85% |
+| Rate limits and body caps (`guard.ts`) | 97% | 83% |
+| Invoice rules and assistant facts (`mockAi.ts`) | 86% | 78% |
+| AI provider calls (`llm.ts`) | 72% | 61% |
+| AI routes (`app/api/ai/*`) | 59% | 39% |
+| **All logic and API code** | **69%** | **64%** |
+
+Not covered by unit tests:
+- The React screens and the browser store (`store.tsx`). These were checked end to end in a browser with Playwright before each deploy; those scripts are not in this repo yet.
+- The `import-map`, `import-parse` and `status` routes, and the live calls to Anthropic, OpenAI and Workers AI (tests use mocks).
 
 ## AI providers
 
