@@ -1,8 +1,9 @@
 import { getPlatform } from "@/lib/platform";
 
-const LIMIT = 20;
+// Requests per client per minute: paid AI routes, and routes that change demo data.
+const LIMITS = { ai: 20, write: 60 };
 const WINDOW_MS = 60_000;
-const hits = new Map<string, { count: number; reset: number }>();
+const hits = { ai: new Map<string, { count: number; reset: number }>(), write: new Map<string, { count: number; reset: number }>() };
 
 // Which client a request belongs to. On Cloudflare, cf-connecting-ip is set by Cloudflare and
 // can't be spoofed. Elsewhere, client headers are only trusted when TRUSTED_IP_HEADER names one
@@ -14,20 +15,21 @@ export function clientKey(request: Request, onCloudflare: boolean, trustedHeader
   return "shared";
 }
 
-// Caps calls to the paid AI routes: Cloudflare's rate limiter on Workers,
+// Caps calls per client: Cloudflare's rate limiter on Workers,
 // an in-memory fixed window elsewhere (per instance; put a shared limiter in front at scale).
-export async function rateLimit(request: Request): Promise<Response | null> {
-  const { limiter } = getPlatform();
+export async function rateLimit(request: Request, kind: keyof typeof LIMITS = "ai"): Promise<Response | null> {
+  const platform = getPlatform();
+  const limiter = kind === "ai" ? platform.limiter : platform.writeLimiter;
   const key = clientKey(request, !!limiter);
   let ok: boolean;
   if (limiter) {
     ok = (await limiter.limit({ key })).success;
   } else {
     const now = Date.now();
-    const h = hits.get(key);
-    if (!h || h.reset < now) hits.set(key, { count: 1, reset: now + WINDOW_MS });
+    const h = hits[kind].get(key);
+    if (!h || h.reset < now) hits[kind].set(key, { count: 1, reset: now + WINDOW_MS });
     else h.count++;
-    ok = hits.get(key)!.count <= (key === "shared" ? LIMIT * 5 : LIMIT);
+    ok = hits[kind].get(key)!.count <= (key === "shared" ? LIMITS[kind] * 5 : LIMITS[kind]);
   }
   return ok ? null : Response.json({ error: "Too many requests. Try again in a minute." }, { status: 429, headers: { "Retry-After": "60" } });
 }

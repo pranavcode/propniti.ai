@@ -4,6 +4,12 @@ import type { DemoState, PersonaId } from "./types";
 // Fixed "today" so the mock data reads the same on every visit.
 export const DEMO_TODAY = "2026-10-28";
 
+// Each visitor's demo data is deleted at midnight in this time zone (an IANA name).
+export const DEMO_RESET_TZ = "America/Los_Angeles";
+// e.g. "Pacific Time", for UI copy.
+export const DEMO_RESET_ZONE_NAME =
+  new Intl.DateTimeFormat("en-US", { timeZone: DEMO_RESET_TZ, timeZoneName: "longGeneric" }).formatToParts(0).find((p) => p.type === "timeZoneName")?.value ?? DEMO_RESET_TZ;
+
 export const PERSONAS: Record<PersonaId, { userId: string; label: string; blurb: string }> = {
   pm: { userId: "u-pm", label: "Property manager", blurb: "Runs the portfolio. Sees alerts, approves agent actions, validates vendor work." },
   owner: { userId: "u-owner1", label: "Owner", blurb: "Limited dashboard for their own properties: occupancy, rent, payouts." },
