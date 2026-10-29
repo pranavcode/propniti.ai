@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { money } from "@/lib/mockAi";
-import { propName, userName, vendorName } from "@/lib/names";
+import { isOpenWorkOrder, propName, userName, vendorName } from "@/lib/names";
 import { useDemo } from "@/lib/store";
 import { Shell } from "../Shell";
 import { RatingBadge } from "../Ratings";
@@ -72,7 +72,7 @@ export function TenancyPage({ id }: { id: string }) {
                 <Stat label="Monthly rent" value={money(t.rent)} />
                 <Stat label="Lease ends" value={t.leaseEnd} sub={t.status} />
                 <Stat label="Outstanding" value={money(invoices.filter((i) => i.status === "Overdue").reduce((a, i) => a + i.amount, 0))} sub="overdue" />
-                <Stat label="Open requests" value={String(jobs.filter((w) => w.status !== "Paid").length)} />
+                <Stat label="Open requests" value={String(jobs.filter(isOpenWorkOrder).length)} />
               </div>
               <div className="grid gap-6 lg:grid-cols-5">
                 <Card title="Tenancy" className="lg:col-span-2">
@@ -133,7 +133,7 @@ export function PropertyPage({ id }: { id: string }) {
                 <Stat label="Type" value={p.type} />
                 <Stat label="Occupancy" value={`${Math.round((p.occupied / p.units) * 100)}%`} sub={`${p.occupied} of ${p.units} units`} />
                 <Stat label="Rent on file" value={money(rent)} sub={`${tenancies.length} tenancies tracked`} />
-                <Stat label="Open work orders" value={String(wos.filter((w) => w.status !== "Paid").length)} />
+                <Stat label="Open work orders" value={String(wos.filter(isOpenWorkOrder).length)} />
               </div>
               <Card title="Details">
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">

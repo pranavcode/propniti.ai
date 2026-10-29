@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { money } from "@/lib/mockAi";
 import type { ExtractResult, ExtractedInvoice } from "@/lib/types";
 import { Badge, Button, SourceNote } from "./ui";
@@ -12,11 +12,19 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Free the preview's memory when it's replaced or the component goes away.
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
+
   async function upload(file: File) {
     setError(null);
     setResult(null);
+    if (file.size > 4 * 1024 * 1024) {
+      setPreview(null);
+      return setError("File too large (max 4 MB).");
+    }
     setPreview(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
-    if (file.size > 4 * 1024 * 1024) return setError("File too large (max 4 MB).");
     setBusy(true);
     try {
       const body = new FormData();
@@ -34,6 +42,8 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
 
   const inv = result?.invoice;
   const passed = result?.checks.filter((c) => c.ok).length ?? 0;
+  // Legibility is advisory; any other failed check means the figures can't be trusted.
+  const blocking = result?.checks.filter((c) => !c.ok && !c.label.startsWith("Legible")) ?? [];
   return (
     <div className="space-y-4 rounded-[1.25rem] bg-[#F6F2EA] p-5 ring-1 ring-[#1C1917]/[0.06]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -79,7 +89,8 @@ export function InvoiceUpload({ onApply, applyLabel = "Use these line items" }: 
                       {inv.issues.map((i) => <li key={i} className="text-[#8E4327]">✗ {i}</li>)}
                     </ul>
                   </div>
-                  <Button onClick={() => onApply(inv)} disabled={!inv.isInvoice || inv.lineItems.length === 0}>{applyLabel}</Button>
+                  <Button onClick={() => onApply(inv)} disabled={blocking.length > 0 || inv.lineItems.length === 0}>{applyLabel}</Button>
+                  {blocking.length > 0 && <p className="text-xs text-[#8E4327]">Fix the failed checks with the vendor before using this invoice.</p>}
                 </>
               )}
             </div>

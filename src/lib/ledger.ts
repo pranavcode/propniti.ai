@@ -1,4 +1,4 @@
-import type { DemoState, Party, Transfer } from "./types";
+import type { DemoState, Party, Transfer, WorkOrder } from "./types";
 
 // Simulated money movement through the property manager's trust account.
 // Tenants pay rent into trust; the management fee, vendor bills and owner payouts come out of it.
@@ -36,6 +36,7 @@ export function settle(s: DemoState, nowMs: number, stamp: string, newId: () => 
     ...s,
     transfers: s.transfers.map((t) => (dueIds.has(t.id) ? { ...t, status: "Cleared", cleared: stamp } : t)),
     invoices: s.invoices.map((i) => (due.some((t) => t.kind === "Rent" && t.ref === i.id) ? { ...i, status: "Paid" } : i)),
+    workOrders: s.workOrders.map((w) => (due.some((t) => t.kind === "Vendor payout" && t.ref === w.id) ? { ...w, status: "Paid" } : w)),
   };
   for (const t of due.filter((x) => x.kind === "Rent")) {
     next = addTransfer(
@@ -89,4 +90,28 @@ export function disburse(s: DemoState, ownerId: string, nowMs: number, stamp: st
     id,
   );
   return { state: next, amount: st.net };
+}
+
+export const vendorPaidYtd = (s: DemoState, vendorId: string) =>
+  round2((s.vendors.find((v) => v.id === vendorId)?.ytdPaid ?? 0) + s.transfers.filter((t) => t.kind === "Vendor payout" && t.to.id === vendorId && t.status === "Cleared").reduce((a, t) => a + t.amount, 0));
+
+// Approves a submitted job. Vendor jobs pay out from trust (refused if trust can't cover it);
+// in-house jobs simply complete. Only a Submitted job can be approved, so a double click is a no-op.
+export function approveWorkOrder(s: DemoState, woId: string, nowMs: number, stamp: string, id: string): { state: DemoState; error?: string; amount: number } {
+  const wo = s.workOrders.find((w) => w.id === woId);
+  if (!wo) return { state: s, error: "Work order not found", amount: 0 };
+  if (wo.status !== "Submitted") return { state: s, error: `Only submitted work can be approved (this one is ${wo.status.toLowerCase()})`, amount: 0 };
+  const amount = wo.submission?.total ?? wo.po.total;
+  const vendor = s.vendors.find((v) => v.id === wo.vendorId);
+  const setStatus = (st: DemoState, status: WorkOrder["status"]) => ({ ...st, workOrders: st.workOrders.map((w) => (w.id === woId ? { ...w, status } : w)) });
+  if (!vendor) return { state: setStatus(s, "Completed"), amount: 0 };
+  if (!(amount > 0)) return { state: s, error: "Invoice total must be more than $0", amount: 0 };
+  if (amount > trustBalance(s).available) return { state: s, error: `Trust account can't cover ${amount.toFixed(2)} (available ${trustBalance(s).available.toFixed(2)})`, amount: 0 };
+  const next = addTransfer(
+    setStatus(s, "Payment pending"),
+    { key: `vendor:${woId}`, kind: "Vendor payout", from: TRUST, to: { kind: "vendor", id: vendor.id, name: vendor.company }, amount, propertyId: wo.propertyId, ref: woId, created: stamp },
+    nowMs,
+    id,
+  );
+  return { state: next, amount };
 }

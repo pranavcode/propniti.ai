@@ -53,7 +53,8 @@ AI features run on **built-in mock results by default** — no key required. To 
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Use Claude (default model `claude-opus-5`, override with `ANTHROPIC_MODEL`) |
 | `OPENAI_API_KEY` | Use OpenAI (default model `gpt-5.5`, override with `OPENAI_MODEL`) |
-| `AI_PROVIDER` | Force `anthropic`, `openai`, `workers-ai` or `mock` |
+| `AI_PROVIDER` | Force `anthropic`, `openai`, `workers-ai` or `mock`. Authoritative: if the forced provider isn't configured, mock is used — data is never sent to a different provider |
+| `TRUSTED_IP_HEADER` | Off Cloudflare only: the client-IP header your proxy sets (e.g. `x-forwarded-for`), used for per-client rate limits. Unset = one shared budget |
 
 On Cloudflare, **Workers AI** (`@cf/meta/llama-4-scout-17b-16e-instruct`, a vision model) is used automatically when no API key is set — no key or extra setup needed. It reads uploaded invoices, validates them against purchase orders and answers assistant questions.
 

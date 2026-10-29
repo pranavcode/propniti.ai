@@ -24,14 +24,26 @@ export function mockValidate(wo: WorkOrder): Omit<ValidationResult, "source" | "
     matched.push(`Invoice total ${money(sub.total)} is under PO total ${money(wo.po.total)}`);
   }
 
+  const key = (d: string) => d.split(",")[0].trim().toLowerCase();
   // Line items match on the text before the first comma, ignoring case ("Labor, 4 h @ $90" -> "labor"),
   // so a changed quantity shows up as a price mismatch rather than an extra item.
   for (const item of sub.items) {
-    const key = (d: string) => d.split(",")[0].trim().toLowerCase();
     const onPo = wo.po.items.find((p) => key(p.description) === key(item.description));
     if (!onPo) issues.push(`Not on PO: ${item.description} (${money(item.amount)})`);
     else if (onPo.amount !== item.amount) issues.push(`${item.description}: ${money(item.amount)} billed vs ${money(onPo.amount)} on PO`);
     else matched.push(`${item.description}: ${money(item.amount)} matches PO`);
+  }
+
+  // Money invariants: an invoice must have lines, no negative amounts, and add up to its total.
+  if (sub.items.length === 0) issues.push("Invoice has no line items");
+  if (sub.total < 0 || sub.items.some((i) => i.amount < 0)) issues.push("Invoice contains negative amounts");
+  const sum = sub.items.reduce((a, i) => a + i.amount, 0);
+  if (sub.items.length && Math.abs(sum - sub.total) > Math.max(1, Math.abs(sub.total) * 0.01)) {
+    issues.push(`Line items add up to ${money(sum)}, not the stated total ${money(sub.total)}`);
+  }
+  // Every PO item should be billed; a missing one usually means the wrong job or partial work.
+  for (const p of wo.po.items) {
+    if (!sub.items.some((i) => key(i.description) === key(p.description))) issues.push(`PO item not on invoice: ${p.description}`);
   }
 
   if (sub.photos.length >= wo.po.photosRequired) {
@@ -82,7 +94,7 @@ export function mockAsk(question: string, s: DemoState): Omit<AskResult, "source
   }
   if (/(work order|vendor|repair|invoice|po\b|maintenance)/.test(q)) {
     const rows = s.workOrders
-      .filter((w) => w.status !== "Paid")
+      .filter((w) => !["Payment pending", "Paid", "Completed"].includes(w.status))
       .map((w) => `${w.id} ${w.title} (${prop(w.propertyId)}): ${w.status}`);
     return {
       answer: `${rows.length} open work orders:\n- ${rows.join("\n- ")}`,
@@ -123,7 +135,7 @@ export function portfolioFacts(s: DemoState) {
     leasesUpForRenewal: s.tenancies
       .filter((t) => t.status === "Renewal due")
       .map((t) => ({ tenant: name(t.tenantId), home: `${prop(t.propertyId)} ${t.unit}`, leaseEnds: t.leaseEnd, rent: t.rent })),
-    openWorkOrders: s.workOrders.filter((w) => w.status !== "Paid").map((w) => ({ id: w.id, job: w.title, property: prop(w.propertyId), status: w.status })),
+    openWorkOrders: s.workOrders.filter((w) => !["Payment pending", "Paid", "Completed"].includes(w.status)).map((w) => ({ id: w.id, job: w.title, property: prop(w.propertyId), status: w.status })),
   };
 }
 
@@ -131,8 +143,10 @@ export function portfolioFacts(s: DemoState) {
 export function expectedMentions(question: string, s: DemoState): string[] {
   const q = question.toLowerCase();
   const f = portfolioFacts(s);
-  if (/(late|overdue|owe|arrear|unpaid)/.test(q)) return f.overdueRent.map((r) => r.tenant);
-  if (/(lease|renew|expir)/.test(q)) return f.leasesUpForRenewal.map((r) => r.tenant);
+  // Names and the figures that go with them: an answer with the right names but wrong amounts or dates fails.
+  const amt = (n: number) => n.toLocaleString("en-US");
+  if (/(late|overdue|owe|arrear|unpaid)/.test(q)) return f.overdueRent.flatMap((r) => [r.tenant, amt(r.amount)]);
+  if (/(lease|renew|expir)/.test(q)) return f.leasesUpForRenewal.flatMap((r) => [r.tenant, r.leaseEnds]);
   if (/(work order|repair|maintenance)/.test(q)) return f.openWorkOrders.map((w) => w.id);
   return [];
 }

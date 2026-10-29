@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { money } from "@/lib/mockAi";
-import { ownerStatement } from "@/lib/ledger";
+import { ownerStatement, vendorPaidYtd } from "@/lib/ledger";
 import { sameSubject } from "@/lib/ratings";
 import { PERSONAS } from "@/lib/seed";
 import { useDemo } from "@/lib/store";
@@ -11,7 +11,7 @@ import { Shell, useAiMode } from "../Shell";
 import { InvoiceUpload } from "../InvoiceUpload";
 import { RateBox, RatingBadge, Stars } from "../Ratings";
 import { Badge, Button, Card, Stat, Table, statusTone } from "../ui";
-import { propName, userName, vendorName } from "@/lib/names";
+import { isDoneWorkOrder, isOpenWorkOrder, propName, userName, vendorName } from "@/lib/names";
 
 export function OwnerView() {
   const { state } = useDemo();
@@ -31,7 +31,7 @@ export function OwnerView() {
         <Stat label="Your properties" value={String(props.length)} sub={`${units} units`} />
         <Stat label="Occupancy" value={`${Math.round((occupied / units) * 100)}%`} sub={`${occupied} of ${units}`} />
         <Stat label="Owed to you" value={money(st.net)} sub="next payout" />
-        <Stat label="Open work orders" value={String(wos.filter((w) => w.status !== "Paid").length)} />
+        <Stat label="Open work orders" value={String(wos.filter(isOpenWorkOrder).length)} />
       </div>
       <Card title="Your properties">
         <Table
@@ -104,7 +104,7 @@ export function TenantView() {
         <Stat label="Next payment" value={nextDue ? money(nextDue.amount) : "Paid up"} sub={nextDue ? `due ${nextDue.due}` : undefined} />
         <Stat label="Monthly rent" value={money(t.rent)} />
         <Stat label="Lease ends" value={t.leaseEnd} sub={t.status} />
-        <Stat label="Open requests" value={String(myJobs.filter((w) => !["Paid", "Approved"].includes(w.status)).length)} />
+        <Stat label="Open requests" value={String(myJobs.filter(isOpenWorkOrder).length)} />
       </div>
       <Card title="Your tenancy">
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -162,7 +162,7 @@ export function TenantView() {
         <Table head={["ID", "Issue", "Status"]} rows={myJobs.map((w) => [w.id, w.title, <Badge key="s" tone={statusTone(w.status)}>{w.status}</Badge>])} empty="No requests yet." />
       </div>
       {myJobs
-        .filter((w) => ["Approved", "Paid"].includes(w.status))
+        .filter(isDoneWorkOrder)
         .map((w) => {
           const subject = w.vendorId === "in-house" ? { kind: "maintenance" as const, id: w.assigneeId ?? "u-m1" } : { kind: "vendor" as const, id: w.vendorId };
           const who = w.vendorId === "in-house" ? userName(state, subject.id) : vendorName(state, w.vendorId);
@@ -213,7 +213,7 @@ export function MaintenanceView() {
             {w.submission?.photos.length ? (
               <div className="space-y-1">{w.submission.photos.map((p) => <div key={p} className="text-xs text-[#57534E]">📷 {p}</div>)}</div>
             ) : null}
-            {w.status !== "Approved" && w.status !== "Paid" && (
+            {isOpenWorkOrder(w) && (
               <div className="flex flex-wrap items-center gap-2">
                 {w.status === "Assigned" && <Button onClick={() => act.updateJob(w.id, "In progress")}>Start job</Button>}
                 <input
@@ -225,7 +225,7 @@ export function MaintenanceView() {
                 <Button variant="secondary" disabled={!photo[w.id]} onClick={() => { act.updateJob(w.id, w.status, photo[w.id]); setPhoto({ ...photo, [w.id]: "" }); }}>
                   Add photo
                 </Button>
-                {w.status === "In progress" && <Button onClick={() => act.updateJob(w.id, "Approved")}>Mark complete</Button>}
+                {w.status === "In progress" && <Button onClick={() => act.updateJob(w.id, "Completed")}>Mark complete</Button>}
               </div>
             )}
           </div>
@@ -243,6 +243,7 @@ export function VendorView() {
   const wos = state.workOrders.filter((w) => w.vendorId === vendor.id);
   const payouts = state.transfers.filter((t) => t.kind === "Vendor payout" && t.to.id === vendor.id);
   const feedback = state.ratings.filter((r) => sameSubject(r.subject, { kind: "vendor", id: vendor.id }));
+  const paidYtd = vendorPaidYtd(state, vendor.id);
 
   const orders = (
     <div className="space-y-4">
@@ -252,8 +253,8 @@ export function VendorView() {
   const payments = (
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <Stat label="Paid this year" value={money(vendor.ytdPaid)} />
-        <Stat label="1099-NEC" value={vendor.ytdPaid >= 600 ? "Will be issued" : "Not required yet"} sub="IRS threshold $600 per year" />
+        <Stat label="Paid this year" value={money(paidYtd)} sub="cleared payouts" />
+        <Stat label="1099-NEC" value={paidYtd >= 600 ? "Will be issued" : "Not required yet"} sub="IRS threshold $600 per year" />
         <Stat label="Payout method" value="ACH" sub="via Stripe Connect" />
       </div>
       <Card title="Payouts">
@@ -366,7 +367,7 @@ export function AdminView() {
           head={["Component", "Status", "Note"]}
           rows={[
             ["AI provider", <Badge key="a" tone={mode?.source === "mock" ? "amber" : "green"}>{mode?.label ?? "…"}</Badge>, mode?.source === "mock" ? "Set ANTHROPIC_API_KEY or OPENAI_API_KEY to use a real model" : "Live model calls; falls back to mock on any error"],
-            ["Scheduled sweep", <Badge key="s" tone="green">Healthy</Badge>, "Every 15 minutes; last run 08:45"],
+            ["Scheduled sweep", <Badge key="s" tone="gray">Planned</Badge>, "Not running in this demo; agent activity shown is sample data. Production runs every 15 minutes"],
             ["Messaging (SMS, WhatsApp, voice, email)", <Badge key="m" tone="gray">Simulated</Badge>, "Messages land in each persona's Inbox"],
             ["Payments", <Badge key="p" tone="gray">Simulated</Badge>, "Trust-account ledger; ACH clears in seconds; no money moves"],
           ]}

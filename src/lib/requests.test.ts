@@ -17,4 +17,9 @@ describe("parseBody", () => {
     expect(((await parseBody(post(JSON.stringify({ question: "", state: seed() })), AskRequest)) as Response).status).toBe(400);
     expect(((await parseBody(post("x".repeat(300 * 1024)), AskRequest)) as Response).status).toBe(413);
   });
+
+  it("rejects assistant state whose records are malformed", async () => {
+    const state = { ...seed(), invoices: [null] };
+    expect(((await parseBody(post(JSON.stringify({ question: "who is late?", state })), AskRequest)) as Response).status).toBe(400);
+  });
 });

@@ -6,12 +6,13 @@ import { useDemo } from "@/lib/store";
 import type { RatingSubject } from "@/lib/types";
 import { Button } from "./ui";
 
+// Exact averages (4.5 shows four and a half stars) via a clipped filled layer over empty stars.
 export function Stars({ value, size = "text-base" }: { value: number; size?: string }) {
+  const pct = Math.max(0, Math.min(100, (value / 5) * 100));
   return (
-    <span className={`inline-flex ${size} leading-none tracking-[0.05em]`} aria-label={`${value} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} className={n <= Math.round(value) ? "text-[#B7862F]" : "text-[#1C1917]/15"}>★</span>
-      ))}
+    <span className={`relative inline-block ${size} leading-none tracking-[0.05em]`} role="img" aria-label={`${value} out of 5 stars`}>
+      <span className="text-[#1C1917]/15" aria-hidden>★★★★★</span>
+      <span className="absolute inset-0 overflow-hidden whitespace-nowrap text-[#B7862F]" style={{ width: `${pct}%` }} aria-hidden>★★★★★</span>
     </span>
   );
 }
@@ -29,20 +30,29 @@ export function RatingBadge({ subject }: { subject: RatingSubject }) {
   );
 }
 
+type RateBoxProps = { by: string; subject: RatingSubject; label: string; refId?: string };
+
 // Lets a user rate someone or something once per job; rating again replaces it.
-export function RateBox({ by, subject, label, refId }: { by: string; subject: RatingSubject; label: string; refId?: string }) {
+// Keyed by identity and saved rating so the form resets when either changes.
+export function RateBox(props: RateBoxProps) {
+  const { state } = useDemo();
+  const existing = state.ratings.find((r) => r.by === props.by && sameSubject(r.subject, props.subject) && r.ref === props.refId);
+  const key = `${props.by}|${props.subject.kind}|${props.subject.id}|${props.refId ?? ""}|${existing?.id ?? "new"}`;
+  return <RateForm key={key} {...props} />;
+}
+
+function RateForm({ by, subject, label, refId }: RateBoxProps) {
   const { state, act } = useDemo();
   const existing = state.ratings.find((r) => r.by === by && sameSubject(r.subject, subject) && r.ref === refId);
   const [stars, setStars] = useState(existing?.stars ?? 0);
   const [comment, setComment] = useState(existing?.comment ?? "");
-  const [saved, setSaved] = useState(false);
+  const saved = !!existing && existing.stars === stars && existing.comment === comment.trim();
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         if (!stars) return;
         act.rate(by, subject, stars, comment, refId);
-        setSaved(true);
       }}
       className="space-y-3 rounded-[1.25rem] bg-[#F6F2EA] p-4 ring-1 ring-[#1C1917]/[0.06]"
     >
@@ -58,7 +68,6 @@ export function RateBox({ by, subject, label, refId }: { by: string; subject: Ra
               aria-label={`${n} star${n > 1 ? "s" : ""}`}
               onClick={() => {
                 setStars(n);
-                setSaved(false);
               }}
               className={`text-2xl leading-none transition-transform duration-300 hover:scale-110 ${n <= stars ? "text-[#B7862F]" : "text-[#1C1917]/15"}`}
             >
@@ -71,7 +80,6 @@ export function RateBox({ by, subject, label, refId }: { by: string; subject: Ra
         value={comment}
         onChange={(e) => {
           setComment(e.target.value);
-          setSaved(false);
         }}
         maxLength={300}
         rows={2}
@@ -80,7 +88,7 @@ export function RateBox({ by, subject, label, refId }: { by: string; subject: Ra
       />
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={!stars}>{existing ? "Update rating" : "Submit rating"}</Button>
-        {saved && <span className="text-sm text-[#4A6340]">Thanks — saved.</span>}
+        {saved && <span className="text-sm text-[#4A6340]">✓ Saved</span>}
         {!stars && <span className="text-xs text-[#78716C]">Pick 1–5 stars</span>}
       </div>
     </form>

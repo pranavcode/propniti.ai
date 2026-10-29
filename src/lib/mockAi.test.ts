@@ -31,6 +31,19 @@ describe("mockValidate", () => {
     expect(mockValidate(wo).issues.some((i) => i.includes("over PO"))).toBe(false);
   });
 
+  it("never approves an invoice with no lines, negative amounts or a total that doesn't add up", () => {
+    const base = byId("WO-1041");
+    const noLines = mockValidate({ ...base, submission: { ...base.submission!, items: [] } });
+    expect(noLines.decision).toBe("review");
+    expect(noLines.issues.join()).toMatch(/no line items/);
+    const negative = mockValidate({ ...base, submission: { ...base.submission!, total: -635 } });
+    expect(negative.decision).toBe("review");
+    expect(negative.issues.join()).toMatch(/negative/);
+    const badSum = mockValidate({ ...base, submission: { ...base.submission!, items: [base.submission!.items[0]], total: 635 } });
+    expect(badSum.issues.join()).toMatch(/add up to \$380/);
+    expect(badSum.issues.join()).toMatch(/PO item not on invoice: Labor/);
+  });
+
   it("asks for review when nothing has been submitted", () => {
     const r = mockValidate(byId("WO-1043"));
     expect(r.decision).toBe("review");

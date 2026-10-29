@@ -1,5 +1,5 @@
 import { extractInvoice } from "@/lib/llm";
-import { rateLimit } from "@/lib/guard";
+import { rateLimit, readBodyLimited } from "@/lib/guard";
 
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
@@ -22,12 +22,13 @@ function toBase64(bytes: Uint8Array) {
 export async function POST(request: Request) {
   const limited = await rateLimit(request);
   if (limited) return limited;
-  if (Number(request.headers.get("content-length") ?? 0) > MAX_FILE_BYTES + 64 * 1024) {
-    return Response.json({ error: "File too large (max 4 MB)" }, { status: 413 });
-  }
+  // Cap the whole multipart body while streaming, then parse it from memory.
+  const body = await readBodyLimited(request, MAX_FILE_BYTES + 64 * 1024);
+  if (body instanceof Response) return Response.json({ error: "File too large (max 4 MB)" }, { status: 413 });
   let file: FormDataEntryValue | null;
   try {
-    file = (await request.formData()).get("file");
+    const form = await new Response(body, { headers: { "content-type": request.headers.get("content-type") ?? "" } }).formData();
+    file = form.get("file");
   } catch {
     return Response.json({ error: "Expected a multipart upload with a 'file' field" }, { status: 400 });
   }

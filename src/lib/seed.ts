@@ -37,7 +37,7 @@ export function seed(): DemoState {
       { id: "u-admin", name: "Sam Okafor", role: "Admin", email: "sam@summitres.example", phone: "(512) 555-0100", channel: "Email", idVerified: true },
     ],
     vendors: [
-      { id: "v1", userId: "u-v1", company: "CoolAir HVAC", trade: "HVAC", ytdPaid: 4860 },
+      { id: "v1", userId: "u-v1", company: "CoolAir HVAC", trade: "HVAC", ytdPaid: 3620 },
       { id: "v2", userId: "u-v2", company: "QuickFix Plumbing", trade: "Plumbing", ytdPaid: 2150 },
       { id: "v3", userId: "u-v3", company: "BrightSpark Electric", trade: "Electrical", ytdPaid: 480 },
     ],

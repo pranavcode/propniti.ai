@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { applyMapping, guessMapping, importPortfolio, parseCsv, parseDate, validateRows } from "./importer";
+import { applyMapping, existingUnitKeys, guessMapping, importPortfolio, parseCsv, parseDate, validateRows, widthProblems } from "./importer";
 import { seed } from "./seed";
 
 const sample = (f: string) => parseCsv(readFileSync(`public/samples/${f}`, "utf8"));
@@ -9,8 +9,13 @@ describe("parseCsv", () => {
   it("handles quotes, embedded commas, escaped quotes and CRLF", () => {
     expect(parseCsv('a,b\r\n"x, y","say ""hi"""\r\n')).toEqual([["a", "b"], ["x, y", 'say "hi"']]);
   });
-  it("reads tab-separated text", () => {
+  it("reads tab-separated text, even with commas in a header", () => {
     expect(parseCsv("a\tb\n1\t2")).toEqual([["a", "b"], ["1", "2"]]);
+    expect(parseCsv("Property\tAddress, line 1\tUnit\nA\t1 Main St\t2")[0]).toEqual(["Property", "Address, line 1", "Unit"]);
+  });
+  it("rejects an unclosed quote and flags rows wider than the header", () => {
+    expect(() => parseCsv('a,b\n"oops,1\n2,3')).toThrow(/unclosed quote/);
+    expect(widthProblems([["a", "b"], ["1", "2", "3"]])).toEqual(["Row 2 has 3 columns but the header has 2"]);
   });
 });
 
@@ -65,5 +70,27 @@ describe("validateRows + importPortfolio", () => {
     expect(checks[2].errors.join()).toMatch(/not a positive amount/);
     expect(checks[3].errors.join()).toMatch(/Duplicate/);
     expect(checks[4].errors.join()).toMatch(/Tenant name is missing/);
+  });
+
+  it("flags rows already in the portfolio when a file is imported again", () => {
+    const t = sample("appfolio-style-rent-roll.csv");
+    const rows = validateRows(applyMapping(t, guessMapping(t[0]))).map((c) => c.row);
+    const once = importPortfolio(seed(), rows).state;
+    const recheck = validateRows(rows, existingUnitKeys(once));
+    expect(recheck.every((c) => c.errors.some((e) => e.startsWith("Already in your portfolio")))).toBe(true);
+  });
+
+  it("gives distinct IDs to names that slug the same, and types retail as commercial", () => {
+    const rows = [
+      { property: "A B", unit: "1", tenant: "X", rent: "100", owner: "O P" },
+      { property: "A-B", unit: "1", tenant: "Y", rent: "100", owner: "O-P" },
+      { property: "Cedar Plaza Retail", unit: "Suite A", tenant: "Z", rent: "100" },
+    ];
+    const { state } = importPortfolio(seed(), rows);
+    const ids = state.properties.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(state.properties.find((p) => p.name === "A B")?.id).not.toBe(state.properties.find((p) => p.name === "A-B")?.id);
+    expect(new Set(state.users.map((u) => u.id)).size).toBe(state.users.length);
+    expect(state.properties.find((p) => p.name === "Cedar Plaza Retail")?.type).toBe("Commercial");
   });
 });

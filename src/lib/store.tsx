@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { TRUST, addTransfer, disburse, settle } from "./ledger";
+import { TRUST, addTransfer, approveWorkOrder, disburse, settle } from "./ledger";
 import { money } from "./mockAi";
 import { importPortfolio, type ImportRow } from "./importer";
+import { submissionKey } from "./names";
 import { upsertRating } from "./ratings";
 import { DEMO_TODAY, seed } from "./seed";
 import type { DemoState, ExtractedInvoice, LineItem, RatingSubject, ValidationResult, WorkOrder } from "./types";
@@ -17,7 +18,7 @@ const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 8)}`;
 type Actions = {
   nudge: (userId: string, message: string, actor: string) => void;
   payInvoice: (invoiceId: string) => void;
-  setValidation: (woId: string, v: ValidationResult) => void;
+  setValidation: (woId: string, v: ValidationResult, forSubmission: string) => void;
   approveWorkOrder: (woId: string) => void;
   requestChanges: (woId: string) => void;
   submitInvoice: (woId: string, items: LineItem[], photos: string[], invoiceNumber?: string) => void;
@@ -48,14 +49,28 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  // Persist only real changes, so an idle tab never writes its stale copy over another tab's work.
   const update = useCallback((fn: (s: DemoState) => DemoState) => {
     setState((prev) => {
       const next = fn(prev);
+      if (next === prev) return prev;
       try {
         localStorage.setItem(KEY, JSON.stringify(next));
       } catch {}
       return next;
     });
+  }, []);
+
+  // Pick up changes made in other tabs.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== KEY || !e.newValue) return;
+      try {
+        setState(JSON.parse(e.newValue));
+      } catch {}
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   // Settle due ACH transfers once a second (the demo's stand-in for the bank).
@@ -122,28 +137,23 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           next = notify(next, "u-pm", `${tenant.name} paid ${money(inv.amount)} (${inv.id}); ACH pending.`);
           return log(next, tenant.name, "Rent payment started", `${inv.id} ${money(inv.amount)} by ACH into the trust account`);
         }),
-      setValidation: (woId, v) =>
-        update((s) =>
-          log(setWo(s, woId, { validation: v }), "Agent", "Invoice validated", `${woId}: ${v.decision}, confidence ${Math.round(v.confidence * 100)}% (${v.source})`),
-        ),
-      // Vendor payouts leave trust as pending ACH and are charged to the property's owner statement.
+      // A result is kept only if the invoice hasn't changed since it was sent for validation.
+      setValidation: (woId, v, forSubmission) =>
+        update((s) => {
+          const wo = s.workOrders.find((w) => w.id === woId);
+          if (!wo || submissionKey(wo) !== forSubmission) return s;
+          return log(setWo(s, woId, { validation: v }), "Agent", "Invoice validated", `${woId}: ${v.decision}, confidence ${Math.round(v.confidence * 100)}% (${v.source})`);
+        }),
+      // Approval rules (status, funds, idempotency) live in ledger.approveWorkOrder.
       approveWorkOrder: (woId) =>
         update((s) => {
-          const wo = s.workOrders.find((w) => w.id === woId)!;
-          const vendor = vendorOf(s, wo);
-          const amount = wo.submission?.total ?? wo.po.total;
-          let next = setWo(s, woId, { status: "Paid" });
-          if (vendor) {
-            next = addTransfer(
-              next,
-              { key: `vendor:${woId}`, kind: "Vendor payout", from: TRUST, to: { kind: "vendor", id: vendor.id, name: vendor.company }, amount, propertyId: wo.propertyId, ref: woId, created: stamp() },
-              Date.now(),
-              uid("tr"),
-            );
-            next = { ...next, vendors: next.vendors.map((v) => (v.id === vendor.id ? { ...v, ytdPaid: v.ytdPaid + amount } : v)) };
-            next = notify(next, vendor.userId, `${woId} approved. ${money(amount)} sent by ACH, arriving in 1–2 business days.`);
-          }
-          return log(next, "Maya Patel", "Payment approved", `${woId}: ${money(amount)} to ${vendor?.company ?? "in-house"} by ACH`);
+          const { state, error, amount } = approveWorkOrder(s, woId, Date.now(), stamp(), uid("tr"));
+          if (error) return state === s && s.audit[0]?.detail.endsWith(error) ? s : log(s, "Maya Patel", "Approval refused", `${woId}: ${error}`);
+          const wo = state.workOrders.find((w) => w.id === woId)!;
+          const vendor = vendorOf(state, wo);
+          let next = state;
+          if (vendor) next = notify(next, vendor.userId, `${woId} approved. ${money(amount)} sent by ACH, arriving in 1–2 business days.`);
+          return log(next, "Maya Patel", vendor ? "Payment approved" : "Job completed", vendor ? `${woId}: ${money(amount)} to ${vendor.company} by ACH` : `${woId} completed in-house`);
         }),
       requestChanges: (woId) =>
         update((s) => {

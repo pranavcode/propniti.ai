@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SETTLE_MS, TRUST, addTransfer, disburse, managementFee, ownerStatement, settle, trustBalance } from "./ledger";
+import { SETTLE_MS, TRUST, addTransfer, approveWorkOrder, disburse, managementFee, ownerStatement, settle, trustBalance, vendorPaidYtd } from "./ledger";
 import { seed } from "./seed";
 import type { DemoState } from "./types";
 
@@ -67,5 +67,29 @@ describe("ledger", () => {
     const s = { ...seed(), transfers: seed().transfers.filter((t) => t.id !== "tr-open") }; // drop opening balance
     expect(trustBalance(s).available).toBeLessThan(ownerStatement(s, "u-owner1").net);
     expect(disburse(s, "u-owner1", T0, "x", "p").amount).toBe(0);
+  });
+
+  it("approves a submitted job once: payout pending, then Paid when it clears", () => {
+    const s = seed();
+    const first = approveWorkOrder(s, "WO-1041", T0, "now", "p1");
+    expect(first.error).toBeUndefined();
+    expect(first.state.workOrders.find((w) => w.id === "WO-1041")?.status).toBe("Payment pending");
+    const again = approveWorkOrder(first.state, "WO-1041", T0, "now", "p2");
+    expect(again.error).toMatch(/Only submitted work/);
+    expect(again.state.transfers.length).toBe(first.state.transfers.length);
+    const cleared = settle(first.state, T0 + SETTLE_MS, "later", id).state;
+    expect(cleared.workOrders.find((w) => w.id === "WO-1041")?.status).toBe("Paid");
+    expect(vendorPaidYtd(cleared, "v1")).toBe(vendorPaidYtd(s, "v1") + 635);
+    expect(vendorPaidYtd(first.state, "v1")).toBe(vendorPaidYtd(s, "v1")); // pending isn't paid yet
+  });
+
+  it("refuses a vendor payout the trust account can't cover", () => {
+    let s = seed();
+    s = disburse(s, "u-owner1", T0, "a", "o1").state;
+    s = disburse(s, "u-owner2", T0, "b", "o2").state;
+    expect(trustBalance(s).available).toBeLessThan(635);
+    const r = approveWorkOrder(s, "WO-1041", T0, "now", "p1");
+    expect(r.error).toMatch(/can't cover/);
+    expect(trustBalance(r.state).available).toBeGreaterThanOrEqual(0);
   });
 });

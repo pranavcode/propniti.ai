@@ -41,6 +41,12 @@ describe("configuredProvider", () => {
     expect(configuredProvider()).toBeNull();
   });
 
+  it("treats AI_PROVIDER as authoritative: never falls through to another company", () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "a");
+    vi.stubEnv("AI_PROVIDER", "openai"); // forced, but no OpenAI key
+    expect(configuredProvider()).toBeNull();
+  });
+
   it("uses Workers AI on Cloudflare when no API key is set", () => {
     platform.ai = { run: vi.fn(), toMarkdown: vi.fn() };
     expect(configuredProvider()?.source).toBe("workers-ai");
@@ -97,14 +103,18 @@ describe("validateWorkOrder", () => {
 describe("askAssistant", () => {
   it("maps the model's answer and falls back on failure", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "k");
-    const answer = "Marcus Lee and Aisha Khan are overdue.";
+    const answer = "Marcus Lee owes $1,725 and Aisha Khan owes $1,350.";
     anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer, suggested_actions: ["Nudge"] } });
     expect(await askAssistant("who is late?", seed())).toEqual({ answer, suggestedActions: ["Nudge"], source: "anthropic" });
 
     anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Marcus Lee is late.", suggested_actions: [] } });
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { answer: "Marcus Lee owes $99 and Aisha Khan owes $1,350.", suggested_actions: [] } });
+    const wrongAmount = await askAssistant("who is late on rent?", seed());
+    expect(wrongAmount.source).toBe("mock"); // right names, wrong figure
+
     const partial = await askAssistant("who is late on rent?", seed());
     expect(partial.source).toBe("mock");
-    expect(partial.note).toMatch(/left out Aisha Khan/);
+    expect(partial.note).toMatch(/left out/);
     expect(partial.answer).toContain("Aisha Khan");
 
     anthropicParse.mockRejectedValueOnce(new Error("timeout"));
@@ -151,6 +161,14 @@ describe("extractInvoice", () => {
     const r = await extractInvoice({ mime: "application/pdf", base64: btoa("%PDF-1.7") });
     expect(platform.ai.toMarkdown).toHaveBeenCalled();
     expect(r.invoice?.invoiceNumber).toBe("CA-88342");
+  });
+
+  it("sends PDFs to OpenAI as a file", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "k");
+    openaiParse.mockResolvedValue({ output_parsed: invoice });
+    const r = await extractInvoice({ mime: "application/pdf", base64: btoa("%PDF-1.7") });
+    expect(r.source).toBe("openai");
+    expect(JSON.stringify(openaiParse.mock.calls[0][0])).toContain('"type":"input_file"');
   });
 
   it("falls back when the model returns malformed output", async () => {

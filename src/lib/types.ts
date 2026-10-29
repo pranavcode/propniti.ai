@@ -25,6 +25,7 @@ export type Vendor = {
   userId: string;
   company: string;
   trade: string;
+  // Paid this calendar year before the ledger's records; cleared payouts are added on top.
   ytdPaid: number;
 };
 
@@ -59,7 +60,8 @@ export type WorkOrder = {
   vendorId: string;
   assigneeId?: string;
   estimatedHours: number;
-  status: "Assigned" | "In progress" | "Submitted" | "Changes requested" | "Approved" | "Paid";
+  // Vendor jobs: Submitted → Payment pending → Paid. In-house jobs end at Completed.
+  status: "Assigned" | "In progress" | "Submitted" | "Changes requested" | "Payment pending" | "Paid" | "Completed";
   po: { number: string; items: LineItem[]; total: number; photosRequired: number };
   submission?: { invoiceNumber: string; items: LineItem[]; total: number; photos: string[] };
   validation?: ValidationResult;

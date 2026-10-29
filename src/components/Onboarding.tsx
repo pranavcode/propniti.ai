@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { FIELD_LABELS, IMPORT_FIELDS, REQUIRED, applyMapping, parseCsv, parseMoney, validateRows, type ImportRow, type Mapping } from "@/lib/importer";
+import { FIELD_LABELS, IMPORT_FIELDS, REQUIRED, applyMapping, existingUnitKeys, parseCsv, parseMoney, validateRows, widthProblems, type ImportRow, type Mapping } from "@/lib/importer";
 import { MANAGEMENT_FEE_RATE } from "@/lib/ledger";
 import { money } from "@/lib/mockAi";
 import { useDemo } from "@/lib/store";
@@ -37,11 +37,18 @@ export function Onboarding() {
   // A CSV/TSV file or sample: parse it, then ask the AI which column is which.
   async function loadTable(text: string, source: string) {
     setError(null);
-    const table = parseCsv(text);
+    let table: string[][];
+    try {
+      table = parseCsv(text);
+    } catch (e) {
+      return setError((e as Error).message);
+    }
     if (table.length < 2) return setError("That file has no data rows. Export your rent roll as CSV and try again.");
+    const width = widthProblems(table);
+    if (width.length) return setError(`${width.slice(0, 3).join("; ")}. Check the export and try again.`);
     setBusy("Matching your columns…");
     try {
-      const res = await postJson<{ mapping: Mapping; source: AiSource; note?: string }>("/api/ai/import-map", { headers: table[0].slice(0, 60), samples: table.slice(1, 6) });
+      const res = await postJson<{ mapping: Mapping; source: AiSource; note?: string }>("/api/ai/import-map", { headers: table[0].slice(0, 60), samples: table.slice(1, 6).map((r) => r.slice(0, 60)) });
       setDraft({ table, mapping: res.mapping, source, ai: { source: res.source, note: res.note } });
       setStep(1);
     } catch (e) {
@@ -80,7 +87,8 @@ export function Onboarding() {
   }
 
   const rows = useMemo(() => (draft?.table && draft.mapping ? applyMapping(draft.table, draft.mapping) : draft?.rows ?? []), [draft]);
-  const checks = useMemo(() => validateRows(rows), [rows]);
+  const existing = useMemo(() => existingUnitKeys(state), [state]);
+  const checks = useMemo(() => validateRows(rows, existing), [rows, existing]);
   const valid = checks.filter((c) => !c.errors.length);
   const missingRequired = draft?.mapping ? REQUIRED.filter((f) => !draft.mapping![f]) : [];
   const owners = state.users.filter((u) => u.role === "Owner");
@@ -108,7 +116,14 @@ export function Onboarding() {
             <div className="mt-10 grid gap-5 lg:grid-cols-2">
               <Card title="Import a file">
                 <p className="text-sm text-[#57534E]">CSV or TSV, up to 2 MB. One row per tenancy.</p>
-                <label className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-[#1C1917]/20 bg-[#F6F2EA] px-6 py-10 text-center transition-colors hover:bg-[#F6F2EA]/60 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                <label
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const f = e.dataTransfer.files?.[0];
+                    if (f) onFile(f);
+                  }}
+                  className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-[#1C1917]/20 bg-[#F6F2EA] px-6 py-10 text-center transition-colors hover:bg-[#F6F2EA]/60 ${busy ? "pointer-events-none opacity-60" : ""}`}>
                   <span className="font-serif text-2xl">Choose a file</span>
                   <span className="mt-1 text-xs text-[#78716C]">or drop it here</span>
                   <input type="file" accept=".csv,.tsv,.txt,text/csv" className="sr-only" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
@@ -239,7 +254,7 @@ export function Onboarding() {
                 <li>✓ {state.properties.length} properties and {state.tenancies.length} tenancies in your portfolio</li>
                 <li>{state.setup?.bank ? "✓" : "○"} Trust account {state.setup?.bank ? `at ${state.setup.bank} connected` : "not connected yet"}</li>
                 <li>{state.setup?.invited.length ? "✓" : "○"} {state.setup?.invited.length ?? 0} people invited</li>
-                <li>→ The agent starts its 15-minute sweep: rent reminders, lease renewals and invoice checks.</li>
+                <li>→ Use the dashboard to send reminders and validate invoices. (In production the agent also sweeps every 15 minutes; that schedule isn&apos;t running in this demo.)</li>
               </ul>
             </Card>
             <Button

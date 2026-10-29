@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/Logo";
 
 const links = [
@@ -15,6 +15,13 @@ const ease = "ease-[cubic-bezier(0.32,0.72,0,1)]";
 
 export function Nav() {
   const [open, setOpen] = useState(false);
+  // Close the full-screen menu with Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   return (
     <>
       <header className="fixed inset-x-0 top-4 z-30 flex justify-center px-4">
@@ -41,6 +48,8 @@ export function Nav() {
         </div>
       </header>
       <div
+        inert={!open}
+        aria-hidden={!open}
         className={`fixed inset-0 z-20 bg-[#FBF9F4]/85 backdrop-blur-3xl transition-opacity duration-500 ${ease} md:hidden ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
       >
         <nav className="flex h-full flex-col justify-center gap-2 px-8">

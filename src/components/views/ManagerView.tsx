@@ -6,7 +6,7 @@ import { money } from "@/lib/mockAi";
 import { MANAGEMENT_FEE_RATE, ownerStatement, trustBalance } from "@/lib/ledger";
 import { lowRatings, ratingSummary } from "@/lib/ratings";
 import { useDemo } from "@/lib/store";
-import { propName, userName, vendorName } from "@/lib/names";
+import { isDoneWorkOrder, isOpenWorkOrder, propName, submissionKey, userName, vendorName } from "@/lib/names";
 import type { AskResult, DemoState, RatingSubject, ValidationResult, WorkOrder } from "@/lib/types";
 import { InvoiceUpload } from "../InvoiceUpload";
 import { RateBox, RatingBadge, Stars } from "../Ratings";
@@ -158,7 +158,7 @@ function Properties() {
           p.units,
           `${p.occupied}/${p.units}`,
           userName(state, p.ownerId),
-          state.workOrders.filter((w) => w.propertyId === p.id && w.status !== "Paid").length,
+          state.workOrders.filter((w) => w.propertyId === p.id && isOpenWorkOrder(w)).length,
         ])}
       />
     </Card>
@@ -223,12 +223,19 @@ function WorkOrders({ selected, onSelect }: { selected: string; onSelect: (id: s
 export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: boolean }) {
   const { state, act } = useDemo();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function validate() {
     setBusy(true);
+    setError(null);
+    const key = submissionKey(wo);
     try {
       const res = await fetch("/api/ai/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workOrder: wo }) });
-      act.setValidation(wo.id, (await res.json()) as ValidationResult);
+      const json = await res.json();
+      if (!res.ok) setError(json.error ?? "Validation failed. Try again.");
+      else act.setValidation(wo.id, json as ValidationResult, key);
+    } catch {
+      setError("Couldn't reach the validation service. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -236,6 +243,8 @@ export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: bo
 
   const v = wo.validation;
   const canDecide = wo.status === "Submitted" && v;
+  const available = trustBalance(state).available;
+  const fundsOk = wo.vendorId === "in-house" || (wo.submission?.total ?? 0) <= available;
   return (
     <Card
       title={wo.title}
@@ -280,14 +289,18 @@ export function WorkOrderDetail({ wo, full = false }: { wo: WorkOrder; full?: bo
         {wo.status === "Submitted" && (
           <Button onClick={validate} disabled={busy}>{busy ? "Validating…" : v ? "Re-run AI validation" : "Run AI validation"}</Button>
         )}
+        {error && <p className="text-sm text-[#8E4327]" role="alert">{error}</p>}
         {v && <ValidationCard v={v} />}
-        {wo.status === "Paid" && <PaidPanel wo={wo} />}
+        {["Payment pending", "Paid", "Completed"].includes(wo.status) && <PaidPanel wo={wo} />}
         {canDecide && (
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => act.approveWorkOrder(wo.id)}>
-              {v.decision === "approve" && v.confidence >= 0.85 ? "Approve & pay (one tap)" : "Approve & pay anyway"} · {money(wo.submission!.total)}
-            </Button>
-            <Button variant="danger" onClick={() => act.requestChanges(wo.id)}>Send back to vendor</Button>
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => act.approveWorkOrder(wo.id)} disabled={!fundsOk}>
+                {v.decision === "approve" && v.confidence >= 0.85 ? "Approve & pay (one tap)" : "Approve & pay anyway"} · {money(wo.submission!.total)}
+              </Button>
+              <Button variant="danger" onClick={() => act.requestChanges(wo.id)}>Send back to vendor</Button>
+            </div>
+            {!fundsOk && <p className="text-sm text-[#8E4327]" role="alert">The trust account has {money(available)} available, not enough for this payout. Collect rent or wait for transfers to clear.</p>}
           </div>
         )}
       </div>
@@ -300,6 +313,7 @@ function Assistant() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<{ q: string; a: AskResult }[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const examples = ["Who is late on rent?", "Which leases are up for renewal?", "What work orders are open?"];
 
   async function ask(question: string) {
@@ -308,8 +322,14 @@ function Assistant() {
     setQ("");
     try {
       const res = await fetch("/api/ai/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, state }) });
-      const a = (await res.json()) as AskResult;
-      setHistory((h) => [{ q: question, a }, ...h]);
+      const json = await res.json();
+      if (!res.ok) setError(json.error ?? "The assistant couldn't answer. Try again.");
+      else {
+        setError(null);
+        setHistory((h) => [{ q: question, a: json as AskResult }, ...h]);
+      }
+    } catch {
+      setError("Couldn't reach the assistant. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -324,6 +344,7 @@ function Assistant() {
       <div className="mt-3 flex flex-wrap gap-2">
         {examples.map((e) => <Button key={e} variant="secondary" onClick={() => ask(e)} disabled={busy}>{e}</Button>)}
       </div>
+      {error && <p className="mt-3 text-sm text-[#8E4327]" role="alert">{error}</p>}
       <div className="mt-5 space-y-4">
         {history.map((h, i) => (
           <div key={i} className="space-y-2">
@@ -356,7 +377,7 @@ function PaidPanel({ wo }: { wo: WorkOrder }) {
           {payout.status === "Pending" && <span className="text-xs text-[#78716C]">ACH in progress (simulated: clears in seconds)</span>}
         </div>
       )}
-      {subject && <RateBox by="u-pm" subject={subject} label={`Rate ${subjectName(state, subject)} for this job`} refId={wo.id} />}
+      {subject && isDoneWorkOrder(wo) && <RateBox by="u-pm" subject={subject} label={`Rate ${subjectName(state, subject)} for this job`} refId={wo.id} />}
     </div>
   );
 }
