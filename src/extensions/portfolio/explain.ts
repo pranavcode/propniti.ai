@@ -18,7 +18,7 @@ export const EXPLAINABLE = {
   "receivables.collections_rate": { label: "Collections rate", goodWhen: "up", agg: { num: (r) => n(r, "collected_cents"), den: (r) => n(r, "charged_cents"), kind: "pct" } },
   "receivables.delinquency": { label: "Delinquent balance", goodWhen: "down", agg: { num: (r) => (n(r, "aging_0_30_cents") + n(r, "aging_31_60_cents") + n(r, "aging_61_90_cents") + n(r, "aging_90p_cents")) / 100, kind: "money" } },
   "leasing.vacancy_loss": { label: "Vacancy loss", goodWhen: "down", agg: { num: (r) => n(r, "vacancy_loss_cents") / 100, kind: "money" } },
-  "maintenance.sla": { label: "Work orders within SLA", goodWhen: "up", agg: { num: (r) => n(r, "wo_open") - n(r, "wo_sla_breach"), den: (r) => n(r, "wo_open"), kind: "pct" } },
+  "portfolio.sla": { label: "Work orders within SLA", goodWhen: "up", agg: { num: (r) => Math.max(0, n(r, "wo_opened") - n(r, "wo_sla_breach")), den: (r) => n(r, "wo_opened"), kind: "pct" } },
   "intelligence.ai_minutes_saved": { label: "Staff hours saved by AI", goodWhen: "up", agg: { num: (r) => Math.round(n(r, "ai_minutes_saved") / 60), kind: "count" } },
 } satisfies Record<string, { label: string; goodWhen: "up" | "down"; agg: Agg }>;
 export type ExplainableKey = keyof typeof EXPLAINABLE;

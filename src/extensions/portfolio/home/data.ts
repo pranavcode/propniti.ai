@@ -24,13 +24,13 @@ const kpi = (m: MetricResult & { error?: string }): Kpi => ({ value: m.value ?? 
 // KPIs read the last closed month, so rates (collections, NOI) compare whole months.
 export async function homeMetrics(q: QueryCtx) {
   const closed = { month: LAST_CLOSED, months: 12 };
-  const [noi, occ, econ, coll, delinq, sla, ai, byProp, byPropPrev, aging, agingByProp, slaByProp, incomeExpense, byRegion, woOpen] = await Promise.all([
+  const [noi, occ, econ, coll, delinq, sla, ai, byProp, byPropPrev, aging, agingByProp, slaByProp, incomeExpense, byRegion] = await Promise.all([
     safe(metrics(q, "portfolio.noi", closed)),
     safe(metrics(q, "portfolio.occupancy", closed)),
     safe(metrics(q, "portfolio.economic_occupancy", closed)),
     safe(metrics(q, "receivables.collections_rate", closed)),
     safe(metrics(q, "receivables.delinquency", closed)),
-    safe(metrics(q, "maintenance.sla", closed)),
+    safe(metrics(q, "portfolio.sla", closed)),
     safe(metrics(q, "intelligence.ai_minutes_saved", closed)),
     safe(metrics(q, "portfolio.by_property", { month: LAST_CLOSED })),
     safe(metrics(q, "portfolio.by_property", { month: addMonths(LAST_CLOSED, -1) })),
@@ -39,12 +39,11 @@ export async function homeMetrics(q: QueryCtx) {
     safe(metrics(q, "portfolio.sla_by_property", { month: LAST_CLOSED })),
     safe(metrics(q, "portfolio.income_expense", closed)),
     safe(metrics(q, "portfolio.by_region", { month: LAST_CLOSED })),
-    safe(metrics(q, "maintenance.wo_open", closed)),
   ]);
   return {
     month: LAST_CLOSED,
     kpis: { noi: kpi(noi), occupancy: kpi(occ), economic: kpi(econ), collections: kpi(coll), delinquency: kpi(delinq), sla: kpi(sla), aiHours: kpi(ai) },
-    series: { noi: noi.points, occupancy: occ.points, collections: coll.points, ai: ai.points, incomeExpense: incomeExpense.points, delinquency: delinq.points, wo: woOpen.points },
+    series: { noi: noi.points, occupancy: occ.points, collections: coll.points, ai: ai.points, incomeExpense: incomeExpense.points, delinquency: delinq.points, wo: sla.points },
     byProperty: byProp.points, byPropertyPrev: byPropPrev.points, aging: aging.points, agingByProperty: agingByProp.points, slaByProperty: slaByProp.points, byRegion: byRegion.points,
   };
 }
@@ -67,7 +66,7 @@ export function compareRows(m: HomeMetrics): CompareRow[] {
       id, name: String(p.name), metro: String(p.metro), photo: `/img/props/${id}-400.webp`, units: Number(p.units ?? 0),
       occupancy: num(p.occupancy), economic: num(p.economic_occupancy), noi, budget, vsBudget: noi != null && budget ? (noi - budget) / Math.abs(budget) : null,
       noiPrev: num(prev.get(id)?.noi), collections: num(p.collections_rate), delinquent: num(p.delinquent),
-      woOpen: Number(s?.wo_open ?? p.wo_open ?? 0), breached: Number(s?.breached ?? 0), sla: num(s?.sla),
+      woOpen: Number(s?.wo_opened ?? 0), breached: Number(s?.breached ?? 0), sla: num(s?.sla),
     };
   });
 }
@@ -92,7 +91,8 @@ export async function briefing(data: DataCtx, rows: CompareRow[], m: HomeMetrics
   const lowOcc = rows.filter((r) => r.occupancy != null && r.occupancy < 0.9).sort((a, b) => a.occupancy! - b.occupancy!);
   if (lowOcc.length) risks.push({ tone: "warning", text: `${lowOcc.length} ${lowOcc.length === 1 ? "property is" : "properties are"} under 90% occupied; ${lowOcc[0].name} is at ${Math.round(lowOcc[0].occupancy! * 1000) / 10}%.`, href: "/app/properties?view=below-92" });
   const breached = rows.reduce((s, r) => s + r.breached, 0);
-  if (breached) risks.push({ tone: "warning", text: `${breached} open work ${breached === 1 ? "order is" : "orders are"} past SLA across ${rows.filter((r) => r.breached).length} properties.`, href: "/app/maintenance/work-orders?view=past-sla" });
+  const opened = rows.reduce((s, r) => s + r.woOpen, 0);
+  if (breached) risks.push({ tone: "warning", text: `${breached} of ${opened} work orders opened in ${new Date(`${LAST_CLOSED}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", timeZone: "UTC" })} missed SLA, across ${rows.filter((r) => r.breached).length} properties.`, href: "/app/maintenance/work-orders?view=past-sla" });
   const d90 = Number(m.aging.find((a) => a.bucket === "90+")?.amount ?? 0);
   if (d90 > 0) risks.push({ tone: "danger", text: `$${Math.round(d90).toLocaleString("en-US")} of resident balances are 90+ days past due.`, href: "/app/receivables/charges?f.aging=90%2B" });
   if (insurance[0]?.n) risks.push({ tone: "warning", text: `${insurance[0].n} property insurance ${insurance[0].n === 1 ? "policy expires" : "policies expire"} within 60 days.`, href: "/app/properties?tab=compliance" });

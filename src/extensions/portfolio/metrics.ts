@@ -1,5 +1,5 @@
 import { effective } from "@/server/query";
-import { byProperty } from "../core-metrics";
+import { byProperty, monthly } from "../core-metrics";
 import { registerMetric } from "../metrics";
 
 // Portfolio-module metrics on top of the shared monthly ones in core-metrics.ts.
@@ -16,12 +16,21 @@ byProperty("portfolio.aging_by_property", "Delinquency aging by property", {
   total: (m) => dollars(m.aging_0_30_cents + m.aging_31_60_cents + m.aging_61_90_cents + m.aging_90p_cents),
 }, "total");
 
+// wo_sla_breach counts work orders opened in the month that missed SLA, so SLA is measured
+// against wo_opened (not wo_open, the month-end backlog).
 byProperty("portfolio.sla_by_property", "Maintenance SLA by property", {
+  wo_opened: (m) => m.wo_opened,
   wo_open: (m) => m.wo_open,
   breached: (m) => m.wo_sla_breach,
-  within: (m) => m.wo_open - m.wo_sla_breach,
-  sla: (m) => (m.wo_open ? 1 - m.wo_sla_breach / m.wo_open : null),
+  within: (m) => Math.max(0, m.wo_opened - m.wo_sla_breach),
+  sla: (m) => (m.wo_opened ? 1 - m.wo_sla_breach / m.wo_opened : null),
 }, "breached");
+
+monthly("portfolio.sla", "Work orders within SLA", (m) => (m.wo_opened ? 1 - m.wo_sla_breach / m.wo_opened : null), {
+  opened: (m) => m.wo_opened,
+  breached: (m) => m.wo_sla_breach,
+  open: (m) => m.wo_open,
+}, "flow");
 
 // NOI by region for the last closed month (regions list chart, principal home).
 registerMetric({

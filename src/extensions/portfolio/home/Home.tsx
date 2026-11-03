@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
-import { AGENT_LABEL, type ProposalJson } from "@/ai/ui/client";
+import type { ProposalJson } from "@/ai/ui/client";
+import { getAgent } from "@/extensions/agents";
 import { ExplainableKpi, ExplainLink } from "../ui/Explain";
 import { ApprovalQueue, CompareTable, HomeAsk } from "./client";
 import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, type CompareRow, type HomeMetrics } from "./data";
@@ -47,7 +48,7 @@ function Briefing({ b, m, rows, scope }: { b: Awaited<ReturnType<typeof briefing
             {best && best.noi! > best.noiPrev! && <>; <Link href={`/app/properties/${best.id}?tab=financials`} className="font-medium hover:underline">{best.name}</Link> added the most</>}.
           </p>
           <p className="text-[12.5px] text-muted-foreground">
-            {agentsRan ? <><Bot className="mr-1 inline size-3.5" />{agentsRan} agent {agentsRan === 1 ? "run" : "runs"}: {b.overnight.slice(0, 3).map((r) => `${AGENT_LABEL[r.agent_key] ?? r.agent_key} ×${r.n}`).join(", ")}.</> : "No agent runs in the last 48 hours in this workspace."}
+            {agentsRan ? <><Bot className="mr-1 inline size-3.5" />{agentsRan} agent {agentsRan === 1 ? "run" : "runs"}: {b.overnight.slice(0, 3).map((r) => `${getAgent(r.agent_key as never)?.name ?? r.agent_key} ×${r.n}`).join(", ")}.</> : "No agent runs in the last 48 hours in this workspace."}
           </p>
         </div>
         <div className="flex flex-col gap-2 px-4 py-3">
@@ -86,17 +87,18 @@ function QuickActions({ actions, extra }: { actions: { label: string; href: stri
 function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
   const k = m.kpis;
   const foot = `${monthLong(LAST_CLOSED)}`;
+  const noAi = !k.aiHours.spark.some((v) => v > 0);
   return (
     <KpiRow className="xl:grid-cols-5">
-      <ExplainableKpi metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
-      <ExplainableKpi metric="portfolio.occupancy" label="Occupancy" format="pct" value={k.occupancy.value} previous={k.occupancy.previous} spark={k.occupancy.spark} goodWhen="up" href="/app/units?f.status=Vacant" footnote={k.economic.value != null ? `Economic ${formatPct(k.economic.value, 1)}` : foot} help="Physical occupancy: occupied and on-notice units over rentable units." />
-      <ExplainableKpi metric="receivables.collections_rate" label="Collections rate" format="pct" value={k.collections.value} previous={k.collections.previous} spark={k.collections.spark} goodWhen="up" href="/app/receivables/payments" footnote="Collected over charged" help="Cash collected in the month over rent and fees charged. Above 100% means past balances were paid down." />
+      <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
+      <ExplainableKpi deltaLabel="" metric="portfolio.occupancy" label="Occupancy" format="pct" value={k.occupancy.value} previous={k.occupancy.previous} spark={k.occupancy.spark} goodWhen="up" href="/app/units?f.status=Vacant" footnote={k.economic.value != null ? `Economic ${formatPct(k.economic.value, 1)}` : foot} help="Physical occupancy: occupied and on-notice units over rentable units." />
+      <ExplainableKpi deltaLabel="" metric="receivables.collections_rate" label="Collections rate" format="pct" value={k.collections.value} previous={k.collections.previous} spark={k.collections.spark} goodWhen="up" href="/app/receivables/payments" footnote="Collected over charged" help="Cash collected in the month over rent and fees charged. Above 100% means past balances were paid down." />
       {regional
-        ? <ExplainableKpi metric="maintenance.sla" label="Work orders within SLA" format="pct" value={k.sla.value} previous={k.sla.previous} spark={k.sla.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote="Open at month end" help="Open work orders that are still inside their response and completion targets." />
-        : <ExplainableKpi metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />}
+        ? <ExplainableKpi deltaLabel="" metric="portfolio.sla" label="Work orders within SLA" format="pct" value={k.sla.value} previous={k.sla.previous} spark={k.sla.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote="Of work orders opened" help="Share of work orders opened in the month that were completed inside their SLA target." />
+        : <ExplainableKpi deltaLabel="" metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />}
       {regional
-        ? <ExplainableKpi metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />
-        : <ExplainableKpi metric="intelligence.ai_minutes_saved" label="AI hours saved" format="count" value={k.aiHours.value} previous={k.aiHours.previous} spark={k.aiHours.spark} goodWhen="up" href="/app/ai/activity" footnote="Staff time agents took on" help="Estimated staff hours saved by agent actions people approved or that ran inside policy, using a fixed minutes-per-action table." />}
+        ? <ExplainableKpi deltaLabel="" metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />
+        : <ExplainableKpi deltaLabel="" metric="intelligence.ai_minutes_saved" label="AI hours saved" format="count" value={k.aiHours.value} previous={k.aiHours.previous} spark={k.aiHours.spark} goodWhen="up" href="/app/ai/activity" footnote={noAi ? "No agent actions recorded yet" : "Staff time agents took on"} help="Estimated staff hours saved by agent actions people approved or that ran inside policy, using a fixed minutes-per-action table." />}
     </KpiRow>
   );
 }
@@ -114,7 +116,7 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
   const noiByProp = [...rows].filter((r) => r.noi != null).sort((a, b) => b.noi! - a.noi!).map((r) => ({ property_id: r.id, name: r.name, noi: r.noi, budget: r.budget }));
   const occByProp = [...rows].filter((r) => r.occupancy != null).sort((a, b) => a.occupancy! - b.occupancy!).map((r) => ({ property_id: r.id, name: r.name, physical: r.occupancy, economic: r.economic }));
   const agingByProp = m.agingByProperty.filter((p) => Number(p.total) > 0).slice(0, 14) as ChartPoint[];
-  const slaByProp = m.slaByProperty.filter((p) => Number(p.wo_open) > 0) as ChartPoint[];
+  const slaByProp = m.slaByProperty.filter((p) => Number(p.wo_opened) > 0) as ChartPoint[];
   const aiTotal = m.series.ai.reduce((s, p) => s + Number(p.hours ?? 0), 0);
 
   return (
@@ -150,22 +152,22 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
               <GridItem span={6}><ChartCard title="Occupancy by property" description="Physical vs economic, lowest first" kind="hbar" data={occByProp} x="name" series={[{ key: "physical", label: "Physical", format: "pct" }, { key: "economic", label: "Economic", format: "pct" }]} drill="/app/units?f.property_id={property_id}&f.status=Vacant" height={Math.max(260, occByProp.length * 30)} /></GridItem>
               <GridItem span={7}><ChartCard title="Delinquency aging by property" description={`Past-due balances at ${monthLong(LAST_CLOSED)} close`} kind="stacked" data={agingByProp} x="name" series={[{ key: "d0_30", label: "0–30 days", format: "money" }, { key: "d31_60", label: "31–60", format: "money" }, { key: "d61_90", label: "61–90", format: "money" }, { key: "d90p", label: "90+", format: "money" }]} drill="/app/receivables/charges?f.property_id={property_id}&f.status=Overdue" height={280} actions={<ExplainLink metric="receivables.delinquency" label="Delinquency" />} /></GridItem>
               <GridItem span={5}><ChartCard title="Aging buckets" description="Region total" kind="bar" data={m.aging as ChartPoint[]} x="label" series={[{ key: "amount", label: "Balance", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={280} /></GridItem>
-              <GridItem span={7}><ChartCard title="Maintenance SLA by property" description="Open work orders within and past SLA" kind="stacked" data={slaByProp} x="name" series={[{ key: "within", label: "Within SLA", format: "count" }, { key: "breached", label: "Past SLA", format: "count", color: "var(--tone-danger)" }]} drill="/app/maintenance/work-orders?f.property_id={property_id}" height={280} actions={<ExplainLink metric="maintenance.sla" label="SLA" />} /></GridItem>
-              <GridItem span={5}><ChartCard title="Work orders, trailing 12 months" kind="line" data={pts(m.series.wo)} x="label" series={[{ key: "open", label: "Open at month end", format: "count" }, { key: "breached", label: "Past SLA", format: "count" }]} drill="/app/maintenance/work-orders" height={280} /></GridItem>
+              <GridItem span={7}><ChartCard title="Maintenance SLA by property" description={`Work orders opened in ${monthLong(LAST_CLOSED)}, within and past SLA`} kind="stacked" data={slaByProp} x="name" series={[{ key: "within", label: "Within SLA", format: "count" }, { key: "breached", label: "Past SLA", format: "count", color: "var(--tone-danger)" }]} drill="/app/maintenance/work-orders?f.property_id={property_id}" height={280} actions={<ExplainLink metric="portfolio.sla" label="SLA" />} /></GridItem>
+              <GridItem span={5}><ChartCard title="Work orders opened vs missed SLA" description="Trailing 12 closed months" kind="line" data={pts(m.series.wo)} x="label" series={[{ key: "opened", label: "Opened", format: "count" }, { key: "breached", label: "Missed SLA", format: "count" }]} drill="/app/maintenance/work-orders" height={280} /></GridItem>
             </DashboardGrid>
           </>
         ) : (
           <DashboardGrid>
             <GridItem span={8}><ChartCard title="Portfolio NOI vs budget" description="Trailing 12 closed months" kind="line" data={pts(m.series.noi)} x="label" series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]} drill="/app/properties?sort=-noi_month" height={260} actions={<ExplainLink metric="portfolio.noi" label="NOI" />} /></GridItem>
             <GridItem span={4}><ChartCard title="NOI by region" description={monthLong(LAST_CLOSED)} kind="donut" data={m.byRegion as ChartPoint[]} x="name" series={[{ key: "noi", label: "NOI", format: "money" }]} drill="/app/properties?f.region_id={region_id}" height={260} /></GridItem>
-            <GridItem span={6}><ChartCard title="NOI by property" description={`${monthLong(LAST_CLOSED)}, highest first`} kind="hbar" data={noiByProp} x="name" series={[{ key: "noi", label: "NOI", format: "money" }]} drill="/app/properties/{property_id}?tab=financials" height={Math.max(300, noiByProp.length * 22)} /></GridItem>
+            <GridItem span={6}><ChartCard title="NOI by property" description={`${monthLong(LAST_CLOSED)}, highest first`} kind="hbar" data={noiByProp} x="name" series={[{ key: "noi", label: "NOI", format: "money" }]} drill="/app/properties/{property_id}?tab=financials" height={Math.max(300, noiByProp.length * 27)} /></GridItem>
             <GridItem span={6}>
               <div className="flex flex-col gap-3">
                 <ChartCard title="Occupancy trend" description="Physical vs economic, trailing 12 months" kind="line" data={pts(m.series.occupancy)} x="label" series={[{ key: "physical", label: "Physical", format: "pct" }, { key: "economic", label: "Economic", format: "pct" }]} drill="/app/units?f.status=Vacant" height={210} actions={<ExplainLink metric="portfolio.occupancy" label="Occupancy" />} />
                 <ChartCard title="Collections" description="Charged vs collected by month" kind="bar" data={pts(m.series.collections)} x="label" series={[{ key: "charged", label: "Charged", format: "money" }, { key: "collected", label: "Collected", format: "money" }]} drill="/app/receivables/payments" height={210} actions={<ExplainLink metric="receivables.collections_rate" label="Collections rate" />} />
               </div>
             </GridItem>
-            <GridItem span={7}><ChartCard title="AI hours saved" description={`${Math.round(aiTotal).toLocaleString("en-US")} staff hours over 12 months, from approved and in-policy agent actions`} kind="bar" data={pts(m.series.ai)} x="label" series={[{ key: "hours", label: "Hours saved", format: "count" }]} drill="/app/ai/activity" height={240} actions={<ExplainLink metric="intelligence.ai_minutes_saved" label="AI hours saved" />} /></GridItem>
+            <GridItem span={7}><ChartCard title="AI hours saved" description={`${Math.round(aiTotal).toLocaleString("en-US")} staff hours over 12 months, from approved and in-policy agent actions`} kind="bar" data={aiTotal > 0 ? pts(m.series.ai) : []} empty="Hours appear here once agents start acting on approved or in-policy work." x="label" series={[{ key: "hours", label: "Hours saved", format: "count" }]} drill="/app/ai/activity" height={240} actions={<ExplainLink metric="intelligence.ai_minutes_saved" label="AI hours saved" />} /></GridItem>
             <GridItem span={5}><Watchlist rows={rows} /></GridItem>
           </DashboardGrid>
         )}

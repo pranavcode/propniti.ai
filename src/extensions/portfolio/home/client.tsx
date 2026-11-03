@@ -58,7 +58,7 @@ const COLS: { key: SortKey; label: string; title?: string }[] = [
   { key: "noiChange", label: "NOI MoM" },
   { key: "collections", label: "Collected" },
   { key: "delinquent", label: "Delinquent" },
-  { key: "sla", label: "WO SLA", title: "Open work orders within SLA" },
+  { key: "sla", label: "WO SLA", title: "Work orders opened last month that were done inside SLA" },
 ];
 
 const val = (r: CompareRow, k: SortKey): number | string | null =>
@@ -134,7 +134,7 @@ export function CompareTable({ rows }: { rows: CompareRow[] }) {
                 <td className="px-2.5 text-right">{pct(r.collections)}</td>
                 <td className="px-2.5 text-right"><Link href={`/app/receivables/charges?f.property_id=${r.id}&f.status=Overdue`} className="hover:underline">{r.delinquent == null ? "—" : formatMoney(r.delinquent, "whole")}</Link></td>
                 <td className={cn("px-2.5 text-right", r.sla != null && r.sla < 0.9 && "text-tone-danger")}>
-                  <Link href={`/app/maintenance/work-orders?f.property_id=${r.id}`} className="hover:underline" title={`${r.woOpen} open, ${r.breached} past SLA`}>{pct(r.sla, 0)}</Link>
+                  <Link href={`/app/maintenance/work-orders?f.property_id=${r.id}`} className="hover:underline" title={`${r.woOpen} opened, ${r.breached} missed SLA`}>{pct(r.sla, 0)}</Link>
                 </td>
                 <td className="px-1.5 text-right"><ExplainButton metric="portfolio.noi" property={r.id} label={`${r.name} NOI`} className="opacity-60 group-hover:opacity-100 focus-visible:opacity-100">Variance</ExplainButton></td>
               </tr>
