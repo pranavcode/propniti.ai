@@ -39,3 +39,34 @@ registerMetric({
     return { points: res.results.map((r) => ({ region_id: r.region_id, name: r.name, noi: dollars(r.noi), occupancy: ratio(r.occupied, r.units) })), asOf: month, source: "metrics_monthly" };
   },
 });
+
+// Units by physical status right now (live, overlay included), drillable to the filtered unit list.
+registerMetric({
+  key: "portfolio.unit_status",
+  label: "Units by status",
+  run: async (ctx, params) => {
+    const binds: unknown[] = [];
+    let where = "";
+    if (ctx.propertyIds !== "all") { where += " AND u.property_id IN (SELECT value FROM json_each(?))"; binds.push(JSON.stringify(ctx.propertyIds)); }
+    if (params.property) { where += " AND u.property_id = ?"; binds.push(params.property); }
+    const res = await ctx.db.prepare(`SELECT u.status, count(*) AS units FROM ${effective("units", ctx.ws)} u WHERE 1 = 1${where} GROUP BY u.status ORDER BY units DESC`).bind(...binds).all<{ status: string; units: number }>();
+    const total = res.results.reduce((s, r) => s + r.units, 0);
+    return { value: total, points: res.results.map((r) => ({ status: r.status, units: r.units })), asOf: ctx.asOf, source: "units (live)" };
+  },
+});
+
+// NOI and occupancy per metro for the last closed month.
+registerMetric({
+  key: "portfolio.by_metro",
+  label: "NOI by metro",
+  run: async (ctx, params) => {
+    const month = params.month ?? (await ctx.db.prepare("SELECT max(month) AS m FROM metrics_monthly WHERE workspace_id = 'base' AND month < substr(?, 1, 7)").bind(ctx.asOf).first<{ m: string }>())?.m;
+    const scoped = ctx.propertyIds !== "all";
+    const res = await ctx.db.prepare(
+      `SELECT p.metro, sum(m.noi_cents) AS noi, sum(m.budget_noi_cents) AS budget, sum(m.units) AS units, sum(m.occupied) AS occupied
+       FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id
+       WHERE m.workspace_id = 'base' AND m.month = ?${scoped ? " AND m.property_id IN (SELECT value FROM json_each(?))" : ""} GROUP BY p.metro ORDER BY noi DESC`,
+    ).bind(month, ...(scoped ? [JSON.stringify(ctx.propertyIds)] : [])).all<{ metro: string; noi: number; budget: number | null; units: number; occupied: number }>();
+    return { points: res.results.map((r) => ({ metro: r.metro, noi: dollars(r.noi), budget: r.budget == null ? null : dollars(r.budget), occupancy: ratio(r.occupied, r.units), units: r.units })), asOf: month, source: "metrics_monthly" };
+  },
+});
