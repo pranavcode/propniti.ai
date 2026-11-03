@@ -37,6 +37,7 @@ async function woEvent(c: ActionContext, wo: Row, kind: string, detail: object, 
 
 registerAction({
   key: "work_orders.run_triage",
+  ai: true,
   label: "Triage with AI",
   entity: "work_orders",
   roles: SUP,
