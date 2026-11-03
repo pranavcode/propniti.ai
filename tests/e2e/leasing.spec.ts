@@ -7,6 +7,8 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "@pla
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3201";
 const TOURS = ["app-basics", "leasing-agent", "broker"];
+// A dev server compiles each page on first visit; give the first paint of a page room for that.
+const FIRST_PAINT = { timeout: 30_000 };
 
 async function as(context: BrowserContext, persona: string) {
   await context.addCookies([{ name: "pn_as", value: persona, url: BASE }]);
@@ -47,13 +49,13 @@ test("leasing agent: day, board move and the broker-only column", async ({ page,
   const errors = watch(page);
 
   await page.goto(`${BASE}/app/leasing/today`);
-  await expect(page.getByRole("heading", { level: 1, name: /Lena/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Lena/ })).toBeVisible(FIRST_PAINT);
   await expect(page.getByRole("heading", { name: "Briefing" })).toBeVisible();
   await expect(page.getByText("Follow-ups due")).toBeVisible();
 
   await page.goto(`${BASE}/app/leasing/pipeline`);
   const board = new Board(page);
-  await expect(board.root).toBeVisible();
+  await expect(board.root).toBeVisible(FIRST_PAINT);
   const name = await board.openMoveMenu("Lead");
   await page.getByRole("menuitem", { name: "Tour", exact: true }).click();
   await expect(page.getByText(`${name} moved to Tour`)).toBeVisible();
@@ -71,7 +73,7 @@ test("listing editor: AI draft with its run, fair-housing flag blocks wording", 
   const errors = watch(page);
   const list = await (await page.request.get(`${BASE}/api/e/listings?f.status=Active&size=1`)).json();
   await page.goto(`${BASE}/app/leasing/listings/${list.rows[0].id}`);
-  await expect(page.getByRole("heading", { name: "Headline and description" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Headline and description" })).toBeVisible(FIRST_PAINT);
 
   await page.getByRole("button", { name: "Draft with AI" }).click();
   const draft = page.getByText("AI draft", { exact: true });
@@ -85,7 +87,7 @@ test("listing editor: AI draft with its run, fair-housing flag blocks wording", 
   await desc.fill((await desc.inputValue()).replace(" Perfect for young professionals.", ""));
   await expect(page.getByText("Fair-housing language check")).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText(/Saved\. The AI draft run/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Saved\. The AI draft run/)).toBeVisible(FIRST_PAINT);
   expect(errors).toEqual([]);
 });
 
@@ -98,11 +100,11 @@ test("renewal: agent prices with reasons, person accepts, AI drafts, person send
   await expect(page.getByRole("link", { name: "View run" }).first()).toHaveAttribute("href", /\/app\/ai\/runs\//);
 
   await page.getByRole("button", { name: /^(Accept|Save edit)$/ }).click();
-  await expect(page.getByRole("button", { name: "Saved" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Saved" })).toBeVisible(FIRST_PAINT);
   await page.getByRole("button", { name: "Draft with AI" }).click();
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).not.toHaveValue("", { timeout: 60_000 });
   await page.getByRole("button", { name: "Send offer" }).click();
-  await expect(page.getByText("Renewal offer sent")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Renewal offer sent")).toBeVisible(FIRST_PAINT);
   expect(errors).toEqual([]);
 });
 
@@ -110,12 +112,12 @@ test("broker: scores an application with reasons and decides it on the record", 
   await as(context, "rachel");
   const errors = watch(page);
   await page.goto(`${BASE}/app/leasing/broker`);
-  await expect(page.getByRole("heading", { name: /Broker desk/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Broker desk/ })).toBeVisible(FIRST_PAINT);
   await expect(page.getByText("Fair-housing language", { exact: true })).toBeVisible();
   // Oldest waiting application first; each test gets a fresh workspace, so it is always still open.
   await page.getByRole("link", { name: "Review" }).first().click();
   await page.waitForURL(/\/app\/leasing\/applications\/[^/?]+$/);
-  await expect(page.getByRole("heading", { name: "Leasing agent score" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Leasing agent score" })).toBeVisible(FIRST_PAINT);
   await expect(page.getByText("Fair-housing safe scoring")).toBeVisible();
   await page.getByRole("button", { name: /Score with AI|Re-score/ }).click();
   await expect(page.getByRole("img", { name: /Score \d+ out of 100/ })).toBeVisible({ timeout: 60_000 });
@@ -127,7 +129,7 @@ test("broker: scores an application with reasons and decides it on the record", 
   await expect(page.getByText(/Add a reason first/)).toBeVisible();
   await page.getByLabel("Reason or conditions").fill("One extra month of deposit");
   await page.getByRole("button", { name: "Approve with conditions" }).click();
-  await expect(page.getByText("Application conditional")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Application conditional")).toBeVisible(FIRST_PAINT);
   await expect(page.getByText(/Conditional by Rachel Moore/).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
