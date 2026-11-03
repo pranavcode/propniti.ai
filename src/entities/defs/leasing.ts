@@ -2,6 +2,7 @@
 // Owned by the leasing module lane; see AGENTS.md "v2 lanes and ownership".
 import { BadgePercent, CalendarClock, ClipboardCheck, FileText, Megaphone, RefreshCw, ShieldCheck, UserPlus } from "lucide-react";
 import { AS_OF, LEADERS, OPS, STAFF, thumb } from "../common";
+import { z } from "zod";
 import { registerEntity } from "../registry";
 import type { Role } from "../types";
 
@@ -50,8 +51,9 @@ registerEntity({
       help: { summary: "A listing site rejected or failed to publish this listing.", article: "list-unit-syndication" } },
     no_description: { type: "bool", label: "Needs description", facet: true, list: { default: false }, sql: "(trim(listings.description) = '')" },
     description: { type: "text", label: "Description", search: true, editable: [...LEASING] },
-    syndication: { type: "json", label: "Syndication", editable: [...LEASING] },
-    photos: { type: "json", label: "Photos", editable: [...LEASING] },
+    syndication: { type: "json", label: "Syndication", editable: [...LEASING], zod: z.record(z.string().max(40), z.enum(["Live", "Pending", "Error", "Paused", "Off", "Removed"])) },
+    // Only the app's own photo library: no outside URLs end up in an <img> on the public site.
+    photos: { type: "json", label: "Photos", editable: [...LEASING], zod: z.array(z.string().regex(/^\/img\/[\w/.-]+\.webp$/)).max(24) },
   },
   relations: [
     { name: "property", entity: "properties", fk: "property_id", kind: "one" },
