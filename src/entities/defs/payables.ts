@@ -31,7 +31,7 @@ registerEntity({
     invoice_number: { type: "text", label: "Invoice #", required: true, search: true, sortable: true },
     vendor_id: { type: "ref", ref: "vendors", label: "Vendor", required: true, facet: true, sortable: true, list: { default: true, width: 200 } },
     property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true } },
-    status: { type: "enum", label: "Status", required: true, zod: z.literal("Draft"), facet: true, sortable: true, list: { default: true }, enum: [
+    status: { system: true, initial: ["Draft"], type: "enum", label: "Status", required: true, zod: z.literal("Draft"), facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Draft", tone: "neutral" }, { value: "Pending approval", tone: "warning" }, { value: "Approved", tone: "info" },
       { value: "Scheduled", tone: "info" }, { value: "Paid", tone: "success" }, { value: "Void", tone: "neutral" },
     ], help: { summary: "Draft → Pending approval → Approved → Scheduled (ACH sent) → Paid when the transfer clears.", article: "approve-a-bill" } },
@@ -53,8 +53,8 @@ registerEntity({
     work_order_id: { type: "ref", ref: "work_orders", label: "Work order" },
     recurring_bill_id: { type: "ref", ref: "recurring_bills", label: "Recurring bill" },
     document_id: { type: "ref", ref: "documents", label: "Scanned invoice" },
-    approved_by: { type: "text", label: "Approved by", editable: [] },
-    approved_at: { type: "datetime", label: "Approved at", editable: [] },
+    approved_by: { system: true, type: "text", label: "Approved by", editable: [] },
+    approved_at: { system: true, type: "datetime", label: "Approved at", editable: [] },
     open_issues: issuesField("bills"),
   },
   relations: [
