@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- see the next line */
 // @ts-nocheck -- @playwright/test is not a dependency yet (requested from the lead); remove once it is.
-import { expect, test } from "@playwright/test";
+import { expect as baseExpect, test } from "@playwright/test";
 
 // Maintenance as Tom Alvarez (maintenance supervisor): home → chart drill-down → intake with the
 // Maintenance Triage agent → dispatch → board and calendar → vendor invoice approve-and-pay →
 // technician view. Run against a dev server: BASE_URL=http://localhost:3201.
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3201";
-test.describe.configure({ mode: "serial", timeout: 180_000 });
+test.describe.configure({ mode: "serial", timeout: 240_000 });
+// The shared dev server compiles each route on first visit, which can take a while.
+const expect = baseExpect.configure({ timeout: 60_000 });
 
 test.beforeEach(async ({ context }) => {
   await context.addCookies([{ name: "pn_as", value: "tom", url: BASE }]);
@@ -45,7 +47,7 @@ test("a plain-language request is triaged by the agent and dispatched", async ({
   await page.getByRole("button", { name: "Save and triage" }).click();
   await expect(page).toHaveURL(/\/app\/maintenance\/intake\/[^/?]+/, { timeout: 60_000 });
   // The agent's suggestion with why, confidence and a link to its run.
-  await expect(page.getByText(/Suggested: Plumbing/)).toBeVisible();
+  await expect(page.getByText(/(Suggested|Applied within policy): Plumbing/)).toBeVisible();
   await expect(page.getByText(/Reads as Plumbing/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Agent run and trace" })).toBeVisible();
   // The photo check ran on the attached photo.
@@ -72,9 +74,9 @@ test("board and calendar show open work orders", async ({ page }) => {
 test("a submitted vendor invoice is checked against the PO and paid once", async ({ page }) => {
   const errors = watch(page);
   await page.goto(`${BASE}/app/maintenance/work-orders?view=awaiting-approval`);
-  const row = page.locator("a[href^='/app/maintenance/work-orders/WO-']").first();
-  const href = await row.getAttribute("href");
-  await page.goto(`${BASE}${href}?tab=wo_invoice`);
+  await page.getByRole("row").filter({ hasText: "Submitted" }).first().getByText(/^WO-/).click();
+  await expect(page).toHaveURL(/\/app\/maintenance\/work-orders\/WO-[^/?]+/);
+  await page.goto(`${page.url().split("?")[0]}?tab=wo_invoice`);
   await expect(page.getByText("PO check")).toBeVisible();
   const pay = page.getByRole("button", { name: /Approve and pay|Review and pay anyway/ });
   if (await pay.isDisabled()) return; // over the owner's limit or a fraud hold: the reason is shown instead
@@ -95,7 +97,8 @@ test("technician view starts a job and logs time", async ({ page }) => {
   await page.goto(`${BASE}/app/maintenance/my-jobs`);
   await expect(page.getByRole("heading", { name: /'s jobs$/ })).toBeVisible();
   const card = page.locator("article").first();
-  await card.getByRole("button").first().click();
+  const toggle = card.getByRole("button").first();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   const start = card.getByRole("button", { name: "Start job" });
   if (await start.isVisible()) {
     await start.click();

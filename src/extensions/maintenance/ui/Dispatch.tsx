@@ -64,7 +64,7 @@ export function DispatchPanel({ wo, trade, suggestion, vendors, techs, policy }:
     <div className="space-y-4">
       {suggestion ? (
         <AISuggestion
-          title={suggestion.title.replace(/^WO-[\w-]+: /, "Suggested: ")}
+          title={`${open ? "Suggested" : suggestion.queue_state === "auto_handled" ? "Applied within policy" : "Decided"}: ${suggestion.title.replace(/^[\w-]+: /, "")}`}
           why={suggestion.why}
           confidence={suggestion.confidence}
           source={!suggestion.model || suggestion.model === "rules" ? "rules" : "live"}
@@ -72,7 +72,7 @@ export function DispatchPanel({ wo, trade, suggestion, vendors, techs, policy }:
           generatedAt={suggestion.created_at}
           evidence={suggestion.run_id ? [{ label: "Agent run and trace", href: `/app/ai/runs/${suggestion.run_id}` }] : []}
           acceptLabel={pol.level === "owner" ? "Accept and ask owner" : "Accept and dispatch"}
-          state={suggestion.decision === "Rejected" ? "rejected" : suggestion.decision || suggestion.queue_state === "auto_handled" ? "accepted" : "open"}
+          state={suggestion.decision === "Rejected" ? "rejected" : "open"}
           onAccept={open ? () => dispatch(true) : undefined}
           onReject={open ? reject : undefined}
         />

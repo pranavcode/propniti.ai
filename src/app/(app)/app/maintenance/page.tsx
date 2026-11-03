@@ -146,7 +146,7 @@ export default async function MaintenanceHome() {
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2"><span className="truncate text-[13px] font-medium">{String(w.title)}</span><StatusBadge value={w.priority} tone={w.priority === "Emergency" ? "danger" : w.priority === "Urgent" ? "warning" : "neutral"} /></span>
                           <span className="block truncate text-[12px] text-muted-foreground">{String(w.id)} · {String(w.property)}{w.unit ? ` · ${w.unit}` : ""} · opened {ageText(String(w.opened_at))}</span>
-                          {w.suggestion ? <span className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-tone-ai"><Sparkles className="size-3 shrink-0" /><span className="truncate">{String(w.suggestion).replace(/^WO-[\w-]+: /, "")}</span>{w.confidence != null && <Confidence value={Number(w.confidence)} />}</span>
+                          {w.suggestion ? <span className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-tone-ai"><Sparkles className="size-3 shrink-0" /><span className="truncate">{String(w.suggestion).replace(/^[\w-]+: /, "")}</span>{w.confidence != null && <Confidence value={Number(w.confidence)} />}</span>
                             : <span className="mt-0.5 block text-[12px] text-muted-foreground">Not triaged yet</span>}
                         </span>
                         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
