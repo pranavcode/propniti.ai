@@ -31,9 +31,9 @@ export async function prepare1099(db: Db, ws: string | null, actor: Actor, year:
       JOIN ${effective("vendors", ws)} v ON v.id = t.to_id
       LEFT JOIN ${effective("owner_entities", ws)} oe ON oe.id = t.owner_entity_id
       LEFT JOIN ${effective("vendor_1099s", ws)} f ON f.vendor_id = t.to_id AND f.owner_entity_id = t.owner_entity_id AND f.year = ?1
-      WHERE t.kind = 'Vendor payout' AND t.status <> 'Returned' AND substr(coalesce(t.cleared, t.created), 1, 4) = CAST(?1 AS TEXT) AND v.is_1099 = 1${scope}
+      WHERE t.kind = 'Vendor payout' AND t.status <> 'Returned' AND substr(coalesce(t.cleared, t.created), 1, 4) = ?1 AND v.is_1099 = 1${scope}
       GROUP BY t.to_id, t.owner_entity_id ORDER BY cents DESC`)
-    .bind(year, ...(actor.propertyIds === "all" ? [] : [JSON.stringify(actor.propertyIds)]))
+    .bind(String(year), ...(actor.propertyIds === "all" ? [] : [JSON.stringify(actor.propertyIds)]))
     .all<{ vendor_id: string; company: string; w9_on_file: number; tin_last4: string; owner_entity_id: string; payer: string; cents: number; n: number; form_id: string | null; form_status: string | null; form_cents: number | null }>();
   const excluded = await db.prepare(`SELECT count(DISTINCT v.id) AS n FROM ${effective("vendors", ws)} v WHERE v.is_1099 = 0`).first<{ n: number }>();
   const rows: Row1099[] = r.results.map((x) => {

@@ -116,3 +116,14 @@ describe("vendor bank account changes", () => {
     expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(200);
   });
 });
+
+describe("1099 preparation", () => {
+  it("totals vendor payouts per payer and finds reportable vendors", async () => {
+    const { prepare1099 } = await import("./tax");
+    const r = await prepare1099(db, WS, ctx.actor, 2025);
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(r.rows.some((x) => x.state === "Reportable")).toBe(true);
+    const r26 = await prepare1099(db, WS, ctx.actor, 2026);
+    expect(r26.rows.length).toBeGreaterThan(0);
+  });
+});
