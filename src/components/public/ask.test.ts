@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { setModelForTests, type ChatModel } from "@/ai/providers";
 import { askListing, fairHousing, rulesAnswer, steering } from "./ask";
-import { listingTerms, type ListingDetail } from "./data";
+import type { ListingDetail } from "./data";
+import { listingTerms } from "./terms";
 import { RENTER_HELP } from "./renter-help";
 import { ApplyRequest, TourRequest } from "./schemas";
 

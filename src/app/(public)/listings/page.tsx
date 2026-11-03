@@ -52,7 +52,7 @@ export default async function Page({ searchParams }: Props) {
       <main id="main" className="mx-auto max-w-7xl flex flex-col gap-6 px-4 pt-6 text-[14px] sm:px-6 sm:pt-8">
         <div className="flex flex-col gap-1.5">
           <h1 className="text-balance text-[26px] font-semibold tracking-tight sm:text-[32px]">{f.metro ? `Homes for rent in ${f.metro}` : "Find your next home"}</h1>
-          <p className="max-w-2xl text-[15px] text-muted-foreground">Real prices with the full move-in cost, floor plans and current specials. Ask our AI anything about a home, no account needed.</p>
+          <p className="max-w-2xl text-[15px] text-muted-foreground">Prices with the full move-in cost, floor plans and current specials. Ask questions about any home without an account.</p>
         </div>
 
         <MetroChooser metros={metros} active={f.metro} hrefFor={(m) => hrefWith(f, { metro: m as F["metro"], page: 1 })} />

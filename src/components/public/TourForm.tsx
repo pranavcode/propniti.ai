@@ -53,7 +53,7 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
         <CalendarCheck className="size-5 shrink-0 text-tone-success" aria-hidden />
         <div className="flex flex-col gap-1 text-[14px]">
           <p className="font-semibold">Tour booked: {day(d, { weekday: "long", month: "long", day: "numeric" })} at {clock(t.slice(0, 5))}</p>
-          <p className="text-muted-foreground">{done.kind} tour{done.agent ? ` with ${done.agent}` : ""}. It&apos;s on the leasing team&apos;s calendar now, and they&apos;ll reach out to confirm.</p>
+          <p className="text-muted-foreground">{done.kind} tour{done.agent ? ` with ${done.agent}` : ""}. It&apos;s on the leasing team&apos;s calendar.</p>
         </div>
       </div>
     );

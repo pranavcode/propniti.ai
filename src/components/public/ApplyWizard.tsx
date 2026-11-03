@@ -152,13 +152,13 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
           <div className="grid gap-4 sm:grid-cols-2">
             <Field k="first_name" error={errors.first_name} label="First name">{text("first_name", { autoComplete: "given-name" })}</Field>
             <Field k="last_name" error={errors.last_name} label="Last name">{text("last_name", { autoComplete: "family-name" })}</Field>
-            <Field k="email" error={errors.email} label="Email" hint="We send your application status here.">{text("email", { type: "email", autoComplete: "email", spellCheck: false })}</Field>
+            <Field k="email" error={errors.email} label="Email" hint="The leasing team uses this to reach you.">{text("email", { type: "email", autoComplete: "email", spellCheck: false })}</Field>
             <Field k="phone" error={errors.phone} label="Mobile phone">{text("phone", { type: "tel", autoComplete: "tel" })}</Field>
             <Field k="move_in" error={errors.move_in} label="Move-in date">{text("move_in", { type: "date", min: earliest })}</Field>
             <Field k="lease_months" error={errors.lease_months} label="Lease length">
               <select id="lease_months" value={v.lease_months} onChange={set("lease_months")} className={input}>{leaseMonths.map((m) => <option key={m} value={m}>{m} months</option>)}</select>
             </Field>
-            <Field k="adults" error={errors.adults} label="Adults applying (18+)" hint="Each adult who will live in the home applies; we'll email the others a link.">
+            <Field k="adults" error={errors.adults} label="Adults applying (18+)" hint="Each adult who will live in the home fills in their own application.">
               <select id="adults" value={v.adults} onChange={set("adults")} className={input}>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
             </Field>
           </div>

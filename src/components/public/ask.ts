@@ -2,7 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { currentModel } from "@/ai/providers";
 import { bathLabel, bedLabel, homeKind, neighborhoodBlurb } from "./catalog";
-import { moveInCents, type ListingDetail } from "./data";
+import type { ListingDetail } from "./data";
+import { moveInCents } from "./terms";
 import type { RenterArticle } from "./renter-help";
 
 // "Ask about this unit": anyone can ask, no sign-in. Answers come only from this listing's data
@@ -42,7 +43,7 @@ const SCHOOLS = /\b(good|best|top|great|bad|rated|ratings?|quality)\b.*\bschools
 
 // null = fine to answer. Otherwise the fixed reply: we describe homes and places, never people.
 export function fairHousing(q: string): string | null {
-  if (SAFETY.test(q)) return "I can't describe an area as safe or unsafe; that kind of description can steer people toward or away from homes. For crime statistics, see the local police department's public data. I'm happy to answer anything about the home itself, its price or the lease.";
+  if (SAFETY.test(q)) return "I can't describe an area as safe or unsafe; that kind of description can steer people toward or away from homes. For crime statistics, see the local police department's public data. I can answer questions about the home itself, its price or the lease.";
   if (SCHOOLS.test(q)) return "I can't rate schools or say which schools are good. For school assignments and performance, contact the local school district. I can answer questions about the home, the price or the lease.";
   const group = GROUPS.test(q);
   if ((STRONG.test(q) || group) && ALLOWED.test(q)) return "Yes. Every home is open to everyone on equal terms, as the Fair Housing Act requires. We don't treat anyone differently because of race, color, religion, sex, national origin, familial status or disability, and households with children are welcome in every home. If you need a reasonable accommodation, ask at any time.";
@@ -76,7 +77,7 @@ const INTENTS: [RegExp, (l: ListingDetail) => Part][] = [
 
 export function rulesAnswer(l: ListingDetail, q: string, help: RenterArticle[]): Omit<AskReply, "source"> {
   const parts = INTENTS.filter(([re]) => re.test(q)).slice(0, 3).map(([, f]) => f(l));
-  if (!parts.length) return { answer: "This listing doesn't cover that. Book a tour or ask the leasing team, and they'll answer within one business day.", covered: false, sources: [{ label: "This listing" }] };
+  if (!parts.length) return { answer: "This listing doesn't cover that. Ask the leasing team on a tour, or try another question about the home, price or lease.", covered: false, sources: [{ label: "This listing" }] };
   const used = [...new Set(parts.map((p) => p.help).filter(Boolean))].map((id) => help.find((h) => h.id === id)).filter((h): h is RenterArticle => !!h);
   return { answer: parts.map((p) => p.text).join(" "), covered: true, sources: [{ label: "This listing" }, ...used.map((h) => ({ label: h.title, href: `#help-${h.id}` }))] };
 }

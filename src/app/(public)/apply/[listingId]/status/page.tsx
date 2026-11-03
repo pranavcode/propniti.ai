@@ -22,9 +22,9 @@ export default async function Page({ params, searchParams }: Props) {
   // The run can finish without reaching this application (it scores the longest-waiting first).
   const queued = !scored && !!a.run && a.run.status !== "running" && a.run.status !== "queued";
   const steps = [
-    { title: "Application received", detail: `Submitted for ${l.property} unit ${l.unit}. Updates go to ${a.email}.`, done: true },
+    { title: "Application received", detail: `Submitted for ${l.property} unit ${l.unit}. The leasing team will contact you at ${a.email}.`, done: true },
     { title: "Screening summary", detail: scored ? "The Leasing agent checked income, rental history and credit against the written criteria and drafted a summary with reasons for and against." : queued ? "Queued for the Leasing agent's next scoring run (every 4 hours); it checks income, rental history and credit against the written criteria." : "The Leasing agent is checking income, rental history and credit against the written criteria.", done: scored, busy: !scored && !queued },
-    { title: "A person decides", detail: "The managing broker reviews the summary and your documents and makes the decision, usually within 1 to 3 business days.", done: false },
+    { title: "A person decides", detail: "The managing broker reviews the summary and your documents and makes the decision.", done: false },
     { title: "Sign your lease", detail: "Once approved, you'll get the lease to sign online and pay the deposit and first month's rent before move-in.", done: false },
   ];
 

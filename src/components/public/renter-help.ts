@@ -7,7 +7,7 @@ export const RENTER_HELP: RenterArticle[] = [
   {
     id: "renter-apply",
     title: "How to apply for a home",
-    body: "Press Apply on the listing. The application has five short steps: your details, where you've lived, income, documents and consent. It takes about 10 minutes. You can apply with co-applicants; each adult who will live in the home applies. After you submit, you'll see your application status and what happens next. Most decisions take 1 to 3 business days.",
+    body: "Press Apply on the listing. The application has five short steps: your details, where you've lived, income, documents and consent. It takes about 10 minutes. Each adult who will live in the home fills in an application. After you submit, a status page shows where your application is and what happens next.",
   },
   {
     id: "renter-screening",
@@ -22,7 +22,7 @@ export const RENTER_HELP: RenterArticle[] = [
   {
     id: "renter-tours",
     title: "Booking a tour",
-    body: "Choose In person, Self-guided or Video tour on the listing, then pick a day and time. You'll get a confirmation by email. Self-guided tours need a photo ID at check-in. To change or cancel, reply to the confirmation email.",
+    body: "Choose In person, Self-guided or Video on the listing, then pick a day and time. The tour goes straight onto the leasing team's calendar. Self-guided tours need a photo ID at check-in. To change or cancel, ask the leasing contact named on the listing.",
   },
   {
     id: "renter-pets",
