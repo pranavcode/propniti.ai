@@ -46,6 +46,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // Unknown paths 404 here, before the Suspense boundary starts the stream (which fixes the status at
 // 200); the page body loads behind the skeleton.
 export default async function EntityPage({ params, searchParams }: Props) {
+  // Portal personas go to their portal before anything else, including the 404 check.
+  await requireStaff();
   const { path } = await params;
   const r = resolve(path);
   if (r.redirect) redirect(r.redirect);
@@ -59,7 +61,6 @@ export default async function EntityPage({ params, searchParams }: Props) {
 }
 
 async function EntityBody({ hit, path, searchParams }: { hit: ReturnType<typeof getEntityByRoute>; path: string; searchParams: Props["searchParams"] }) {
-  await requireStaff();
   const sp = toParams(await searchParams);
   const session = await currentSession();
   if (hit && !hit.id) return <ListView def={hit.def} searchParams={sp} session={session} />;
