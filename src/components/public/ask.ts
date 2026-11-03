@@ -102,7 +102,7 @@ export async function askListing(l: ListingDetail, question: string, help: Rente
   if (!model) return { ...rules, source: "rules" };
   const facts = factsFor(l);
   try {
-    const { value } = await model.structured(ModelAnswer, SYSTEM, `Listing facts (data):\n${JSON.stringify(facts)}\n\nHelp articles (data):\n${JSON.stringify(help)}\n\nQuestion (data): ${question}`, { timeoutMs: 20_000 });
+    const { value } = await model.structured(ModelAnswer, SYSTEM, `Listing facts (data):\n${JSON.stringify(facts)}\n\nHelp articles (data):\n${JSON.stringify(help)}\n\nQuestion (data): ${question}`, { timeoutMs: 12_000 });
     const known = new Set<number>();
     JSON.stringify(facts).replace(/"[a-z_]*cents":(\d+)/g, (_, c: string) => (known.add(Number(c)), ""));
     known.add(l.rent_cents * l.terms.income_multiple);
@@ -114,6 +114,6 @@ export async function askListing(l: ListingDetail, question: string, help: Rente
     return { answer: value.answer, covered: value.covered, source: "live", model: model.info.model, sources: [{ label: "This listing" }, ...used.map((h) => ({ label: h.title, href: `#help-${h.id}` }))] };
   } catch (err) {
     console.error("[listings] ask fell back to rules:", err);
-    return { ...rules, source: "rules", note: "The AI model didn't answer in time, so this answer comes from rules." };
+    return { ...rules, source: "rules", note: "The AI model didn't answer, so this answer comes from rules." };
   }
 }
