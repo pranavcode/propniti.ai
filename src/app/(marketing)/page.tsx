@@ -59,12 +59,9 @@ export default async function Home() {
           </div>
 
           <div className="relative mt-14 sm:mt-20 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:duration-1000">
-            <Shot src="/img/marketing/shots/home.webp" alt="Propniti home for a property manager: what the agents handled overnight, the approval queue and portfolio KPIs" priority className="rounded-b-none" />
-            <div aria-hidden className="pointer-events-none absolute -left-6 top-[22%] hidden w-80 lg:block motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-4 motion-safe:delay-500 motion-safe:duration-700 motion-safe:fill-mode-both">
+            <Shot src="/img/marketing/shots/home.webp" alt="Propniti home for a property manager: what the agents handled since yesterday, approvals waiting with their reasons, and risks to look at" priority className="rounded-b-none" />
+            <div aria-hidden className="pointer-events-none absolute -left-6 top-[46%] hidden w-80 lg:block motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-4 motion-safe:delay-500 motion-safe:duration-700 motion-safe:fill-mode-both">
               <PillarVignette slug="data-health" />
-            </div>
-            <div aria-hidden className="pointer-events-none absolute -right-6 top-[48%] hidden w-[22rem] lg:block motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:delay-700 motion-safe:duration-700 motion-safe:fill-mode-both">
-              <PillarVignette slug="predictions" />
             </div>
           </div>
         </div>

@@ -27,7 +27,7 @@ export const PILLARS: Pillar[] = [
       "Vendor bank details changed without a verification call",
     ],
     shot: "/img/marketing/shots/data-health.webp",
-    shotAlt: "Data Health page: a health score for each property, open issues by severity, and a proposed fix with before and after values",
+    shotAlt: "Data Health page: scores by module and property, and proposed fixes with before and after values and a confidence score",
     appHref: "/app/data-health",
   },
   {
@@ -41,8 +41,8 @@ export const PILLARS: Pillar[] = [
       "Answers show the records the assistant looked up",
     ],
     shot: "/img/marketing/shots/explained.webp",
-    shotAlt: "Properties list with occupancy, NOI and delinquency KPIs; each row links to the property's ledger",
-    appHref: "/app/properties",
+    shotAlt: "Principal dashboard: a briefing of what changed, NOI, occupancy, collections and delinquency KPIs, each with an Explain button",
+    appHref: "/app",
   },
   {
     slug: "predictions",
@@ -55,21 +55,21 @@ export const PILLARS: Pillar[] = [
       "Certificates of insurance and permits that expire within 30 days",
     ],
     shot: "/img/marketing/shots/predictions.webp",
-    shotAlt: "Residents list with delinquency risk scores and balances, filtered to high-risk residents",
+    shotAlt: "Residents list with delinquency, collections, high delinquency risk and lapsed insurance counts above the table",
     appHref: "/app/residents",
   },
   {
     slug: "what-if",
     name: "What-if",
     title: "Test a rent or occupancy change before you commit to it.",
-    body: "Move rent, occupancy or concessions for one property or a whole metro and see the NOI impact on each property next to its baseline. The simulator starts from your trailing actuals, so the starting numbers match the ledger.",
+    body: "Move rent, occupancy or operating expenses for one property or your whole scope and see the NOI impact on each property next to its baseline. The simulator starts from your trailing actuals, so the starting numbers match the ledger.",
     points: [
       "Baselines from trailing 12-month actuals",
       "Per-property NOI impact, side by side",
       "A plain-English summary of the scenario you can share",
     ],
     shot: "/img/marketing/shots/what-if.webp",
-    shotAlt: "What-if simulator: rent and occupancy sliders with the NOI impact for each property",
+    shotAlt: "What-if simulator: rent, occupancy and expense controls with baseline and scenario NOI for each property",
     appHref: "/app/portfolio/what-if",
   },
 ];
@@ -105,14 +105,14 @@ export const PERSONAS_MKT: Persona[] = [
   },
   {
     key: "residents", who: "Residents", title: "Rent, repairs and the lease, in one place.",
-    body: "Residents pay rent or set up autopay, report a repair with photos and follow it to done, and read their lease without calling the office.",
+    body: "Residents pay rent or set up autopay, report a repair and follow it to done, and read their lease without calling the office.",
     points: ["Balance, autopay and receipts", "Maintenance requests with status", "Lease documents and renewal offers"],
     img: "/img/marketing/hero-community.webp", alt: "Residents walking through an apartment community at sunset", href: "/login",
   },
   {
     key: "vendors", who: "Vendors", title: "Jobs, invoices and payments without the phone tag.",
-    body: "Vendors see assigned work orders, submit invoices against the job, track payment status and keep their insurance certificate current.",
-    points: ["Assigned jobs with photos and access notes", "Invoice status through to payment", "Insurance expiry reminders"],
+    body: "Vendors see their assigned work orders, the status of each invoice and payment, and when their insurance certificate expires.",
+    points: ["Assigned jobs by property and priority", "Invoice status through to payment", "Insurance status and expiry"],
     img: "/img/marketing/hero-maintenance.webp", alt: "Maintenance technician checking a work order on a tablet", href: "/login",
   },
 ];
