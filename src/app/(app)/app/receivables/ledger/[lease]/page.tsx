@@ -9,12 +9,21 @@ import { LedgerView } from "@/extensions/receivables/ui/LedgerView";
 
 type Props = { params: Promise<{ lease: string }>; searchParams: Promise<{ highlight?: string }> };
 
+const decode = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return null;
+  }
+};
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  return { title: `Ledger ${decodeURIComponent((await params).lease)} · Propniti` };
+  return { title: `Ledger ${decode((await params).lease) ?? ""} · Propniti` };
 }
 
 export default async function LeaseLedgerPage({ params, searchParams }: Props) {
-  const lease = decodeURIComponent((await params).lease);
+  const lease = decode((await params).lease);
+  if (!lease) notFound();
   const { highlight } = await searchParams;
   const session = await staffSession();
   if (!can(session.actor.role, "read", "charges")) notFound();
@@ -22,12 +31,12 @@ export default async function LeaseLedgerPage({ params, searchParams }: Props) {
   const header = await leaseFor(ctx, lease);
   if (!header) notFound();
   return (
-    <main className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       <PageHeader
         title={`${header.household} · ${header.property} #${header.unit}`}
         description="Resident ledger: every charge, payment and credit on the lease with a running balance. Click any figure to see the rows that make it up."
       />
       <LedgerView ctx={ctx} leaseId={lease} highlight={highlight} switchHref={(id) => `/app/receivables/ledger/${id}`} />
-    </main>
+    </div>
   );
 }

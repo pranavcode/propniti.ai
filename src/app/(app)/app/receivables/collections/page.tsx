@@ -19,7 +19,7 @@ const usd = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency"
 export default async function CollectionsPage({ searchParams }: Props) {
   const sp = toParams(await searchParams);
   const session = await staffSession();
-  if (!can(session.actor.role, "read", "charges")) return <main className="p-6"><EmptyState title="Collections isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!can(session.actor.role, "read", "charges")) return <div className="p-6"><EmptyState title="Collections isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></div>;
   const band = ["High", "Medium", "Low"].includes(sp.get("band") ?? "") ? sp.get("band")! : undefined;
   const step = ["reminder", "plan", "legal"].includes(sp.get("step") ?? "") ? sp.get("step")! : undefined;
   const page = Math.max(1, Number(sp.get("page")) || 1);
@@ -40,10 +40,10 @@ export default async function CollectionsPage({ searchParams }: Props) {
   };
 
   return (
-    <main className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       <PageHeader
         title="Collections"
-        description={<>Delinquent residents ranked by risk, with the reasons and the Collections agent&apos;s next step. Approve the safe reminders together; payment plans and legal referrals need a decision each. {session.actor.scope.label}.</>}
+        description={<>Delinquent residents ranked by risk, with the reasons and the Collections agent&apos;s next step. Approve low-risk reminders together; payment plans and legal referrals are decided one at a time. {session.actor.scope.label}.</>}
       />
       {!data ? <ErrorBanner title="Collections couldn't load" message="Refresh the page to try again." /> : (
         <>
@@ -52,7 +52,7 @@ export default async function CollectionsPage({ searchParams }: Props) {
               { l: "Delinquent residents", v: data.counts.all.toLocaleString(), h: "/app/receivables/delinquency" },
               { l: "Balance in this view", v: usd(data.balance), h: "/app/receivables/charges?view=overdue" },
               { l: "High risk", v: data.counts.High.toLocaleString(), h: "/app/receivables/collections?band=High" },
-              { l: "Waiting on you", v: data.counts.proposed.toLocaleString(), h: "/app/ai/approvals?agent=collections" },
+              { l: "Awaiting approval", v: data.counts.proposed.toLocaleString(), h: "/app/ai/approvals?agent=collections" },
             ].map((x) => (
               <Link key={x.l} href={x.h} className="bg-card px-3 py-2 hover:bg-muted/40">
                 <dt className="text-[11px] text-muted-foreground">{x.l}</dt>
@@ -68,6 +68,6 @@ export default async function CollectionsPage({ searchParams }: Props) {
           <Pager page={page} size={SIZE} total={data.total} params={sp} base="/app/receivables/collections" />
         </>
       )}
-    </main>
+    </div>
   );
 }

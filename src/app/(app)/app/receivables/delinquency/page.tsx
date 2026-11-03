@@ -5,6 +5,7 @@ import { ArrowRight, X } from "lucide-react";
 import { can } from "@/entities";
 import { Money } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
+import { Button } from "@/components/ui/button";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { AS_OF } from "@/seed/constants";
@@ -23,7 +24,7 @@ const chargesHref = (f: Record<string, string>) => `/app/receivables/charges?${n
 export default async function DelinquencyPage({ searchParams }: Props) {
   const sp = toParams(await searchParams);
   const session = await staffSession();
-  if (!can(session.actor.role, "read", "charges")) return <main className="p-6"><EmptyState title="Delinquency isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!can(session.actor.role, "read", "charges")) return <div className="p-6"><EmptyState title="Delinquency isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></div>;
   const ctx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const bucket = BUCKETS.find((b) => b.key === sp.get("bucket"))?.key as BucketKey | undefined;
   const props = await agingByProperty(ctx).catch((e) => (console.error("aging", e), null));
@@ -43,12 +44,12 @@ export default async function DelinquencyPage({ searchParams }: Props) {
   const cellLabel = (r: AgingRow | null, b?: string) => [r?.name ?? "All properties", b ? BUCKETS.find((x) => x.key === b)?.label : "all ages"].join(", ");
 
   return (
-    <main className="flex flex-col gap-5 p-4 md:p-6">
+    <div className="flex flex-col gap-5 p-4 md:p-6">
       <PageHeader
         title="Delinquency aging"
         description={<>Past-due balances by property and days late, as of {AS_OF}. Each charge ages from its own due date. Click a cell for the residents in it; click a total for the charges behind it.</>}
       >
-        <Link href="/app/receivables/collections" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground hover:bg-primary/90">Work collections<ArrowRight className="size-4" /></Link>
+        <Button asChild><Link href="/app/receivables/collections">Work collections<ArrowRight data-icon="inline-end" /></Link></Button>
       </PageHeader>
 
       {!props ? <ErrorBanner title="Aging couldn't load" message="Refresh the page to try again." /> : props.length === 0 ? <EmptyState kind="table" title="Nobody is past due" description="Every charge in your properties is paid or not yet due." /> : (
@@ -78,7 +79,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
                         {v > 0 ? (
                           <Link href={href({ property: r.property_id, bucket: c.bucket })} aria-label={`Residents: ${cellLabel(r, c.bucket)}`} aria-current={active ? "true" : undefined}
                             className={cn("relative block rounded px-2.5 py-1.5 tabular-nums hover:ring-1 hover:ring-primary/40", active && "ring-2 ring-primary")}>
-                            <span aria-hidden className={cn("absolute inset-0 rounded", c.bucket === "90+" || c.bucket === "61-90" ? "bg-tone-danger" : "bg-tone-warning")} style={{ opacity: 0.05 + (v / max) * 0.3 }} />
+                            <span aria-hidden className="absolute inset-0 rounded bg-tone-danger" style={{ opacity: 0.08 + (v / max) * 0.42 }} />
                             <span className="relative"><Money value={v} cents style="whole" tone="none" /></span>
                           </Link>
                         ) : <span className="block px-2.5 py-1.5 text-muted-foreground/50">—</span>}
@@ -153,6 +154,6 @@ export default async function DelinquencyPage({ searchParams }: Props) {
           </>
         )}
       </section>
-    </main>
+    </div>
   );
 }

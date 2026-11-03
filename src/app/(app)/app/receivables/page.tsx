@@ -6,11 +6,14 @@ import { can } from "@/entities";
 import { ChartCard } from "@/components/app/dashboard/ChartCard";
 import { KpiCard } from "@/components/app/dashboard/KpiCard";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
+import { Button } from "@/components/ui/button";
 import { getPlatform } from "@/lib/platform";
+import { cn } from "@/lib/utils";
 import { AS_OF } from "@/seed/constants";
 import { effective, metrics, type QueryCtx } from "@/server/query";
 import { workbench } from "@/extensions/receivables/collections";
 import { depositsInTransit, settleDue } from "@/extensions/receivables/queries";
+import { AGING_SERIES } from "@/extensions/receivables/ui/aging";
 import { PageHeader } from "@/extensions/receivables/ui/bits";
 import { LateFeeRunner, type PolicyRow } from "@/extensions/receivables/ui/LateFeeRunner";
 import { AgingCard, NsfCard, ScheduledVsCollected } from "@/extensions/receivables/widgets";
@@ -36,7 +39,7 @@ async function policies(ctx: QueryCtx): Promise<PolicyRow[]> {
 export default async function ReceivablesPage() {
   const session = await staffSession();
   const role = session.actor.role;
-  if (!can(role, "read", "charges")) return <main className="p-6"><EmptyState title="Receivables isn't part of your role" description="Switch role from your avatar menu to see this area." action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!can(role, "read", "charges")) return <div className="p-6"><EmptyState title="Receivables isn't part of your role" description="Switch role from your avatar menu to see this area." action={{ label: "Go to your home", href: "/app" }} /></div>;
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   await settleDue(ctx);
   const [aging, rate, transit, dispo, byProp, trend, mix, wb, pol] = await Promise.all([
@@ -56,10 +59,10 @@ export default async function ReceivablesPage() {
   const pct = (p?: Record<string, unknown>) => (p && Number(p.charged) ? Number(p.collected) / Number(p.charged) : null);
 
   return (
-    <main className="flex flex-col gap-5 p-4 md:p-6">
+    <div className="flex flex-col gap-5 p-4 md:p-6">
       <PageHeader title="Receivables" description={<>What residents owe, what came in and what needs following up. {session.actor.scope.label} · as of {AS_OF}.</>}>
-        <Link href="/app/receivables/record-payment" className="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-card px-3 text-[13px] font-medium hover:bg-muted"><Banknote className="size-4" />Record payment</Link>
-        <Link href="/app/receivables/collections" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground hover:bg-primary/90"><Scale className="size-4" />Work collections</Link>
+        <Button asChild variant="outline"><Link href="/app/receivables/record-payment"><Banknote data-icon="inline-start" />Record payment</Link></Button>
+        <Button asChild><Link href="/app/receivables/collections"><Scale data-icon="inline-start" />Work collections</Link></Button>
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -75,12 +78,12 @@ export default async function ReceivablesPage() {
         <AgingCard actor={session.actor} />
         {byProp ? (
           <ChartCard title="Past due by property" description="Top 15 properties, stacked by days late" kind="stacked" data={byProp.points as never} x="name" height={260}
-            series={[{ key: "d0_30", label: "0–30" }, { key: "d31_60", label: "31–60" }, { key: "d61_90", label: "61–90" }, { key: "d90p", label: "90+" }].map((s) => ({ ...s, format: "money" as const }))}
+            series={AGING_SERIES}
             drill="/app/receivables/delinquency?property={property_id}" help="Click a property to see its delinquent residents." />
         ) : <ErrorBanner title="Past due by property couldn't load" />}
         {trend ? (
           <ChartCard title="Delinquency at month end" description="Month-end snapshots, trailing 12 months" kind="stacked" data={trend.points as never} x="month" height={260}
-            series={[{ key: "d0_30", label: "0–30" }, { key: "d31_60", label: "31–60" }, { key: "d61_90", label: "61–90" }, { key: "d90p", label: "90+" }].map((s) => ({ ...s, format: "money" as const }))}
+            series={AGING_SERIES}
             drill="/app/receivables/charges?f.period={month}&f.status=Overdue" help="From the month-end close. Today's live figure is on the aging card." />
         ) : <ErrorBanner title="Delinquency trend couldn't load" />}
       </div>
@@ -95,7 +98,7 @@ export default async function ReceivablesPage() {
             <ul className="divide-y">
               {wb.rows.map((r) => (
                 <li key={r.lease_id} className="flex items-center gap-3 px-4 py-2">
-                  <span className="w-10 shrink-0 text-right text-[12px] font-semibold tabular-nums text-tone-danger">{r.score}</span>
+                  <span className={cn("w-10 shrink-0 text-right text-[12px] font-semibold tabular-nums", r.band === "High" ? "text-tone-danger" : r.band === "Medium" ? "text-tone-warning" : "text-muted-foreground")} title={`${r.band} risk`}>{r.score}</span>
                   <div className="min-w-0 flex-1">
                     <Link href={`/app/receivables/ledger/${r.lease_id}`} className="block truncate text-[13px] font-medium hover:text-primary hover:underline">{r.resident}</Link>
                     <span className="block truncate text-[11.5px] text-muted-foreground">{r.why[0]}{r.dataError ? " · lease rent typo flagged" : ""}</span>
@@ -122,11 +125,11 @@ export default async function ReceivablesPage() {
           )}
           <Link href="/app/receivables/deposits?view=due" className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:bg-muted/40">
             <Landmark className="size-4 text-muted-foreground" />
-            <span className="flex-1 text-[13px]"><span className="font-medium">{dispo?.value ?? "—"} deposit dispositions due</span><span className="block text-[11.5px] text-muted-foreground">Itemise deductions and refund before the state deadline</span></span>
+            <span className="flex-1 text-[13px]"><span className="font-medium">{dispo?.value ?? "—"} deposit dispositions due</span><span className="block text-[11.5px] text-muted-foreground">Itemize deductions and refund before the state deadline</span></span>
             <ArrowRight className="size-4 text-muted-foreground" />
           </Link>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

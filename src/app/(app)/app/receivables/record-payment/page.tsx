@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { can } from "@/entities";
 import { Money } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
+import { formatDate } from "@/lib/format";
 import { getPlatform } from "@/lib/platform";
 import { effective, type QueryCtx } from "@/server/query";
 import { delinquentLeases, leaseLedger } from "@/extensions/receivables/queries";
@@ -37,21 +38,23 @@ async function find(ctx: QueryCtx, q: string): Promise<Hit[]> {
 export default async function RecordPaymentPage({ searchParams }: Props) {
   const q = ((await searchParams).q ?? "").trim().slice(0, 80);
   const session = await staffSession();
-  if (!can(session.actor.role, "charges.record_payment", "charges")) return <main className="p-6"><EmptyState title="Recording payments isn't part of your role" description="Property managers and accountants record payments received in the office." action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!can(session.actor.role, "charges.record_payment", "charges")) return <div className="p-6"><EmptyState title="Recording payments isn't part of your role" description="Property managers and accountants record payments received in the office." action={{ label: "Go to your home", href: "/app" }} /></div>;
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const hits: Hit[] = q ? await find(ctx, q) : (await delinquentLeases(ctx, { page: 1, size: 6, sort: "days" })).rows.map((r) => ({ lease_id: r.lease_id, household: r.household, property: r.property, unit: r.unit, status: r.lease_status }));
   const ledgers = await Promise.all(hits.map(async (h) => ({ h, open: (await leaseLedger(ctx, h.lease_id)).rows.filter((r) => r.kind === "charge" && (r.open ?? 0) > 0 && r.status !== "Processing") })));
 
   return (
-    <main className="flex max-w-4xl flex-col gap-4 p-4 md:p-6">
-      <PageHeader title="Record payment" description="Find the resident, then record the check, money order or cash against the charge it pays. It's deposited to the property's trust today; partial payments are fine." />
+    <div className="flex max-w-4xl flex-col gap-4 p-4 md:p-6">
+      <PageHeader title="Record payment" description="Find the resident, then record the check, money order or cash against the charge it pays. It's deposited to the property's trust account today. Partial payments are fine." />
       <form role="search" className="flex items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/50">
         <Search className="size-4 text-muted-foreground" aria-hidden />
         <label htmlFor="rp-q" className="sr-only">Resident, unit or lease</label>
         <input id="rp-q" name="q" defaultValue={q} autoFocus autoComplete="off" spellCheck={false} placeholder="Resident name, unit number or lease ID…" className="h-10 flex-1 bg-transparent text-[13.5px] outline-none" />
       </form>
       {!q && <h2 className="text-[12.5px] font-medium text-muted-foreground">Longest overdue in your properties</h2>}
-      {ledgers.length === 0 ? <EmptyState compact kind="filtered" title={`No current lease matches “${q}”`} description="Try the last name, the unit number (412) or the lease ID (L-10001)." /> : (
+      {ledgers.length === 0 ? (q
+        ? <EmptyState compact kind="filtered" title={`No current lease matches “${q}”`} description="Try the last name, the unit number (412) or the lease ID (L-10001)." />
+        : <EmptyState compact kind="table" title="No overdue balances in your properties" description="Search for a resident to record a payment against a charge that isn't due yet." />) : (
         <ul className="flex flex-col gap-3">
           {ledgers.map(({ h, open }) => (
             <li key={h.lease_id} className="rounded-lg border bg-card">
@@ -64,7 +67,7 @@ export default async function RecordPaymentPage({ searchParams }: Props) {
                   <tbody>
                     {open.slice(0, 5).map((c) => (
                       <tr key={c.id} className="border-t first:border-0">
-                        <td className="px-3 py-1.5"><Link href={c.href} className="font-medium hover:text-primary hover:underline">{c.description}</Link><span className="ml-2 text-[11.5px] text-muted-foreground">due {c.date}</span></td>
+                        <td className="px-3 py-1.5"><Link href={c.href} className="font-medium hover:text-primary hover:underline">{c.description}</Link><span className="ml-2 text-[11.5px] text-muted-foreground">due {formatDate(c.date, "always")}</span></td>
                         <td className="px-3 text-right tabular-nums"><Money value={c.open ?? 0} cents tone="none" /> open</td>
                         <td className="w-40 px-3 py-1.5 text-right"><RecordPaymentButton size="xs" charge={{ id: c.id, description: c.description, open: (c.open ?? 0) / 100, due_on: c.date }} /></td>
                       </tr>
@@ -79,6 +82,6 @@ export default async function RecordPaymentPage({ searchParams }: Props) {
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }
