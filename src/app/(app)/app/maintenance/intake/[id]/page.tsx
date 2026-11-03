@@ -35,7 +35,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
   const suggestion = await latestTriage(db, ws, id);
   const trade = (sp.trade && sp.trade.length < 40 ? sp.trade : null) ?? String(suggestion?.changes.category ?? wo.category);
   const [vendors, techs, policy, photos] = await Promise.all([
-    rankVendors(db, ws, trade, String(wo.property_id)),
+    rankVendors(db, ws, trade, String(wo.property_id), actor.propertyIds),
     techniciansFor(db, ws, String(wo.property_id)),
     policyFor(db, ws, String(wo.property_id)),
     all<Row>(db, `SELECT * FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 6`, [id]),

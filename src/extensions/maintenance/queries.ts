@@ -39,16 +39,18 @@ export type RankedVendor = { id: string; company: string; trade: string; rating:
 
 // Vendors for a trade in the property's metro, ranked like the triage agent ranks them. Vendors
 // without a current COI stay on the list, marked, so the reason they're skipped is visible.
-export async function rankVendors(db: Db, ws: string | null, trade: string, propertyId: string): Promise<RankedVendor[]> {
+export async function rankVendors(db: Db, ws: string | null, trade: string, propertyId: string, propertyIds: Actor["propertyIds"]): Promise<RankedVendor[]> {
+  // Track record (on-time rate, typical cost) comes only from jobs at properties this person manages.
+  const hist = scoped(propertyIds, "w.property_id");
   const metro = (await db.prepare(`SELECT metro FROM ${effective("properties", ws)} WHERE id = ?`).bind(propertyId).first<{ metro: string }>())?.metro ?? "";
   const rows = await all<Row>(db,
     `SELECT v.id, v.company, v.trade, v.rating, v.status, v.metros,
        (SELECT count(*) FROM ${effective("work_orders", ws)} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs,
-       (SELECT CASE WHEN count(*) THEN 1.0 * sum(w.completed_at <= w.sla_due_at) / count(*) END FROM ${effective("work_orders", ws)} w WHERE w.vendor_id = v.id AND w.completed_at IS NOT NULL AND w.sla_due_at IS NOT NULL) AS on_time,
+       (SELECT CASE WHEN count(*) THEN 1.0 * sum(w.completed_at <= w.sla_due_at) / count(*) END FROM ${effective("work_orders", ws)} w WHERE w.vendor_id = v.id AND w.completed_at IS NOT NULL AND w.sla_due_at IS NOT NULL${hist.sql}) AS on_time,
        (SELECT max(c.expires_on) FROM ${effective("vendor_cois", ws)} c WHERE c.vendor_id = v.id AND c.status <> 'Missing') AS coi_expires
-     FROM ${effective("vendors", ws)} v WHERE v.trade = ? AND v.status <> 'Do not use' LIMIT 40`, [trade]);
+     FROM ${effective("vendors", ws)} v WHERE v.trade = ? AND v.status <> 'Do not use' LIMIT 40`, [...hist.binds, trade]);
   const costs = await all<{ vendor_id: string; cost: number }>(db,
-    `SELECT w.vendor_id, w.cost_cents AS cost FROM ${effective("work_orders", ws)} w WHERE w.vendor_id IN (SELECT value FROM json_each(?)) AND w.cost_cents > 0 ORDER BY w.cost_cents LIMIT 2000`, [JSON.stringify(rows.map((r) => r.id))]);
+    `SELECT w.vendor_id, w.cost_cents AS cost FROM ${effective("work_orders", ws)} w WHERE w.vendor_id IN (SELECT value FROM json_each(?)) AND w.cost_cents > 0${hist.sql} ORDER BY w.cost_cents LIMIT 2000`, [JSON.stringify(rows.map((r) => r.id)), ...hist.binds]);
   return rows
     .filter((r) => parse<string[]>(r.metros, []).includes(metro))
     .map((r) => {
@@ -115,7 +117,11 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
        WHERE w.status = 'Submitted'${s.sql} ORDER BY w.opened_at LIMIT 8`, s.binds),
     db.prepare(`SELECT count(*) AS open, coalesce(sum(t.target_ready_on < ${today}), 0) AS late FROM ${effective("turnovers", ws)} t WHERE t.status IN ('Not started', 'In progress')${scoped(actor.propertyIds, "t.property_id").sql}`).bind(...scoped(actor.propertyIds, "t.property_id").binds).first<{ open: number; late: number }>(),
     db.prepare(`SELECT count(*) AS due, coalesce(sum(m.next_due_on < ${today}), 0) AS overdue FROM ${effective("pm_schedules", ws)} m WHERE m.active = 1 AND m.next_due_on <= date(${today}, '+7 days')${scoped(actor.propertyIds, "m.property_id").sql}`).bind(...scoped(actor.propertyIds, "m.property_id").binds).first<{ due: number; overdue: number }>(),
-    all<Row>(db, `SELECT c.vendor_id, v.company, c.expires_on, c.status FROM ${effective("vendor_cois", ws)} c JOIN ${effective("vendors", ws)} v ON v.id = c.vendor_id WHERE c.expires_on <= date(${today}, '+30 days') AND v.status = 'Active' ORDER BY c.expires_on LIMIT 6`),
+    // Only vendors who worked at this person's properties in the last 12 months.
+    all<Row>(db, `SELECT c.vendor_id, v.company, c.expires_on, c.status FROM ${effective("vendor_cois", ws)} c JOIN ${effective("vendors", ws)} v ON v.id = c.vendor_id
+      WHERE c.expires_on <= date(${today}, '+30 days') AND v.status = 'Active'
+        AND EXISTS (SELECT 1 FROM ${wo} w WHERE w.vendor_id = v.id AND w.opened_at >= date(${today}, '-12 months')${s.sql})
+      ORDER BY c.expires_on LIMIT 6`, s.binds),
     db.prepare(`SELECT count(*) AS runs, coalesce(sum((SELECT count(*) FROM ${effective("ai_proposals", ws)} p WHERE p.run_id = r.id)), 0) AS proposals FROM ${effective("agent_runs", ws)} r WHERE r.agent_key IN ('maintenance_triage', 'compliance') AND r.started_at >= date(${today}, '-1 day')`).first<{ runs: number; proposals: number }>(),
   ]);
   return { counts: counts ?? {}, triage, invoices, turns: turns ?? { open: 0, late: 0 }, pm: pm ?? { due: 0, overdue: 0 }, cois, overnight: overnight ?? { runs: 0, proposals: 0 } };

@@ -205,7 +205,7 @@ export default async function MaintenanceHome() {
               ) : <EmptyState compact kind="inbox" title="No invoices waiting" description="Vendor invoices land here once the work is submitted." />}
             </div>
           </Section>
-          <Section title="Vendor insurance" description="Certificates expired or expiring in 30 days. The triage agent won't suggest these vendors.">
+          <Section title="Vendor insurance" description="Vendors who worked at your properties this year, with certificates expired or expiring in 30 days. The triage agent won't suggest them.">
             <div className="overflow-hidden rounded-lg border bg-card">
               {h?.cois.length ? (
                 <ul className="divide-y">{h.cois.map((x) => (
