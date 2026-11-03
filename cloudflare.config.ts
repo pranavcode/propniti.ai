@@ -8,6 +8,8 @@ export default defineConfig({
     workersDev: true,
     compatibilityDate: "2026-10-28",
     compatibilityFlags: ["nodejs_compat", "nodejs_compat_populate_process_env"],
+    // Workers Logs: request logs, errors and AI fallbacks, queryable in the Cloudflare dashboard.
+    observability: { enabled: true, logs: { enabled: true, invocationLogs: true } },
     assets: {
       htmlHandling: "none",
       notFoundHandling: "none",
