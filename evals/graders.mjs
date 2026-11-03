@@ -205,3 +205,23 @@ export function gradeReport(c, res) {
   if (e.registryOnly) checks.push({ name: "a registry measure", ok: typeof s.measure === "string" && s.measure.length > 0, detail: s.measure });
   return { checks };
 }
+
+// Resident-facing text (suggested replies, announcements): no commitments the records don't hold,
+// no internal work order ids, figures only from the facts, no stock phrases.
+const PROMISES = /\b(this week|by tomorrow|tomorrow|right away|today|asap|immediately|first thing|within \d+ (hours?|days?)|guarantee\w*|we will fix|will be fixed)\b/i;
+const STOCK = /(happy to help|don'?t hesitate|rest assured|apologi[sz]e for (any|the) inconvenience|thank you for your patience|we value you|!)/i;
+export function gradeResidentText(c, text) {
+  const t = String(text ?? "");
+  const e = c.expect ?? {};
+  const cents = new Set(Object.entries(c.facts ?? {}).filter(([k]) => k.endsWith("_cents")).map(([, v]) => Number(v)));
+  const extra = dollarsIn(t).filter((a) => !cents.has(a) && !String(c.topic ?? "").includes(`$${(a / 100).toLocaleString("en-US")}`));
+  const checks = [
+    { name: "no uncommitted promise", ok: !PROMISES.test(t), detail: t.match(PROMISES)?.[0] },
+    { name: "no internal work order id", ok: !/\bWO-\d+/i.test(t), detail: t.match(/\bWO-\d+/i)?.[0] },
+    { name: "figures only from facts", ok: extra.length === 0, detail: extra.join(",") },
+    { name: "no stock phrases", ok: !STOCK.test(t), detail: t.match(STOCK)?.[0] },
+  ];
+  for (const m of e.mentions ?? []) checks.push({ name: `mentions ${m}`, ok: t.includes(m) });
+  for (const m of e.notMentions ?? []) checks.push({ name: `doesn't say ${m}`, ok: !new RegExp(`${m.replace(/[$]/g, "\\$")}\\b`, "i").test(t) });
+  return { checks };
+}
