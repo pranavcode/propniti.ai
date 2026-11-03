@@ -4,7 +4,7 @@ import { can } from "@/entities";
 import { getPlatform } from "@/lib/platform";
 import { currentSession } from "@/auth/session";
 import { registerTab } from "../tabs";
-import { periodsOf, statementOf, monthLabel } from "./statements";
+import { entityInScope, periodsOf, statementOf, monthLabel } from "./statements";
 import { StatementView } from "./ui/StatementView";
 
 // Record tabs: the open statement (with Send distribution) on an owner entity, and the statement
@@ -16,6 +16,7 @@ registerTab({
   entity: "owner_entities",
   component: async ({ id, actor }) => {
     const c = { db: getPlatform().db, ws: (await currentSession()).ws };
+    if (!can(actor.role, "read", "owner_distributions") || !(await entityInScope(c, id, actor.propertyIds))) return <p className="text-[13px] text-muted-foreground">Statements for this entity are outside your access.</p>;
     const periods = await periodsOf(c, id);
     const [open, last] = await Promise.all([statementOf(c, id, periods[0].period), periods[1] ? statementOf(c, id, periods[1].period) : null]);
     const distribute = can(actor.role, "owner_entities.distribute", "owner_entities");

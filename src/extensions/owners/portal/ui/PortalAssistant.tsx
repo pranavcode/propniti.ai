@@ -47,7 +47,7 @@ export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} className="fixed right-4 bottom-20 z-40 h-11 rounded-full px-4 shadow-lg md:bottom-6 print:hidden" aria-label={title}>
+      <Button data-tour="portal-ask" onClick={() => setOpen(true)} className="fixed right-4 bottom-20 z-40 h-11 rounded-full px-4 shadow-lg md:bottom-6 print:hidden" aria-label={title}>
         <Sparkles />Ask AI
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>

@@ -102,7 +102,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
                     {l.sign < 0 && !total ? `(${usd(l.amount_cents)})` : usd(l.amount_cents)}
                   </td>
                   <td className="px-3 py-2 print:hidden">
-                    <ExplainButton url={`${explainUrl}?entity=${st.entity.id}&period=${st.period}&line=${l.key}`} label={l.label} onAsk={onAsk} />
+                    <ExplainButton url={`${explainUrl}?entity=${st.entity.id}&period=${st.period}&line=${l.key}`} label={l.label} onAsk={onAsk} tour={l.key === "rent"} />
                   </td>
                 </tr>
                 {isOpen && l.children!.map((c) => (
@@ -130,7 +130,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
   );
 }
 
-function ExplainButton({ url, label, onAsk }: { url: string; label: string; onAsk: (q: string) => void }) {
+function ExplainButton({ url, label, onAsk, tour }: { url: string; label: string; onAsk: (q: string) => void; tour?: boolean }) {
   const [data, setData] = useState<ExplainReply | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -152,7 +152,7 @@ function ExplainButton({ url, label, onAsk }: { url: string; label: string; onAs
   return (
     <Popover onOpenChange={(o) => o && load()}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs" className="text-tone-ai hover:text-tone-ai" aria-label={`Explain ${label}`}>
+        <Button variant="ghost" size="xs" className="text-tone-ai hover:text-tone-ai" aria-label={`Explain ${label}`} data-tour={tour ? "explain-line" : undefined}>
           <Sparkles />Explain
         </Button>
       </PopoverTrigger>
@@ -219,7 +219,7 @@ function DistributeButton({ entityId, entityName, amount }: { entityId: string; 
   };
   return (
     <>
-      <Button size="sm" disabled={amount <= 0} onClick={() => setConfirm(true)}>Send {usd(amount)} distribution</Button>
+      <Button size="sm" data-tour="distribute" disabled={amount <= 0} onClick={() => setConfirm(true)}>Send {usd(amount)} distribution</Button>
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent>
           <DialogHeader>

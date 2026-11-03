@@ -48,7 +48,7 @@ export function PortalNav({ role, badges = {} }: { role: PortalRole; badges?: Re
   const home = items[0].href;
   return (
     <>
-      <nav aria-label="Portal" className="hidden items-center gap-0.5 md:flex">
+      <nav aria-label="Portal" data-tour="portal-nav" className="hidden items-center gap-0.5 md:flex">
         {items.map((i) => {
           const on = active(path, i.href, home);
           return (

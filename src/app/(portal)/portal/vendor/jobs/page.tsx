@@ -21,7 +21,7 @@ export default async function VendorJobs({ searchParams }: Props) {
   const sp = await searchParams;
   if (sp.id) {
     const j = await job(c, sp.id);
-    if (!j) return <EmptyState title="Job not found" description="It may have been reassigned. Check your job list." action={<Link href="/portal/vendor/jobs" className="text-primary underline">Back to jobs</Link>} />;
+    if (!j) return <EmptyState title="Job not found" description="It may have been reassigned. Check your job list." action={{ label: "Back to jobs", href: "/portal/vendor/jobs" }} />;
     return (
       <>
         <Link href="/portal/vendor/jobs" className="mb-3 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" />All jobs</Link>

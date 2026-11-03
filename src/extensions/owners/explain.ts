@@ -6,7 +6,7 @@ import { currentModel } from "@/ai/providers";
 import { can } from "@/entities";
 import { rateLimit } from "@/lib/guard";
 import { getPlatform } from "@/lib/platform";
-import { entityOf, explainLine, type Explanation, type LineKey } from "./statements";
+import { entityInScope, entityOf, explainLine, type Explanation, type LineKey } from "./statements";
 
 // GET handler behind "Explain this line" (staff statements page and the owner portal). The facts
 // and the trace are computed; a model, when one is configured, only rewords them, and its answer is
@@ -54,7 +54,7 @@ export async function explainRoute(request: Request, audience: "staff" | "owner"
   const role = s.actor.role;
   const allowed = audience === "owner"
     ? role === "owner" && getPersona(s.persona.id)?.record?.id === entity.owner_id
-    : role !== "owner" && can(role, "read", "owner_distributions");
+    : role !== "owner" && can(role, "read", "owner_distributions") && (await entityInScope(c, entity.id, s.actor.propertyIds));
   if (!allowed) return Response.json({ error: "You can't view this statement" }, { status: 403 });
   const x = await explainLine(c, q.data.entity, q.data.period, q.data.line as LineKey, audience === "staff");
   if (!x) return Response.json({ error: "That line isn't on this statement" }, { status: 404 });

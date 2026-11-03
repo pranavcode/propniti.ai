@@ -42,6 +42,12 @@ export async function entitiesOf(c: Ctx, ownerId?: string): Promise<(Entity & { 
   return results;
 }
 
+// Staff with property scope see an entity's statements only when it holds a property they cover.
+export async function entityInScope(c: Ctx, entityId: string, propertyIds: string[] | "all") {
+  if (propertyIds === "all") return true;
+  return !!(await c.db.prepare(`SELECT 1 FROM ${effective("properties", c.ws)} p WHERE p.owner_entity_id = ? AND p.id IN (SELECT value FROM json_each(?)) LIMIT 1`).bind(entityId, JSON.stringify(propertyIds)).first());
+}
+
 // Closed months (newest first) plus the open month at the top.
 export async function periodsOf(c: Ctx, entityId: string): Promise<Period[]> {
   const { results } = await c.db

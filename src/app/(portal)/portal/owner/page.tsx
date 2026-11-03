@@ -37,7 +37,7 @@ export default async function OwnerHome() {
     <div className="space-y-6">
       <PortalTitle eyebrow={ents.map((e) => e.name).join(" · ")} title={`Good morning, ${first}`} description={`${props.length} properties, ${props.reduce((a, p) => a + p.units, 0).toLocaleString("en-US")} homes. Figures are as of ${monthLabel(m?.month ?? "2026-10")}, your last closed month.`} />
 
-      <section aria-label="Briefing" className="rounded-xl border border-tone-ai/20 bg-gradient-to-br from-tone-ai/[0.06] to-transparent p-4 md:p-5">
+      <section aria-label="Briefing" data-tour="owner-briefing" className="rounded-xl border border-tone-ai/20 bg-gradient-to-br from-tone-ai/[0.06] to-transparent p-4 md:p-5">
         <div className="flex items-start gap-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-tone-ai/10 text-tone-ai"><Sparkles className="size-4" /></span>
           <div className="min-w-0 flex-1">

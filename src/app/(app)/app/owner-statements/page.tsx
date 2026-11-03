@@ -4,12 +4,12 @@ import { can } from "@/entities";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
-import { effective, metrics } from "@/server/query";
+import { metrics } from "@/server/query";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { Money, StatusBadge } from "@/components/app/display";
-import { entitiesOf, monthLabel, periodsOf, statementOf } from "@/extensions/owners/statements";
+import { entitiesOf, entityInScope, monthLabel, periodsOf, statementOf } from "@/extensions/owners/statements";
 import { StatementView } from "@/extensions/owners/ui/StatementView";
 
 export const metadata = { title: "Owner statements · Propniti" };
@@ -29,8 +29,8 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
   const ctx = { db: c.db, ws: c.ws, actor: session.actor };
   const scope = session.actor.propertyIds;
   const all = await entitiesOf(c);
-  // An entity is in scope when any of its properties is.
-  const inScope = scope === "all" ? all : (await Promise.all(all.map(async (e) => ({ e, ok: !!(await c.db.prepare(`SELECT 1 FROM ${effective("properties", c.ws)} p WHERE p.owner_entity_id = ? AND p.id IN (SELECT value FROM json_each(?)) LIMIT 1`).bind(e.id, JSON.stringify(scope)).first()) })))).filter((x) => x.ok).map((x) => x.e);
+  const ok = await Promise.all(all.map((e) => entityInScope(c, e.id, scope)));
+  const inScope = all.filter((_, i) => ok[i]);
   if (!inScope.length) return <PageBody><EmptyState title="No owner entities in your scope" description="Statements appear here for the entities that own properties you manage." /></PageBody>;
 
   const entityId = inScope.some((e) => e.id === sp.entity) ? sp.entity! : inScope[0].id;
@@ -72,7 +72,7 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
 
         <div className="grid items-start gap-4 xl:grid-cols-[300px_1fr]">
           <Section title="Entities">
-            <nav aria-label="Owner entities" className="overflow-hidden rounded-lg border bg-card">
+            <nav aria-label="Owner entities" data-tour="statement-entities" className="overflow-hidden rounded-lg border bg-card">
               <ul className="divide-y">
                 {inScope.map((e) => (
                   <li key={e.id}>

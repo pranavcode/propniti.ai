@@ -8,6 +8,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { portalCtx, portalPersona } from "./context";
 import { PortalNav } from "./ui/PortalNav";
 import { PortalAssistant } from "./ui/PortalAssistant";
+import { PortalTour } from "./ui/PortalTour";
+import { toursFor } from "@/components/app/tour/registry";
+import "../tours";
 
 const LABEL: Record<PortalRole, string> = { owner: "Owner portal", resident: "Resident portal", vendor: "Vendor portal", applicant: "Applicant portal" };
 
@@ -52,6 +55,7 @@ export async function PortalShell({ role, brand, badges, children }: { role: Por
         )}
       </main>
       {c && <PortalAssistant endpoint={`/portal/${role}/ask`} prompts={c.persona.assistantPrompts} />}
+      {c && <PortalTour tours={toursFor(role)} />}
     </div>
     </TooltipProvider>
   );
