@@ -81,6 +81,19 @@ export const chargeOpenSql = (c = "c", ws = "?1") =>
     - coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits", ws)} AS x WHERE x.charge_id = ${c}.id AND x.lease_id = ${c}.lease_id), 0)
     - coalesce((SELECT sum(tr.amount_cents) FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending'), 0))`;
 
+// List-speed equivalents from the stored columns (charges.paid_cents, pending_cents), which every money
+// action keeps current in the visitor's overlay. Use these in lists, filters and counts; the money
+// guards keep using the exact recompute above.
+export const chargeOpenStoredSql = (c = "c") => `(${c}.amount_cents - ${c}.paid_cents - ${c}.pending_cents)`;
+export const chargeStatusStoredSql = (c = "c") => `(CASE
+    WHEN ${c}.pending_cents > 0 AND ${c}.paid_cents + ${c}.pending_cents >= ${c}.amount_cents THEN 'Processing'
+    WHEN ${c}.paid_cents >= ${c}.amount_cents THEN 'Paid'
+    WHEN ${c}.due_on <= date('${AS_OF}', '-3 days') THEN 'Overdue'
+    WHEN ${c}.paid_cents > 0 THEN 'Partial'
+    ELSE 'Due' END)`;
+// The open-charges predicate the partial indexes are built on; keep the exact text in WHERE clauses.
+export const CHARGE_IS_OPEN = (c = "c") => `${c}.paid_cents + ${c}.pending_cents < ${c}.amount_cents`;
+
 // Processing (a live rent:<id> transfer is pending) | Paid | Partial | Overdue | Due.
 export const chargeStatusSql = (c = "c", ws = "?1") => `(CASE
     WHEN EXISTS (SELECT 1 FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending') THEN 'Processing'

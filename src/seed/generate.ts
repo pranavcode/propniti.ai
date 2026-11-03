@@ -167,6 +167,12 @@ function storeBalances(c: Ctx) {
     bump(lease, x.lease_id as string, -(x.amount_cents as number));
     bump(hh, householdOf.get(x.lease_id as string)!, -(x.amount_cents as number));
   }
+  // Stored paid amount per charge (payments not NSF, plus credits on the charge's own lease).
+  const paid = new Map<string, number>();
+  for (const x of c.t.payments) if (!x.nsf && x.charge_id) paid.set(x.charge_id as string, (paid.get(x.charge_id as string) ?? 0) + (x.amount_cents as number));
+  const chargeLease = new Map(c.t.charges.map((x) => [x.id as string, x.lease_id as string]));
+  for (const x of c.t.credits) if (x.charge_id && chargeLease.get(x.charge_id as string) === x.lease_id) paid.set(x.charge_id as string, (paid.get(x.charge_id as string) ?? 0) + (x.amount_cents as number));
+  for (const x of c.t.charges) Object.assign(x, { paid_cents: paid.get(x.id as string) ?? 0, pending_cents: 0 });
   for (const l of c.t.leases) Object.assign(l, { balance_cents: lease.get(l.id as string) ?? 0, last_payment_at: lastL.get(l.id as string) ?? null });
   for (const h of c.t.households) Object.assign(h, { balance_cents: hh.get(h.id as string) ?? 0, last_payment_at: lastH.get(h.id as string) ?? null });
 }

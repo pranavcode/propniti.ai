@@ -4,9 +4,9 @@ import type { Actor } from "@/entities/types";
 import { SETTLE_MS } from "@/lib/ledger";
 import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
-import { chargeOpenSql, chargeStatusSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
+import { chargeOpenSql, chargeStatusSql, chargeStatusStoredSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
-import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
+import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, movePayment, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
 import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
@@ -48,13 +48,40 @@ describe("migrations and base", () => {
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
     expect(raw.prepare("SELECT count(*) AS n FROM sqlite_master").get()).toEqual(before);
-    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql"]);
+    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql"]);
   });
 
   it("loads the base once, with its version, as-of date and trust constants", async () => {
     expect(await one("SELECT value FROM meta WHERE key = 'as_of'")).toEqual({ value: "2026-11-04" });
     expect(await n("SELECT count(*) AS n FROM properties WHERE workspace_id = 'base'")).toBe(30);
     expect(await n("SELECT count(*) AS n FROM base_balances")).toBe(16);
+  });
+});
+
+describe("stored charge paid amounts", { timeout: 240_000 }, () => {
+  const mismatches = (ws: string) =>
+    n(`SELECT count(*) AS n FROM ${effective("charges")} AS c WHERE c.paid_cents <> (
+        coalesce((SELECT sum(p.amount_cents) FROM ${effective("payments")} AS p WHERE p.charge_id = c.id AND p.nsf = 0), 0)
+        + coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits")} AS x WHERE x.charge_id = c.id AND x.lease_id = c.lease_id), 0))
+      OR c.pending_cents <> coalesce((SELECT sum(t.amount_cents) FROM transfers AS t WHERE t.workspace_id = ?1 AND t.key = 'rent:' || c.id AND t.status = 'Pending'), 0)`, ws);
+
+  it("match a full recompute on the whole seed, and after pay, record, settle, move and disposition", async () => {
+    const c = await ctx(grace);
+    expect(await mismatches(c.ws)).toBe(0);
+    const [a, b] = (await db.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 2`).bind(c.ws).all<{ id: string }>()).results;
+    await payRent(c, a.id);
+    expect(await one(`SELECT ${chargeStatusStoredSql("c")} AS s FROM ${effective("charges")} AS c WHERE c.id = ?2`, c.ws, a.id)).toEqual({ s: "Processing" });
+    await recordPayment(c, { chargeId: b.id, amountCents: 10_000, method: "Check", reference: "Check #77", idempotencyKey: "paid-1" });
+    expect(await mismatches(c.ws)).toBe(0);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect(await one(`SELECT ${chargeStatusStoredSql("c")} AS s FROM ${effective("charges")} AS c WHERE c.id = ?2`, c.ws, a.id)).toEqual({ s: "Paid" });
+    const wrong = (await one<{ entity_id: string }>("SELECT entity_id FROM data_issues WHERE workspace_id = 'base' AND rule_id = 'payments.wrong_lease' AND status = 'open' LIMIT 1"))!;
+
+    const target = (await one<{ id: string }>(`SELECT c2.id FROM ${effective("charges")} AS c2 JOIN ${effective("payments")} AS p ON p.id = ?2 WHERE c2.property_id = p.property_id AND c2.lease_id <> p.lease_id AND ${chargeOpenSql("c2")} >= p.amount_cents LIMIT 1`, c.ws, wrong.entity_id))!;
+    await movePayment(c, wrong.entity_id, target.id);
+    const dep = (await one<{ id: string; lease_id: string }>("SELECT id, lease_id FROM deposits WHERE workspace_id = 'base' AND status = 'Disposition due' LIMIT 1"))!;
+    await disposeDeposit(c, dep.id, [{ label: "Cleaning", amount_cents: 5_000 }]);
+    expect(await mismatches(c.ws)).toBe(0);
   });
 });
 
@@ -351,7 +378,7 @@ describe("money", { timeout: 60_000 }, () => {
     const c = await ctx();
     const r = await postLateFees(c, ["p01", "p02", "p03"]);
     expect(r).toMatchObject({ status: 200 });
-    const fees = (await db.prepare("SELECT f.amount_cents, c.amount_cents AS rent FROM charges AS f JOIN charges AS c ON c.lease_id = f.lease_id AND c.period = f.period AND c.gl_account_id = 'gl-4000' WHERE f.workspace_id = ?1 AND f.gl_account_id = 'gl-4100'").bind(c.ws).all<{ amount_cents: number; rent: number }>()).results;
+    const fees = (await db.prepare(`SELECT f.amount_cents, (SELECT max(r.amount_cents) FROM ${effective("charges")} AS r WHERE r.lease_id = f.lease_id AND r.period = f.period AND r.gl_account_id = 'gl-4000') AS rent FROM charges AS f WHERE f.workspace_id = ?1 AND f.gl_account_id = 'gl-4100'`).bind(c.ws).all<{ amount_cents: number; rent: number }>()).results;
     expect(fees.length).toBe((r as { posted: number }).posted);
     // Texas: at most 10% of monthly rent for buildings with more than 4 units.
     for (const f of fees) expect(f.amount_cents).toBeLessThanOrEqual(Math.floor((f.rent * 10 + 50) / 100));

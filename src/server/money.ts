@@ -34,6 +34,23 @@ const gateParams = (g: Gate) => (g ? [g.transferId] : []);
 export const done = (transferId: string): Gate => ({ transferId, exists: true });
 const refused = (transferId: string): Gate => ({ transferId, exists: false });
 
+// Rewrites a charge's stored paid/pending amounts from its ledger rows, into the visitor's overlay
+// (copying the base row the first time). Put it after the statements that change the ledger.
+const CHARGE_COLS = ["id", "deleted", "lease_id", "household_id", "property_id", "unit_id", "gl_account_id", "description", "period", "due_on", "amount_cents"];
+export function chargeRefreshStmt(db: Db, ws: string, chargeId: string): DbStatement {
+  return db
+    .prepare(
+      `INSERT INTO charges (workspace_id, ${CHARGE_COLS.join(", ")}, paid_cents, pending_cents)
+       SELECT ?1, ${CHARGE_COLS.map((x) => `e.${x}`).join(", ")},
+         coalesce((SELECT sum(p.amount_cents) FROM ${effective("payments")} AS p WHERE p.charge_id = e.id AND p.nsf = 0), 0)
+           + coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits")} AS x WHERE x.charge_id = e.id AND x.lease_id = e.lease_id), 0),
+         coalesce((SELECT sum(t.amount_cents) FROM transfers AS t WHERE t.workspace_id = ?1 AND t.key = 'rent:' || e.id AND t.status = 'Pending'), 0)
+       FROM ${effective("charges")} AS e WHERE e.id = ?2
+       ON CONFLICT (workspace_id, id) DO UPDATE SET paid_cents = excluded.paid_cents, pending_cents = excluded.pending_cents`,
+    )
+    .bind(ws, chargeId);
+}
+
 export function auditStmt(db: Db, ws: string, at: string, actor: Pick<Actor, "name" | "personaId" | "role">, a: { action: string; entityType?: string; entityId?: string; propertyId?: string | null; detail: string; before?: unknown; after?: unknown; agent?: string; model?: string }, gate: Gate = null): DbStatement {
   return db
     .prepare(
@@ -134,6 +151,7 @@ export async function settle(db: Db, ws: string, nowMs: number) {
     }
     // Last, so the steps above still see the transfer as Pending.
     steps.push(db.prepare("UPDATE transfers SET status = 'Cleared', cleared = ?3 WHERE workspace_id = ?1 AND id = ?2 AND status = 'Pending'").bind(ws, id, at));
+    if (t.kind === "Rent" && String(t.key).startsWith("rent:")) steps.push(chargeRefreshStmt(db, ws, String(t.ref)));
   }
   await db.batch(steps);
 }
@@ -171,6 +189,7 @@ export async function payRent(ctx: ActionContext, chargeId: string): Promise<Out
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, c.id, c.owner_entity_id, c.household_name ?? "Resident", c.open_cents, at, nowMs + SETTLE_MS),
+    chargeRefreshStmt(db, ws, c.id),
     eventStmt(db, ws, at, "payment.initiated", "charges", c.id, c.property_id, { transfer_id: id, amount_cents: c.open_cents, method: "ACH" }, done(id)),
     auditStmt(db, ws, at, actor, { action: "Rent payment started", entityType: "charges", entityId: c.id, propertyId: c.property_id, detail: `${c.description}: ${dollars(c.open_cents)} by ACH into the operating trust` }, done(id)),
     notifyStmt(db, ws, at, "marcus", "Rent payment started", `${c.household_name} paid ${dollars(c.open_cents)} (${c.description}); ACH pending.`, `/app/receivables/charges/${c.id}`, ["charges", c.id], done(id)),
@@ -210,6 +229,7 @@ export async function recordPayment(ctx: ActionContext, input: RecordPaymentInpu
          WHERE c.id = ?4 AND EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?2)`,
       )
       .bind(ws, id, uid("pay"), c.id, input.method, input.reference, AS_OF, input.amountCents),
+    chargeRefreshStmt(db, ws, c.id),
     db
       .prepare(
         `INSERT INTO transfers (${TRANSFER_COLS})
@@ -674,6 +694,7 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
         .bind(ws, gateId, uid("cr"), d.lease_id, d.property_id, c.id, AS_OF, c.amount, actor.personaId),
     );
   }
+  for (const c of [...existing.map((e) => e.id), ...damages.map((dm) => dm.id)]) steps.push(chargeRefreshStmt(db, ws, c));
   const deductions = withIds.map((l) => ({ label: l.label, amount_cents: l.amount_cents, charge_id: l.id, photo: null }));
   steps.push(
     db.prepare(overlayUpsertSql("deposits", DEPOSIT_COLS, { status: "'Settled'" }, `EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)`)).bind(ws, d.id, gateId),
@@ -716,6 +737,8 @@ export async function movePayment(ctx: ActionContext, paymentId: string, toCharg
       .prepare(overlayUpsertSql("payments", PAYMENT_COLS, { lease_id: "?3", household_id: "?4", charge_id: "?5" },
         `e.lease_id = ?6 AND e.nsf = 0 AND e.amount_cents <= (SELECT ${chargeOpenSql("t")} FROM ${effective("charges")} AS t WHERE t.id = ?5) + CASE WHEN e.charge_id = ?5 THEN e.amount_cents ELSE 0 END`))
       .bind(ws, p.id, c.lease_id, c.household_id, c.id, p.lease_id),
+    chargeRefreshStmt(db, ws, c.id),
+    ...(p.charge_id && p.charge_id !== c.id ? [chargeRefreshStmt(db, ws, p.charge_id)] : []),
   ]);
   const room = c.open_cents + (p.charge_id === c.id ? p.amount_cents : 0);
   if (!moved.meta.changes) return { status: 409, error: room < p.amount_cents ? `Only ${dollars(room)} is open on ${c.description}.` : "This payment was already moved." };
