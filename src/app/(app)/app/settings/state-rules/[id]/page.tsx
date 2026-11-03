@@ -1,4 +1,4 @@
-import { recordPage } from "@/extensions/settings/pages";
+import { recordMetadata, recordPage } from "@/extensions/settings/pages";
 
-export const metadata = { title: "State rule · Propniti" };
+export const generateMetadata = recordMetadata("state_rules");
 export default recordPage("state_rules");

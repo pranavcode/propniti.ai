@@ -1,4 +1,4 @@
-import { recordPage } from "@/extensions/settings/pages";
+import { recordMetadata, recordPage } from "@/extensions/settings/pages";
 
-export const metadata = { title: "Audit entry · Propniti" };
+export const generateMetadata = recordMetadata("audit");
 export default recordPage("audit");
