@@ -5,7 +5,6 @@ import type { PortalRole, Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
 import type { Db } from "@/lib/platform/types";
 import { expand } from "@/server/query";
-import { settle } from "@/server/money";
 
 // Server context for /portal/<role> pages: who is signed in, their own record id and a reader
 // over base + their overlay. Portal pages read only rows tied to that record id.
@@ -19,8 +18,6 @@ export async function portalCtx(role: PortalRole): Promise<PortalCtx | null> {
   const session = await currentSession();
   if (session.persona.role !== role || !session.persona.record) return null;
   const db = getPlatform().db;
-  // Settle-on-read (plan §1): ACH payments whose window has passed clear on the next visit.
-  if (session.ws) await settle(db, session.ws, Date.now()).catch(() => undefined);
   return { db, ws: session.ws, session, persona: session.persona, me: session.persona.record.id };
 }
 
