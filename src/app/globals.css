@@ -191,6 +191,21 @@
   --tone-ai: oklch(0.7 0.1 192);
 }
 
+/* Table density (profile menu / ⌘K): the shell root carries data-density. */
+[data-surface="app"] [data-density="compact"] { --row-h: 30px; }
+
+[data-surface="app"] ::selection { background: color-mix(in oklab, var(--primary) 22%, transparent); }
+[data-surface="app"] :focus-visible { outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-surface="app"] *, [data-surface="app"] ::before, [data-surface="app"] ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @layer base {
   [data-surface="app"] *, [data-surface="app"] ::before, [data-surface="app"] ::after {
     border-color: var(--border);

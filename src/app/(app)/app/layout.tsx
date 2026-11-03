@@ -1,15 +1,17 @@
+import { cookies } from "next/headers";
 import { SurfaceBody } from "@/components/app/SurfaceBody";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/sonner";
+import { AppShell } from "@/components/app/shell/AppShell";
+import { shellData } from "@/components/app/shell/data";
 
-// App shell placeholder. Lane B replaces the body with the AppShell (sidebar, top bar, ⌘K,
-// "Viewing as" banner, copilot panel); keep the data-surface root and SurfaceBody.
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+// Staff app frame (lane B): sidebar from the entity registry, top bar, ⌘K, "Viewing as" banner and
+// the assistant dock. Keep the data-surface root and SurfaceBody (tokens in globals.css).
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const data = await shellData();
+  const dark = (await cookies()).get("pn_theme")?.value === "dark";
   return (
-    <div data-surface="app" className="app min-h-screen">
+    <div data-surface="app" className={dark ? "app dark" : "app"}>
       <SurfaceBody />
-      <TooltipProvider>{children}</TooltipProvider>
-      <Toaster />
+      <AppShell data={data}>{children}</AppShell>
     </div>
   );
 }
