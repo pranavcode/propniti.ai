@@ -37,7 +37,7 @@ export type Unit = {
 };
 export type Household = {
   id: string; p: Prop; name: string; profile: "autopay" | "ontime" | "late" | "chronic"; residents: R[]; split: boolean; pet: number; rubs: number;
-  parking: { item: string; rent: number } | null; leases: Lease[]; open: Open[]; company?: string; plan?: boolean; evict?: boolean;
+  parking: { item: string; rent: number } | null; leases: Lease[]; open: Open[]; company?: string; plan?: boolean; evict?: boolean; last: string;
 };
 export type Lease = {
   id: string; u: Unit; hh: Household; start: number; end: number | null; moveOut: number | null; notice: number | null; rent: number; deposit: number;
@@ -53,6 +53,7 @@ export type Ctx = {
   workOrders: R[]; bills: R[]; transfers: R[]; propById: Record<string, Prop>; unitById: Record<string, Unit>; leaseById: Record<string, Lease>;
   // Corrupted cases planted inside the ledger (rule → record ids), so data_issues can point at them.
   planted: Record<string, string[]>; woN: number;
+  bill: (p: Prop, vendor: string, lines: [glNo: string, description: string, amount: number][], billDate: number, opts?: { wo?: string; recurring?: string; po?: string; termsDays?: number; status?: string; doc?: string }) => R | null;
   // Set once the ledger is closed; later work orders (extras) never create bills or payouts.
   sealed: boolean;
 };
@@ -72,12 +73,15 @@ export function generate(): Base {
   const je = (prop: string, glNo: string, period: string, dr: number, cr: number) => {
     const k = `${prop}|${glNo}|${period}`;
     const v = jeMap.get(k);
-    if (v) (v[0] += dr), (v[1] += cr);
+    if (v) {
+      v[0] += dr;
+      v[1] += cr;
+    }
     else jeMap.set(k, [dr, cr]);
   };
   const ctx: Ctx = {
     t, add, props: [], units: [], leases: [], households: [], staffName: {}, vendorName: {}, vendorTrade: {}, je, next,
-    workOrders: [], bills: [], transfers: [], propById: {}, unitById: {}, leaseById: {}, planted: {}, woN: 10000, sealed: false,
+    workOrders: [], bills: [], transfers: [], propById: {}, unitById: {}, leaseById: {}, planted: {}, woN: 10000, sealed: false, bill: () => null,
   };
 
   org(ctx);
@@ -345,7 +349,7 @@ function floorplan(beds: number, baths: number, sqft: number) {
 
 const PROFILES: [Household["profile"], number][] = [["autopay", 41], ["ontime", 47.5], ["late", 8], ["chronic", 3.5]];
 
-function newHousehold(c: Ctx, p: Prop, r: Rng, commercial: boolean): Household {
+function newHousehold(c: Ctx, p: Prop, commercial: boolean): Household {
   const n = c.next(`hh:${p.id}`);
   const id = `hh-${p.id}-${String(n).padStart(4, "0")}`;
   const hr = rng(`hh:${id}`);
@@ -354,11 +358,9 @@ function newHousehold(c: Ctx, p: Prop, r: Rng, commercial: boolean): Household {
   const hh: Household = {
     id, p, name: company ?? `${last} household`, profile: commercial ? (hr.chance(0.9) ? "ontime" : "late") : hr.weighted(PROFILES), residents: [],
     split: false, pet: !commercial && hr.chance(0.16) ? hr.pick([3500, 4000, 5000]) : 0, rubs: p.rubs && !commercial ? 3800 + hr.int(0, 34) * 100 : 0,
-    parking: null, leases: [], open: [], company,
+    parking: null, leases: [], open: [], company, last,
   };
-  void r;
   // Residents are created after simulation (ids are numbered per property in a stable order).
-  (hh as Household & { last: string }).last = last;
   c.households.push(hh);
   return hh;
 }
@@ -390,7 +392,7 @@ function simulateUnit(c: Ctx, u: Unit) {
     const offset = r.weighted(Array.from({ length: 18 }, (_, i) => [i, [4, 5, 6, 7].includes((10 + i) % 12) ? 2.4 : 1] as const));
     start = monthStart(addMonths("2023-11", offset)) + (r.chance(0.7) ? 0 : r.int(1, 27));
   }
-  let hh = newHousehold(c, p, r, false);
+  let hh = newHousehold(c, p, false);
   let rent = marketAt(u, start);
   let prev: Lease | null = null;
   for (let guard = 0; guard < 12; guard++) {
@@ -429,7 +431,11 @@ function simulateUnit(c: Ctx, u: Unit) {
       const out = addMonthsDay(end + 1, months) - 1;
       if (out >= ASOF) {
         l.status = "Month-to-month";
-        if (r.chance(0.25)) (l.notice = ASOF - r.int(1, 25)), (l.moveOut = Math.max(ASOF + 5, l.notice + 30)), (l.status = "Notice");
+        if (r.chance(0.25)) {
+          l.notice = ASOF - r.int(1, 25);
+          l.moveOut = Math.max(ASOF + 5, l.notice + 30);
+          l.status = "Notice";
+        }
         break;
       }
       l.moveOut = out;
@@ -444,7 +450,7 @@ function simulateUnit(c: Ctx, u: Unit) {
     }
     const gap = r.chance(0.03) ? r.int(95, 160) : Math.round(-Math.log(1 - r()) * p.gapMean) + 6;
     start = l.moveOut! + gap;
-    hh = newHousehold(c, p, r, false);
+    hh = newHousehold(c, p, false);
     rent = marketAt(u, start);
     prev = null;
   }
@@ -465,7 +471,7 @@ function simulateSuite(c: Ctx, u: Unit, r: Rng) {
   let term = r.pick([36, 60, 60, 84, 120]);
   let start = monthStart(addMonths("2019-01", r.int(0, 76)));
   while (addMonthsDay(start, term) - 1 < WIN) start = addMonthsDay(start, term);
-  const hh = newHousehold(c, u.p, r, true);
+  const hh = newHousehold(c, u.p, true);
   let prev: Lease | null = null;
   let l!: Lease;
   for (;;) {
@@ -491,7 +497,11 @@ function simulateSuite(c: Ctx, u: Unit, r: Rng) {
   } else {
     u.status = "Occupied";
     l.status = "Active";
-    if (end - ASOF < 120 && r.chance(0.5)) (l.notice = ASOF - r.int(10, 60)), (l.moveOut = end), (l.status = "Notice"), (u.status = "Notice");
+    if (end - ASOF < 120 && r.chance(0.5)) {
+      l.notice = ASOF - r.int(10, 60);
+      l.moveOut = end;
+      l.status = u.status = "Notice";
+    }
   }
   u.row.status = u.status;
   u.row.available_on = u.status === "Vacant" ? iso(ASOF + 14) : null;
@@ -512,12 +522,15 @@ function people(c: Ctx) {
   for (const p of c.props) {
     const hhs = c.households.filter((h) => h.p === p && h.leases.length);
     const jordan = p.id === "p01" ? hhs.find((h) => h.leases.some((l) => l.u.number === "412" && l.status !== "Expired" && l.status !== "Future" && l.status !== "Terminated")) : undefined;
-    if (jordan) hhs.splice(hhs.indexOf(jordan), 1), hhs.unshift(jordan);
+    if (jordan) {
+      hhs.splice(hhs.indexOf(jordan), 1);
+      hhs.unshift(jordan);
+    }
     let n = 0;
     let unicode = 0;
     for (const hh of hhs) {
       const hr = rng(`res:${hh.id}`);
-      const last = (hh as Household & { last: string }).last;
+      const last = hh.last;
       const size = hh.company ? 1 : hr.weighted([[1, 52], [2, 38], [3, 10]] as const);
       const current = hh.leases.some((l) => ["Active", "Notice", "Month-to-month", "Eviction"].includes(l.status));
       const future = hh.leases.every((l) => l.status === "Future");
@@ -525,7 +538,7 @@ function people(c: Ctx) {
         const id = `res-${p.id}-${String(++n).padStart(4, "0")}`;
         let first = hr.pick(FIRST);
         let lastName = i === 0 || hr.chance(0.6) ? last : hr.pick(LAST);
-        if (hh === jordan && i === 0) (first = "Jordan"), (lastName = "Lee");
+        if (hh === jordan && i === 0) [first, lastName] = ["Jordan", "Lee"];
         else if (!hh.company && hr.chance(0.012) && unicode < UNICODE_NAMES.length) [first, lastName] = UNICODE_NAMES[(unicode++ + p.id.charCodeAt(2)) % UNICODE_NAMES.length];
         const contact = hh.company ? { first: hr.pick(FIRST), last: hr.pick(LAST) } : null;
         const fn = contact?.first ?? first, ln = contact?.last ?? lastName;
@@ -552,7 +565,10 @@ function people(c: Ctx) {
   evict.evict = true;
   for (const pid of ["p01", "p03", "p09"]) {
     const h = c.households.find((x) => x.p.id === pid && x.profile === "chronic" && live(x) && !x.evict) ?? c.households.find((x) => x.p.id === pid && x.profile === "late" && live(x));
-    if (h) (h.profile = "chronic"), (h.plan = true);
+    if (h) {
+      h.profile = "chronic";
+      h.plan = true;
+    }
   }
   const jordan = c.households.find((h) => h.residents[0]?.id === "res-p01-0001")!;
   jordan.profile = "ontime";
@@ -810,8 +826,7 @@ function ledger(c: Ctx) {
       const days = p.state === "AZ" ? 20 : 30;
       const damages = dr.chance(0.32) ? round(15_000 + dr() * 75_000, 500) : 0;
       if (damages) {
-        const o = charge(last, "6050", "Move-out damages and cleaning", ym(mo), mo + 2, damages);
-        void o;
+        charge(last, "6050", "Move-out damages and cleaning", ym(mo), mo + 2, damages);
       }
       const sent = mo + dr.int(6, days + (dr.chance(0.08) ? 12 : -2));
       const balance = hh.open.reduce((s, o) => s + Math.max(0, o.rem), 0);
@@ -925,7 +940,7 @@ function operations(c: Ctx) {
     }
     return row;
   };
-  (c as Ctx & { bill: typeof bill }).bill = bill;
+  c.bill = bill;
 
   for (const p of c.props) {
     const pr = rng(`ops:${p.id}`);
@@ -1025,7 +1040,6 @@ function operations(c: Ctx) {
 
 export function createWorkOrder(c: Ctx, p: Prop, u: Unit | null, spec: (typeof WO_TYPES)[number], opened: number, id: string, pr: Rng, source: string, extra: { pm?: string; turnover?: string; sr?: string; title?: string } | null) {
   const { add } = c;
-  const bill = (c as Ctx & { bill: (...a: unknown[]) => R | null }).bill;
   const priority = spec[0] === "HVAC" && [6, 7, 8].includes(Number(iso(opened).slice(5, 7))) && p.metro === "Phoenix" ? "Urgent" : spec[1].includes("No hot water") || spec[1].includes("Ceiling") ? pr.weighted([["Emergency", 30], ["Urgent", 70]] as const) : pr.weighted(PRIORITY);
   const openedMin = pr.int(7 * 60, 19 * 60);
   const hours = priority === "Emergency" ? pr.int(1, 5) : priority === "Urgent" ? pr.int(3, 28) : priority === "Normal" ? pr.int(6, 84) : pr.int(24, 190);
@@ -1086,7 +1100,7 @@ export function createWorkOrder(c: Ctx, p: Prop, u: Unit | null, spec: (typeof W
   if (completedDay && vendor && !c.sealed) {
     // Corrupted case: a plumbing repair coded to Landscaping (posted that way, so the books agree).
     const miscode = spec[0] === "Plumbing" && pr.chance(0.02);
-    const b = bill(p, vendor, [[miscode ? "6100" : "6000", `${spec[1]}${unitNo} (${id})`, cost]], completedDay + pr.int(1, 3), { wo: id });
+    const b = c.bill(p, vendor, [[miscode ? "6100" : "6000", `${spec[1]}${unitNo} (${id})`, cost]], completedDay + pr.int(1, 3), { wo: id });
     if (miscode && b) (c.planted["bill_lines.gl_miscoded"] ??= []).push(b.id as string);
   }
   return row;

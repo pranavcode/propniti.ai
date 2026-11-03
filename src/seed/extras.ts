@@ -1,8 +1,8 @@
 import { FIRST, LAST, RENTERS_CARRIERS, VENDORS } from "./catalog";
 import { AS_OF } from "./constants";
-import { ASOF, PERIODS, WO_TYPES, createWorkOrder, type Ctx, type Household, type Lease, type Prop, type R, type Unit } from "./generate";
+import { ASOF, PERIODS, WO_TYPES, createWorkOrder, type Ctx, type Household, type Prop, type R, type Unit } from "./generate";
 import { HELP_ARTICLES } from "./help";
-import { addMonths, addMonthsDay, day, iso, monthStart, rng, round, ts, ym, type Rng } from "./rng";
+import { addMonths, day, iso, monthStart, rng, round, ts, type Rng } from "./rng";
 
 // Everything around the ledger that makes the product feel lived-in: policies and state rules,
 // the leasing funnel, operations depth, communications, risk and compliance, AI agent history,
@@ -10,7 +10,6 @@ import { addMonths, addMonthsDay, day, iso, monthStart, rng, round, ts, ym, type
 // curated records each demo persona lands on. Nothing here moves money: all money rows are
 // generated (and reconciled) in generate.ts.
 
-const STAFF_IDS = ["marcus", "priya", "lena", "grace", "tom", "rachel", "daniel", "sam", "s-ivy", "s-derek", "s-alma", "s-kofi", "s-beth", "s-ramon", "s-tess", "s-jalen", "s-lucy", "s-kevin"];
 const regional = (p: Prop) => (p.region === "r-tx" ? "priya" : p.region === "r-se" ? "s-wanjiru" : "s-colton");
 const CURRENT = new Set(["Active", "Notice", "Month-to-month", "Eviction"]);
 const pick = <T>(r: Rng, xs: readonly T[]) => xs[r.int(0, xs.length - 1)];
@@ -37,6 +36,7 @@ export function generateExtras(c: Ctx) {
 class Extras {
   add: Ctx["add"];
   t: Ctx["t"];
+  docN = 0;
   constructor(private c: Ctx) {
     this.add = c.add;
     this.t = c.t;
@@ -177,7 +177,7 @@ class Extras {
             const unit = pick(r, res);
             const income = round(unit.market * (2.4 + r() * 2), 1000);
             add("applicants", { id: aid, prospect_id: id, first_name: first, last_name: last, email: `${first}.${last}`.toLowerCase() + "@mail.example", phone: `(512) 555-${r.int(1000, 9999)}`, monthly_income_cents: income, employer: pick(r, ["Dell Technologies", "St. David's HealthCare", "Delta Air Lines", "Banner Health", "City of Dallas", "Emory University", "Intel", "H-E-B", "Home Depot", "Self-employed"]), created_at: ts(created + 2, 900) });
-            this.application(p, unit, aid, id, income, stage === "Leased" ? "Leased" : age < 4 ? "Submitted" : r.weighted([["Screening", 30], ["Review", 40], ["Approved", 15], ["Conditional", 8], ["Denied", 7]] as const), created + 2, r);
+            this.application(p, unit, aid, income, stage === "Leased" ? "Leased" : age < 4 ? "Submitted" : r.weighted([["Screening", 30], ["Review", 40], ["Approved", 15], ["Conditional", 8], ["Denied", 7]] as const), created + 2, r);
           }
         }
       }
@@ -191,7 +191,7 @@ class Extras {
       if (!primary) continue;
       const income = round(l.rent * (2.6 + r() * 1.8), 1000);
       add("applicants", { id: aid, prospect_id: null, first_name: primary.first_name, last_name: primary.last_name, email: primary.email, phone: primary.phone, monthly_income_cents: income, employer: pick(r, ["Apple", "Tesla Giga Texas", "Oracle", "Southwest Airlines", "Piedmont Healthcare", "Honor Health", "UT Austin", "Freelance designer"]), created_at: ts(l.start - 20, 700) });
-      const app = this.application(l.u.p, l.u, aid, null, income, "Leased", l.start - 20, r);
+      const app = this.application(l.u.p, l.u, aid, income, "Leased", l.start - 20, r);
       l.row.application_id = app;
     }
     // Renewal offers: history for renewed leases this year, open offers for leases ending soon.
@@ -228,7 +228,7 @@ class Extras {
     }
   }
 
-  application(p: Prop, unit: Unit, applicantId: string, prospectId: string | null, income: number, stage: string, submitted: number, r: Rng) {
+  application(p: Prop, unit: Unit, applicantId: string, income: number, stage: string, submitted: number, r: Rng) {
     const id = `app-${String(this.n("app") + 1).padStart(4, "0")}`;
     const itr = Math.round((income / unit.market) * 100) / 100;
     const credit = r.weighted([["Excellent", 25], ["Good", 40], ["Fair", 22], ["Thin file", 8], ["Poor", 5]] as const);
@@ -247,7 +247,6 @@ class Extras {
       recommendation: stage === "Submitted" ? null : rec, decided_by: decided ? "rachel" : null, decided_at: decided ? ts(submitted + r.int(1, 4), 840) : null, fee_paid: 1, submitted_at: ts(submitted, 780),
     });
     if (stage !== "Submitted") this.add("screening_results", { id: `scr-${id}`, application_id: id, applicant_id: applicantId, property_id: p.id, provider: "Sample Screening Co.", credit_band: credit, score: 520 + Math.round(score * 3), eviction_found: eviction ? 1 : 0, criminal_flag: 0, income_verified: itr >= 2.5 ? 1 : 0, decision: rec === "Approve" ? "Pass" : rec === "Conditional" ? "Conditional" : "Fail", completed_at: ts(submitted + 1, 660) });
-    void prospectId;
     return id;
   }
 
@@ -306,7 +305,6 @@ class Extras {
       w.service_request_id = id;
     }
     // Inspections: move-in/move-out in the last 4 months, annual unit inspections, property safety.
-    const AREAS: [string, string[]][] = [["Kitchen", ["Range and oven", "Refrigerator", "Dishwasher", "Sink and faucet", "Cabinets"]], ["Bath", ["Toilet", "Tub and shower", "Vanity", "Exhaust fan"]], ["Living", ["Flooring", "Walls and paint", "Windows and blinds"]], ["Bedroom", ["Closet doors", "Smoke detector", "Outlets"]]];
     let insp = 0;
     for (const l of c.leases) {
       if (l.commercial) continue;
@@ -321,7 +319,6 @@ class Extras {
       this.inspection(null, p.kind === "com" ? "Quarterly" : "Insurance", ASOF + r.int(2, 40), ++insp, p);
       for (const u of p.units.filter((_, i) => i % 23 === 0)) this.inspection(u, "Annual", ASOF - r.int(-20, 200), ++insp);
     }
-    void AREAS;
     // Ratings on completed work orders.
     for (const w of c.workOrders) {
       if (!w.completed_at || w.source !== "Resident" || (w.completed_at as string) < iso(ASOF - 150)) continue;
@@ -435,7 +432,7 @@ class Extras {
     // Corrupted: a lease filed to a vendor record.
     const mis = doc({ property_id: "p17", entity_type: "vendors", entity_id: "v14", name: "Lease renewal — unit 318.pdf", url: "/docs/misc/lease-318.pdf", doc_type: "Lease", classify_confidence: 0.41, filed_to: "ATL Make-Ready Pros › Documents", classified_by: "s-kofi", uploaded_by: "s-kofi", uploaded_at: "2026-10-29T15:10:00Z" });
     (c.planted["documents.misfiled"] ??= []).push(mis.id as string);
-    (this as unknown as { docN: number }).docN = n;
+    this.docN = n;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -519,7 +516,7 @@ class Extras {
   // -------------------------------------------------------------------------------------------
   risk() {
     const { add, c } = this;
-    let docN = (this as unknown as { docN: number }).docN;
+    let docN = this.docN;
     for (const [id, company, trade, , , is1099] of VENDORS) {
       if (!is1099) continue;
       const r = rng(`coi:${id}`);
@@ -553,7 +550,7 @@ class Extras {
     const past = c.households.find((h) => h.p.id === "p09" && h.leases.every((l) => l.moveOut && l.moveOut < ASOF - 90) && h.open.some((o) => o.rem > 0)) ?? c.households.find((h) => h.p.id === "p09")!;
     add("legal_cases", { id: "lc-2", property_id: past.p.id, lease_id: past.leases.at(-1)!.id, kind: "Small claims", stage: "Filed", balance_cents: 412_550, attorney: "", court: "Dallas County JP Court, Pct. 1", next_date: iso(ASOF + 30), opened_on: iso(ASOF - 21), closed_on: null });
     add("legal_cases", { id: "lc-3", property_id: "p16", lease_id: null, kind: "Fair housing complaint", stage: "Closed", balance_cents: 0, attorney: "Holloway Law Group", court: "HUD intake", next_date: null, opened_on: "2026-02-10", closed_on: "2026-06-30" });
-    (this as unknown as { docN: number }).docN = docN;
+    this.docN = docN;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -725,7 +722,6 @@ class Extras {
       issues.push({ id: `iss-${++n}`, rule_id: rule, entity_type: entity, entity_id: id, property_id: propertyId, detected_at: ts(d, 380), severity, evidence: JSON.stringify(evidence), suggested_fix: JSON.stringify(fix), status, fixed_by: status === "open" ? null : "data_health", fixed_at: status === "open" ? null : ts(d + 1, 400) });
     };
     // Residents: duplicates (same phone, near-identical spelling) and phone numbers in the email field.
-    let dup = 0, phone = 0;
     for (const hh of c.households) {
       const r = rng(`dh:${hh.id}`);
       const res = hh.residents[0];
@@ -736,12 +732,10 @@ class Extras {
         const alt = first.length > 3 ? first.slice(0, -1) + first.slice(-1).repeat(2) : first + "e";
         add("residents", { ...res, id: nid, first_name: alt, email: `${alt.toLowerCase()}.${String(res.last_name).toLowerCase().replace(/[^a-z]/g, "")}@mail.example`, is_primary: 0 });
         issue("residents.possible_duplicate", "residents", nid, hh.p.id, "warn", { duplicate_of: res.id, name: `${alt} ${res.last_name}`, matches: `${res.first_name} ${res.last_name}`, phone: res.phone }, { action: "residents.merge", params: { keep: res.id, merge: nid }, why: ["Same phone number", `Names differ by one letter ("${alt}" vs "${first}")`, "Same household and property"], confidence: 0.94, source: "rule" });
-        dup++;
       } else if (r.chance(0.018)) {
         const before = res.email;
         res.email = String(res.phone).replace(/\D/g, "");
         issue("residents.phone_in_email", "residents", res.id as string, hh.p.id, "warn", { email: res.email, phone: res.phone }, { changes: { email: null, phone: res.phone }, why: ["The email field holds a 10-digit phone number", "It matches the phone on file"], confidence: 0.97, source: "rule", note: `Previous email was ${before}` });
-        phone++;
       }
     }
     // Leases: end before start; rent ten times market (typo).
@@ -853,8 +847,6 @@ class Extras {
       ["work_orders.completed_without_cost", "work_orders", "Completed vendor job without cost", "info", "A vendor work order is completed with no cost recorded.", "SELECT id FROM {{work_orders}} WHERE status = 'Completed' AND vendor_id IS NOT NULL AND cost_cents IS NULL"],
     ];
     for (const [id, entity, nm, severity, description, sql] of RULES) add("data_rules", { id, entity_type: entity, name: nm, severity, description, check_kind: sql ? "sql" : "computed", check_sql: sql, help_slug: "data-health-fix-issues", enabled: 1 });
-    void dup;
-    void phone;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -873,7 +865,7 @@ class Extras {
     for (const [id, nm, role, goal, tools, triggers, autonomy, pol] of AGENTS) add("agent_definitions", { id, name: nm, owner_role: role, goal, tools: JSON.stringify(tools), triggers: JSON.stringify(triggers), autonomy, approval_policy_id: pol, enabled: 1, model: id === "ap" || id === "owner_reporting" ? "claude-sonnet-4-5" : null });
 
     // Run history over the last 30 days with step traces; proposals link to their run and step.
-    let run = 0, stepN = 0, prop = 0, ev = 0;
+    let run = 0, prop = 0, ev = 0;
     const MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "claude-sonnet-4-5", "rules"];
     const proposals: R[] = [];
     const doRun = (agent: string, d: number, minute: number, trigger: string, tools: string[], props: { entity: string; id: string; pid: string | null; action: string; title: string; why: string[]; conf: number; amount?: number; risk?: string; queue: string; role: string; payload?: object; evidence?: object[] }[], summary: string, eventType?: string) => {
@@ -890,7 +882,6 @@ class Extras {
       const step = (kind: string, tool: string | null, input: object | null, output: object | null, ms: number) => {
         const sid = `${id}-s${idx}`;
         add("agent_steps", { id: sid, run_id: id, idx: idx++, kind, tool_key: tool, input: input ? JSON.stringify(input) : null, output: output ? JSON.stringify(output) : null, latency_ms: ms, ok: 1, at: ts(d, Math.min(1439, at)) });
-        stepN++;
         return sid;
       };
       step("plan", null, null, { plan: `Check ${tools.map((t) => t.split(".")[0]).join(", ")}; propose actions that need a person.` }, r.int(300, 1400));
@@ -999,8 +990,6 @@ class Extras {
     add("assistant_messages", { id: "at-1-m1", thread_id: "at-1", role: "user", content: "Who is late on rent at Barton Creek?", plan: null, citations: "[]", model: null, at: ts(ASOF - 1, 560) });
     const p02late = late.filter((h) => h.p.id === "p02").slice(0, 5);
     add("assistant_messages", { id: "at-1-m2", thread_id: "at-1", role: "assistant", content: `${p02late.length} households at Barton Creek Commons are more than 20 days late: ${p02late.map((h) => h.name).join(", ")}.`, plan: JSON.stringify({ entity: "charges", filters: { property_id: "p02", status: "Overdue" }, agg: "count_by_household" }), citations: JSON.stringify(p02late.map((h) => ({ entity_type: "households", entity_id: h.id, label: h.name }))), model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", at: ts(ASOF - 1, 561) });
-    (this as unknown as { aiRuns: number }).aiRuns = run;
-    void stepN;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -1095,7 +1084,5 @@ class Extras {
     for (const m of c.t.metrics_monthly) m.wo_opened = opened.get(`${m.property_id}|${m.month}`) ?? 0;
     const cur = c.t.metrics_monthly.filter((m) => m.month === "2026-11");
     for (const m of cur) m.wo_open = c.workOrders.filter((w) => w.property_id === m.property_id && !w.completed_at && w.status !== "Cancelled").length;
-    void ym;
-    void addMonthsDay;
   }
 }
