@@ -326,6 +326,17 @@ describe("writes", () => {
     }
   });
 
+  it("locks finished leases, approved bills, sent offers and settled concessions against generic edits", async () => {
+    await db.prepare("UPDATE leases SET status = 'Terminated' WHERE id = 'l-p01-u1'").run();
+    await expect(updateRecord(await wctx("marcus"), "leases", "l-p01-u1", { rent: 1 })).rejects.toMatchObject({ status: 409 });
+    expect((await updateRecord(await wctx("marcus"), "leases", "l-p01-u2", { rent: 1500 })).rent).toBe(1500);
+    for (const [e, states] of [["bills", ["Approved", "Paid"]], ["renewal_offers", ["Sent", "Accepted"]], ["concessions", ["Active"]]] as const) {
+      const lock = getEntity(e)?.lockedWhen;
+      expect(lock?.field, e).toBe("status");
+      for (const st of states) expect(lock!.in, e).toContain(st);
+    }
+  });
+
   it("can't update or delete a record outside scope", async () => {
     await expect(updateRecord(await wctx("marcus"), "units", "p05-u1", { sqft: 1 })).rejects.toMatchObject({ status: 404 });
     await expect(deleteRecord(await wctx("priya"), "units", "p05-u1")).rejects.toMatchObject({ status: 404 });

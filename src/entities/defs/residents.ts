@@ -209,6 +209,8 @@ registerEntity({
   },
   permissions: { read: [...STAFF, "resident", "owner"], create: [...OPS, "leasing_agent", "broker"], update: [...OPS, "broker"], delete: [...LEADERS] },
   writes: "generic",
+  // A finished lease is history: generic edits and deletes are refused.
+  lockedWhen: { field: "status", in: ["Expired", "Terminated"] },
   dataRules: ["leases.end_before_start", "leases.rent_outlier"],
   help: { summary: "Every residential and commercial lease: term, rent, balance and renewal timing. Ledgers and payments hang off the lease.", article: "leases" },
 });
