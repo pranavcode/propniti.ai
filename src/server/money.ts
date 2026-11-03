@@ -605,6 +605,13 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
   let n = 0;
   const withIds = lines.map((l) => ({ ...l, id: l.charge_id ?? `mo-${d.lease_id}-${++n}`, damage: !l.charge_id }));
   const existing = withIds.filter((l) => !l.damage).map((l) => ({ id: l.id, amount: l.amount_cents }));
+  // Each existing charge once, and only this lease's charges: an unknown id would leave a credit
+  // waiting for a charge created later (a late fee or next month's rent) under that id.
+  if (new Set(existing.map((e) => e.id)).size !== existing.length) return { status: 400, error: "Each charge can appear only once in a disposition." };
+  if (existing.length) {
+    const found = await db.prepare(`SELECT count(*) AS n FROM ${effective("charges")} AS c WHERE c.lease_id = ?2 AND c.id IN (SELECT value FROM json_each(?3))`).bind(ws, d.lease_id, JSON.stringify(existing.map((e) => e.id))).first<{ n: number }>();
+    if (Number(found?.n ?? 0) !== existing.length) return { status: 400, error: "A deduction points at a charge that isn't on this lease." };
+  }
   const damages = withIds.filter((l) => l.damage);
   const toResident = [d.household_id, d.household_name ?? "Resident"];
 
@@ -617,8 +624,10 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
        FROM ${effective("deposits")} AS d
        WHERE d.id = ?13 AND d.status <> 'Settled' AND d.amount_cents = ?14 AND d.amount_cents <= ${AVAILABLE_SQL("?4")}
          AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key IN ('depapply:' || d.lease_id, 'refund:' || d.lease_id))
+         AND (SELECT count(DISTINCT c.id) FROM json_each(?15) AS j JOIN ${effective("charges")} AS c ON c.id = json_extract(j.value, '$.id') AND c.lease_id = d.lease_id) = json_array_length(?15)
+         AND (SELECT count(DISTINCT json_extract(j.value, '$.id')) FROM json_each(?15) AS j) = json_array_length(?15)
          AND NOT EXISTS (SELECT 1 FROM json_each(?15) AS j JOIN ${effective("charges")} AS c ON c.id = json_extract(j.value, '$.id')
-                         WHERE c.lease_id <> d.lease_id OR json_extract(j.value, '$.amount') > ${chargeOpenSql("c")})
+                         WHERE json_extract(j.value, '$.amount') > ${chargeOpenSql("c")})
        ON CONFLICT DO NOTHING`,
     )
     .bind(ws, gateId, gateKey, d.bank_account_id, d.owner_entity_id, applied > 0 ? "trust" : "resident", applied > 0 ? trust : toResident[0], applied > 0 ? "Operating trust" : toResident[1],

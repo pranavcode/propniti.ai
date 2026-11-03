@@ -4,9 +4,9 @@ import type { Actor } from "@/entities/types";
 import { SETTLE_MS } from "@/lib/ledger";
 import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
-import { chargeStatusSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
+import { chargeOpenSql, chargeStatusSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
-import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
+import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
 import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
@@ -309,6 +309,22 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await available(c.ws, "ba-oe01-trust")).toBe(trust + 5_500);
     expect(await payApplicationFee({ ...c, actor: priyanka }, "app-0001")).toMatchObject({ status: 409, error: expect.stringContaining("already paid") });
     expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Application fee paid'", c.ws)).toBe(1);
+  });
+
+  it("deposit disposition refuses unknown, other-lease and duplicate charges", async () => {
+    const c = await ctx(grace);
+    const dep = (await one<{ id: string; lease_id: string; amount_cents: number }>("SELECT id, lease_id, amount_cents FROM deposits WHERE workspace_id = 'base' AND status = 'Disposition due' ORDER BY amount_cents DESC LIMIT 1"))!;
+    const own = await one<{ id: string; open: number }>(`SELECT c.id, ${chargeOpenSql("c")} AS open FROM ${effective("charges")} AS c WHERE c.lease_id = ?2 AND ${chargeOpenSql("c")} > 0 LIMIT 1`, c.ws, dep.lease_id);
+    const other = (await one<{ id: string }>(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.lease_id <> ?2 AND ${chargeOpenSql("c")} > 0 LIMIT 1`, c.ws, dep.lease_id))!;
+    // A charge id that doesn't exist yet (next month's late fee) must not get a credit waiting for it.
+    expect(await disposeDeposit(c, dep.id, [{ label: "Future", amount_cents: 1000, charge_id: `lf-${dep.lease_id}-202612` }])).toMatchObject({ status: 400 });
+    expect(await disposeDeposit(c, dep.id, [{ label: "Someone else's", amount_cents: 1000, charge_id: other.id }])).toMatchObject({ status: 400 });
+    if (own) {
+      const half = Math.max(1, Math.floor(own.open / 2) + 1);
+      expect(await disposeDeposit(c, dep.id, [{ label: "A", amount_cents: half, charge_id: own.id }, { label: "B", amount_cents: half, charge_id: own.id }])).toMatchObject({ status: 400 });
+    }
+    expect(await n("SELECT count(*) AS n FROM credits WHERE workspace_id = ?1", c.ws)).toBe(0);
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1", c.ws)).toBe(0);
   });
 
   it("late fees: posted once per lease and month, capped by the state rule", async () => {

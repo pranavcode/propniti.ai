@@ -72,12 +72,13 @@ export async function get<T = Row>(ctx: DataCtx, table: string, id: string): Pro
 // Derived money state (status is computed, never stored on base rows)
 // ---------------------------------------------------------------------------------------------
 
-// Amount still owed on a charge: amount − payments − credits − rent already on its way (a pending
+// Amount still owed on a charge: amount − payments − credits (only credits on the charge's own lease
+// count, so a stray credit can't pay someone else's charge) − rent already on its way (a pending
 // rent:<charge> ACH). Counting the pending ACH keeps every pay-down path from paying it twice.
 export const chargeOpenSql = (c = "c", ws = "?1") =>
   `(${c}.amount_cents
     - coalesce((SELECT sum(p.amount_cents) FROM ${effective("payments", ws)} AS p WHERE p.charge_id = ${c}.id AND p.nsf = 0), 0)
-    - coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits", ws)} AS x WHERE x.charge_id = ${c}.id), 0)
+    - coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits", ws)} AS x WHERE x.charge_id = ${c}.id AND x.lease_id = ${c}.lease_id), 0)
     - coalesce((SELECT sum(tr.amount_cents) FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending'), 0))`;
 
 // Processing (a live rent:<id> transfer is pending) | Paid | Partial | Overdue | Due.
