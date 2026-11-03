@@ -63,8 +63,8 @@ export function DocumentsPanel({ entity, id, initial }: { entity: string; id: st
           </DialogHeader>
           {preview && (preview.mime.startsWith("image/")
             // eslint-disable-next-line @next/next/no-img-element -- user documents, shown as-is
-            ? <img src={preview.url} alt={preview.name} className="max-h-[70vh] w-full rounded-md border object-contain" />
-            : <iframe src={preview.url} title={preview.name} className="h-[70vh] w-full rounded-md border bg-muted" />)}
+            ? <img src={preview.url ?? undefined} alt={preview.name} className="max-h-[70vh] w-full rounded-md border object-contain" />
+            : <iframe src={preview.url ?? undefined} title={preview.name} className="h-[70vh] w-full rounded-md border bg-muted" />)}
         </DialogContent>
       </Dialog>
     </>
