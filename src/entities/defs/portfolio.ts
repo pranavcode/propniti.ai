@@ -1,9 +1,9 @@
 // Entity defs for the portfolio module. Call registerEntity() from "../registry" for each def.
 // Owned by the portfolio module lane; see AGENTS.md "v2 lanes and ownership".
 // Properties and units are written by lane C as the reference pattern for module lanes.
-import { Building2, DoorOpen } from "lucide-react";
+import { Briefcase, Building, Building2, DoorOpen, LayoutPanelTop, Map as MapIcon } from "lucide-react";
 import { AS_OF, issuesField, LEADERS, OPS, propertyPhoto, STAFF, thumb } from "../common";
-import { registerEntity } from "../registry";
+import { getEntity, registerEntity } from "../registry";
 import type { Role } from "../types";
 
 const OWNER_PORTAL: Role[] = ["owner"];
@@ -211,4 +211,223 @@ registerEntity({
   writes: "generic",
   dataRules: ["units.orphan_property"],
   help: { summary: "Every rentable unit with its live status, floor plan, rent and current resident. Filter by status to find vacancies.", article: "units" },
+});
+
+// ---------------------------------------------------------------------------------------------
+// Portfolio lane: custom record tabs on properties and units, plus regions, portfolios, buildings
+// and floor plans. Lane C's two defs above stay as written; these re-register them with the
+// portfolio tabs (src/extensions/portfolio/tabs).
+// ---------------------------------------------------------------------------------------------
+
+const PROPERTY_FINANCE: Role[] = ["principal", "regional_manager", "property_manager", "accountant", "owner"];
+const props = getEntity("properties")!;
+registerEntity({
+  ...props,
+  detail: {
+    ...props.detail,
+    tabs: [
+      { custom: "portfolio.overview" },
+      { custom: "portfolio.stack" },
+      { custom: "portfolio.floorplans" },
+      { key: "units", label: "Units", relation: "units" },
+      { custom: "portfolio.financials" },
+      { key: "leases", label: "Leases", relation: "leases" },
+      { key: "residents", label: "Residents", relation: "residents" },
+      { key: "work_orders", label: "Work orders", relation: "work_orders" },
+      { custom: "portfolio.compliance" },
+      { key: "ledger", label: "Ledger", relation: "charges", roles: PROPERTY_FINANCE },
+      { key: "details", label: "Details", fields: ["name", "status", "type", "class", "year_built", "stories", "rentable_sqft", "unit_count", "street", "city", "state", "zip", "neighborhood", "region_id", "portfolio_id", "owner_entity_id", "manager_id", "acquired_on", "amenities"] },
+    ],
+    related: [...props.detail.related, "portfolio"],
+  },
+  relations: [...props.relations, { name: "portfolio", entity: "portfolios", fk: "portfolio_id", kind: "one" }, { name: "buildings", entity: "buildings", fk: "property_id", kind: "many" }, { name: "unit_types", label: "Floor plans", entity: "unit_types", fk: "property_id", kind: "many" }],
+});
+
+const units = getEntity("units")!;
+registerEntity({
+  ...units,
+  detail: {
+    ...units.detail,
+    tabs: [
+      { custom: "portfolio.unit" },
+      { custom: "portfolio.lease_history" },
+      { custom: "portfolio.turnover" },
+      { key: "work_orders", label: "Maintenance", relation: "work_orders" },
+      { key: "ledger", label: "Ledger", relation: "charges", roles: ["principal", "regional_manager", "property_manager", "accountant"] },
+      { key: "details", label: "Details", fields: ["number", "property_id", "building_id", "floor", "unit_type_id", "beds", "sqft", "status", "available_on", "market_rent", "rent", "resident", "lease_end", "days_vacant"] },
+    ],
+    related: [...units.detail.related, "building"],
+  },
+  relations: [...units.relations, { name: "building", entity: "buildings", fk: "building_id", kind: "one" }],
+});
+
+// Rollups for org-level records: properties in the region or portfolio, then their units and the
+// latest closed month of metrics_monthly.
+const propsWhere = (cond: string) => `(SELECT count(*) FROM {properties} p WHERE ${cond})`;
+const unitsWhere = (cond: string) => `(SELECT count(*) FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE ${cond})`;
+const occWhere = (cond: string) => `(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.status <> 'Model' AND ${cond})`;
+const noiWhere = (cond: string) => `(SELECT sum(mm.noi_cents) FROM metrics_monthly mm JOIN {properties} p ON p.id = mm.property_id WHERE mm.workspace_id = 'base' AND ${cond} AND mm.month = (SELECT max(month) FROM metrics_monthly WHERE workspace_id = 'base' AND month < substr(${AS_OF}, 1, 7)))`;
+
+registerEntity({
+  key: "regions",
+  table: "regions",
+  label: { one: "Region", many: "Regions" },
+  icon: MapIcon,
+  module: "portfolio",
+  route: "/app/regions",
+  titleField: "name",
+  subtitle: (r) => [r.properties != null && `${r.properties} properties`, r.units != null && `${r.units} units`].filter(Boolean).join(" · "),
+  // A region spans many properties, so it's org-level; its rollups still read scoped properties.
+  scopePath: null,
+  fields: {
+    name: { type: "text", label: "Region", required: true, search: true, sortable: true, list: { default: true, width: 220 } },
+    states: { type: "json", label: "States", list: { default: true } },
+    properties: { type: "number", label: "Properties", sortable: true, list: { default: true, align: "right" }, sql: propsWhere("p.region_id = regions.id") },
+    units: { type: "number", label: "Units", sortable: true, list: { default: true, align: "right" }, sql: unitsWhere("p.region_id = regions.id") },
+    occupancy: { type: "number", label: "Occupancy", format: "pct", sortable: true, list: { default: true, align: "right" }, sql: occWhere("p.region_id = regions.id"), help: { summary: "Occupied and on-notice units over rentable units across the region.", article: "occupancy" } },
+    noi_month: { type: "money", label: "NOI (last month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: noiWhere("p.region_id = regions.id"), help: { summary: "Net operating income for the last closed month, summed across the region's properties.", article: "noi" } },
+    org_id: { type: "ref", ref: "orgs", label: "Organization", required: true, hiddenFor: ["owner", "resident", "vendor", "applicant"] },
+  },
+  relations: [{ name: "properties", entity: "properties", fk: "region_id", kind: "many" }],
+  list: { defaultSort: ["name", "asc"], footer: [{ field: "units", fn: "sum", label: "Units" }, { field: "noi_month", fn: "sum", label: "NOI" }] },
+  detail: {
+    facts: ["properties", "units", "occupancy", "noi_month", "states"],
+    tabs: [{ key: "properties", label: "Properties", relation: "properties" }, { key: "overview", label: "Details", fields: ["name", "states", "org_id"] }],
+    related: [],
+  },
+  capabilities: { notes: true, activity: true },
+  kpis: [
+    { key: "noi", label: "NOI", metric: "portfolio.noi", format: "money", delta: "mom", goodWhen: "up", drill: "/app/properties?sort=-noi_month" },
+    { key: "occupancy", label: "Occupancy", metric: "portfolio.occupancy", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/units?f.status=Vacant" },
+  ],
+  charts: [{ key: "by_region", title: "NOI by region, last closed month", kind: "hbar", metric: "portfolio.by_region", x: "name", series: [{ key: "noi", label: "NOI", format: "money" }], drill: "/app/properties?f.region_id={region_id}" }],
+  permissions: { read: [...STAFF], create: ["principal"], update: ["principal"], delete: ["principal"] },
+  writes: "generic",
+  help: { summary: "Regions group properties for regional managers: Texas, Southeast and Southwest. Scope and rollups follow the region.", article: "regions-and-portfolios" },
+});
+
+registerEntity({
+  key: "portfolios",
+  table: "portfolios",
+  label: { one: "Portfolio", many: "Portfolios" },
+  icon: Briefcase,
+  module: "portfolio",
+  route: "/app/portfolios",
+  titleField: "name",
+  subtitle: (r) => [r.owner_entity_id__label, r.properties != null && `${r.properties} properties`].filter(Boolean).join(" · "),
+  scopePath: null,
+  fields: {
+    name: { type: "text", label: "Portfolio", required: true, search: true, sortable: true, list: { default: true, width: 300 } },
+    owner_entity_id: { type: "ref", ref: "owner_entities", label: "Owner entity", facet: true, required: true, list: { default: true }, editable: [...LEADERS] },
+    properties: { type: "number", label: "Properties", sortable: true, list: { default: true, align: "right" }, sql: propsWhere("p.portfolio_id = portfolios.id") },
+    units: { type: "number", label: "Units", sortable: true, list: { default: true, align: "right" }, sql: unitsWhere("p.portfolio_id = portfolios.id") },
+    occupancy: { type: "number", label: "Occupancy", format: "pct", sortable: true, list: { default: true, align: "right" }, sql: occWhere("p.portfolio_id = portfolios.id") },
+    noi_month: { type: "money", label: "NOI (last month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: noiWhere("p.portfolio_id = portfolios.id"), help: { summary: "Net operating income for the last closed month across the portfolio's properties.", article: "noi" } },
+    org_id: { type: "ref", ref: "orgs", label: "Organization", required: true, hiddenFor: ["owner", "resident", "vendor", "applicant"] },
+  },
+  relations: [
+    { name: "properties", entity: "properties", fk: "portfolio_id", kind: "many" },
+    { name: "owner_entity", label: "Owner entity", entity: "owner_entities", fk: "owner_entity_id", kind: "one" },
+  ],
+  list: { defaultSort: ["name", "asc"], footer: [{ field: "units", fn: "sum", label: "Units" }, { field: "noi_month", fn: "sum", label: "NOI" }] },
+  detail: {
+    facts: ["owner_entity_id", "properties", "units", "occupancy", "noi_month"],
+    tabs: [{ key: "properties", label: "Properties", relation: "properties" }, { key: "overview", label: "Details", fields: ["name", "owner_entity_id", "org_id"] }],
+    related: ["owner_entity"],
+  },
+  capabilities: { notes: true, activity: true, documents: true },
+  permissions: { read: [...STAFF, ...OWNER_PORTAL], create: [...LEADERS], update: [...LEADERS], delete: ["principal"] },
+  writes: "generic",
+  help: { summary: "A portfolio is the set of properties one owner entity holds title to. Owner statements and distributions roll up by portfolio.", article: "regions-and-portfolios" },
+});
+
+registerEntity({
+  key: "buildings",
+  table: "buildings",
+  label: { one: "Building", many: "Buildings" },
+  icon: Building,
+  module: "portfolio",
+  route: "/app/buildings",
+  titleField: "label",
+  subtitle: (r) => [r.property_id__label, r.floors != null && `${r.floors} floors`].filter(Boolean).join(" · "),
+  scopePath: "buildings.property_id",
+  fields: {
+    label: { type: "text", label: "Building", sortable: true, list: { default: true, width: 260 }, sql: "(SELECT p.name FROM {properties} p WHERE p.id = buildings.property_id) || ' · ' || buildings.name" },
+    name: { type: "text", label: "Name", required: true, search: true, sortable: true, editable: [...OPS] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
+    floors: { type: "number", label: "Floors", sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
+    units: { type: "number", label: "Units", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {units} u WHERE u.building_id = buildings.id)" },
+    occupancy: { type: "number", label: "Occupancy", format: "pct", sortable: true, list: { default: true, align: "right" },
+      sql: "(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u WHERE u.building_id = buildings.id AND u.status <> 'Model')" },
+    vacant: { type: "number", label: "Vacant", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {units} u WHERE u.building_id = buildings.id AND u.status IN ('Vacant', 'Make-ready', 'Down'))" },
+  },
+  relations: [
+    { name: "property", entity: "properties", fk: "property_id", kind: "one" },
+    { name: "units", entity: "units", fk: "building_id", kind: "many" },
+  ],
+  list: { defaultSort: ["label", "asc"], footer: [{ field: "units", fn: "sum", label: "Units" }, { field: "vacant", fn: "sum", label: "Vacant" }] },
+  detail: {
+    facts: ["property_id", "floors", "units", "occupancy", "vacant"],
+    tabs: [{ key: "units", label: "Units", relation: "units" }, { key: "overview", label: "Details", fields: ["name", "property_id", "floors"] }],
+    related: ["property"],
+  },
+  capabilities: { notes: true, activity: true, tasks: true, documents: true },
+  permissions: { read: [...STAFF, ...OWNER_PORTAL], create: [...OPS], update: [...OPS], delete: ["principal", "regional_manager"] },
+  writes: "generic",
+  help: { summary: "The physical buildings on a property. The unit stack on each property groups units by building and floor.", article: "units" },
+});
+
+registerEntity({
+  key: "unit_types",
+  table: "unit_types",
+  label: { one: "Floor plan", many: "Floor plans" },
+  icon: LayoutPanelTop,
+  module: "portfolio",
+  nav: { section: "portfolio", order: 25 },
+  route: "/app/floor-plans",
+  titleField: "label",
+  subtitle: (r) => [r.property_id__label, r.sqft != null && `${r.sqft} sq ft`].filter(Boolean).join(" · "),
+  image: (r) => thumb(r.photo),
+  scopePath: "unit_types.property_id",
+  fields: {
+    label: { type: "text", label: "Floor plan", sortable: true, list: { default: true, width: 260 }, sql: "(SELECT p.name FROM {properties} p WHERE p.id = unit_types.property_id) || ' · ' || unit_types.name" },
+    name: { type: "text", label: "Plan name", required: true, search: true, sortable: true, editable: [...OPS] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
+    beds: { type: "number", label: "Beds", facet: true, sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
+    baths: { type: "number", label: "Baths", sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
+    sqft: { type: "number", label: "Sq ft", sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
+    market_rent: { type: "money", label: "Market rent", column: "market_rent_cents", sortable: true, list: { default: true, align: "right" }, editable: [...OPS], help: { summary: "Asking rent for the plan. Units can carry their own market rent on top of it.", article: "rent-and-market" } },
+    units: { type: "number", label: "Units", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {units} u WHERE u.unit_type_id = unit_types.id)" },
+    available: { type: "number", label: "Available", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {units} u WHERE u.unit_type_id = unit_types.id AND u.status IN ('Vacant', 'Make-ready', 'Notice'))" },
+    avg_rent: { type: "money", label: "Avg lease rent", sortable: true, list: { default: true, align: "right" },
+      sql: "(SELECT CAST(avg(l.rent_cents) AS INTEGER) FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE u.unit_type_id = unit_types.id AND l.status IN ('Active', 'Notice', 'Month-to-month'))",
+      help: { summary: "Average rent on active leases for units of this plan. Compare it with market rent to see loss to lease.", article: "rent-and-market" } },
+    photo: { type: "image", label: "Photo", sql: "json_extract(unit_types.photos, '$[0]')" },
+    photos: { type: "json", label: "Photos" },
+  },
+  relations: [
+    { name: "property", entity: "properties", fk: "property_id", kind: "one" },
+    { name: "units", entity: "units", fk: "unit_type_id", kind: "many" },
+  ],
+  list: {
+    defaultSort: ["label", "asc"],
+    savedViews: [
+      { key: "available", label: "With availability", filters: { "available.min": "1" }, sort: ["available", "desc"] },
+      { key: "two-bed", label: "2 bedrooms", filters: { beds: "2" } },
+    ],
+    footer: [{ field: "units", fn: "sum", label: "Units" }, { field: "available", fn: "sum", label: "Available" }],
+  },
+  detail: {
+    facts: ["property_id", "beds", "baths", "sqft", "market_rent", "avg_rent", "units", "available"],
+    tabs: [{ key: "units", label: "Units", relation: "units" }, { key: "overview", label: "Details", fields: ["name", "property_id", "beds", "baths", "sqft", "market_rent", "photos"] }],
+    related: ["property"],
+  },
+  capabilities: { notes: true, activity: true, documents: true },
+  ai: {
+    facts: (r) => ({ plan: String(r.label), beds: Number(r.beds ?? 0), sqft: Number(r.sqft ?? 0), market_rent: Number(r.market_rent ?? 0), avg_lease_rent: r.avg_rent == null ? null : Number(r.avg_rent), units: Number(r.units ?? 0), available: Number(r.available ?? 0) }),
+    agents: ["leasing", "renewals"],
+  },
+  permissions: { read: [...STAFF, ...OWNER_PORTAL], create: [...OPS], update: [...OPS], delete: ["principal", "regional_manager"] },
+  writes: "generic",
+  help: { summary: "Each property's floor plans with beds, baths, size, market rent, photos and a generated floor-plan drawing.", article: "units" },
 });
