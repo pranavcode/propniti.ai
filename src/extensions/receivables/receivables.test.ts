@@ -45,7 +45,10 @@ const overdue = (ws: string, where = "1 = 1") =>
 describe("record payment", () => {
   it("double click with one dialog key records one payment; the fee is exactly the management rate", async () => {
     const c = await ctx();
-    const ch = (await overdue(c.ws, "c.property_id = 'p02'"))!;
+    // Under FIFO allocation some old charges are nearly paid; pick one with room for the whole amount
+    // so the double click (not the overpay guard) is what's tested.
+    const ch = (await overdue(c.ws, `c.property_id = 'p02' AND ${CHARGE_IS_OPEN("c")} AND c.amount_cents - c.paid_cents - c.pending_cents >= 123456`))!;
+    expect(ch.open).toBeGreaterThanOrEqual(123_456);
     const amount = 1234.56;
     const input = { amount, method: "Check", reference: "Check #4471", idempotencyKey: "dialog-key-0001" };
     const rs = await Promise.all([act("charges.record_payment")(c, ch, input), act("charges.record_payment")(c, ch, input)]);
