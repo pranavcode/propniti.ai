@@ -218,3 +218,26 @@ export function unknownNumbers(text: string, facts: Facts): string[] {
   }
   return out;
 }
+
+// Where an AI proposal's content came from, for the AI badge: "live" = a model call made by a run,
+// "rules" = no model, "precomputed" = written ahead of time (the seeded history). Runs record the
+// source on the proposal (payload._source); older rows fall back to their model column.
+export type AiSource = "live" | "precomputed" | "rules";
+export function proposalSource(p: unknown): AiSource {
+  if (p && typeof p === "object") {
+    const o = p as { source?: unknown; payload?: unknown; model?: unknown };
+    if (o.source === "live" || o.source === "rules" || o.source === "precomputed") return o.source;
+    let payload = o.payload;
+    if (typeof payload === "string") {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = null;
+      }
+    }
+    const s = (payload as { _source?: unknown } | null)?._source;
+    if (s === "live" || s === "rules") return s;
+    return proposalSource(o.model ?? null);
+  }
+  return !p || p === "rules" ? "rules" : "precomputed";
+}

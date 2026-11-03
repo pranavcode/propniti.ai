@@ -149,6 +149,9 @@ describe("orchestrator with a model", () => {
     expect(p[0].confidence).toBe(0.8);
     expect(String(p[0].why)).toContain("AI: Two months behind");
     expect(JSON.parse(String(p[0].payload)).effects[0].body).toContain("three payments of $1,400");
+    // The badge says what actually wrote it, from the run through the read model the cards use.
+    const { proposalOut } = await import("../views");
+    expect(proposalOut(p[0])).toMatchObject({ source: "live", model: "claude-opus-5" });
     const kinds = steps(raw, r.runId).map((s) => `${s.kind}${s.tool_key ? ":" + s.tool_key : ""}${s.ok ? "" : "!"}`);
     expect(kinds).toContain("tool_result:messages.draft!");
     expect(kinds).toContain("reasoning_summary");
@@ -162,6 +165,9 @@ describe("orchestrator with a model", () => {
     const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "manual" } })).done;
     expect(proposals(raw, r.runId)).toHaveLength(2);
     expect(steps(raw, r.runId).some((s) => s.output?.includes("upstream 529"))).toBe(true);
+    const { proposalOut } = await import("../views");
+    expect(proposals(raw, r.runId).map((x) => proposalOut(x).source)).toEqual(["rules", "rules"]);
+    expect(proposals(raw, r.runId).map((x) => x.model)).toEqual(["rules", "rules"]);
   });
 });
 

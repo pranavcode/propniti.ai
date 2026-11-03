@@ -126,7 +126,7 @@ export function ApprovalsInbox({ initial, initialQueue }: { initial: Page; initi
                 runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
                 recordHref={p.href}
                 createdAt={p.created_at}
-                source={sourceOf(p.model)}
+                source={sourceOf(p)}
                 model={p.model ?? undefined}
                 onApprove={decided ? undefined : () => decide(p, "approve")}
                 onReject={decided ? undefined : () => decide(p, "reject")}

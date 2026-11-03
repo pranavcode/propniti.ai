@@ -18,7 +18,7 @@ export type StepJson = { id: string; idx: number; kind: TraceStep["kind"]; tool_
 export const toTrace = (s: StepJson): TraceStep => ({ idx: s.idx, kind: s.kind, toolKey: (s.tool_key ?? undefined) as TraceStep["toolKey"], input: s.input ?? undefined, output: s.output ?? undefined, latencyMs: s.latency_ms ?? undefined, ok: s.ok, at: s.at });
 
 export type RunJson = { id: string; agent_key: string; status: RunStatus; trigger_kind: string; started_at: string; ended_at: string | null; model: string | null; tokens_in: number; tokens_out: number; cost_cents: number; summary: string | null; error: string | null; started_by: string | null };
-export type ProposalJson = { id: string; agent: string; title: string; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; risk: "Low" | "Medium" | "High"; confidence: number; amount_cents: number | null; queue_state: string; assignee_role: string | null; model: string | null; run_id: string | null; created_at: string; href?: string; payload: Record<string, unknown>; decision?: string | null; decided_by?: string | null; action: string; entity_type: string; entity_id: string };
+export type ProposalJson = { id: string; source?: "live" | "precomputed" | "rules"; agent: string; title: string; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; risk: "Low" | "Medium" | "High"; confidence: number; amount_cents: number | null; queue_state: string; assignee_role: string | null; model: string | null; run_id: string | null; created_at: string; href?: string; payload: Record<string, unknown>; decision?: string | null; decided_by?: string | null; action: string; entity_type: string; entity_id: string };
 
 export function useRunStream(runId: string | null, initial?: { run: RunJson; steps: StepJson[]; proposals: ProposalJson[] }) {
   const [run, setRun] = useState<RunJson | null>(initial?.run ?? null);
@@ -79,5 +79,5 @@ export const AGENT_LABEL: Record<string, string> = {
   data_health: "Data Health agent", owner_reporting: "Owner Reporting agent", compliance: "Compliance agent", copilot: "Assistant",
 };
 
-// Live = this model call happened at request time; rules = no model; anything stored = precomputed.
-export const sourceOf = (model: string | null | undefined, live = false) => (!model || model === "rules" ? "rules" : live ? "live" : "precomputed") as "live" | "precomputed" | "rules";
+// The AI badge source for a proposal (pass the proposal) or a stored model name.
+export { proposalSource as sourceOf } from "@/ai/rules";

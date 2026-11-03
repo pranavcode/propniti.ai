@@ -32,6 +32,9 @@ export type ProposeInput = {
   alwaysHuman?: boolean;
   // Role that should approve when no policy category names one (e.g. broker for applications).
   assignee?: Role;
+  // Who wrote it: "live" when a model proposed it in this run, "rules" when the rules did. Defaults
+  // to the run's model (rules when no model answered).
+  source?: "live" | "rules";
 };
 
 export type Proposed = { id: string; queueState: "needs_you" | "auto_handled" | "waiting"; duplicate: boolean; executed?: { ok: boolean; message: string } };
@@ -153,7 +156,8 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   const id = newId("prop");
   // What the agent saw, so approval can refuse a proposal whose record has since changed.
   const target = isTable(p.entity) ? await getRaw(ctx.data, p.entity, p.entityId) : null;
-  const payload = target ? { ...(p.payload as Record<string, unknown>), _snapshot: snapshotOf(target) } : p.payload;
+  const source = p.source ?? (ctx.modelUsed.provider === "rules" ? "rules" : "live");
+  const payload = { ...(p.payload as Record<string, unknown>), _source: source, ...(target ? { _snapshot: snapshotOf(target) } : {}) };
   const stepId = await ctx.step({
     kind: "proposal",
     output: { proposal_id: id, title: p.title, action: p.action, confidence: p.confidence, risk, queue_state: queueState, why: p.why },
@@ -163,7 +167,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
     id, agent: ctx.agent, entity_type: p.entity, entity_id: p.entityId, property_id: p.propertyId ?? null, action: p.action, title: p.title,
     payload: JSON.stringify(payload ?? {}), why: JSON.stringify(p.why), evidence: JSON.stringify(p.evidence ?? []),
     confidence: Math.round(Math.min(1, Math.max(0, p.confidence)) * 100) / 100, risk, amount_cents: p.amountCents ?? null,
-    queue_state: queueState, assignee_role: assignee, model: ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
+    queue_state: queueState, assignee_role: assignee, model: source === "rules" ? "rules" : ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
   };
   await (await insert(db, ws, "ai_proposals", row)).run();
   if (!auto || ctx.aborted) return { id, queueState, duplicate: false };

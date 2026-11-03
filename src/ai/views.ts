@@ -3,7 +3,7 @@ import { getEntity } from "@/entities";
 import type { AgentKey, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
-import { computeFix } from "./rules";
+import { computeFix, proposalSource, type AiSource } from "./rules";
 import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
@@ -93,10 +93,10 @@ export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
   return { run, steps: steps.map(stepOut), proposals: proposals.map(proposalOut) };
 }
 
-export type ProposalOut = Row & { why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string };
+export type ProposalOut = Row & { source: AiSource; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string };
 export function proposalOut(p: Row): ProposalOut {
   const evidence = parseJson<{ entity_type: string; entity_id: string; label: string }[]>(p.evidence, []).map((e) => ({ ...e, href: hrefOf(e.entity_type, e.entity_id) }));
-  return { ...p, why: parseJson<string[]>(p.why, []), evidence, payload: parseJson<Record<string, unknown>>(p.payload, {}), href: hrefOf(String(p.entity_type), String(p.entity_id)) };
+  return { ...p, source: proposalSource(p), why: parseJson<string[]>(p.why, []), evidence, payload: parseJson<Record<string, unknown>>(p.payload, {}), href: hrefOf(String(p.entity_type), String(p.entity_id)) };
 }
 const hrefOf = (t: string, id: string) => {
   const d = getEntity(t);

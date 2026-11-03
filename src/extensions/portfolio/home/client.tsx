@@ -38,7 +38,7 @@ export function ApprovalQueue({ rows, total }: { rows: ProposalJson[]; total: nu
       {rows.map((p) => (
         <ApprovalItem key={p.id} variant="row" agent={AGENT_LABEL[p.agent] ?? p.agent} title={p.title} amount={p.amount_cents == null ? null : p.amount_cents / 100} risk={p.risk}
           why={p.why} evidence={p.evidence.map((e) => ({ label: e.label, href: e.href }))} confidence={p.confidence} runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
-          recordHref={p.href} createdAt={p.created_at} source={sourceOf(p.model)} model={p.model ?? undefined}
+          recordHref={p.href} createdAt={p.created_at} source={sourceOf(p)} model={p.model ?? undefined}
           onApprove={() => decide(p, "approve")} onReject={() => decide(p, "reject")} />
       ))}
       {total > rows.length && (

@@ -34,7 +34,7 @@ export default async function BrokerDesk() {
   const agents = perf[0].points as { agent_id: string; agent: string | null; leads: number; tours: number; applied: number; leased: number; stale: number; conversion: number; first_reply_h: number | null }[];
   const items: ProposalView[] = proposals.map((p) => ({
     id: String(p.id), agent: AGENT_NAME[String(p.agent)] ?? String(p.agent), title: String(p.title), why: p.why, evidence: p.evidence, risk: p.risk as ProposalView["risk"], confidence: Number(p.confidence),
-    runId: (p.run_id as string) ?? null, recordHref: p.href, createdAt: String(p.created_at), source: sourceOf(p.model), model: (p.model as string) ?? undefined, canApprove: p.canApprove,
+    runId: (p.run_id as string) ?? null, recordHref: p.href, createdAt: String(p.created_at), source: sourceOf(p), model: (p.model as string) ?? undefined, canApprove: p.canApprove,
   }));
   const unscored = apps.rows.filter((a) => a.score == null).length;
   const oldest = apps.rows[0];

@@ -30,7 +30,7 @@ async function all<T = Row>(c: LeasingCtx, q: string, binds: unknown[]) {
 }
 // Server copies of the AI page labels (the originals live in a client module).
 export const AGENT_NAME: Record<string, string> = { leasing: "Leasing agent", renewals: "Renewals agent" };
-export const sourceOf = (model: unknown) => (!model || model === "rules" ? "rules" : "precomputed") as "rules" | "precomputed";
+export { proposalSource as sourceOf } from "@/ai/rules";
 // Tour times are the property's wall-clock time (the seed writes them as "10:00Z" for a 10 AM
 // tour), so they are formatted in UTC, on the server, which also keeps server and browser renders equal.
 export function localTime(iso: unknown, _metro?: unknown, withDate = false) {

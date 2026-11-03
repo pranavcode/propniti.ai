@@ -38,7 +38,7 @@ export default async function LeasingToday() {
   // Only what this person can act on; the broker's application decisions wait on the broker desk.
   const items: ProposalView[] = proposals.filter((p) => p.canApprove).slice(0, 6).map((p) => ({
     id: String(p.id), agent: AGENT_NAME[String(p.agent)] ?? String(p.agent), title: String(p.title), why: p.why, evidence: p.evidence, risk: p.risk as ProposalView["risk"], confidence: Number(p.confidence),
-    runId: (p.run_id as string) ?? null, recordHref: p.href, createdAt: String(p.created_at), source: sourceOf(p.model as string), model: (p.model as string) ?? undefined,
+    runId: (p.run_id as string) ?? null, recordHref: p.href, createdAt: String(p.created_at), source: sourceOf(p), model: (p.model as string) ?? undefined,
     canApprove: p.canApprove,
   }));
   const needs = [

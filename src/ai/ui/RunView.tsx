@@ -34,7 +34,7 @@ export function ProposalCard({ p, variant = "card", canApprove = true }: { p: Pr
       runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
       recordHref={p.href}
       createdAt={p.created_at}
-      source={sourceOf(p.model)}
+      source={sourceOf(p)}
       model={p.model ?? undefined}
       canApprove={canApprove}
       onApprove={decided ? undefined : () => decide("approve")}

@@ -79,7 +79,7 @@ export function defineAgent(spec: AgentSpec): AgentDef {
         const c = byKey.get(keyOf(p.entityId, p.action));
         if (!c) return { refuse: `No checked candidate for ${p.entityId} with ${p.action}. Propose only from the candidate list.` };
         proposed.add(keyOf(c.entityId, c.action));
-        return finalize(ctx, c, p.why, p.confidence);
+        return { ...finalize(ctx, c, p.why, p.confidence), source: "live" };
       };
 
       let modelText: string | null = null;
@@ -99,7 +99,7 @@ export function defineAgent(spec: AgentSpec): AgentDef {
       for (const c of top) {
         if (proposed.has(keyOf(c.entityId, c.action))) continue;
         if (!fallback && !c.mandatory) continue;
-        await ctx.proposeFull(finalize(ctx, c));
+        await ctx.proposeFull({ ...finalize(ctx, c), source: "rules" });
       }
       const made = ctx.proposals.filter((p) => !p.duplicate);
       const auto = made.filter((p) => p.queueState === "auto_handled").length;
