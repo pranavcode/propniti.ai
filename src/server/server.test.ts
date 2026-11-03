@@ -6,7 +6,7 @@ import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { chargeOpenSql, chargeStatusSql, chargeStatusStoredSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
-import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, movePayment, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
+import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, movePayment, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle, settleIfDue } from "./money";
 import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
@@ -205,6 +205,24 @@ describe("money", { timeout: 60_000 }, () => {
     await settle(db, c.ws, T0 + SETTLE_MS * 3);
     expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND kind = 'Management fee'", c.ws)).toBe(1);
     expect(await payRent(c, jordan!.id)).toMatchObject({ status: 409, error: expect.stringContaining("already paid") });
+  });
+
+  it("settles a payment of a few cents (no zero fee row), and one failing transfer blocks nothing", async () => {
+    const c = await ctx(grace);
+    const ch = (await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws))!;
+    // Leave 5 cents open, then pay those 5 cents by ACH: the 8% fee rounds to 0 and is skipped.
+    expect(await recordPayment(c, { chargeId: ch.id, amountCents: ch.amount_cents - 5, method: "Check", reference: "Check #5", idempotencyKey: "five-cents" })).toMatchObject({ status: 200 });
+    expect(await payRent(c, ch.id)).toMatchObject({ status: 200 });
+    // A broken pending transfer (its fee insert hits the amount CHECK) next to the good one.
+    await db.prepare("INSERT INTO transfers (workspace_id, id, key, kind, bank_account_id, owner_entity_id, from_kind, from_id, from_name, to_kind, to_id, to_name, amount_cents, property_id, ref, status, created, settles_at) VALUES (?1, 'tr-broken', 'rent:broken', 'Rent', 'ba-oe01-trust', 'oe01', 'household', 'h', 'H', 'trust', 'ba-oe01-trust', 'T', 100, 'p02', 'missing-charge', 'Pending', 'x', 0)").bind(c.ws).run();
+    await db.prepare("CREATE TRIGGER IF NOT EXISTS fail_broken BEFORE INSERT ON events WHEN NEW.entity_id = 'missing-charge' BEGIN SELECT RAISE(ABORT, 'forced'); END").run();
+    await settleIfDue(db, c.ws, T0 + SETTLE_MS);
+    await db.prepare("DROP TRIGGER fail_broken").run();
+    expect(await chargeStatus(c.ws, ch.id)).toBe("Paid");
+    expect(await one("SELECT status FROM transfers WHERE workspace_id = ?1 AND id = 'tr-broken'", c.ws)).toEqual({ status: "Pending" });
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND kind = 'Management fee' AND amount_cents <= 0", c.ws)).toBe(0);
+    // The page path keeps working: the next request doesn't throw.
+    await expect(settleIfDue(db, c.ws, T0 + SETTLE_MS + 1)).resolves.toBeUndefined();
   });
 
   it("settles a backlog of pending transfers ten per request", async () => {

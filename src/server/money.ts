@@ -88,10 +88,15 @@ const transferAt = (db: Db, ws: string, key: string) => db.prepare("SELECT id, s
 
 // Settle-on-read for every request: called from actorFor (permissions.ts), which both page
 // sessions and API sessions go through. One indexed EXISTS check when nothing is due.
+// Never throws: a page must render even if settling fails (settle itself isolates each transfer).
 export async function settleIfDue(db: Db, ws: string | null, nowMs: number) {
   if (!ws) return;
-  const due = await db.prepare("SELECT 1 FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 LIMIT 1").bind(ws, nowMs).first();
-  if (due) await settle(db, ws, nowMs);
+  try {
+    const due = await db.prepare("SELECT 1 FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 LIMIT 1").bind(ws, nowMs).first();
+    if (due) await settle(db, ws, nowMs);
+  } catch (e) {
+    console.error("settle failed", ws, e);
+  }
 }
 
 // At most SETTLE_BATCH transfers per call (up to 5 statements each), to stay well inside D1's
@@ -101,8 +106,8 @@ export async function settle(db: Db, ws: string, nowMs: number) {
   const due = (await db.prepare(`SELECT * FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 ORDER BY seq LIMIT ${SETTLE_BATCH}`).bind(ws, nowMs).all<Record<string, string | number>>()).results;
   if (!due.length) return;
   const at = nowIso(nowMs);
-  const steps: DbStatement[] = [];
   for (const t of due) {
+    const steps: DbStatement[] = [];
     const id = String(t.id);
     const pending = `EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?2 AND status = 'Pending')`;
     if (t.kind === "Rent") {
@@ -119,7 +124,7 @@ export async function settle(db: Db, ws: string, nowMs: number) {
             `INSERT INTO transfers (${TRANSFER_COLS})
              SELECT ?1, ?3, 'fee:' || id, 'Management fee', bank_account_id, owner_entity_id, 'trust', bank_account_id, 'Operating trust', 'pm', 'ba-mgmt', 'Summit Residential Partners (management fees)',
                CAST((amount_cents * ?4 + 50) / 100 AS INTEGER), property_id, id, 'Cleared', ?5, NULL, ?5
-             FROM transfers WHERE workspace_id = ?1 AND id = ?2 AND status = 'Pending' ON CONFLICT DO NOTHING`,
+             FROM transfers WHERE workspace_id = ?1 AND id = ?2 AND status = 'Pending' AND CAST((amount_cents * ?4 + 50) / 100 AS INTEGER) > 0 ON CONFLICT DO NOTHING`,
           )
           .bind(ws, id, uid("tr"), FEE_PCT, at),
         eventStmt(db, ws, at, "payment.received", "charges", String(t.ref), String(t.property_id), { transfer_id: id, amount_cents: t.amount_cents }, done(id)),
@@ -152,8 +157,15 @@ export async function settle(db: Db, ws: string, nowMs: number) {
     // Last, so the steps above still see the transfer as Pending.
     steps.push(db.prepare("UPDATE transfers SET status = 'Cleared', cleared = ?3 WHERE workspace_id = ?1 AND id = ?2 AND status = 'Pending'").bind(ws, id, at));
     if (t.kind === "Rent" && String(t.key).startsWith("rent:")) steps.push(chargeRefreshStmt(db, ws, String(t.ref)));
+    // One batch per transfer: a row that can't settle is logged and retried in an hour, and the
+    // others still clear.
+    try {
+      await db.batch(steps);
+    } catch (e) {
+      console.error("settle: transfer failed", id, e);
+      await db.prepare("UPDATE transfers SET settles_at = ?3 WHERE workspace_id = ?1 AND id = ?2 AND status = 'Pending'").bind(ws, id, nowMs + 3_600_000).run();
+    }
   }
-  await db.batch(steps);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -235,7 +247,7 @@ export async function recordPayment(ctx: ActionContext, input: RecordPaymentInpu
         `INSERT INTO transfers (${TRANSFER_COLS})
          SELECT ?1, ?3, 'fee:' || id, 'Management fee', bank_account_id, owner_entity_id, 'trust', bank_account_id, 'Operating trust', 'pm', 'ba-mgmt', 'Summit Residential Partners (management fees)',
            CAST((amount_cents * ?4 + 50) / 100 AS INTEGER), property_id, id, 'Cleared', ?5, NULL, ?5
-         FROM transfers WHERE workspace_id = ?1 AND id = ?2 ON CONFLICT DO NOTHING`,
+         FROM transfers WHERE workspace_id = ?1 AND id = ?2 AND CAST((amount_cents * ?4 + 50) / 100 AS INTEGER) > 0 ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, uid("tr"), FEE_PCT, at),
     eventStmt(db, ws, at, "payment.received", "charges", c.id, c.property_id, { transfer_id: id, amount_cents: input.amountCents, method: input.method }, done(id)),
