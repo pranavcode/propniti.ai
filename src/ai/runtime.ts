@@ -165,7 +165,10 @@ export const errText = (e: unknown) => (e instanceof Error ? e.message : String(
 export function toolSpecs(keys: ToolKey[]) {
   return keys.flatMap((k) => {
     const t = getTool(k);
-    return t ? [{ name: toWire(t.key), description: t.description, schema: z.toJSONSchema(t.input, { io: "input" }) as Record<string, unknown> }] : [];
+    if (!t) return [];
+    const schema = z.toJSONSchema(t.input, { io: "input" }) as Record<string, unknown>;
+    delete schema.$schema;
+    return [{ name: toWire(t.key), description: t.description, schema }];
   });
 }
 

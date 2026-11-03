@@ -37,6 +37,8 @@ export function anthropicModel(): ChatModel {
         { timeout: opts?.timeoutMs ?? 60_000 },
       );
       if (res.stop_reason === "refusal") throw new Error("model declined the request");
+      // A tool call cut off at max_tokens can still parse as a partial object; never run it.
+      if (res.stop_reason === "max_tokens") throw new Error("model reply truncated at max_tokens");
       const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
       const calls = res.content.flatMap((b) => (b.type === "tool_use" ? [{ id: b.id, name: b.name, input: b.input }] : []));
       return { text, calls, raw: res.content, usage: usageOf(model, res.usage.input_tokens, res.usage.output_tokens, Date.now() - t0) };
