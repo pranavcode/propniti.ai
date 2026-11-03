@@ -31,6 +31,12 @@ async function all<T = Row>(c: LeasingCtx, q: string, binds: unknown[]) {
 // Server copies of the AI page labels (the originals live in a client module).
 export const AGENT_NAME: Record<string, string> = { leasing: "Leasing agent", renewals: "Renewals agent" };
 export const sourceOf = (model: unknown) => (!model || model === "rules" ? "rules" : "precomputed") as "rules" | "precomputed";
+// Tour times are the property's wall-clock time (the seed writes them as "10:00Z" for a 10 AM
+// tour), so they are formatted in UTC, on the server, which also keeps server and browser renders equal.
+export function localTime(iso: unknown, _metro?: unknown, withDate = false) {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit", ...(withDate ? { month: "short", day: "numeric" } : {}) }).format(new Date(String(iso)));
+}
 const aiData = (c: LeasingCtx) => ({ db: c.db, ws: c.ws ?? "base", actor: c.actor });
 
 export async function kpis(c: LeasingCtx, keys: string[]) {
@@ -47,7 +53,7 @@ export async function kpis(c: LeasingCtx, keys: string[]) {
 
 export async function todaysTours(c: LeasingCtx, agentId?: string) {
   const s = scope(c, "sh.property_id");
-  return all(c, `SELECT sh.id, sh.scheduled_at, sh.status, sh.kind, sh.feedback, sh.prospect_id, pr.name AS prospect, pr.desired_beds, pr.budget_cents, pr.phone, u.number AS unit, p.name AS property, st.name AS agent
+  return all(c, `SELECT sh.id, sh.scheduled_at, sh.status, sh.kind, sh.feedback, sh.prospect_id, pr.name AS prospect, pr.desired_beds, pr.budget_cents, pr.phone, u.number AS unit, p.name AS property, p.metro, st.name AS agent
     FROM ${E(c, "showings")} sh JOIN ${E(c, "prospects")} pr ON pr.id = sh.prospect_id LEFT JOIN ${E(c, "units")} u ON u.id = sh.unit_id JOIN ${E(c, "properties")} p ON p.id = sh.property_id LEFT JOIN ${E(c, "staff")} st ON st.id = sh.agent_id
     WHERE substr(sh.scheduled_at, 1, 10) = ?${agentId ? " AND (sh.agent_id = ? OR sh.agent_id IS NULL)" : ""}${s.sql} ORDER BY sh.scheduled_at LIMIT 30`, [AS_OF, ...(agentId ? [agentId] : []), ...s.binds]);
 }
@@ -137,7 +143,7 @@ export async function pipeline(c: LeasingCtx, property?: string) {
   const pf = property ? " AND pr.property_id = ?" : "";
   // Prospects first, then their applications, scores and next tours in three batched lookups by id
   // (json_each), rather than correlated subqueries per card: keeps the board inside D1's CPU limit.
-  const rows = await all(c, `SELECT pr.id, pr.name, pr.stage, pr.property_id, p.name AS property, pr.desired_beds, pr.budget_cents, pr.source,
+  const rows = await all(c, `SELECT pr.id, pr.name, pr.stage, pr.property_id, p.name AS property, p.metro, pr.desired_beds, pr.budget_cents, pr.source,
       CAST(julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) AS INTEGER) AS days
     FROM ${E(c, "prospects")} pr JOIN ${E(c, "properties")} p ON p.id = pr.property_id
     WHERE (pr.stage IN ('Inquiry', 'Contacted', 'Tour scheduled', 'Toured', 'Applied') OR (pr.stage = 'Leased' AND substr(coalesce(pr.last_contact_at, pr.created_at), 1, 10) >= ?))${s.sql}${pf}
@@ -166,7 +172,7 @@ export async function pipeline(c: LeasingCtx, property?: string) {
     cards.push({
       id: String(r.id), name: String(r.name), property: String(r.property), propertyId: String(r.property_id), stage: String(r.stage), appStage: appStage || null, appId: appId || null,
       score: score ? Number(score) : null, beds: r.desired_beds == null ? null : Number(r.desired_beds), budget: r.budget_cents == null ? null : Number(r.budget_cents) / 100,
-      source: String(r.source ?? ""), days, nextTour: (r.next_tour as string) ?? null, stale: ["lead", "tour"].includes(column) && days >= 3 && !r.next_tour, column,
+      source: String(r.source ?? ""), days, nextTour: localTime(r.next_tour, r.metro, true), stale: ["lead", "tour"].includes(column) && days >= 3 && !r.next_tour, column,
     });
   }
   return cards;

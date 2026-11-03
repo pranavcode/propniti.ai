@@ -55,12 +55,12 @@ test("leasing agent: day, board move and the broker-only column", async ({ page,
   const board = new Board(page);
   await expect(board.root).toBeVisible();
   const name = await board.openMoveMenu("Lead");
-  await page.getByRole("menuitem", { name: "Tour" }).click();
+  await page.getByRole("menuitem", { name: "Tour", exact: true }).click();
   await expect(page.getByText(`${name} moved to Tour`)).toBeVisible();
 
   // Approval belongs to the broker: the menu item is disabled for a leasing agent.
   await board.openMoveMenu("Screening");
-  await expect(page.getByRole("menuitem", { name: "Approved" })).toBeDisabled();
+  await expect(page.getByRole("menuitem", { name: /^Approved/ })).toBeDisabled();
   await page.keyboard.press("Escape");
 
   expect(errors).toEqual([]);

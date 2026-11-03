@@ -3,7 +3,7 @@ import { ArrowRight, ArrowUpRight, CalendarDays, Cpu, KanbanSquare, Sparkles } f
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
-import { AGENT_NAME, followUps, kpis, sourceOf, leasingCtx, leasingProposals, overnight, todaysTours } from "@/extensions/leasing/data";
+import { AGENT_NAME, followUps, kpis, localTime, sourceOf, leasingCtx, leasingProposals, overnight, todaysTours } from "@/extensions/leasing/data";
 import { AskPanel, FollowUpList, ProposalQueue, TourList, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
 import { AS_OF } from "@/seed/constants";
 
@@ -29,13 +29,14 @@ export default async function LeasingToday() {
   const [tours, follow, proposals, night, k] = await Promise.all([
     todaysTours(c, c.actor.role === "leasing_agent" ? c.actor.personaId : undefined),
     followUps(c, 8),
-    leasingProposals(c, { limit: 6 }),
+    leasingProposals(c, { limit: 20 }),
     overnight(c),
     kpis(c, KPIS.map((x) => x.key)),
   ]);
   const first = c.persona.name.split(" ")[0];
   const scheduled = tours.filter((t) => t.status === "Scheduled").length;
-  const items: ProposalView[] = proposals.map((p) => ({
+  // Only what this person can act on; the broker's application decisions wait on the broker desk.
+  const items: ProposalView[] = proposals.filter((p) => p.canApprove).slice(0, 6).map((p) => ({
     id: String(p.id), agent: AGENT_NAME[String(p.agent)] ?? String(p.agent), title: String(p.title), why: p.why, evidence: p.evidence, risk: p.risk as ProposalView["risk"], confidence: Number(p.confidence),
     runId: (p.run_id as string) ?? null, recordHref: p.href, createdAt: String(p.created_at), source: sourceOf(p.model as string), model: (p.model as string) ?? undefined,
     canApprove: p.canApprove,
@@ -76,7 +77,7 @@ export default async function LeasingToday() {
                   {night.runs.map((r) => (
                     <li key={String(r.id)} className="flex items-start gap-1.5 text-muted-foreground">
                       <Sparkles className="mt-0.5 size-3 shrink-0 text-tone-ai" />
-                      <span className="min-w-0"><span className="text-foreground">{AGENT_NAME[String(r.agent_key)] ?? String(r.agent_key)}:</span> {String(r.summary ?? r.status).split("\n")[0].slice(0, 140)} <Link href={`/app/ai/runs/${r.id}`} className="inline-flex items-center text-primary hover:underline">run<ArrowUpRight className="size-3" /></Link></span>
+                      <span className="min-w-0"><span className="text-foreground">{AGENT_NAME[String(r.agent_key)] ?? String(r.agent_key)}:</span> <span className="line-clamp-2 inline">{String(r.summary ?? r.status).split("\n")[0]}</span> <Link href={`/app/ai/runs/${r.id}`} aria-label={`View the ${AGENT_NAME[String(r.agent_key)] ?? "agent"} run`} className="inline-flex items-center text-primary hover:underline">run<ArrowUpRight className="size-3" /></Link></span>
                     </li>
                   ))}
                 </ul>
@@ -99,9 +100,9 @@ export default async function LeasingToday() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <Section title={<span id="tours" className="flex items-center gap-1.5"><CalendarDays className="size-4 text-muted-foreground" />Today’s tours</span>} description={`${tours.length} booked · ${scheduled} still to run`} actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/showings?view=upcoming">Upcoming</Link></Button>}>
+          <Section title={<span id="tours" className="flex scroll-mt-16 items-center gap-1.5"><CalendarDays className="size-4 text-muted-foreground" />Today’s tours</span>} description={`${tours.length} booked · ${scheduled} still to run`} actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/showings?view=upcoming">Upcoming</Link></Button>}>
             <div className={card} data-tour="leasing-tours">
-              <TourList canAct tours={tours.map((t) => ({ id: String(t.id), at: String(t.scheduled_at), status: String(t.status), kind: String(t.kind), prospect: String(t.prospect), prospectId: String(t.prospect_id), unit: (t.unit as string) ?? null, property: String(t.property), beds: t.desired_beds == null ? null : Number(t.desired_beds), budget: t.budget_cents == null ? null : Number(t.budget_cents) / 100, agent: (t.agent as string) ?? null, feedback: String(t.feedback ?? "") }))} />
+              <TourList canAct tours={tours.map((t) => ({ id: String(t.id), at: String(t.scheduled_at), time: localTime(t.scheduled_at, t.metro) ?? "—", status: String(t.status), kind: String(t.kind), prospect: String(t.prospect), prospectId: String(t.prospect_id), unit: (t.unit as string) ?? null, property: String(t.property), beds: t.desired_beds == null ? null : Number(t.desired_beds), budget: t.budget_cents == null ? null : Number(t.budget_cents) / 100, agent: (t.agent as string) ?? null, feedback: String(t.feedback ?? "") }))} />
             </div>
           </Section>
           <Section title="Follow-ups due" description={`${follow.total} lead${follow.total === 1 ? "" : "s"} with no contact in 3 to 30 days`} actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/prospects?view=follow-up">All {follow.total}</Link></Button>}>
@@ -111,7 +112,7 @@ export default async function LeasingToday() {
           </Section>
         </div>
 
-        <Section title={<span id="proposals">Waiting on you from the agents</span>} description="Follow-ups and renewal offers the Leasing and Renewals agents prepared. Approving sends exactly what's shown; every one links to its run." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">All approvals</Link></Button>}>
+        <Section title={<span id="proposals" className="scroll-mt-16">Waiting on you from the agents</span>} description="Follow-ups and renewal offers the Leasing and Renewals agents prepared. Approving sends exactly what's shown; every one links to its run." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">All approvals</Link></Button>}>
           <ProposalQueue items={items} empty="When the Leasing or Renewals agent drafts a follow-up or an offer for you, it waits here with its reasons." />
         </Section>
       </PageBody>

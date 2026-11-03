@@ -68,7 +68,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
           </nav>
           <div className="ml-auto flex items-center gap-1 text-[12px] text-muted-foreground">
             Ending within
-            {WINDOWS.map((w) => <Link key={w} href={href({ window: w, page: 1, lease: undefined })} className={cn("rounded px-1.5 py-0.5 tabular-nums", w === window ? "bg-primary/10 font-medium text-primary" : "hover:text-foreground")}>{w}d</Link>)}
+            {WINDOWS.map((w) => <Link key={w} href={href({ window: w, page: 1, lease: undefined })} aria-current={w === window ? "page" : undefined} className={cn("rounded px-1.5 py-0.5 tabular-nums", w === window ? "bg-primary/10 font-medium text-primary" : "hover:text-foreground")}>{w}d</Link>)}
           </div>
         </div>
       </PageHeader>
@@ -87,7 +87,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
                     {data.rows.map((r) => (
                       <tr key={r.leaseId} className={cn("border-b last:border-0", r.leaseId === sel?.leaseId ? "bg-primary/[0.06]" : "hover:bg-muted/30")}>
                         <td className="max-w-64 px-3 py-2">
-                          <Link href={href({ lease: r.leaseId })} scroll={false} className="block truncate font-medium hover:text-primary" aria-current={r.leaseId === sel?.leaseId ? "true" : undefined}>{r.resident}</Link>
+                          <Link href={`${href({ lease: r.leaseId })}#renewal-panel`} className="block truncate font-medium hover:text-primary" aria-current={r.leaseId === sel?.leaseId ? "true" : undefined}>{r.resident}</Link>
                           <span className="block truncate text-[11.5px] text-muted-foreground">{r.property} · #{r.unit}</span>
                         </td>
                         <td className={cn("px-3 py-2 whitespace-nowrap tabular-nums", r.daysLeft <= 30 && "text-tone-warning")}>{r.endOn ? formatDate(r.endOn) : "Month-to-month"} <span className="text-[11.5px] text-muted-foreground">{r.endOn ? `${r.daysLeft}d` : ""}</span></td>
@@ -108,7 +108,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
                 </span>
               </footer>
             </div>
-            <aside className="self-start rounded-lg border bg-card p-4 xl:sticky xl:top-4">
+            <aside id="renewal-panel" className="scroll-mt-16 self-start rounded-lg border bg-card p-4 xl:sticky xl:top-4">
               {selected ? <RenewalPanel key={selected.leaseId + (selected.offer?.id ?? "")} s={selected} /> : null}
             </aside>
           </div>

@@ -29,7 +29,7 @@ export default async function PipelinePage({ searchParams }: Props) {
     <>
       <PageHeader
         title="Pipeline board"
-        description="Every open lead from first inquiry to a signed lease. Drag a card one column to move it; approval stays with the broker."
+        description="Every open lead from first inquiry to a signed lease. Drag a card one column, or use its Move menu; approval stays with the broker."
         meta={<><span>{cards.length} on the board</span>{stale > 0 && <Link href="/app/leasing/prospects?view=follow-up" className="text-tone-warning hover:underline">{stale} with no contact in 3+ days</Link>}<span>{c.actor.scope.label}</span></>}
         actions={<Button asChild size="sm" variant="outline"><Link href="/app/leasing/prospects?view=open"><List />List view</Link></Button>}
       >

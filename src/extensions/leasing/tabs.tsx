@@ -108,7 +108,7 @@ registerTab({
     const rows = res.results;
     if (!rows.length) return <EmptyState compact title="No price changes yet" description="Every change to the asking rent is kept here with the reason." />;
     return (
-      <table className="w-full overflow-hidden rounded-lg border text-[13px]">
+      <div className="overflow-x-auto rounded-lg border"><table className="w-full text-[13px]">
         <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
           <tr><th className="px-3 py-2 font-medium">Date</th><th className="px-3 py-2 text-right font-medium">Asking rent</th><th className="px-3 py-2 text-right font-medium">Change</th><th className="px-3 py-2 font-medium">Reason</th></tr>
         </thead>
@@ -118,7 +118,7 @@ registerTab({
             const delta = prev ? Number(r.rent_cents) - Number(prev.rent_cents) : null;
             return (
               <tr key={String(r.id)} className="border-t">
-                <td className="px-3 py-2">{formatDate(String(r.changed_on), "always")}</td>
+                <td className="px-3 py-2 whitespace-nowrap tabular-nums">{formatDate(String(r.changed_on), "always")}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Number(r.rent_cents) / 100, "whole")}</td>
                 <td className={delta == null ? "px-3 py-2 text-right text-muted-foreground" : delta < 0 ? "px-3 py-2 text-right text-tone-danger tabular-nums" : "px-3 py-2 text-right text-tone-success tabular-nums"}>{delta == null ? "First listed" : `${delta < 0 ? "−" : "+"}${formatMoney(Math.abs(delta) / 100, "whole")}`}</td>
                 <td className="px-3 py-2 text-muted-foreground">{String(r.reason || "—")}</td>
@@ -126,7 +126,7 @@ registerTab({
             );
           })}
         </tbody>
-      </table>
+      </table></div>
     );
   },
 });

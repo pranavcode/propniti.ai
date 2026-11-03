@@ -12,7 +12,11 @@ export async function callAction(entity: string, id: string, action: string, bod
 
 export async function callAi<T>(entity: string, id: string, action: string): Promise<T & { runId: string; source: "live" | "rules"; model: string }> {
   const r = await callAction(entity, id, action);
-  return JSON.parse(r.message);
+  try {
+    return JSON.parse(r.message);
+  } catch {
+    throw new Error("The agent's reply couldn't be read. Try again, or open the run from AI activity.");
+  }
 }
 
 export async function patchRecord(entity: string, id: string, body: Record<string, unknown>) {

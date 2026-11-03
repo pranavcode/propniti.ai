@@ -67,12 +67,12 @@ export default async function BrokerDesk() {
           <div className="grid grid-cols-2 gap-3 self-start">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>
 
-        <Section title={<span id="approvals">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
+        <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
           <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-approvals">
             {apps.rows.length ? (
               <table className="w-full text-[13px]">
                 <thead className="border-b bg-muted/40 text-left text-[12px] text-muted-foreground">
-                  <tr><th className="px-3 py-2 font-medium">Applicant</th><th className="px-3 py-2 font-medium">Home</th><th className="px-3 py-2 text-right font-medium">Rent</th><th className="px-3 py-2 text-right font-medium">Income ÷ rent</th><th className="px-3 py-2 font-medium">Screening</th><th className="px-3 py-2 font-medium">AI recommends</th><th className="px-3 py-2 text-right font-medium">Waiting</th><th className="px-3 py-2" /></tr>
+                  <tr><th className="px-3 py-2 font-medium">Applicant</th><th className="px-3 py-2 font-medium">Home</th><th className="px-3 py-2 text-right font-medium">Rent</th><th className="px-3 py-2 text-right font-medium">Income ÷ rent</th><th className="px-3 py-2 font-medium">Screening</th><th className="px-3 py-2 font-medium">AI recommends</th><th className="px-3 py-2 text-right font-medium">Waiting</th><th className="px-3 py-2"><span className="sr-only">Actions</span></th></tr>
                 </thead>
                 <tbody>
                   {apps.rows.map((a) => (
@@ -87,7 +87,7 @@ export default async function BrokerDesk() {
                           <span className="inline-flex items-center gap-1.5">
                             <Sparkles className="size-3 text-tone-ai" /><span className={cn("font-medium", REC[String(a.recommendation)])}>{String(a.recommendation)}</span>
                             <span className="text-muted-foreground tabular-nums">· {Number(a.score)}</span>
-                            {a.runId && <Link href={`/app/ai/runs/${a.runId}`} className="text-[11.5px] text-primary hover:underline" aria-label="View the scoring run">run<ArrowUpRight className="inline size-3" /></Link>}
+                            {a.runId && <Link href={`/app/ai/runs/${a.runId}`} className="text-[11.5px] text-primary hover:underline" aria-label={`View the scoring run for ${String(a.applicant)}`}>run<ArrowUpRight className="inline size-3" /></Link>}
                           </span>
                         ) : <span className="text-muted-foreground">Not scored</span>}
                       </td>
@@ -102,7 +102,7 @@ export default async function BrokerDesk() {
         </Section>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <Section title={<span id="compliance" className="flex items-center gap-1.5">{flags.length ? <AlertTriangle className="size-4 text-tone-danger" /> : <ShieldCheck className="size-4 text-tone-success" />}Fair-housing language</span>} description="Listings whose wording states a preference about who may live there. Publishing is blocked until they're fixed.">
+          <Section title={<span id="compliance" className="flex scroll-mt-16 items-center gap-1.5">{flags.length ? <AlertTriangle className="size-4 text-tone-danger" /> : <ShieldCheck className="size-4 text-tone-success" />}Fair-housing language</span>} description="Listings whose wording states a preference about who may live there. Publishing is blocked until they're fixed.">
             <div className="rounded-lg border bg-card" data-tour="broker-compliance">
               {flags.length ? (
                 <ul className="divide-y">
@@ -122,7 +122,7 @@ export default async function BrokerDesk() {
 
           <Section title="Leasing agent performance" description="Leads created in the last 30 days, by assigned agent.">
             <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-agents">
-              <table className="w-full text-[13px]">
+              {agents.length === 0 ? <EmptyState compact kind="table" title="No leads in the last 30 days" description="Agent numbers appear once leads are assigned." /> : <table className="w-full text-[13px]">
                 <thead className="border-b bg-muted/40 text-left text-[12px] text-muted-foreground">
                   <tr><th className="px-3 py-2 font-medium">Agent</th><th className="px-3 py-2 text-right font-medium">Leads</th><th className="px-3 py-2 text-right font-medium">Toured</th><th className="px-3 py-2 text-right font-medium">Applied</th><th className="px-3 py-2 text-right font-medium">Leased</th><th className="px-3 py-2 text-right font-medium">Going stale</th></tr>
                 </thead>
@@ -138,7 +138,7 @@ export default async function BrokerDesk() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table>}
             </div>
           </Section>
         </div>

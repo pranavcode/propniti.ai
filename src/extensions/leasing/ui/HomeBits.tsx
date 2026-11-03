@@ -11,7 +11,6 @@ import { ApprovalItem, AskBox, type AISource } from "@/components/app/ai";
 import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { useShellMaybe } from "@/components/app/shell/context";
-import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { callAction, runHref } from "./client";
 
@@ -56,7 +55,7 @@ export function ProposalQueue({ items, empty }: { items: ProposalView[]; empty: 
   );
 }
 
-export type TourView = { id: string; at: string; status: string; kind: string; prospect: string; prospectId: string; unit: string | null; property: string; beds: number | null; budget: number | null; agent: string | null; feedback: string };
+export type TourView = { id: string; at: string; time: string; status: string; kind: string; prospect: string; prospectId: string; unit: string | null; property: string; beds: number | null; budget: number | null; agent: string | null; feedback: string };
 
 export function TourList({ tours, canAct }: { tours: TourView[]; canAct: boolean }) {
   const router = useRouter();
@@ -83,22 +82,22 @@ export function TourList({ tours, canAct }: { tours: TourView[]; canAct: boolean
       {tours.map((t) => (
         <li key={t.id} className="px-3 py-2.5">
           <div className="flex items-center gap-3">
-            <span className="w-16 shrink-0 text-[12.5px] font-medium tabular-nums">{formatTime(t.at)}</span>
+            <span className="w-16 shrink-0 text-[12.5px] font-medium tabular-nums">{t.time}</span>
             <div className="min-w-0 flex-1">
               <Link href={`/app/leasing/prospects/${t.prospectId}`} className="font-medium hover:text-primary hover:underline">{t.prospect}</Link>
               <p className="truncate text-[12px] text-muted-foreground">{t.property}{t.unit ? ` · #${t.unit}` : ""} · {t.kind}{t.beds != null ? ` · ${t.beds === 0 ? "studio" : `${t.beds} bed`}` : ""}{t.budget ? <> · up to <Money value={t.budget} style="whole" /></> : null}</p>
             </div>
             {t.status !== "Scheduled" ? <StatusBadge value={t.status} /> : canAct && (
               <div className="flex shrink-0 gap-1">
-                <Button size="sm" variant="outline" disabled={busy === t.id} onClick={() => setOpen(open === t.id ? null : t.id)}><CalendarCheck />Toured</Button>
+                <Button size="sm" variant="outline" disabled={busy === t.id} aria-expanded={open === t.id} aria-controls={`fb-${t.id}`} onClick={() => setOpen(open === t.id ? null : t.id)}><CalendarCheck />Toured</Button>
                 <Button size="sm" variant="ghost" disabled={busy === t.id} onClick={() => void act(t.id, "no_show")} aria-label={`Mark ${t.prospect} as a no-show`}><CalendarX /><span className="sr-only sm:not-sr-only">No-show</span></Button>
               </div>
             )}
           </div>
           {open === t.id && (
-            <form className="mt-2 flex gap-2 pl-19" onSubmit={(e) => { e.preventDefault(); void act(t.id, "complete"); }}>
-              <Input autoFocus value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="How did it go? e.g. liked the layout, wants a higher floor…" aria-label="Tour feedback" maxLength={1000} className="h-8 text-[13px]" />
-              <Button size="sm" type="submit" disabled={busy === t.id}>Save</Button>
+            <form id={`fb-${t.id}`} className="mt-2 flex gap-2 pl-19" onSubmit={(e) => { e.preventDefault(); void act(t.id, "complete"); }}>
+              <Input autoFocus name="feedback" autoComplete="off" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="How did it go? e.g. liked the layout, wants a higher floor…" aria-label="Tour feedback" maxLength={1000} className="h-8 text-[13px]" />
+              <Button size="sm" type="submit" disabled={busy === t.id}>{busy === t.id ? "Saving…" : "Save feedback"}</Button>
             </form>
           )}
         </li>
@@ -121,7 +120,7 @@ export function FollowUpList({ rows }: { rows: FollowUpView[] }) {
             <Link href={`/app/leasing/prospects/${r.id}`} className="font-medium hover:text-primary hover:underline">{r.name}</Link>
             <p className="truncate text-[12px] text-muted-foreground">{r.stage} · {r.property} · {r.source}{r.beds != null ? ` · ${r.beds === 0 ? "studio" : `${r.beds} bed`}` : ""}</p>
           </div>
-          {shell && <Button size="sm" variant="ghost" onClick={() => shell.assistant.ask(`Draft a short follow-up message to ${r.name}, a ${r.stage.toLowerCase()} lead at ${r.property}`, { entity: "prospects", id: r.id, title: r.name })}><MessageSquareText className="text-tone-ai" />Draft</Button>}
+          {shell && <Button size="sm" variant="ghost" aria-label={`Draft a follow-up to ${r.name}`} onClick={() => shell.assistant.ask(`Draft a short follow-up message to ${r.name}, a ${r.stage.toLowerCase()} lead at ${r.property}`, { entity: "prospects", id: r.id, title: r.name })}><MessageSquareText className="text-tone-ai" />Draft</Button>}
         </li>
       ))}
     </ul>

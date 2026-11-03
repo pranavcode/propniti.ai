@@ -48,7 +48,7 @@ function ScoreDial({ score }: { score: number }) {
     <div className="relative size-[92px] shrink-0" role="img" aria-label={`Score ${score} out of 100`}>
       <svg viewBox="0 0 80 80" className="size-full -rotate-90">
         <circle cx="40" cy="40" r={r} fill="none" strokeWidth="6" className="stroke-muted" />
-        <circle cx="40" cy="40" r={r} fill="none" strokeWidth="6" strokeLinecap="round" className={cn("transition-[stroke-dashoffset] duration-700", tone)} strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
+        <circle cx="40" cy="40" r={r} fill="none" strokeWidth="6" strokeLinecap="round" className={cn("transition-[stroke-dashoffset] duration-700 motion-reduce:transition-none", tone)} strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-[26px] leading-none font-semibold tabular-nums">{score}</span>
@@ -89,6 +89,8 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
   const [busy, setBusy] = useState<"score" | "Approved" | "Conditional" | "Denied" | null>(null);
   const [fresh, setFresh] = useState<Partial<ScoringData> | null>(null);
   const [note, setNote] = useState("");
+  const [noteError, setNoteError] = useState(false);
+  const [confirmDeny, setConfirmDeny] = useState(false);
   const d = { ...data, ...fresh };
 
   const score = async () => {
@@ -106,12 +108,18 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
   };
 
   const decide = async (decision: "Approved" | "Conditional" | "Denied") => {
-    if (decision !== "Approved" && note.trim().length < 3) return toast.error("Add a reason first. It goes in the adverse-action record.");
+    if (decision !== "Approved" && note.trim().length < 3) {
+      setNoteError(true);
+      document.getElementById("decision-note")?.focus();
+      return;
+    }
+    if (decision === "Denied" && !confirmDeny) return setConfirmDeny(true);
     setBusy(decision);
     try {
       const r = await callAction("applications", d.appId, "decide", { decision, note: note.trim() || undefined });
       toast.success(r.message);
       setNote("");
+      setConfirmDeny(false);
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -138,13 +146,13 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
               {d.runId && <Link href={runHref(d.runId)!} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>}
               {d.canScore && d.open && (
                 <Button size="sm" variant={d.score == null ? "default" : "outline"} disabled={!!busy} onClick={() => void score()}>
-                  {busy === "score" ? <Loader2 className="animate-spin" /> : <Sparkles />}{d.score == null ? "Score with AI" : "Re-score"}
+                  {busy === "score" ? <Loader2 className="animate-spin" /> : <Sparkles />}{busy === "score" ? "Scoring…" : d.score == null ? "Score with AI" : "Re-score"}
                 </Button>
               )}
             </div>
           </header>
           {d.score == null ? (
-            <div className="flex flex-col items-start gap-1 px-4 py-6">
+            <div className="flex flex-col items-start gap-1 px-4 py-6" role="status">
               <p className="font-medium">{busy === "score" ? "Reading the application and screening summary…" : "Not scored yet"}</p>
               <p className="max-w-xl text-[12.5px] text-muted-foreground">The Leasing agent scores from income to rent, credit band, rental history and income verification, then sends a recommendation to the broker. Every step is recorded in its run.</p>
             </div>
@@ -188,11 +196,13 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
             ) : d.canDecide ? (
               <div className="flex flex-col gap-3">
                 <p className="text-[12.5px] text-muted-foreground">The AI recommendation is advice. Your decision, the reason and the recommendation are kept in the audit log.</p>
-                <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason or conditions (required for conditional approval or denial), e.g. one extra month of deposit…" aria-label="Reason or conditions" maxLength={500} className="min-h-16 text-[13px]" />
+                <Textarea id="decision-note" name="decision-note" value={note} onChange={(e) => { setNote(e.target.value); setNoteError(false); }} placeholder="Reason or conditions, e.g. one extra month of deposit…" aria-label="Reason or conditions" aria-invalid={noteError || undefined} aria-describedby="decision-note-help" maxLength={500} className="min-h-16 text-[13px]" />
+                <p id="decision-note-help" className={cn("-mt-1.5 text-[12px]", noteError ? "text-tone-danger" : "text-muted-foreground")}>{noteError ? "Add a reason first. It goes in the adverse-action record." : "Required for a conditional approval or a denial."}</p>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" disabled={!!busy} onClick={() => void decide("Approved")}>{busy === "Approved" ? <Loader2 className="animate-spin" /> : <Check />}Approve</Button>
                   <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void decide("Conditional")}>{busy === "Conditional" ? <Loader2 className="animate-spin" /> : <Check />}Approve with conditions</Button>
-                  <Button size="sm" variant="outline" className="text-tone-danger hover:text-tone-danger" disabled={!!busy} onClick={() => void decide("Denied")}>{busy === "Denied" ? <Loader2 className="animate-spin" /> : <X />}Deny</Button>
+                  <Button size="sm" variant={confirmDeny ? "destructive" : "outline"} className={cn(!confirmDeny && "text-tone-danger hover:text-tone-danger")} disabled={!!busy} onClick={() => void decide("Denied")}>{busy === "Denied" ? <Loader2 className="animate-spin" /> : <X />}{confirmDeny ? "Confirm denial" : "Deny"}</Button>
+                  {confirmDeny && <Button size="sm" variant="ghost" onClick={() => setConfirmDeny(false)}>Cancel</Button>}
                 </div>
               </div>
             ) : (
