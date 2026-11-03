@@ -214,7 +214,7 @@ registerEntity({
   scopePath: "inspections.property_id",
   fields: {
     title: { type: "text", label: "Inspection", sortable: true, list: { default: true, width: 220 },
-      sql: "(inspections.kind || ' inspection' || coalesce(' · ' || (SELECT u.label FROM {units} u WHERE u.id = inspections.unit_id), ''))" },
+      sql: "(inspections.kind || ' inspection' || coalesce(' · ' || (SELECT 'Unit ' || u.number FROM {units} u WHERE u.id = inspections.unit_id), ''))" },
     kind: { type: "enum", label: "Type", required: true, facet: true, sortable: true, list: { default: true }, enum: ["Move-in", "Move-out", "Annual", "Quarterly", "Safety", "Insurance"].map((v) => ({ value: v, tone: "neutral" as const })) },
     status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Scheduled", tone: "info" }, { value: "In progress", tone: "info" }, { value: "Completed", tone: "success" }, { value: "Failed", tone: "danger" },
@@ -332,7 +332,7 @@ registerEntity({
   subtitle: (r) => [r.property_id__label, r.move_out_on ? `Moved out ${r.move_out_on}` : null].filter(Boolean).join(" · "),
   scopePath: "turnovers.property_id",
   fields: {
-    title: { type: "text", label: "Unit", sortable: true, list: { default: true, width: 200 }, sql: "('Make-ready · ' || coalesce((SELECT u.label FROM {units} u WHERE u.id = turnovers.unit_id), turnovers.unit_id))" },
+    title: { type: "text", label: "Unit", sortable: true, list: { default: true, width: 200 }, sql: "('Make-ready · ' || coalesce((SELECT p.name || ' #' || u.number FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.id = turnovers.unit_id), turnovers.unit_id))" },
     status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Not started", tone: "warning" }, { value: "In progress", tone: "info" }, { value: "Ready", tone: "success" }, { value: "Leased", tone: "neutral" },
     ] },

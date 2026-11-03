@@ -98,7 +98,7 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
        FROM ${wo} w WHERE w.status IN ${OPEN_SQL}${s.sql}`,
     ).bind(...s.binds).first<Record<string, number>>(),
     all<Row>(db,
-      `SELECT w.id, w.title, w.priority, w.category, w.status, w.opened_at, w.sla_due_at, w.property_id, p.name AS property, u.label AS unit,
+      `SELECT w.id, w.title, w.priority, w.category, w.status, w.opened_at, w.sla_due_at, w.property_id, p.name AS property, '#' || u.number AS unit,
          (SELECT ph.url FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo,
          (SELECT ph.check_result FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo_check,
          (SELECT pr.title FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = pr.id) ORDER BY pr.created_at DESC LIMIT 1) AS suggestion,
@@ -147,7 +147,7 @@ export async function boardData(db: Db, ws: string | null, actor: Actor, f: { pr
   // Per-column cap with a window function, plus the true count per column.
   const rows = await all<Row>(db,
     `SELECT * FROM (
-       SELECT w.id, w.title, w.status, w.priority, w.category, w.opened_at, w.sla_due_at, w.scheduled_at, w.vendor_id, w.assignee_id, w.property_id, p.name AS property, u.label AS unit,
+       SELECT w.id, w.title, w.status, w.priority, w.category, w.opened_at, w.sla_due_at, w.scheduled_at, w.vendor_id, w.assignee_id, w.property_id, p.name AS property, '#' || u.number AS unit,
          v.company AS vendor, st.name AS technician,
          (w.sla_due_at IS NOT NULL AND substr(w.sla_due_at, 1, 10) < '${AS_OF}') AS past_sla,
          (SELECT ph.url FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo,
@@ -184,7 +184,7 @@ export async function technicians(db: Db, ws: string | null, actor: Actor) {
 export async function techJobs(db: Db, ws: string | null, actor: Actor, techId: string) {
   const s = scoped(actor.propertyIds, "w.property_id");
   return all<Row>(db,
-    `SELECT w.id, w.title, w.description, w.status, w.priority, w.category, w.sla_due_at, w.scheduled_at, w.permission_to_enter, p.name AS property, p.street, u.label AS unit,
+    `SELECT w.id, w.title, w.description, w.status, w.priority, w.category, w.sla_due_at, w.scheduled_at, w.permission_to_enter, p.name AS property, p.street, '#' || u.number AS unit,
        (w.sla_due_at IS NOT NULL AND substr(w.sla_due_at, 1, 10) < '${AS_OF}') AS past_sla,
        (SELECT coalesce(sum(json_extract(e.detail, '$.minutes')), 0) FROM ${effective("wo_events", ws)} e WHERE e.work_order_id = w.id AND e.kind = 'Time') AS minutes,
        (SELECT json_group_array(json_object('url', ph.url, 'result', ph.check_result, 'confidence', ph.check_confidence)) FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id) AS photos
@@ -201,5 +201,5 @@ export async function intakeOptions(db: Db, ws: string | null, actor: Actor) {
 }
 
 export async function unitsFor(db: Db, ws: string | null, propertyId: string) {
-  return all<{ id: string; label: string }>(db, `SELECT u.id, u.label FROM ${effective("units", ws)} u WHERE u.property_id = ? ORDER BY u.label LIMIT 400`, [propertyId]);
+  return all<{ id: string; label: string }>(db, `SELECT u.id, '#' || u.number AS label FROM ${effective("units", ws)} u WHERE u.property_id = ? ORDER BY u.number LIMIT 400`, [propertyId]);
 }
