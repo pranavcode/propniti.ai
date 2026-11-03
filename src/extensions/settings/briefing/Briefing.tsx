@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/app/states";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
+import { personaGreeting } from "@/lib/format";
 import { metrics, type QueryCtx } from "@/server/query";
 import { asOf, count, rows } from "../data";
 import { BriefingAsk, RecentlyViewed } from "./client";
@@ -24,11 +25,6 @@ import { BriefingAsk, RecentlyViewed } from "./client";
 
 type Risk = { key: string; label: string; detail: string; n: number; href: string; tone: "danger" | "warning" };
 type Run = { id: string; agent_key: string; status: string; started_at: string; summary: string | null; model: string | null };
-
-function greeting(now: Date) {
-  const h = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: "America/Chicago" }).format(now));
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-}
 
 // Rows in the persona's properties; org-level rows (no property) stay visible to org roles only.
 function scoped(ctx: QueryCtx, col = "property_id") {
@@ -98,7 +94,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
     <PageBody className="gap-6 pt-6">
       <header className="flex flex-col gap-1">
         <p className="text-[12.5px] text-muted-foreground">{new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(`${today}T12:00:00Z`))} · {persona.scope.label}</p>
-        <h1 className="text-[24px] leading-8 font-semibold tracking-[-0.015em]">{greeting(new Date())}, {persona.name.split(" ")[0]}</h1>
+        <h1 className="text-[24px] leading-8 font-semibold tracking-[-0.015em]">{personaGreeting(persona)}</h1>
         <p className="max-w-3xl text-[14px] text-muted-foreground">{sentence} <span className="inline-flex items-center gap-1 align-middle text-[11.5px] text-muted-foreground/80"><Sparkles className="size-3" />Computed from your data</span></p>
       </header>
 
