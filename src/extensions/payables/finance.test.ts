@@ -110,6 +110,10 @@ describe("vendor bank account changes", () => {
     expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(409);
     const confirm = getAction("vendors.confirm_bank_change")!;
     expect((await runAction(grace, confirm, "v03", { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(403);
+    // Dismissing the flag from Data Health doesn't let the same person verify their own change.
+    await db.prepare("UPDATE data_issues SET status = 'dismissed' WHERE workspace_id = ? AND entity_id = 'v03' AND rule_id = 'vendors.unverified_bank_change'").bind(WS).run();
+    expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(409);
+    expect((await runAction(grace, confirm, "v03", { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(403);
     expect((await runAction(daniel, confirm, "v03", { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(200);
     expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(200);
   });

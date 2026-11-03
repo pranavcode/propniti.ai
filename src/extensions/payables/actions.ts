@@ -195,7 +195,11 @@ async function confirmBankChange(ctx: ActionContext, vendor: string, input: z.in
   const v = await db.prepare(`SELECT v.company, v.status, v.bank_changed_at FROM ${effective("vendors", "?1")} v WHERE v.id = ?2`).bind(ws, vendor).first<{ company: string; status: string; bank_changed_at: string | null }>();
   if (!v?.bank_changed_at) return { status: 409, error: "This vendor has no bank change to confirm" };
   const open = await db.prepare(`SELECT di.id, di.evidence FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ?2 AND di.status = 'open'`).bind(ws, vendor).all<{ id: string; evidence: string }>();
-  const changedBy = open.results.map((r) => { try { return (JSON.parse(r.evidence) as { changed_by?: string }).changed_by; } catch { return undefined; } }).find(Boolean);
+  // Who entered the change comes from the append-only audit log, not the issue: an issue can be
+  // dismissed from Data Health, which must not let the same person verify their own change.
+  const entered = await db.prepare("SELECT actor_id FROM audit WHERE workspace_id IN ('base', ?1) AND action = 'Vendor bank account changed' AND entity_id = ?2 AND at >= ?3 ORDER BY at DESC LIMIT 1")
+    .bind(ws, vendor, v.bank_changed_at).first<{ actor_id: string }>();
+  const changedBy = entered?.actor_id ?? open.results.map((r) => { try { return (JSON.parse(r.evidence) as { changed_by?: string }).changed_by; } catch { return undefined; } }).find(Boolean);
   if (changedBy === ctx.actor.personaId) return { status: 403, error: "You entered this bank change, so someone else has to verify it" };
   const issueId = open.results[0]?.id ?? uid("di");
   const fix = open.results.length
