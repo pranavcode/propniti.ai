@@ -1,0 +1,20 @@
+[
+  {
+    "id": "parse-email-two-units",
+    "text": "Hi Maya, we're handing over two units at Pine Ridge Apartments (14 Pine Ridge Rd, Dallas, TX), owned by Carla Mendes.\nUnit 3A is rented to Ben Ochoa for $1,575/month; his lease runs 2026-03-01 to 2027-02-28 and his email is ben.ochoa@example.com.\nUnit 3B: Fatima Said pays $1,610 a month, lease ends 2026-12-31, phone (214) 555-0199.\nThanks, Joe",
+    "expect": [
+      { "tenant": "Ben Ochoa", "unit": "3A", "rent": 1575, "property": "Pine Ridge", "leaseEnd": "2027-02-28" },
+      { "tenant": "Fatima Said", "unit": "3B", "rent": 1610, "property": "Pine Ridge", "leaseEnd": "2026-12-31" }
+    ]
+  },
+  {
+    "id": "parse-notes-with-vacancy",
+    "about": "Unit R is vacant, so it is not a tenancy row.",
+    "text": "portfolio notes -\nElm St Duplex: left side (Unit L) is Joe Park at 1200/mo. Right side Unit R is vacant since Sept.\nCedar House #2 - Mia Wong, rent 2,050, lease till 2027-06-30, mia.wong@example.com\nCedar House #5 - Omar Haddad, $1,980, lease till 2027-01-31",
+    "expect": [
+      { "tenant": "Joe Park", "unit": "L", "rent": 1200, "property": "Elm" },
+      { "tenant": "Mia Wong", "unit": "2", "rent": 2050, "property": "Cedar House", "leaseEnd": "2027-06-30" },
+      { "tenant": "Omar Haddad", "unit": "5", "rent": 1980, "property": "Cedar House", "leaseEnd": "2027-01-31" }
+    ]
+  }
+]

@@ -49,3 +49,6 @@ next-env.d.ts
 
 # local demo database (Node / next dev)
 /.data/
+
+# live AI eval runs (the latest summary, evals/results/latest.md, is committed)
+/evals/results/*.json

@@ -11,7 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "evals/**/*.test.mjs"],
     coverage: { provider: "v8", include: ["src/lib/**", "src/server/**", "src/app/api/**"], reporter: ["text", "html"] },
   },
 });

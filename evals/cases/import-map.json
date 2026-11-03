@@ -1,0 +1,24 @@
+[
+  {
+    "id": "map-appfolio-sample",
+    "csv": "public/samples/appfolio-style-rent-roll.csv",
+    "expect": { "property": "Property", "address": "Property Address", "unit": "Unit", "tenant": "Tenant", "email": "Email", "phone": "Phone Number", "rent": "Rent", "leaseStart": "Lease From", "leaseEnd": "Lease To", "owner": null }
+  },
+  {
+    "id": "map-buildium-sample",
+    "csv": "public/samples/buildium-style-export.csv",
+    "expect": { "property": "Rental name", "address": null, "unit": "Unit number", "tenant": "Resident name", "email": "Resident email", "phone": null, "rent": "Rent amount", "leaseStart": "Lease start date", "leaseEnd": "Lease end date", "owner": "Owner name" }
+  },
+  {
+    "id": "map-synonyms-short",
+    "headers": ["Bldg", "Apt #", "Occupant", "Monthly Charge", "Move-in", "Expiry", "Contact Email", "Mobile", "Street", "Landlord"],
+    "samples": [["Pine Ridge", "3A", "Ben Ochoa", "1575", "2026-03-01", "2027-02-28", "ben@example.com", "214-555-0199", "14 Pine Ridge Rd, Dallas, TX", "Carla Mendes"]],
+    "expect": { "property": "Bldg", "address": "Street", "unit": "Apt #", "tenant": "Occupant", "email": "Contact Email", "phone": "Mobile", "rent": "Monthly Charge", "leaseStart": "Move-in", "leaseEnd": "Expiry", "owner": "Landlord" }
+  },
+  {
+    "id": "map-synonyms-commercial",
+    "headers": ["Community", "Space", "Lessee Full Name", "Base Rent ($)", "Commencement", "Termination", "E-mail Addr", "Tel.", "Site Location", "Beneficial Owner", "Sq Ft"],
+    "samples": [["Harbor Point", "Suite 210", "Northwind Dental", "4,200.00", "02/01/2025", "01/31/2028", "office@nw.example", "(619) 555-0303", "77 Harbor Blvd, San Diego, CA", "Alvarez Holdings LLC", "1850"]],
+    "expect": { "property": "Community", "address": "Site Location", "unit": "Space", "tenant": "Lessee Full Name", "email": "E-mail Addr", "phone": "Tel.", "rent": "Base Rent ($)", "leaseStart": "Commencement", "leaseEnd": "Termination", "owner": "Beneficial Owner" }
+  }
+]
