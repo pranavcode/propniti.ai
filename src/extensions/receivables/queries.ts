@@ -4,7 +4,7 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
 import { CHARGE_IS_OPEN, chargeOpenStoredSql } from "@/server/data";
-import { settle } from "@/server/money";
+import { RETURNED_PAYMENT_FEE_CENTS, settle } from "@/server/money";
 import { effective, type QueryCtx } from "@/server/query";
 
 // Receivables reads for the custom pages, tabs and widgets. Every figure is computed the same way
@@ -144,6 +144,16 @@ async function leaseForUncached(ctx: QueryCtx, leaseId: string): Promise<LeaseHe
   if (ctx.actor.propertyIds !== "all" && !ctx.actor.propertyIds.includes(lease.property_id)) return null;
   if (ctx.actor.scope.kind === "self" && (await householdOf(ctx)) !== lease.household_id) return null;
   return lease;
+}
+
+// The returned-payment fee for a property: the policy fee, capped by its state's nsf_fee_cap_cents.
+// The same rule markPaymentReturned applies; the confirm dialog shows it before anyone clicks.
+export async function returnedFeeCents(ctx: Pick<QueryCtx, "db" | "ws">, propertyId: string) {
+  const cap = await ctx.db
+    .prepare(`SELECT s.value FROM ${effective("state_rules", ctx.ws)} AS s WHERE s.state = (SELECT p.state FROM ${effective("properties", ctx.ws)} AS p WHERE p.id = ?) AND s.rule = 'nsf_fee_cap_cents' AND s.effective_from <= ? ORDER BY s.effective_from DESC LIMIT 1`)
+    .bind(propertyId, AS_OF)
+    .first<{ value: string }>();
+  return Math.min(RETURNED_PAYMENT_FEE_CENTS, cap ? Number(cap.value) : RETURNED_PAYMENT_FEE_CENTS);
 }
 
 // A portal resident's household (persona record → residents.household_id).

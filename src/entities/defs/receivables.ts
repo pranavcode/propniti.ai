@@ -156,7 +156,7 @@ registerEntity({
   ],
   permissions: { read: ["principal", "regional_manager", "property_manager", "accountant", "resident", "owner"], create: [], update: [], delete: [] },
   writes: "actions-only",
-  actions: ["payments.move_to_lease"],
+  actions: ["payments.move_to_lease", "payments.mark_returned"],
   dataRules: ["payments.wrong_lease"],
   help: { summary: "Money received from residents. Payments are recorded through the Record payment action so the trust account and ledger stay in balance.", article: "record-a-payment" },
 });

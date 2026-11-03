@@ -8,7 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { QueryCtx } from "@/server/query";
-import { leaseFor, leaseLedger, leasesOfHousehold, settleDue } from "../queries";
+import { leaseFor, leaseLedger, leasesOfHousehold, returnedFeeCents, settleDue } from "../queries";
+import { MarkReturnedButton } from "./MarkReturned";
 import { RecordPaymentButton } from "./RecordPayment";
 
 // A lease's ledger: every charge, payment and credit with a running balance. Each figure in the
@@ -22,6 +23,9 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
   if (!lease) return <EmptyState compact kind="table" title="No ledger to show" description="This lease isn't in your scope, or it doesn't exist." />;
   const [{ rows, totals }, siblings] = await Promise.all([leaseLedger(ctx, leaseId), switchHref ? leasesOfHousehold(ctx, lease.household_id) : Promise.resolve([])]);
   const canRecord = can(ctx.actor.role, "charges.record_payment", "charges");
+  const canReturn = can(ctx.actor.role, "payments.mark_returned", "payments");
+  const fee = canReturn ? await returnedFeeCents(ctx, lease.property_id) : 0;
+  const actions = canRecord || canReturn;
   const lf = { "f.lease_id": leaseId };
   const figures = [
     { label: "Charged", value: totals.charged, href: `/app/receivables/charges?${q(lf)}`, hint: "All charges on this lease" },
@@ -80,7 +84,7 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
                 <th scope="col" className="px-3 py-2 text-right font-medium">Payment / credit</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Balance</th>
                 <th scope="col" className="px-3 py-2 text-left font-medium">Status</th>
-                {canRecord && <th scope="col" className="px-3 py-2"><span className="sr-only">Actions</span></th>}
+                {actions && <th scope="col" className="px-3 py-2"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -95,9 +99,10 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
                   <td className="px-3 text-right">{r.kind !== "charge" ? <Money value={r.nsf ? r.returned : r.credit} cents tone="none" className={cn(r.nsf && "line-through")} /> : null}{r.nsf && <span className="sr-only">returned, not counted</span>}</td>
                   <td className="px-3 text-right font-medium"><Money value={r.balance} cents tone="none" /></td>
                   <td className="px-3">{r.status ? <StatusBadge value={r.status} /> : null}{r.kind === "charge" && (r.open ?? 0) > 0 && r.status !== "Due" && <span className="ml-1.5 text-[11.5px] text-muted-foreground tabular-nums"><Money value={r.open} cents tone="none" /> open</span>}</td>
-                  {canRecord && (
+                  {actions && (
                     <td className="px-2 text-right">
-                      {r.kind === "charge" && (r.open ?? 0) > 0 && r.status !== "Processing" && <RecordPaymentButton size="xs" variant="ghost" label="Record" charge={{ id: r.id, description: r.description, open: (r.open ?? 0) / 100, due_on: r.date }} />}
+                      {canReturn && r.kind === "payment" && !r.nsf && <MarkReturnedButton payment={{ id: r.id, label: `${r.description} on ${formatDate(r.date, "always")}`, amount: r.credit / 100 }} fee={fee / 100} state={lease.state} />}
+                      {canRecord && r.kind === "charge" && (r.open ?? 0) > 0 && r.status !== "Processing" && <RecordPaymentButton size="xs" variant="ghost" label="Record" charge={{ id: r.id, description: r.description, open: (r.open ?? 0) / 100, due_on: r.date }} />}
                     </td>
                   )}
                 </tr>

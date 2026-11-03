@@ -89,3 +89,17 @@ test("data health: a payment on the wrong lease is moved after approval", async 
   await expect(page.getByText(/Moved \$125\.00 to L-10018/)).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("mark a payment returned: the amount and capped fee are stated, the ledger shows it returned", async ({ page }) => {
+  const errors = await as(page, "grace");
+  await go(page, "/app/receivables/ledger/L-10494");
+  await page.getByRole("button", { name: /^Mark Payment .* returned$/ }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText(/returned-payment fee is charged \(TX cap\)/)).toBeVisible();
+  await dialog.getByLabel(/^Note/).fill("R01");
+  await dialog.getByRole("button", { name: "Mark returned and charge $30.00" }).click();
+  await expect(page.getByText(/Marked \$[\d,.]+ returned; \$30\.00 fee charged/)).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Returned", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Returned payment fee/ }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

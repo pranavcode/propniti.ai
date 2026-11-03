@@ -205,3 +205,23 @@ describe("portal personas see no portfolio receivables", () => {
     expect((await delinquentLeases({ db, ws: c.ws, actor: marcus }, { page: 1, size: 5 })).rows.length).toBeGreaterThan(0);
   });
 });
+
+describe("mark payment returned", () => {
+  it("returns once on a double click (409 the second time), charges the state-capped fee, and refuses a property manager", { timeout: 60_000 }, async () => {
+    const c = await ctx();
+    const pay = (await one<Row & { id: string; amount_cents: number; lease_id: string }>(
+      `SELECT p.id, p.amount_cents, p.lease_id, p.nsf FROM ${effective("payments")} AS p WHERE p.property_id = 'p01' AND p.nsf = 0 AND p.received_on >= '2026-10-01' ORDER BY p.id LIMIT 1`, c.ws))!;
+    const row = { ...pay, nsf: false };
+    const input = { reason: "NSF", note: "R01" };
+    expect(getAction("payments.mark_returned")!.roles).not.toContain("property_manager");
+    const marcus: Actor = { personaId: "marcus", name: "Marcus Bell", role: "property_manager", scope: { kind: "property", ids: ["p01"], label: "" }, propertyIds: ["p01"] };
+    expect(await act("payments.mark_returned")({ ...c, actor: marcus }, row, input)).toMatchObject({ status: 403 });
+    const rs = await Promise.all([act("payments.mark_returned")(c, row, input), act("payments.mark_returned")(c, row, input)]);
+    expect(statuses(rs)).toEqual([200, 409]);
+    expect(await act("payments.mark_returned")(c, row, input)).toMatchObject({ status: 409, error: expect.stringContaining("already") });
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = ?2", c.ws, `return:${pay.id}`)).toBe(1);
+    // p01 is in Texas: the $35 policy fee is capped at $30.
+    expect(await n(`SELECT x.amount_cents AS n FROM ${effective("charges")} AS x WHERE x.id = ?2`, c.ws, `nsf-${pay.id}`)).toBe(3000);
+    expect((await one<{ nsf: number }>(`SELECT p.nsf FROM ${effective("payments")} AS p WHERE p.id = ?2`, c.ws, pay.id))!.nsf).toBe(1);
+  });
+});

@@ -1,4 +1,4 @@
-import { Banknote, CreditCard, Gavel, MoveRight, Undo2 } from "lucide-react";
+import { Ban, Banknote, CreditCard, Gavel, MoveRight, Undo2 } from "lucide-react";
 import { z } from "zod";
 import type { ActionContext, Role, Row } from "@/entities/types";
 import { registerAction } from "@/extensions/actions";
@@ -6,7 +6,7 @@ import { CURRENT_PERIOD } from "@/seed/constants";
 import { effective } from "@/server/effective";
 import { payRent, postLateFees, recordPayment } from "@/server/money";
 import { householdOf } from "./queries";
-import { disposeDeposit, movePayment } from "@/server/money";
+import { disposeDeposit, markPaymentReturned, movePayment } from "@/server/money";
 
 // Receivables actions. Every one that moves or re-points money goes through the guarded functions
 // (src/server/money.ts, and ./money.ts until Lane A adopts it); the SQL guards decide.
@@ -124,4 +124,21 @@ registerAction({
   when: (r) => r.nsf !== true,
   handler: (ctx, row, i) => movePayment(ctx, String(row.id), i.to_charge_id, i.issue_id),
   help: { summary: "Moves a payment posted to the wrong lease onto the charge it was meant for. No money moves; both ledgers update.", article: "data-health-fix-issues" },
+});
+
+export const RETURN_REASONS = ["NSF", "Account closed", "Stop payment", "Other"] as const;
+
+// The bank sent a payment back. markPaymentReturned reverses it out of trust, gives back the fee,
+// re-opens the charges oldest first and adds the state-capped returned-payment fee; one return per payment.
+registerAction({
+  key: "payments.mark_returned",
+  label: "Mark returned",
+  entity: "payments",
+  roles: ACCOUNTING,
+  icon: Ban,
+  money: true,
+  input: z.strictObject({ reason: z.enum(RETURN_REASONS), note: z.string().trim().max(160).default("") }),
+  when: (r) => r.nsf !== true,
+  handler: (ctx, row, i) => markPaymentReturned(ctx, String(row.id), i.note ? `${i.reason}: ${i.note}` : i.reason),
+  help: { summary: "Records that the bank returned a payment. The amount comes back out of trust, the charges it paid reopen, and the returned-payment fee is charged, capped by state rules.", article: "handle-nsf-returned-payment" },
 });
