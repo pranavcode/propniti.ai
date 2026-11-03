@@ -34,7 +34,7 @@ registerAction({
   input: RecordPaymentInput,
   when: open,
   handler: (ctx, row, i) => recordPayment(ctx, { chargeId: String(row.id), amountCents: cents(i.amount), method: i.method, reference: i.reference || `${i.method} received ${new Date(ctx.nowMs).toISOString().slice(0, 10)}`, idempotencyKey: i.idempotencyKey }),
-  help: { summary: "Records a check, money order or other payment received in the office. It is deposited to the property's trust account at once, the management fee is taken, and the charge's balance drops.", article: "record-a-payment" },
+  help: { summary: "Records a check, money order or other payment received in the office. The payment goes to the property's trust account today, the management fee is deducted, and the charge's balance goes down by the amount paid.", article: "record-a-payment" },
 });
 
 registerAction({
@@ -119,5 +119,5 @@ registerAction({
   input: z.strictObject({ to_charge_id: z.string().min(1).max(80), issue_id: z.string().max(80).optional() }),
   when: (r) => r.nsf !== true,
   handler: (ctx, row, i) => movePayment(ctx, String(row.id), i.to_charge_id, i.issue_id),
-  help: { summary: "Re-points a payment that was posted to the wrong lease at the charge it was meant for. No money moves; both ledgers update.", article: "data-health-fix-issues" },
+  help: { summary: "Moves a payment posted to the wrong lease onto the charge it was meant for. No money moves; both ledgers update.", article: "data-health-fix-issues" },
 });

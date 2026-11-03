@@ -229,7 +229,7 @@ registerEntity({
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, sortable: true, list: { default: true } },
     move_out_on: { type: "date", label: "Moved out", sortable: true, list: { default: true }, sql: DEP_LEASE("move_out_on") },
     due_on: { type: "date", label: "Disposition due", sortable: true, list: { default: true }, sql: DEP_DUE,
-      help: { summary: "The state deadline to send the itemised disposition after move-out (Texas and Georgia 30 days, Arizona 14 business days).", article: "move-out-deposit-disposition" } },
+      help: { summary: "The state deadline to send the itemized disposition after move-out (Texas and Georgia 30 days, Arizona 14 business days).", article: "move-out-deposit-disposition" } },
     days_left: { type: "number", label: "Days left", sortable: true, list: { default: false, align: "right" }, sql: `CASE WHEN deposits.status <> 'Settled' AND ${DEP_DUE} IS NOT NULL THEN CAST(julianday(${DEP_DUE}) - julianday(${AS_OF}) AS INTEGER) END` },
     bank_account_id: { type: "text", label: "Held in", list: { default: false } },
   },
@@ -257,7 +257,7 @@ registerEntity({
   permissions: { read: [...FINANCE, "resident"], create: [], update: [], delete: [] },
   writes: "actions-only",
   actions: ["deposits.send_disposition"],
-  help: { summary: "Security deposits held in each owner's deposit account. At move-out, send the itemised disposition before the state deadline; deductions settle open charges and the rest is refunded.", article: "move-out-deposit-disposition" },
+  help: { summary: "Security deposits held in each owner's deposit account. At move-out, send the itemized disposition before the state deadline; deductions settle open charges and the rest is refunded.", article: "move-out-deposit-disposition" },
 });
 
 registerEntity({
@@ -279,7 +279,7 @@ registerEntity({
     flat: { type: "money", label: "Flat fee", column: "flat_cents", list: { default: true, align: "right" }, editable: ACCOUNTING },
     pct: { type: "number", label: "Percent of rent", list: { default: true, align: "right" }, editable: ACCOUNTING },
     daily: { type: "money", label: "Daily fee", column: "daily_cents", list: { default: false, align: "right" }, editable: ACCOUNTING },
-    max: { type: "money", label: "Maximum", column: "max_cents", list: { default: true, align: "right" }, editable: ACCOUNTING, help: { summary: "The policy's own cap. The state cap from state rules applies on top, whichever is lower." } },
+    max: { type: "money", label: "Maximum", column: "max_cents", list: { default: true, align: "right" }, editable: ACCOUNTING, help: { summary: "The policy's own cap. The state cap also applies; the fee is the lower of the two." } },
     summary: { type: "text", label: "Summary", sql: "CASE late_fee_policies.kind WHEN 'Flat' THEN '$' || printf('%.2f', late_fee_policies.flat_cents / 100.0) || ' after ' || late_fee_policies.grace_days || ' days' WHEN 'Percent' THEN late_fee_policies.pct || '% of rent after ' || late_fee_policies.grace_days || ' days' ELSE '$' || printf('%.2f', late_fee_policies.flat_cents / 100.0) || ' + $' || printf('%.2f', late_fee_policies.daily_cents / 100.0) || '/day after ' || late_fee_policies.grace_days || ' days' END" },
   },
   relations: [{ name: "property", entity: "properties", fk: "property_id", kind: "one" }],

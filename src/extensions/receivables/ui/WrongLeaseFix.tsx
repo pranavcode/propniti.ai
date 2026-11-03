@@ -12,7 +12,7 @@ export type WrongLeaseIssue = {
   why: string[]; confidence: number; source: string; canApprove: boolean;
 };
 
-// "AI: fix this" for a payment posted to the neighbouring lease. Ledger changes always need a
+// "AI: fix this" for a payment posted to the neighboring lease. Ledger changes always need a
 // person with accounting approval; applying the fix is that approval, and it is audited.
 export function WrongLeaseFix({ issue }: { issue: WrongLeaseIssue }) {
   const router = useRouter();
@@ -20,7 +20,7 @@ export function WrongLeaseFix({ issue }: { issue: WrongLeaseIssue }) {
     return <p className="rounded-lg border bg-muted/40 px-3 py-2 text-[13px]">This payment was flagged as posted to the wrong lease and the issue is now <strong>{issue.status}</strong>. The change is in the audit log and the Data Health fix log.</p>;
   }
   if (!issue.to) {
-    return <p className="rounded-lg border border-tone-warning/30 bg-tone-warning/[0.06] px-3 py-2 text-[13px]">Flagged as posted to the wrong lease, but no matching charge was found on a neighbouring lease. Check the payment’s reference with the resident before moving it.</p>;
+    return <p className="rounded-lg border border-tone-warning/30 bg-tone-warning/[0.06] px-3 py-2 text-[13px]">Flagged as posted to the wrong lease, but no matching charge was found on a neighboring lease. Check the payment’s reference with the resident before moving it.</p>;
   }
   const to = issue.to;
   return (
@@ -31,10 +31,10 @@ export function WrongLeaseFix({ issue }: { issue: WrongLeaseIssue }) {
         { field: "lease_id", label: "Lease", before: issue.from.label, after: `${to.lease} (${to.household})` },
         ...(issue.from.charge === to.charge ? [] : [{ field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${to.due_on}` }]),
       ]}
-      why={[...issue.why, ...(issue.from.charge === to.charge ? [`It already pays ${to.description} (due ${to.due_on}), which is on ${to.lease}`] : []), ...(issue.canApprove ? ["No money moves: same property and trust account. Applying it is your approval; it's audited and logged."] : [])]}
+      why={[...issue.why, ...(issue.from.charge === to.charge ? [`It already pays ${to.description} (due ${to.due_on}), which is on ${to.lease}`] : []), ...(issue.canApprove ? ["No money moves; both leases are in the same property and trust account. Applying the fix counts as your approval and is recorded in the audit log."] : [])]}
       confidence={issue.confidence}
       source={issue.source}
-      needsPerson={issue.canApprove ? null : "Moves a ledger entry: needs an accountant or a manager with approval"}
+      needsPerson={issue.canApprove ? null : "Moves a ledger entry: needs an accountant, regional manager or principal"}
       onApply={issue.canApprove ? async () => {
         const r = await runAction("payments", issue.paymentId, "move_to_lease", { to_charge_id: to.charge, issue_id: issue.id });
         if (!r.ok) {

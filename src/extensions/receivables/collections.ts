@@ -1,6 +1,6 @@
 import "server-only";
 import { PERMISSIONS } from "@/auth/personas";
-import { reminder } from "@/ai/rules";
+import { planMessage, reminder } from "@/ai/rules";
 import { delinquency, type Delinquent } from "@/ai/facts";
 import type { Role } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
@@ -26,13 +26,6 @@ export type WorkbenchRow = {
 
 const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
-function planDraft(d: Delinquent, lang: "en" | "es"): Draft {
-  const first = d.resident.split(" ")[0];
-  const installment = Math.ceil(d.balance_cents / 3 / 100) * 100;
-  return lang === "es"
-    ? { subject: `Un plan de pagos para su saldo en ${d.property}`, body: `Hola ${first}, su saldo en ${d.property} #${d.unit} es de ${usd(d.balance_cents)}. Podemos dividirlo en tres pagos mensuales de aproximadamente ${usd(installment)}. Responda para organizarlo, o pague en el portal de residentes.` }
-    : { subject: `A payment plan for your balance at ${d.property}`, body: `Hi ${first}, your balance at ${d.property} #${d.unit} is ${usd(d.balance_cents)}. We can split it into three monthly payments of about ${usd(installment)}. Reply to set it up, or pay in the resident portal.` };
-}
 
 // Rules, not a model: every point in the score has a reason a person can check on the ledger.
 export function scoreRisk(d: Delinquent, rentCents: number, nsf12: number) {
@@ -108,6 +101,8 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
     const nsf12 = nsfBy.get(d.lease_id) ?? 0;
     const market = e?.market_rent_cents ?? 0;
     const dataError = e && (e.outlier || (market > 0 && e.rent_cents >= market * 5)) ? { rent: e.rent_cents, market, flagged: !!e.outlier } : null;
+    // Same rounding as the Collections agent, so the preview matches what it sends.
+    const installment = Math.ceil(d.balance_cents / 3 / 100) * 100;
     const s = scoreRisk(d, dataError ? market || Math.round(dataError.rent / 10) : e?.rent_cents ?? 0, nsf12);
     // The agent proposes per lease; precomputed proposals in the seed are per household.
     const p = prop.get(d.lease_id) ?? prop.get(d.household_id);
@@ -120,7 +115,7 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
       lease_id: d.lease_id, property_id: d.property_id, property: d.property, unit: d.unit, resident: d.resident, resident_id: d.resident_id, language: d.language,
       balance: d.balance_cents, days_late: d.days_late, oldest_due_on: d.oldest_due_on, aging: d.aging, lease_status: d.lease_status, rent: e?.rent_cents ?? 0, nsf12,
       ...s, step, safe: step === "reminder", dataError,
-      drafts: step === "legal" ? null : step === "plan" ? { en: planDraft(d, "en"), es: planDraft(d, "es") } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
+      drafts: step === "legal" ? null : step === "plan" ? { en: planMessage({ ...d, language: "en" }, installment), es: planMessage({ ...d, language: "es" }, installment) } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
       proposal: p ? {
         id: String(p.id), title: String(p.title), risk: p.risk as "Low" | "Medium" | "High", confidence: Number(p.confidence), run_id: (p.run_id as string) ?? null, model: (p.model as string) ?? null, created_at: String(p.created_at),
         message: msg?.subject && msg.body ? { subject: msg.subject, body: msg.body } : null, canDecide: canDecideAs(ctx.actor.role, String(p.risk), p.amount_cents),

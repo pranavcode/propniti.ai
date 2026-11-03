@@ -19,14 +19,14 @@ const money = (c: number) => (c / 100).toLocaleString("en-US", { style: "currenc
 
 export async function ScheduledVsCollected({ actor }: { actor: Actor }) {
   const m = await metrics(await ctxFor(actor), "receivables.collections_rate", { months: 12 }).catch(() => null);
-  if (!m) return failed("Scheduled vs collected");
+  if (!m) return failed("Charged vs collected");
   const last = m.points.filter((p) => String(p.month) < AS_OF.slice(0, 7)).at(-1);
   return (
     <ChartCard
-      title="Scheduled vs collected"
+      title="Charged vs collected"
       description={last ? `${String(last.month)}: ${((Number(last.collected) / Number(last.charged || 1)) * 100).toFixed(1)}% collected` : "Trailing 12 months"}
       kind="bar" data={m.points as never} x="month" height={220}
-      series={[{ key: "charged", label: "Scheduled", format: "money" }, { key: "collected", label: "Collected", format: "money" }]}
+      series={[{ key: "charged", label: "Charged", format: "money" }, { key: "collected", label: "Collected", format: "money" }]}
       drill="/app/receivables/charges?f.period={month}"
       help="Charges billed per month against money received. Click a month to see its charges."
     />
@@ -61,7 +61,7 @@ export async function NsfCard({ actor }: { actor: Actor }) {
   return <KpiCard label="Returned payments (NSF)" value={m.value ?? 0} previous={m.previous} goodWhen="down" spark={m.spark} footnote={`${String(m.asOf)}${month ? ` · ${money(Math.round(Number(month.amount) * 100))}` : ""}`} href="/app/receivables/payments?view=nsf" help="Payments the bank returned unpaid in the last closed month. Each one reopens the charge and adds an NSF fee." />;
 }
 
-registerWidget({ key: "receivables.scheduled_vs_collected", title: "Scheduled vs collected", roles: ROLES, size: "md", component: ScheduledVsCollected });
+registerWidget({ key: "receivables.scheduled_vs_collected", title: "Charged vs collected", roles: ROLES, size: "md", component: ScheduledVsCollected });
 registerWidget({ key: "receivables.aging", title: "Delinquency aging", roles: ROLES, size: "md", component: AgingCard });
 registerWidget({ key: "receivables.deposits_in_transit", title: "Deposits in transit", roles: ROLES, size: "sm", component: DepositsInTransit });
 registerWidget({ key: "receivables.nsf", title: "Returned payments", roles: ROLES, size: "sm", component: NsfCard });
