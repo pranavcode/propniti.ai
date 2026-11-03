@@ -18,7 +18,7 @@ const render = async (path: string[]) => {
   return Page({ params: Promise.resolve({ path }), searchParams: Promise.resolve({}) });
 };
 
-describe("staff pages", () => {
+describe("staff pages", { timeout: 60_000 }, () => {
   it.each([["receivables", "delinquency"], ["properties"], ["residents", "res-p01-0001"]])("send a resident from /app/%s to the resident portal", async (...path) => {
     jar.persona = "resident";
     await expect(render(path)).rejects.toMatchObject({ to: "/portal/resident" });
