@@ -92,7 +92,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
 }
 
 function HelpMenu() {
-  const { openShortcuts, startTour, openSetup } = useShell();
+  const { data, openShortcuts, startTour, openSetup } = useShell();
   return (
     <DropdownMenu>
       <Tooltip>
@@ -105,9 +105,17 @@ function HelpMenu() {
         <DropdownMenuGroup>
         <DropdownMenuItem asChild><Link href="/docs"><BookOpen /> Help center and docs</Link></DropdownMenuItem>
         <DropdownMenuItem onSelect={openShortcuts}><Keyboard /> Keyboard shortcuts <Kbd className="ml-auto">?</Kbd></DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => startTour()}><Compass /> Restart product tour</DropdownMenuItem>
         <DropdownMenuItem onSelect={openSetup}><ListChecks /> Setup checklist</DropdownMenuItem>
         </DropdownMenuGroup>
+        {data.tours.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Product tours</DropdownMenuLabel>
+              {data.tours.map((t) => <DropdownMenuItem key={t.id} onSelect={() => startTour(t.id)}><Compass /> <span className="truncate">{t.title}</span></DropdownMenuItem>)}
+            </DropdownMenuGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
