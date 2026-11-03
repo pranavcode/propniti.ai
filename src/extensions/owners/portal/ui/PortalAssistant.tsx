@@ -20,10 +20,15 @@ export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const count = useRef(0);
+  const inflight = useRef(0);
 
   const ask = async (q: string) => {
     setOpen(true);
     setBusy(true);
+    inflight.current += 1;
+    // Each answer goes back to its own question, even if another was asked meanwhile.
+    const idx = count.current++;
     setTurns((t) => [...t, { q }]);
     let next: Turn;
     try {
@@ -33,8 +38,9 @@ export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: {
     } catch {
       next = { q, error: "You seem to be offline." };
     }
-    setTurns((t) => [...t.slice(0, -1), next]);
-    setBusy(false);
+    setTurns((t) => t.map((x, i) => (i === idx ? next : x)));
+    inflight.current -= 1;
+    if (!inflight.current) setBusy(false);
   };
 
   useEffect(() => {
@@ -47,7 +53,7 @@ export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: {
 
   return (
     <>
-      <Button data-tour="portal-ask" onClick={() => setOpen(true)} className="fixed right-4 bottom-20 z-40 h-11 rounded-full px-4 shadow-lg md:bottom-6 print:hidden" aria-label={title}>
+      <Button data-tour="portal-ask" onClick={() => setOpen(true)} className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 h-11 rounded-full px-4 shadow-lg md:bottom-6 print:hidden">
         <Sparkles />Ask AI
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>

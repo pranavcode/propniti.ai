@@ -75,6 +75,7 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
     return () => {
       clearTimeout(t);
       ctl.abort();
+      setThinking(false);
     };
   }, [text, description]);
 
@@ -131,7 +132,7 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
                 {/* eslint-disable-next-line @next/next/no-img-element -- a local preview of the resident's own photo */}
                 <img src={p} alt={`Photo ${i + 1}`} className="size-20 rounded-lg object-cover ring-1 ring-border" />
                 <button type="button" onClick={() => setPhotos((ps) => ps.filter((_, j) => j !== i))} aria-label={`Remove photo ${i + 1}`}
-                  className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-foreground text-background"><X className="size-3" /></button>
+                  className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-foreground text-background after:absolute after:-inset-3 after:content-['']"><X className="size-3" /></button>
               </div>
             ))}
             {photos.length < 2 && (
@@ -139,7 +140,7 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
                 <Camera className="size-5" />Add photo
               </button>
             )}
-            <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" className="sr-only" aria-label="Add photos" onChange={(e) => addPhotos(e.target.files)} />
+            <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" className="hidden" aria-label="Add photos" onChange={(e) => addPhotos(e.target.files)} />
           </div>
           {photoError && <p className="text-[12px] text-tone-danger" role="alert">{photoError}</p>}
         </div>
@@ -152,11 +153,11 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
       <aside className="h-fit rounded-xl border border-tone-ai/25 bg-tone-ai/[0.04] p-4" aria-live="polite" aria-label="AI first read">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-[13px] font-semibold"><Sparkles className="size-4 text-tone-ai" />AI&apos;s first read</p>
-          {triage && <AIBadge source="rules" size="xs" />}
+          {valid && triage && <AIBadge source="rules" size="xs" />}
         </div>
         {!valid && !triage && <p className="text-[12.5px] text-muted-foreground">Start describing the problem and we&apos;ll suggest the trade, how urgent it is and a typical cost.</p>}
-        {thinking && !triage && <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Reading your description…</p>}
-        {triage && (
+        {valid && thinking && !triage && <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />Reading your description…</p>}
+        {valid && triage && (
           <div className={`space-y-3 transition-opacity ${thinking ? "opacity-60" : ""}`}>
             {triage.safety && (
               <p className="flex items-start gap-2 rounded-lg bg-tone-danger/10 p-2.5 text-[12.5px] font-medium text-tone-danger" role="alert">

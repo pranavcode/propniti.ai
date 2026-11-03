@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ImageOff, Sparkles, Star, X } from "lucide-react";
 import { formatDate, formatMoney } from "@/lib/format";
+import { useMounted } from "@/hooks/use-mounted";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +18,8 @@ const usd = (cents: number) => formatMoney(cents / 100);
 // reasons, and Approve / Decline with an optional note.
 export function ApprovalCard({ a, me }: { a: Approval; me: string }) {
   const { run, busy } = usePortalAction("owners", me);
+  const mounted = useMounted();
+  const day = (v: string) => (mounted ? formatDate(v) : v.slice(0, 10));
   const [decision, setDecision] = useState<"Approved" | "Declined" | null>(null);
   const [note, setNote] = useState("");
   const over = a.amount_cents - a.limit_cents;
@@ -41,7 +44,7 @@ export function ApprovalCard({ a, me }: { a: Approval; me: string }) {
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 id={`ap-${a.id}`} className="text-[15px] font-semibold text-balance">{a.title}</h3>
-              <p className="text-[12.5px] text-muted-foreground">{a.property}{a.unit ? ` · Unit ${a.unit}` : " · Common area"} · {a.id} · opened {formatDate(a.opened_at)}</p>
+              <p className="text-[12.5px] text-muted-foreground">{a.property}{a.unit ? ` · Unit ${a.unit}` : " · Common area"} · {a.id} · opened {day(a.opened_at)}</p>
             </div>
             <div className="text-right">
               <p className="text-[18px] font-semibold tabular-nums">{usd(a.amount_cents)}</p>
@@ -62,13 +65,13 @@ export function ApprovalCard({ a, me }: { a: Approval; me: string }) {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {a.decision ? (
               <>
-                <StatusBadge value={a.decision} tone={a.decision === "Approved" ? "success" : "danger"} label={`You ${a.decision.toLowerCase()} this${a.decided_at ? ` on ${formatDate(a.decided_at)}` : ""}`} />
+                <StatusBadge value={a.decision} tone={a.decision === "Approved" ? "success" : "danger"} label={`You ${a.decision.toLowerCase()} this${a.decided_at ? ` on ${day(a.decided_at)}` : ""}`} />
                 {a.note && <span className="text-[12.5px] text-muted-foreground">&ldquo;{a.note}&rdquo;</span>}
               </>
             ) : (
               <>
-                <Button onClick={() => setDecision("Approved")} disabled={!!busy}><Check />Approve {usd(a.amount_cents)}</Button>
-                <Button variant="outline" onClick={() => setDecision("Declined")} disabled={!!busy}><X />Decline</Button>
+                <Button className="max-md:h-11" onClick={() => setDecision("Approved")} disabled={!!busy}><Check />Approve {usd(a.amount_cents)}</Button>
+                <Button variant="outline" className="max-md:h-11" onClick={() => setDecision("Declined")} disabled={!!busy}><X />Decline</Button>
               </>
             )}
           </div>

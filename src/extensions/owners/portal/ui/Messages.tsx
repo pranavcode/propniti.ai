@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, MessageSquarePlus, Send, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatRelative } from "@/lib/format";
+import { useMounted } from "@/hooks/use-mounted";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +27,7 @@ export function Messages({ base, entity, me, threads, active, messages, teamName
   teamName?: string;
 }) {
   const router = useRouter();
+  const mounted = useMounted();
   const { run, busy } = usePortalAction(entity, me);
   const [body, setBody] = useState("");
   const [composing, setComposing] = useState(!threads.length);
@@ -71,7 +73,7 @@ export function Messages({ base, entity, me, threads, active, messages, teamName
                   className={cn("block px-3 py-2.5 hover:bg-muted/60 focus-visible:bg-muted focus-visible:outline-none", active?.id === t.id && "bg-primary/[0.06]")}>
                   <div className="flex items-center justify-between gap-2">
                     <p className={cn("truncate text-[13px]", t.unread ? "font-semibold" : "font-medium")}>{t.subject}</p>
-                    <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={t.last_message_at} title={formatDateTime(t.last_message_at)}>{formatRelative(t.last_message_at)}</time>
+                    <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={t.last_message_at} title={mounted ? formatDateTime(t.last_message_at) : undefined}>{mounted ? formatRelative(t.last_message_at) : t.last_message_at.slice(0, 10)}</time>
                   </div>
                   <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{t.preview}</p>
                 </Link>
@@ -101,7 +103,7 @@ export function Messages({ base, entity, me, threads, active, messages, teamName
                       <p className="whitespace-pre-wrap">{m.body}</p>
                       <p className={cn("mt-1 flex items-center gap-1 text-[10.5px]", mine ? "text-primary-foreground/75" : "text-muted-foreground")}>
                         {!mine && <>{teamName}{m.drafted_by_agent && <span className="inline-flex items-center gap-0.5"> · <Sparkles className="size-2.5" />drafted with AI, sent by staff</span>} · </>}
-                        <time dateTime={m.sent_at}>{formatDateTime(m.sent_at)}</time>
+                        <time dateTime={m.sent_at}>{mounted ? formatDateTime(m.sent_at) : m.sent_at.slice(0, 10)}</time>
                       </p>
                     </div>
                   </li>

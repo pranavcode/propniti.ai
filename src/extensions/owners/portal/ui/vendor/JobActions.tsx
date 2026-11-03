@@ -21,8 +21,8 @@ export function JobActions({ me, id, title, status, invoiced, compact }: { me: s
     return (
       <>
         <div className="flex flex-wrap gap-2">
-          <Button size={size} onClick={() => setMode("accept")} disabled={!!busy}><Check />Accept</Button>
-          <Button size={size} variant="outline" onClick={() => setMode("decline")} disabled={!!busy}><X />Decline</Button>
+          <Button size={size} className="max-md:h-11" onClick={() => setMode("accept")} disabled={!!busy}><Check />Accept</Button>
+          <Button size={size} variant="outline" className="max-md:h-11" onClick={() => setMode("decline")} disabled={!!busy}><X />Decline</Button>
         </div>
         <Dialog open={!!mode} onOpenChange={(o) => !o && setMode(null)}>
           <DialogContent>
@@ -43,7 +43,7 @@ export function JobActions({ me, id, title, status, invoiced, compact }: { me: s
             <DialogFooter>
               <Button variant="outline" onClick={() => setMode(null)}>Cancel</Button>
               <Button variant={mode === "decline" ? "destructive" : "default"} disabled={!!busy} onClick={async () => {
-                const r = await run("respond_job", { workOrderId: id, decision: mode, note, ...(mode === "accept" && visit ? { visitAt: new Date(visit).toISOString() } : {}) });
+                const r = await run("respond_job", { workOrderId: id, decision: mode, note, ...(mode === "accept" && visit ? { visitAt: `${visit}:00.000Z` } : {}) });
                 if (r.ok) setMode(null);
               }}>{busy ? "Saving…" : mode === "accept" ? "Accept job" : "Decline job"}</Button>
             </DialogFooter>
