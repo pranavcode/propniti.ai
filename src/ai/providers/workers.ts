@@ -7,14 +7,25 @@ export const WORKERS_AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 
 type Out = { response?: unknown; usage?: { prompt_tokens?: number; completion_tokens?: number } };
 
-// Pulls the first JSON object out of a model reply (models sometimes wrap it in prose or fences).
+// Pulls the first complete JSON object out of a model reply. Models sometimes wrap it in prose or
+// fences, or run on and write a second step; only the first counts.
 export function firstJson(raw: unknown): unknown {
   if (raw && typeof raw === "object") return raw;
   const s = String(raw ?? "");
   const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("model reply had no JSON");
-  return JSON.parse(s.slice(start, end + 1));
+  if (start < 0) throw new Error("model reply had no JSON");
+  let depth = 0;
+  let inStr = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (c === "\\") i++;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return JSON.parse(s.slice(start, i + 1));
+  }
+  throw new Error("model reply had incomplete JSON");
 }
 
 const Step = z.union([

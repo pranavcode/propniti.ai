@@ -93,7 +93,8 @@ export function defineAgent(spec: AgentSpec): AgentDef {
       }
 
       // Rules path: everything when the model is absent or failed; otherwise only mandatory items it skipped.
-      const fallback = modelText === null;
+      // A model that ends without proposing anything (or fails) leaves the whole list to the rules.
+      const fallback = modelText === null || proposed.size === 0;
       for (const c of top) {
         if (proposed.has(keyOf(c.entityId, c.action))) continue;
         if (!fallback && !c.mandatory) continue;
@@ -102,7 +103,7 @@ export function defineAgent(spec: AgentSpec): AgentDef {
       const made = ctx.proposals.filter((p) => !p.duplicate);
       const auto = made.filter((p) => p.queueState === "auto_handled").length;
       const counts = `${made.length} new proposal${made.length === 1 ? "" : "s"}${auto ? ` (${auto} applied automatically within policy)` : ""}, ${ctx.proposals.length - made.length} already waiting`;
-      return { summary: modelText ? `${modelText}\n\n${counts}.` : `Rules: ${all.length} found, ${counts}.` };
+      return { summary: modelText && !fallback ? `${modelText}\n\n${counts}.` : `Rules: ${all.length} found, ${counts}.` };
     },
   };
   return registerAgent(def);
