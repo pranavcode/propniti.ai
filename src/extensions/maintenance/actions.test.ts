@@ -61,7 +61,8 @@ describe("vendor invoice → validate → approve and pay", () => {
     expect(r).toMatchObject({ status: 200, message: expect.stringContaining("issue") });
     // Issues found: paying needs a reason.
     expect(await act("work_orders.approve_and_pay", "WO-2", {})).toMatchObject({ status: 409, error: expect.stringContaining("add a short note") });
-    expect(await twice(() => act("work_orders.approve_and_pay", "WO-2", { note: "Trip charge agreed by phone" }))).toEqual([200, 409]);
+    expect(await act("work_orders.approve_and_pay", "WO-2", { note: "Trip charge agreed by phone", expected_cents: 30000 })).toMatchObject({ status: 409, error: expect.stringContaining("changed since you opened it") });
+    expect(await twice(() => act("work_orders.approve_and_pay", "WO-2", { note: "Trip charge agreed by phone", expected_cents: 34500 }))).toEqual([200, 409]);
     const t = await db.prepare("SELECT count(*) AS n, sum(amount_cents) AS c FROM transfers WHERE workspace_id = ? AND key = 'vendor:WO-2'").bind(WS).first<{ n: number; c: number }>();
     expect(t).toMatchObject({ n: 1, c: 34500 });
   });

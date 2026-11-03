@@ -9,6 +9,7 @@ import type { Role } from "../types";
 const OPEN = "('Completed', 'Paid', 'Cancelled')";
 const SUP: Role[] = [...OPS, "maintenance_supervisor"];
 const WO_STAFF: Role[] = [...SUP, "leasing_agent"];
+const VENDOR_ADMIN: Role[] = [...SUP, "accountant"];
 const MAINT_READ: Role[] = [...STAFF];
 const OPEN_LIST = ["New", "Triaged", "Assigned", "Scheduled", "In progress", "On hold", "Submitted"];
 
@@ -26,7 +27,7 @@ registerEntity({
   fields: {
     title: { type: "text", label: "Work order", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
     // Status moves through named actions after creation (dispatch, technician updates, invoice, payment).
-    status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, editable: WO_STAFF, enum: [
+    status: { system: true, initial: ["New"], type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, editable: WO_STAFF, enum: [
       { value: "New", tone: "warning" }, { value: "Triaged", tone: "info" }, { value: "Assigned", tone: "info" }, { value: "Scheduled", tone: "info" },
       { value: "In progress", tone: "info" }, { value: "On hold", tone: "warning" }, { value: "Submitted", tone: "warning" },
       { value: "Completed", tone: "success" }, { value: "Paid", tone: "success" }, { value: "Cancelled", tone: "neutral" },
@@ -53,7 +54,7 @@ registerEntity({
     ] },
     description: { type: "text", label: "Description", search: true },
     scheduled_at: { type: "datetime", label: "Scheduled", sortable: true },
-    completed_at: { type: "datetime", label: "Completed", sortable: true, editable: SUP },
+    completed_at: { system: true, type: "datetime", label: "Completed", sortable: true, editable: SUP },
     permission_to_enter: { type: "bool", label: "Permission to enter" },
     pm_schedule_id: { type: "ref", ref: "pm_schedules", label: "Preventive schedule", editable: [] },
     turnover_id: { type: "ref", ref: "turnovers", label: "Turnover", editable: [] },
@@ -139,9 +140,11 @@ registerEntity({
   subtitle: (r) => [r.trade, r.contact_name].filter(Boolean).join(" · "),
   scopePath: null,
   fields: {
-    company: { type: "text", label: "Company", required: true, search: true, sortable: true, list: { default: true, width: 240 } },
-    trade: { type: "text", label: "Trade", facet: true, required: true, sortable: true, list: { default: true } },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+    // Vendors edit only their contact details; status, name, trade and tax flags gate dispatch and
+    // payment (the payee name is copied onto transfers), so they stay with staff.
+    company: { type: "text", label: "Company", required: true, search: true, sortable: true, list: { default: true, width: 240 }, editable: VENDOR_ADMIN },
+    trade: { type: "text", label: "Trade", facet: true, required: true, sortable: true, list: { default: true }, editable: VENDOR_ADMIN },
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: VENDOR_ADMIN, enum: [
       { value: "Active", tone: "success" }, { value: "Inactive", tone: "neutral" }, { value: "Do not use", tone: "danger" },
     ] },
     rating: { type: "number", label: "Rating", sortable: true, list: { default: true, align: "right" }, editable: [] },
@@ -158,8 +161,8 @@ registerEntity({
     email: { type: "text", label: "Email", search: true },
     phone: { type: "text", label: "Phone", search: true },
     metros: { type: "json", label: "Metros served" },
-    w9_on_file: { type: "bool", label: "W-9 on file", facet: true, list: { default: false } },
-    is_1099: { type: "bool", label: "1099 vendor", facet: true },
+    w9_on_file: { type: "bool", label: "W-9 on file", facet: true, list: { default: false }, editable: ["accountant"] },
+    is_1099: { type: "bool", label: "1099 vendor", facet: true, editable: ["accountant"] },
     tin_last4: { type: "text", label: "TIN (last 4)", hiddenFor: ["leasing_agent", "maintenance_supervisor", "property_manager", "vendor"], editable: ["accountant"] },
     // Read-only here (computed from the column): bank changes go only through vendors.change_bank_account.
     bank_last4: { type: "text", label: "Bank account (last 4)", hiddenFor: ["leasing_agent", "maintenance_supervisor"], sql: "vendors.bank_last4",
@@ -221,7 +224,7 @@ registerEntity({
     title: { type: "text", label: "Inspection", sortable: true, list: { default: true, width: 220 },
       sql: "(inspections.kind || ' inspection' || coalesce(' · ' || (SELECT 'Unit ' || u.number FROM {units} u WHERE u.id = inspections.unit_id), ''))" },
     kind: { type: "enum", label: "Type", required: true, facet: true, sortable: true, list: { default: true }, enum: ["Move-in", "Move-out", "Annual", "Quarterly", "Safety", "Insurance"].map((v) => ({ value: v, tone: "neutral" as const })) },
-    status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
+    status: { system: true, initial: ["Scheduled"], type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Scheduled", tone: "info" }, { value: "In progress", tone: "info" }, { value: "Completed", tone: "success" }, { value: "Failed", tone: "danger" },
     ] },
     property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true } },
@@ -338,7 +341,7 @@ registerEntity({
   scopePath: "turnovers.property_id",
   fields: {
     title: { type: "text", label: "Unit", sortable: true, list: { default: true, width: 200 }, sql: "('Make-ready · ' || coalesce((SELECT p.name || ' #' || u.number FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.id = turnovers.unit_id), turnovers.unit_id))" },
-    status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
+    status: { system: true, initial: ["Not started"], type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Not started", tone: "warning" }, { value: "In progress", tone: "info" }, { value: "Ready", tone: "success" }, { value: "Leased", tone: "neutral" },
     ] },
     property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true }, editable: [] },

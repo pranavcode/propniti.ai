@@ -24,7 +24,8 @@ describe("work order write permissions", () => {
     expect(created).toContain("status");
     expect(created).not.toContain("estimate");
     const sup = Object.keys(writeSchema(def, "maintenance_supervisor", "update").shape);
-    expect(sup).toEqual(expect.arrayContaining(["status", "estimate", "cost", "vendor_id", "sla_due_at"]));
+    expect(sup).toEqual(expect.arrayContaining(["estimate", "cost", "vendor_id", "sla_due_at"]));
+    expect(sup).not.toContain("status"); // status moves through work_orders.set_status (a system field)
   });
 
   it("only staff approve and pay", () => {
@@ -41,5 +42,14 @@ describe("vendor bank details", () => {
       expect(Object.keys(writeSchema(def, role, "update").shape)).not.toContain("bank_last4");
       expect(Object.keys(writeSchema(def, role, "create").shape)).not.toContain("bank_last4");
     }
+  });
+});
+
+describe("vendor record", () => {
+  it("lets a vendor change only its contact details, never status, name, trade or tax flags", () => {
+    const fields = Object.keys(writeSchema(getEntity("vendors")!, "vendor", "update").shape);
+    for (const f of ["status", "company", "trade", "w9_on_file", "is_1099", "rating", "bank_last4"]) expect(fields).not.toContain(f);
+    expect(fields).toEqual(expect.arrayContaining(["contact_name", "email", "phone"]));
+    expect(Object.keys(writeSchema(getEntity("vendors")!, "maintenance_supervisor", "update").shape)).toContain("status");
   });
 });

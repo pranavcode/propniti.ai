@@ -297,12 +297,14 @@ registerAction({
   roles: SUP,
   icon: CheckCircle2,
   money: true,
-  input: z.strictObject({ note: z.string().trim().max(500).optional() }),
+  // expected_cents: the invoice total the person reviewed, so a resubmission in between isn't paid unseen.
+  input: z.strictObject({ note: z.string().trim().max(500).optional(), expected_cents: z.number().int().positive().optional() }),
   when: (r) => r.status === "Submitted",
   confirm: { title: "Approve and pay this invoice?", body: "The vendor is paid from the property's trust account by ACH. This can't be undone here.", tone: "warning" },
   help: { summary: "Approves the vendor's work and pays the invoice from trust, within the owner's approval limit. Paying twice is impossible.", article: "approve-pay-work-order" },
   handler: async (c, r, input) => {
     const { po, photos, submission } = await invoiceInputs(c.db, c.ws, String(r.id));
+    if (input.expected_cents != null && submission?.total_cents !== input.expected_cents) return conflict("The vendor's invoice changed since you opened it. Reload and review it again.");
     if (submission) {
       const v = validateInvoice(po, { lines: submission.lines, total_cents: submission.total_cents, photos });
       if (v.issues.length && (input.note ?? "").length < 8) return conflict(`${v.summary} To pay anyway, add a short note saying why.`);

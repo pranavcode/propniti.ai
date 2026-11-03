@@ -127,7 +127,7 @@ export function ApprovePay({ woId, amount, vendor, validation, policy, blocked }
   const [note, setNote] = useState("");
   const needsNote = validation.issues.length > 0;
   const pay = async () => {
-    const out = await run("work_orders", woId, "work_orders.approve_and_pay", needsNote ? { note: note.trim() } : {});
+    const out = await run("work_orders", woId, "work_orders.approve_and_pay", { expected_cents: Math.round(amount * 100), ...(needsNote ? { note: note.trim() } : {}) });
     if (out) setOpen(false);
   };
   return (
