@@ -225,11 +225,45 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
   if (!row) notFound();
   const tabs = tabsFor(def, role);
   const active = tabs.find((t) => t.key === searchParams.get("tab")) ?? tabs[0];
-  const [rail, issues, summary, kpis] = await Promise.all([
+  // The active tab loads alongside the header data, not after it.
+  const tabBody = async (): Promise<React.ReactNode> => {
+    if (active?.kind === "fields") {
+      return <FieldGrid def={def} row={row} keys={active.tab!.fields ?? Object.keys(def.fields)} role={role} />;
+    } else if (active?.kind === "relation") {
+      const r = def.relations.find((x) => x.name === active.tab!.relation)!;
+      const rel = getEntity(r.entity)!;
+      const [remote, local] = r.fk.split("=", 2);
+      const value = local ? (await ctx.db.prepare(`SELECT ${local.replace(/[^a-z_]/g, "")} AS v FROM ${effective(def.table, ctx.ws)} WHERE id = ?`).bind(id).first<{ v: unknown }>())?.v : id;
+      const q = parseListQuery(withView(rel, searchParams));
+      const [{ res, error }, facets] = await Promise.all([
+        attempt(list(ctx, rel.key, { ...q, where: { column: remote, value } })),
+        facetOptions(ctx, rel.key, q).catch(() => ({})),
+      ]);
+      return (
+        <EntityList entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
+          counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
+          searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
+      );
+    } else if (active?.kind === "custom") {
+      const c = getTab(active.customKey!)!;
+      return c.component({ entity: def.key, id, row, actor: session.actor });
+    } else if (active) {
+      const res = await collab(ctx, active.kind as "notes" | "tasks" | "activity" | "documents", def.key, id, Number(searchParams.get("page")) || 1, 50);
+      return (
+        <div className="space-y-3">
+          {(active.kind === "notes" || active.kind === "tasks") && <Composer entity={def.key} id={id} kind={active.kind} />}
+          <CollabList kind={active.kind as "notes"} rows={res.rows} />
+        </div>
+      );
+    }
+    return null;
+  };
+  const [rail, issues, summary, kpis, body] = await Promise.all([
     relations(ctx, def, row, def.detail.related, 5),
     def.dataRules?.length ? healthIssues(ctx, def.key, id) : Promise.resolve([] as HealthIssue[]),
     def.capabilities?.aiSummary ? aiSummary(ctx, def.key, id) : Promise.resolve(null),
     def.key === "properties" ? kpiData(ctx, (def.kpis ?? []).slice(0, 4), id) : Promise.resolve([] as KpiData[]),
+    tabBody(),
   ]);
   const statusKey = def.list.statusTabs && def.fields[def.list.statusTabs]?.type === "enum" ? def.list.statusTabs : def.fields.status ? "status" : null;
   const hero = typeof row._image === "string" ? row._image.replace(/-400\.webp$/, ".webp") : null;
@@ -238,36 +272,6 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
   const editFields = can(role, "update", def.key) ? formFields(def, role, "update") : [];
   const title = String(row._title ?? id);
 
-  let body: React.ReactNode;
-  if (active?.kind === "fields") {
-    body = <FieldGrid def={def} row={row} keys={active.tab!.fields ?? Object.keys(def.fields)} role={role} />;
-  } else if (active?.kind === "relation") {
-    const r = def.relations.find((x) => x.name === active.tab!.relation)!;
-    const rel = getEntity(r.entity)!;
-    const [remote, local] = r.fk.split("=", 2);
-    const value = local ? (await ctx.db.prepare(`SELECT ${local.replace(/[^a-z_]/g, "")} AS v FROM ${effective(def.table, ctx.ws)} WHERE id = ?`).bind(id).first<{ v: unknown }>())?.v : id;
-    const q = parseListQuery(withView(rel, searchParams));
-    const [{ res, error }, facets] = await Promise.all([
-      attempt(list(ctx, rel.key, { ...q, where: { column: remote, value } })),
-      facetOptions(ctx, rel.key, q).catch(() => ({})),
-    ]);
-    body = (
-      <EntityList entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
-        counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
-        searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
-    );
-  } else if (active?.kind === "custom") {
-    const c = getTab(active.customKey!)!;
-    body = await c.component({ entity: def.key, id, row, actor: session.actor });
-  } else if (active) {
-    const res = await collab(ctx, active.kind as "notes" | "tasks" | "activity" | "documents", def.key, id, Number(searchParams.get("page")) || 1, 50);
-    body = (
-      <div className="space-y-3">
-        {(active.kind === "notes" || active.kind === "tasks") && <Composer entity={def.key} id={id} kind={active.kind} />}
-        <CollabList kind={active.kind as "notes"} rows={res.rows} />
-      </div>
-    );
-  }
 
   return (
     <main className="space-y-4 p-4 md:p-6">
