@@ -81,3 +81,98 @@ Small, focused commits. Imperative, sentence-case subject with no prefix or trai
 ## Deploy
 
 Manual: `npm run deploy:vinext` (Cloudflare Workers), after any remote migration. CI builds but does not deploy.
+
+## v2 lanes and ownership
+
+v2 is built on the `v2-saas` branch in the `prototype-v2` worktree by parallel lanes. Plan: `../research/v2-plan.md`; design brief: `../research/saas-design-brief.md`. Edit only what your lane owns. If you need a change in another lane's files, ask that lane or the lead.
+
+| Lane | Owns |
+|---|---|
+| Lead | `package.json`, `package-lock.json`, `components.json`, `src/entities/types.ts`, `src/ai/types.ts`, `src/auth/`, `src/app/globals.css`, config files, this file |
+| A Data | `migrations/`, `src/seed/`, `src/server/` (money, repo, workspace, `effective()`, `ensureBase`, base load script) except `query.ts` |
+| B UI kit | `src/components/ui/`, `src/components/app/`, `src/hooks/`, the app shell (`src/app/(app)/app/layout.tsx`), `/app/_kit` |
+| C Framework | `src/entities/registry.ts`, `src/entities/index.ts`, `src/extensions/*.ts`, `src/server/query.ts`, `src/app/api/e/**`, `src/app/api/metrics/**`, the generic pages (`src/app/(app)/app/[...path]/`) |
+| E AI | `src/ai/**`, new `evals/cases/*.json`, `src/worker-entry.ts` |
+| Module lanes | `src/entities/defs/<module>.ts`, `src/extensions/<module>/`, their pages under `src/app/(app)/app/<section>/`, `src/app/(portal)/portal/<role>/` and `src/app/(public)/` as assigned |
+
+Rules for every lane:
+
+- Only the lead edits `package.json`. Ask the lead for a dependency; don't install one yourself.
+- Never commit to `main`. Commit on `v2-saas` only, in small commits, following "Commits" above. Commit messages never mention AI tools, assistants or co-authors.
+- Before you commit, run `npm run check`. Before you hand off, also run `npm run build` and `npm run build:vinext`. Run the two builds one after the other, not in parallel, because they share `.next/types`.
+
+### Contracts (read these before writing code)
+
+- **Entities: `src/entities/types.ts`.** It defines `EntityDef`, `FieldDef`, `KpiDef`, `ChartDef`, `ActionDef`, `TabDef`, the query contract and the closed key unions (`Role`, `EntityKey`, `ModuleKey`, `AgentKey`). A module describes each record type once as an `EntityDef` in `src/entities/defs/<module>.ts`, calling `registerEntity()`. The framework derives the sidebar (`navTree`), ⌘K, pages, API, permissions (`can`) and the SQL whitelist from those defs.
+  - Import from `@/entities`, never from `./registry` directly, so every module's defs are loaded.
+  - Defs hold functions, so they stay on the server. Pass client components plain data only. Chart and KPI drill-downs are href templates (`/app/properties/{property_id}`), not functions.
+  - `capabilities` (`notes`, `activity`, `tasks`, `documents`, `aiSummary`) makes the generic record page add those tabs automatically. `help` is `{ summary, article }` on entities, fields, KPIs and actions; the tour and the assistant use it. `dataRules` lists the data-health rules that apply to the entity.
+  - Ledger tables (`charges`, `payments`, `transfers`, `owner_distributions`, `bank_accounts`, `journal_entries`) must be `writes: "actions-only"`.
+- **Extensions: `src/extensions/{actions,tabs,widgets,agents}.ts`.** Register from `src/extensions/<module>/index.ts`; it is already imported. Action keys are `"<entity>.<verb>"`; tab, widget and metric keys are `"<module>.<name>"`.
+- **AI: `src/ai/types.ts`, `src/ai/tools/registry.ts`, `src/ai/agents/registry.ts`.** These hold `AgentDef`, `ToolDef`, `RunContext` and `Step`.
+  - Every run writes `agent_runs` and `agent_steps`, which is the live trace.
+  - Every proposal in `ai_proposals` carries a `run_id` and `step_id`.
+  - Write tools never move money: they create a proposal, or, after approval, call the guarded actions in `src/server/money.ts`.
+- **Queries: `src/server/query.ts` (lane C).**
+  - Server-side pagination everywhere: `ListQuery` and `ListResult` carry `page`, `size` (at most `MAX_PAGE_SIZE` = 200) and `total`, with keyset `cursor` where it's cheap. No endpoint returns unbounded rows.
+  - Identifiers come only from defs. Values are bound, and `IN` lists go through `json_each(?)`.
+- **Personas: `src/auth/personas.ts`.** It holds 9 internal and platform roles (platform admin, principal, regional, property manager, leasing agent, broker, accountant, maintenance supervisor, admin) plus the owner, resident, vendor and applicant portals.
+  - Each persona has a scope, a home route, quick actions and suggested assistant questions.
+  - The chosen persona is stored in the `pn_as` cookie; `currentPersona()` in `src/auth/session.ts` reads it on the server.
+  - `PERMISSIONS` is the role × module matrix. The sign-in page lists every persona as a one-click demo user, with no passwords.
+  - The seed must use the ids personas reference: regions `r-tx`, `r-se`, `r-sw`; properties `p01`–`p30`; owner `ow01`; resident `res-p01-0001`; vendor `v01`; applicant `apl-0001`.
+- **Schema: `migrations/0002_v2.sql`.** It has 106 tables. The header explains the conventions:
+  - `workspace_id = 'base'` rows are shared and read-only. A visitor's overlay rows replace base rows that have the same id, and a `deleted = 1` overlay row hides a base row.
+  - Money is stored in `*_cents` integers.
+  - `transfers` and `audit` are append-only.
+  - Entity references are indexed columns, not foreign keys, because an overlay row may point at a base row.
+  - `tasks.queue_state` and `ai_proposals.queue_state` feed the home queue: `needs_you`, `auto_handled` or `waiting`.
+  - `src/server/migrations.test.ts` proves the migration on node:sqlite and on D1.
+- **Seed: `src/seed/roster.json` and `src/seed/scenarios.md`.**
+  - The roster has 30 properties, `p01`–`p30`, with metro, neighborhood, type, class, year built and units. Images already exist for each id. Lane A generates everything else around the roster.
+  - The roster wins over the plan's metro split: Austin 7, Dallas 7, Atlanta 7, Phoenix 9. So Texas has 14 properties, not 11.
+  - `scenarios.md` lists the happy, sad, edge and corrupted cases. Corrupted cases make up 3–8% of records; each is detected by a `data_rules` row and fixed through `data_issues` and `data_fix_log`.
+
+### Routes
+
+| Area | Folder | URL |
+|---|---|---|
+| Staff app | `src/app/(app)/app/` | `/app/...` |
+| Portals | `src/app/(portal)/portal/<role>/` | `/portal/owner`, `/portal/resident`, `/portal/vendor`, `/portal/applicant` |
+| Public listings site | `src/app/(public)/` | `/listings`, `/listings/[id]`, `/apply/[listingId]` |
+
+- **Static pages beat the generic page.** `src/app/(app)/app/[...path]/page.tsx` resolves any other `/app` path through `getEntityByRoute()`: `EntityDef.route` opens the list, and `route/<id>` opens the detail. Add a static folder only for custom pages (inbox, copilot, dashboards, settings sections). A static folder that shadows an entity route hides the generic page.
+- **Stubs exist for:** `/app` (dashboard), inbox, tasks, copilot, `ai/activity`, `ai/approvals`, automations, data-health, reports and settings.
+- **Scoped tokens.** All three layouts render `<div data-surface="app">` and `<SurfaceBody />`. App tokens in `globals.css` are scoped to `[data-surface="app"]`, so marketing (`/`, `/login`, `/docs`) keeps Instrument Serif, the beige palette and Tailwind's default `rounded-*` scale. Don't add app styles outside that scope.
+- **Legacy code.** The old persona pages (`/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`), the old `/api/*` routes and `DemoProvider` in the root layout still read 0001 tables. They break at runtime once 0002 is applied. Lane C removes `DemoProvider` from `src/app/layout.tsx` and turns the old routes into redirects.
+- **Legacy tests.** `src/server/server.test.ts` and `src/server/routes.test.ts` are excluded in `vitest.config.mts` until lane A ports them.
+
+### Theme (plan §6)
+
+- **Tokens.** All tokens are in `globals.css` under `[data-surface="app"]`: neutral greys, one deep-teal `--primary` (oklch 0.47 0.085 195), Geist with tabular numbers, a 6 px `--radius`, 13 px body text and `--row-h: 36px` for table rows.
+- **Status tones.** Use `bg-tone-<tone>/10 text-tone-<tone>` for `Tone`: `neutral`, `info`, `success`, `warning`, `danger` or `ai`.
+- **Dark mode.** It is class-based: put `.dark` on `<html>`. Dark tokens apply only on the app surface.
+
+### shadcn, vinext and library notes (found while proving the stack)
+
+- **`/app/_kit` proof.** Button, Dialog, Command palette, Sheet, TanStack Table, a Recharts line chart and Sonner all render under `next build`, `build:vinext` and `dev:vinext`, with no console errors. Radix and Recharts needed no SSR workaround; the only rule is that they live in `"use client"` components.
+- **Percent-encoded folders.** `/app/_kit` lives in a folder named `%5Fkit`, because folders starting with `_` are private in Next and vinext. Keep only `page.tsx` in percent-encoded folders: vinext dev requests client modules by URL, the browser decodes `%5F`, and the import 404s.
+- **Command palette.** In this shadcn style (`radix-nova`), `CommandDialog` does not wrap its children in `<Command>`. Write `<CommandDialog><Command>…</Command></CommandDialog>`.
+- **Forms.** shadcn `form` is empty in this style. Use `field.tsx` (`Field`, `FieldLabel`, `FieldError`) with react-hook-form `Controller` and `@hookform/resolvers/zod`.
+- **TanStack Table is pinned to v8** (`useReactTable`, `getCoreRowModel`); v9 has a different API. The React Compiler lint flags `useReactTable`, so add `// eslint-disable-next-line react-hooks/incompatible-library` above it.
+- **Other library choices.**
+  - `cn` comes from shadcn's `cn` package and is re-exported by `@/lib/utils`.
+  - Icons are `lucide-react`.
+  - Charts use `recharts` 3 through `@/components/ui/chart`.
+  - Toasts use `sonner`, which reads `next-themes`. No ThemeProvider is needed for light mode.
+- **Bundle size.** The Worker bundle (`.cloudflare/output/.../bundle`) is about 16 MB uncompressed. Watch it against the 10 MB compressed limit, and lazy-load charts on heavy pages.
+
+### Scheduled agents (Cron Triggers)
+
+This is feasible but not wired yet:
+
+- `cf/config` supports `triggers: { crons: [...] }`, and the Worker `entrypoint` is configurable.
+- `vinext/server/fetch-handler` is importable; its default export carries `fetch`.
+- `src/worker-entry.ts` wraps it and adds `scheduled()`, using `ctx.waitUntil` for background work.
+
+To enable it, the lead or lane E sets `entrypoint: "./src/worker-entry.ts"` and the crons in `cloudflare.config.ts`, then proves both builds and a `curl "http://localhost:<port>/cdn-cgi/handler/scheduled"` in `dev:vinext`. Until then, agent runs start from events, from a person, or from chat.
