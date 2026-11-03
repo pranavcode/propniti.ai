@@ -157,6 +157,7 @@ const OPEN_APP = ["Started", "Submitted", "Screening", "Review"];
 
 registerAction({
   key: "applications.score",
+  ai: true,
   label: "Score with AI",
   entity: "applications",
   roles: [...LEASING],
@@ -237,6 +238,7 @@ for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as 
 
 registerAction({
   key: "listings.draft_description",
+  ai: true,
   label: "Draft with AI",
   entity: "listings",
   roles: LEASING,
@@ -367,6 +369,7 @@ registerAction({
 
 registerAction({
   key: "renewal_offers.draft_message",
+  ai: true,
   label: "Draft message with AI",
   entity: "renewal_offers",
   roles: LEASING,
