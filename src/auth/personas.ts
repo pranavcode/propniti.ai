@@ -184,9 +184,9 @@ export const PERMISSIONS: Matrix = {
   property_manager: { ...ALL("write"), payables: "read", accounting: "read", owners: "read", settings: "none", intelligence: "approve" },
   leasing_agent: { portfolio: "read", leasing: "write", residents: "read", communications: "write", intelligence: "read" },
   broker: { portfolio: "read", leasing: "approve", residents: "read", communications: "write", owners: "approve", risk: "read", intelligence: "approve" },
-  accountant: { portfolio: "read", residents: "read", receivables: "approve", payables: "approve", accounting: "approve", owners: "approve", risk: "read", intelligence: "approve", maintenance: "read" },
+  accountant: { portfolio: "read", residents: "read", receivables: "approve", payables: "approve", accounting: "approve", owners: "approve", risk: "approve", intelligence: "approve", maintenance: "read" },
   maintenance_supervisor: { portfolio: "read", maintenance: "approve", residents: "read", communications: "write", risk: "write", intelligence: "approve", payables: "read" },
-  admin: { ...ALL("read"), settings: "approve", intelligence: "read" },
+  admin: { ...ALL("read"), settings: "approve", risk: "approve", intelligence: "read" },
   // Portals reach their own records only (scope "self"); their pages live under /portal.
   owner: { portfolio: "read", owners: "approve", accounting: "read", maintenance: "read", communications: "write" },
   resident: { residents: "write", receivables: "write", maintenance: "write", communications: "write" },
