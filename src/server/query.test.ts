@@ -199,8 +199,9 @@ describe("writes", () => {
     expect(docs.safeParse({ name: "x", url: "//evil.example/x" }).success).toBe(false);
     expect(docs.safeParse({ name: "x", url: "/docs/lease.pdf" }).success).toBe(true);
     const vendors = allEntities().find((d) => d.key === "vendors")!;
-    expect(writeSchema(vendors, "property_manager", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(false); // accountant only
-    expect(writeSchema(vendors, "accountant", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(true);
+    // Bank details change only through the verified vendors.change_bank_account action, never a generic write.
+    expect(writeSchema(vendors, "property_manager", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(false);
+    expect(writeSchema(vendors, "accountant", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(false);
     expect(writeSchema(allEntities().find((d) => d.key === "units")!, "property_manager", "update").safeParse({ property_id: "p02" }).success).toBe(false); // set once
   });
 
