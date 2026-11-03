@@ -152,7 +152,7 @@ export async function Resident360({ id, actor }: TabProps) {
               <ul className="mt-3 flex flex-col gap-1 text-[12.5px]">
                 {drivers.map((d) => <li key={d.label} className="flex items-start gap-1.5"><span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", d.bad ? "bg-tone-danger" : "bg-tone-success")} />{d.label}</li>)}
               </ul>
-              <p className="mt-2 text-[11.5px] text-muted-foreground">Higher means more likely to fall behind. Scored nightly from payment history; a person decides any action.</p>
+              <p className="mt-2 text-[11.5px] text-muted-foreground">Higher means more likely to fall behind. Precomputed from payment history; a person decides any action.</p>
             </>
           )}
         </Card>

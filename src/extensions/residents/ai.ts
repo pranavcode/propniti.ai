@@ -90,24 +90,24 @@ export function rulesReply(f: ThreadFacts, lastIn: string): { body: string; why:
   const hi = f.first_name ? `Hi ${f.first_name}, ` : "Hello, ";
   const text = `${String(f.subject)} ${lastIn}`.toLowerCase();
   if (f.work_order && /\b(ac|a\/c|leak\w*|heat\w*|repair\w*|fix|broken|water|eta|parts?|technician)\b/.test(text)) {
-    const when = f.work_order_scheduled ? ` It's scheduled for ${shortDate(String(f.work_order_scheduled))}.` : "";
+    const when = f.work_order_scheduled ? ` The visit is scheduled for ${shortDate(String(f.work_order_scheduled))}.` : " I'll reply here once a visit is scheduled.";
     if (f.party_kind === "vendor") return { body: `${hi}thanks for the update on ${f.work_order}. Please go ahead as planned and send the invoice against ${f.work_order} when the work is done.`, why: [`Vendor thread about ${f.work_order}`, `Work order is ${f.work_order_status}`], confidence: 0.72 };
-    return { body: `${hi}thanks for letting us know. Work order ${f.work_order} (${f.work_order_title}) is ${String(f.work_order_status).toLowerCase()}.${when} We'll message you before the technician arrives.`, why: [`The thread is about ${f.work_order}, currently ${f.work_order_status}`, "Confirms status without promising a time the record doesn't hold"], confidence: 0.8 };
+    return { body: `${hi}thanks for letting us know. Your repair request (${f.work_order_title}) is ${String(f.work_order_status).toLowerCase()}.${when}`, why: [`The thread is about ${f.work_order}, currently ${f.work_order_status}`, "Confirms status without promising a time the record doesn't hold"], confidence: 0.8 };
   }
   if (/balance|paid|payment|charge|late fee|ledger/.test(text) && f.balance_cents != null) {
     const bal = Number(f.balance_cents);
     return {
       body: bal > 0
-        ? `${hi}thanks for checking. Your ledger shows a balance of ${money(bal)} on #${f.unit}. If you paid recently it may still be processing; send a screenshot or confirmation number and I'll match it right away.`
+        ? `${hi}thanks for checking. Your ledger shows a balance of ${money(bal)} on #${f.unit}. If you paid recently, it may still be processing. Send the confirmation number and I'll check it against your ledger.`
         : `${hi}thanks for checking. Your ledger for #${f.unit} shows no balance due right now. Let me know if you see something different in the portal.`,
       why: [`Ledger balance is ${money(bal)}`, "Asks for proof of payment instead of promising a credit"], confidence: 0.84,
     };
   }
   if (/renew|lease (is )?ending|term/.test(text) && f.lease_end) {
-    return { body: `${hi}your lease on #${f.unit} ends ${shortDate(String(f.lease_end))}. I'll send your renewal options this week, including other term lengths, so you can compare them.`, why: [`Lease ends ${shortDate(String(f.lease_end))}`, "Renewal pricing needs a person; the reply commits only to sending options"], confidence: 0.76 };
+    return { body: `${hi}your lease on #${f.unit} ends ${shortDate(String(f.lease_end))}. I'll look at the renewal options and reply with the rent for each term, including the one you asked about.`, why: [`Lease ends ${shortDate(String(f.lease_end))}`, "Renewal pricing needs a person; the reply commits only to sending options"], confidence: 0.76 };
   }
-  if (f.party_kind === "owner") return { body: `${hi}thanks for the question. I'll pull the statement detail for the month and send a line-by-line explanation of the change by tomorrow.`, why: ["Owner question about statements", "Owner Reporting can explain the variance from computed figures"], confidence: 0.7 };
-  return { body: `${hi}thanks for reaching out. I've got your message and will follow up today.`, why: ["No specific record matched; a holding reply"], confidence: 0.55 };
+  if (f.party_kind === "owner") return { body: `${hi}thanks for the question. I'll pull the statement detail for the month and send you a line-by-line explanation of the change.`, why: ["Owner question about statements", "Owner Reporting can explain the variance from computed figures"], confidence: 0.7 };
+  return { body: `${hi}thanks for your message. I'm looking into it and will reply here.`, why: ["No specific record matched; a holding reply"], confidence: 0.55 };
 }
 
 const ReplySchema = z.object({
@@ -129,7 +129,7 @@ export async function suggestReply(data: Data, threadId: string) {
     const transcript = c.messages.map((m) => `[${m.direction === "in" ? "them" : "us"} · ${m.channel} · ${String(m.sent_at).slice(0, 16)}] ${m.body}`).join("\n");
     const sms = c.channel === "SMS";
     const model = await structured(ctx, ReplySchema,
-      `You draft replies for a US property manager. ${SAFETY} Use only figures and dates that appear in FACTS. Never promise waivers, credits, refunds, guarantees or dates FACTS don't contain; offer to check instead. Plain, warm, professional. ${sms ? "SMS: at most 300 characters." : "At most 90 words."} Write in ${c.language === "es" ? "Spanish" : "English"}. Return the reply body, 1-3 short reasons for this reply, and your confidence 0-1.`,
+      `You draft replies for a US property manager. ${SAFETY} Use only figures and dates that appear in FACTS. Never promise waivers, credits, refunds, guarantees or dates FACTS don't contain; offer to check instead. Plain and polite; no "happy to help", "don't hesitate" or exclamation marks. Don't commit to times, visits or follow-ups the facts don't support. ${sms ? "SMS: at most 300 characters." : "At most 90 words."} Write in ${c.language === "es" ? "Spanish" : "English"}. Return the reply body, 1-3 short reasons for this reply, and your confidence 0-1.`,
       `FACTS: ${JSON.stringify(c.facts)}\n<data>\n${transcript}\n</data>`, "draft_reply");
     let draft = model ?? rulesReply(c.facts, c.lastIn);
     let source: "live" | "rules" = model ? "live" : "rules";
