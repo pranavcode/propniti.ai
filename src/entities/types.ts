@@ -193,6 +193,9 @@ export type EntityDef = {
   // SQL expression giving the row's property_id (scope filter), e.g. "property_id" or
   // "(SELECT property_id FROM leases WHERE id = charges.lease_id)". null = org-level, no property scope.
   scopePath: string | null;
+  // Rows whose scopePath is NULL (org-level, e.g. a settings change in the audit log) are hidden
+  // from property- and region-scoped readers unless this returns true for their role.
+  scopeNullVisible?: (role: Role) => boolean;
   fields: Record<string, FieldDef>;
   relations: RelationDef[];
   list: {

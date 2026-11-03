@@ -94,6 +94,19 @@ describe("scope", () => {
     expect(await ids(o, "charges")).toEqual([]);
   });
 
+  it("shows org-level audit rows to scoped readers with settings access, but not other regions' rows", async () => {
+    const at = "2026-10-28T10:00:00Z";
+    await db.batch([
+      db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, property_id, detail) VALUES ('base', 'au-org', '${at}', 'Sam', 'approval_policies.updated', NULL, 'Raised the limit')`),
+      db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, property_id, detail) VALUES ('base', 'au-tx', '${at}', 'Marcus', 'units.updated', 'p01', 'x')`),
+      db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, property_id, detail) VALUES ('base', 'au-ga', '${at}', 'Ann', 'units.updated', 'p05', 'x')`),
+    ]);
+    const ids = async (p: string) => list(await ctx(p), "audit", { size: 100 }).then((r) => r.rows.map((x) => x.id).sort(), (e) => (e.status === 403 ? [] : Promise.reject(e)));
+    expect(await ids("priya")).toEqual(["au-org", "au-tx"]);
+    expect(await ids("marcus")).not.toContain("au-org"); // no settings access
+    expect(await ids("daniel")).toEqual(["au-ga", "au-org", "au-tx"]);
+  });
+
   it("denies entities the role can't read", async () => {
     await expect(list(await ctx("lena"), "charges", {})).rejects.toMatchObject({ status: 403 });
   });

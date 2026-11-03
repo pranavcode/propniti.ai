@@ -156,7 +156,9 @@ function scopeWhere(def: EntityDef, actor: Actor, ws: string | null): { sql: str
     params.push(...s.params);
   }
   if (actor.propertyIds !== "all" && def.scopePath) {
-    sql.push(`(${expand(def.scopePath, ws)}) IN (SELECT value FROM json_each(?))`);
+    const e = `(${expand(def.scopePath, ws)})`;
+    const nulls = actor.scope.kind !== "self" && def.scopeNullVisible?.(actor.role);
+    sql.push(nulls ? `(${e} IS NULL OR ${e} IN (SELECT value FROM json_each(?)))` : `${e} IN (SELECT value FROM json_each(?))`);
     params.push(JSON.stringify(actor.propertyIds));
   }
   return { sql, params };
