@@ -57,7 +57,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "lena", name: "Lena Ortiz", title: "Leasing agent", role: "leasing_agent",
-    scope: AUSTIN3, home: "/app/leasing/prospects",
+    scope: AUSTIN3, home: "/app/leasing/today",
     quickActions: [
       { label: "Add prospect", href: "/app/leasing/prospects?new=1" },
       { label: "Today's tours", href: "/app/leasing/showings?view=today" },
@@ -67,7 +67,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "rachel", name: "Rachel Moore", title: "Managing broker", role: "broker",
-    scope: { kind: "org", label: "Brokerage · all properties" }, home: "/app/leasing/applications",
+    scope: { kind: "org", label: "Brokerage · all properties" }, home: "/app/leasing/broker",
     quickActions: [
       { label: "Applications to decide", href: "/app/leasing/applications?f.stage=Review" },
       { label: "Leases to sign", href: "/app/leases?f.status=Future" },
