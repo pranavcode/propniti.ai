@@ -4,7 +4,7 @@ import { can } from "@/entities";
 import type { Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
-import { formatDate, formatMoney, formatPct, formatRelative } from "@/lib/format";
+import { formatDate, formatMoney, formatPct, formatRelative, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { metrics } from "@/server/query";
 import { proposalOut } from "@/ai/views";
@@ -33,7 +33,6 @@ const PRIORITY_SERIES = [
   { key: "Normal", label: "Normal", color: "var(--chart-4)" },
   { key: "Low", label: "Low", color: "color-mix(in oklch, var(--chart-4) 72%, var(--card))" },
 ];
-const greeting = (name: string) => `Good morning, ${name.split(" ")[0]}`;
 const ageText = (iso: string) => formatRelative(iso).replace(/^in /, "");
 
 async function safe<T>(p: Promise<T>): Promise<{ v: T | null; error: boolean }> {
@@ -76,7 +75,7 @@ export default async function MaintenanceHome() {
   return (
     <main>
       <PageHeader
-        title={isSup ? greeting(persona.name) : "Maintenance"}
+        title={isSup ? personaGreeting(persona) : "Maintenance"}
         meta={<><span>{persona.title}</span><span>·</span><span>{persona.scope.label}</span><span>·</span><span>As of {formatDate("2026-11-04", "always")}</span></>}
         actions={<>
           <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/board"><KanbanSquare />Board</Link></Button>

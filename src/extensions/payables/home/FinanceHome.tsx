@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, BarChart3, Bot, ChevronRight, FileStack, Inbox, Landmark, Sparkles } from "lucide-react";
 import type { Session } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
+import { personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { widgetsFor } from "@/extensions/widgets";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export async function FinanceHome({ session }: { session: Session }) {
   return (
     <main>
       <PageHeader
-        title={`Good morning, ${persona.name.split(" ")[0]}`}
+        title={personaGreeting(persona)}
         meta={<><span>{persona.title}</span><span>·</span><span>{persona.scope.label}</span><span>·</span><span>Books closed through {monthLong(h.lastClosed)}</span></>}
         actions={<>
           <Button asChild size="sm" variant="outline"><Link href="/app/reports"><BarChart3 />Reports</Link></Button>
