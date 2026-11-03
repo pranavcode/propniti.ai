@@ -2,11 +2,18 @@ import { Palette } from "lucide-react";
 import { PageBody, PageHeader, Section } from "../page";
 import { KitTable } from "./KitTable";
 import { queryUnits, UNIT_COLUMNS, UNIT_FACETS, UNIT_TABS } from "./sample";
+import { AISection } from "./sections/AISection";
+import { DashboardSection } from "./sections/DashboardSection";
 import { FoundationsSection } from "./sections/FoundationsSection";
+import { RecordSection } from "./sections/RecordSection";
 
 const INDEX = [
   ["foundations", "Foundations"],
   ["table", "DataTable"],
+  ["record", "Record page"],
+  ["forms", "Forms"],
+  ["dashboard", "Dashboards"],
+  ["ai", "AI surfaces"],
   ["states", "States"],
   ["onboarding", "Onboarding"],
 ] as const;
@@ -39,6 +46,9 @@ export function KitPage({ searchParams }: { searchParams: Record<string, string 
             {...res}
           />
         </Section>
+        <RecordSection />
+        <DashboardSection />
+        <AISection />
       </PageBody>
     </>
   );

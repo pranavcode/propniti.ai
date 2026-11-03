@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertCircle, Brain, ChevronRight, FileOutput, ListChecks, Loader2, MessageSquare, Send, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatNumber, formatTime } from "@/lib/format";
+import { useMounted } from "@/hooks/use-mounted";
 import type { RunStatus, Step, StepKind } from "@/ai/types";
 import { StatusBadge } from "../display";
 
@@ -102,7 +103,7 @@ function StepRow({ step, last, pulsing }: { step: TraceStep; last: boolean; puls
         <span className="flex shrink-0 items-center gap-2 pt-0.5 text-[11px] text-muted-foreground tabular-nums">
           {step.tokens != null && <span>{formatNumber(step.tokens)} tok</span>}
           {step.latencyMs != null && <span>{step.latencyMs < 1000 ? `${step.latencyMs}ms` : `${(step.latencyMs / 1000).toFixed(1)}s`}</span>}
-          <span className="hidden sm:inline">{formatTime(step.at)}</span>
+          <StepTime at={step.at} />
           {hasBody && <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />}
         </span>
       </button>
@@ -117,6 +118,12 @@ function StepRow({ step, last, pulsing }: { step: TraceStep; last: boolean; puls
 }
 
 const LIMIT = 900;
+// Clock times depend on the viewer's time zone, so they render after hydration.
+function StepTime({ at }: { at: string }) {
+  const mounted = useMounted();
+  return <span className="hidden min-w-[52px] sm:inline">{mounted ? formatTime(at) : ""}</span>;
+}
+
 function Json({ label, value }: { label: string; value: unknown }) {
   const [all, setAll] = useState(false);
   const text = JSON.stringify(value, null, 2) ?? "null";
