@@ -2,14 +2,28 @@ import { Palette } from "lucide-react";
 import { PageBody, PageHeader, Section } from "../page";
 import { KitTable } from "./KitTable";
 import { queryUnits, UNIT_COLUMNS, UNIT_FACETS, UNIT_TABS } from "./sample";
+import { FoundationsSection } from "./sections/FoundationsSection";
 
-// /app/_kit: every app component with realistic props. Sections are added as the kit grows.
+const INDEX = [
+  ["foundations", "Foundations"],
+  ["table", "DataTable"],
+  ["states", "States"],
+  ["onboarding", "Onboarding"],
+] as const;
+
+// /app/_kit: the living style guide. Every app component with realistic props.
 export function KitPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const res = queryUnits(searchParams);
   return (
     <>
-      <PageHeader icon={<Palette />} title="Component kit" description="The Propniti app design system: frame, tables, records, dashboards and AI surfaces, with sample data." />
-      <PageBody>
+      <PageHeader
+        icon={<Palette />}
+        title="Component kit"
+        description="The Propniti app design system: frame, tables, records, dashboards and AI surfaces, with sample data."
+        meta={<>{INDEX.map(([id, label]) => <a key={id} href={`#${id}`} className="hover:text-foreground">{label}</a>)}</>}
+      />
+      <PageBody className="space-y-10">
+        <FoundationsSection />
         <Section id="table" title="DataTable" description="Server-driven: URL state, status tabs with counts, facet chips, AI filter, saved views, column picker, density, export, sum footer, selection with bulk bar, J/K keys, virtualised over 100 rows.">
           <KitTable
             entity="units"
