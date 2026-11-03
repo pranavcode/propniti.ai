@@ -5,6 +5,7 @@ import { getPersona } from "@/auth/personas";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type Role, type Row } from "@/entities/types";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
+import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
 // relation in one; every value is bound. Reads go through effective(): the visitor's overlay
@@ -24,27 +25,25 @@ export const PAGE_SIZE_CAP = Math.min(MAX_PAGE_SIZE, 100);
 const EXPORT_CAP = 10_000;
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const WS_ID = /^[A-Za-z0-9_-]{22,64}$/;
-// Append-only tables have no tombstone column.
-const APPEND_ONLY = new Set(["transfers", "audit"]);
 
 function ident(name: string) {
   if (!IDENT.test(name)) throw new Error(`Bad identifier: ${name}`);
   return name;
 }
 
-// The workspace id is inlined so def SQL can reference {table} anywhere without threading
-// parameters; it is safe because it must match the cookie regex (or be the read-only base).
-function wsLiteral(ws: string | null) {
-  return ws && WS_ID.test(ws) ? `'${ws}'` : null;
-}
-
-// Effective rows of a table for a workspace, as a parenthesised subquery.
+// Effective rows of a table for a workspace, as a parenthesised subquery: overlay rows replace
+// base rows with the same id and tombstones hide them (same rows as src/server/effective.ts).
+// It is a single flat SELECT rather than a UNION ALL so SQLite can flatten it into correlated
+// aggregates (a property's unit count, a household's balance) and use the (workspace_id, fk)
+// indexes; the compound form scans the whole base table once per outer row.
+// The workspace id is inlined as a literal so def SQL can use {table} anywhere without
+// threading parameters; that is safe because it must match the cookie regex.
 export function effective(table: string, ws: string | null): string {
-  const t = ident(table);
-  const w = wsLiteral(ws);
-  if (APPEND_ONLY.has(t)) return `(SELECT * FROM ${t} WHERE workspace_id IN (${w ?? "'base'"}${w ? ", 'base'" : ""}))`;
-  if (!w) return `(SELECT * FROM ${t} WHERE workspace_id = 'base' AND deleted = 0)`;
-  return `(SELECT * FROM ${t} WHERE deleted = 0 AND (workspace_id = ${w} OR (workspace_id = 'base' AND id NOT IN (SELECT id FROM ${t} WHERE workspace_id = ${w}))))`;
+  assertTable(table);
+  const w = `'${ws && WS_ID.test(ws) ? ws : NO_WORKSPACE}'`;
+  if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}))`;
+  if (table === "metrics_monthly") return baseEffective(table, w);
+  return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}) AND deleted = 0 AND (workspace_id = ${w} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${w} AND o.id = ${table}.id)))`;
 }
 
 // Def SQL may name another table as {table}; it expands to that table's effective rows.
