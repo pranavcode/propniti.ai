@@ -25,6 +25,14 @@ export const metadata = { title: "Maintenance · Propniti" };
 // KPIs and charts that each open the work orders behind them.
 
 const OPEN = encodeURIComponent(OPEN_FILTER);
+// Priority is ordered, so it reads as one hue from dark (Emergency) to light (Low), built from the
+// kit's chart-4 so it follows the theme. Validated in light and dark (ordinal checks, dataviz skill).
+const PRIORITY_SERIES = [
+  { key: "Emergency", label: "Emergency", color: "color-mix(in oklch, var(--chart-4) 55%, var(--foreground))" },
+  { key: "Urgent", label: "Urgent", color: "color-mix(in oklch, var(--chart-4) 78%, var(--foreground))" },
+  { key: "Normal", label: "Normal", color: "var(--chart-4)" },
+  { key: "Low", label: "Low", color: "color-mix(in oklch, var(--chart-4) 72%, var(--card))" },
+];
 const greeting = (name: string) => `Good morning, ${name.split(" ")[0]}`;
 const ageText = (iso: string) => formatRelative(iso).replace(/^in /, "");
 
@@ -164,16 +172,16 @@ export default async function MaintenanceHome() {
 
         <DashboardGrid>
           <GridItem span={6}><ChartCard title="Open work orders by age and priority" description="Click a bar to open those work orders" kind="stacked" data={(ageP.v?.points ?? []) as ChartPoint[]} x="bucket"
-            series={[{ key: "Emergency", label: "Emergency", color: "var(--tone-danger)" }, { key: "Urgent", label: "Urgent", color: "var(--tone-warning)" }, { key: "Normal", label: "Normal", color: "var(--chart-1)" }, { key: "Low", label: "Low", color: "var(--muted-foreground)" }]}
+            series={PRIORITY_SERIES}
             drill={`/app/maintenance/work-orders?f.status=${OPEN}&f.age_days.min={min}&f.age_days.max={max}&sort=-age_days`} /></GridItem>
           <GridItem span={6}><ChartCard title="SLA by trade" description="Open work orders inside and past their SLA" kind="stacked" data={(trade.v?.points ?? []) as ChartPoint[]} x="category"
-            series={[{ key: "on_time", label: "Within SLA", color: "var(--chart-1)" }, { key: "breached", label: "Past SLA", color: "var(--tone-danger)" }]} drill={`/app/maintenance/work-orders?f.category={category}&f.status=${OPEN}&sort=sla_due_at`} /></GridItem>
+            series={[{ key: "on_time", label: "Within SLA", color: "var(--chart-1)" }, { key: "breached", label: "Past SLA", color: "var(--chart-4)" }]} drill={`/app/maintenance/work-orders?f.category={category}&f.status=${OPEN}&sort=sla_due_at`} /></GridItem>
           {can(actor.role, "read", "bills") || actor.role === "maintenance_supervisor" ? (
             <GridItem span={6}><ChartCard title="Vendor spend" description="Maintenance vendors, bills in the last 12 months, top 10" kind="hbar" data={(spend.v?.points ?? []) as ChartPoint[]} x="vendor"
               series={[{ key: "spend", label: "Spend", format: "money" }]} drill="/app/maintenance/vendors/{vendor_id}?tab=bills" height={300} /></GridItem>
           ) : null}
           <GridItem span={6}><ChartCard title="Technician workload" description="Open in-house jobs per technician" kind="hbar" data={(techs.v?.points ?? []) as ChartPoint[]} x="name"
-            series={[{ key: "open", label: "Open jobs", color: "var(--chart-1)" }, { key: "past_sla", label: "Past SLA", color: "var(--tone-danger)" }]} drill={`/app/maintenance/my-jobs?tech={staff_id}`} height={300} /></GridItem>
+            series={[{ key: "open", label: "Open jobs", color: "var(--chart-1)" }, { key: "past_sla", label: "Past SLA", color: "var(--chart-4)" }]} drill={`/app/maintenance/my-jobs?tech={staff_id}`} height={300} /></GridItem>
           <GridItem span={12}><ChartCard title="Work orders opened and past SLA, trailing 12 months" kind="bar" data={(open.v?.points ?? []) as ChartPoint[]} x="month"
             series={[{ key: "opened", label: "Opened" }, { key: "open", label: "Open at month end" }, { key: "breached", label: "Past SLA" }]} drill={`/app/maintenance/work-orders?view=open`} height={240} /></GridItem>
         </DashboardGrid>
