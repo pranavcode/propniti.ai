@@ -131,6 +131,29 @@ describe("deposit disposition", () => {
 });
 
 describe("payment posted to the wrong lease", () => {
+  it("refuses to close any other issue, so a vendor bank-change fraud hold stays", async () => {
+    const c = await ctx();
+    const target = (await overdue(c.ws, "c.property_id = 'p01'"))!;
+    const pay = (await one<Row>(`SELECT p.* FROM ${effective("payments")} AS p WHERE p.property_id = 'p01' AND p.nsf = 0 AND p.lease_id <> (SELECT lease_id FROM ${effective("charges")} AS x WHERE x.id = ?2) AND p.amount_cents <= ?3 LIMIT 1`, c.ws, target.id, target.open))!;
+    await db.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, detected_at, severity, status) VALUES (?1, 'di-fraud', 'vendors.unverified_bank_change', 'vendors', 'v01', '2026-11-04', 'critical', 'open')").bind(c.ws).run();
+    expect(await act("payments.move_to_lease")(c, pay, { to_charge_id: target.id, issue_id: "di-fraud" })).toMatchObject({ status: 400 });
+    expect((await one<{ status: string }>(`SELECT i.status FROM ${effective("data_issues")} AS i WHERE i.id = ?2`, c.ws, "di-fraud"))!.status).toBe("open");
+    expect((await one<{ lease_id: string }>(`SELECT p.lease_id FROM ${effective("payments")} AS p WHERE p.id = ?2`, c.ws, pay.id))!.lease_id).toBe(pay.lease_id);
+    expect(await n("SELECT count(*) AS n FROM data_fix_log WHERE workspace_id = ?1", c.ws)).toBe(0);
+  });
+
+  it("fixes a seeded case: the payment already pays the right charge, only its lease is wrong", async () => {
+    const c = await ctx();
+    const issue = await one<{ id: string; entity_id: string; evidence: string }>(`SELECT i.id, i.entity_id, i.evidence FROM ${effective("data_issues")} AS i WHERE i.rule_id = 'payments.wrong_lease' AND i.status = 'open' ORDER BY i.id LIMIT 1`, c.ws);
+    if (!issue) return; // older base without the planted case
+    const ev = JSON.parse(issue.evidence) as { charge_id: string; charge_lease: string };
+    const pay = (await one<Row>(`SELECT p.* FROM ${effective("payments")} AS p WHERE p.id = ?2`, c.ws, issue.entity_id))!;
+    const move = () => act("payments.move_to_lease")(c, pay, { to_charge_id: ev.charge_id, issue_id: issue.id });
+    expect(statuses(await Promise.all([move(), move()]))).toEqual([200, 409]);
+    expect((await one<{ lease_id: string }>(`SELECT p.lease_id FROM ${effective("payments")} AS p WHERE p.id = ?2`, c.ws, pay.id))!.lease_id).toBe(ev.charge_lease);
+    expect((await one<{ status: string }>(`SELECT i.status FROM ${effective("data_issues")} AS i WHERE i.id = ?2`, c.ws, issue.id))!.status).toBe("fixed");
+  });
+
   it("moves to the intended charge once, logs the fix and closes the issue", async () => {
     const c = await ctx();
     const target = (await overdue(c.ws, "c.property_id = 'p03'"))!;

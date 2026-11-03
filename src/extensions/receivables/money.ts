@@ -120,7 +120,7 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
 }
 
 // Data Health fix for payments.wrong_lease: the payment is re-pointed at the charge it was meant for
-// on the neighbouring lease. No money moves (same property, same trust deposit); the ledger rows
+// on the neighbouring lease (often it already names that charge and only its lease is wrong). No money moves (same property, same trust deposit); the ledger rows
 // move, so it is guarded on the payment's current lease and on the target charge's open balance.
 export async function movePayment(ctx: ActionContext, paymentId: string, toChargeId: string, issueId?: string): Promise<Outcome> {
   const { db, ws, nowMs, actor } = ctx;
@@ -130,14 +130,21 @@ export async function movePayment(ctx: ActionContext, paymentId: string, toCharg
   if (!c) return { status: 404, error: "Target charge not found" };
   if (c.property_id !== p.property_id) return { status: 400, error: "A payment can only move to a lease at the same property." };
   if (c.lease_id === p.lease_id) return { status: 409, error: "The payment is already on that lease." };
+  // Only this payment's own wrong-lease issue can be closed here. Other issues (a vendor bank-change
+  // fraud hold above all) have their own guarded flows; closing one from here would lift the hold.
+  if (issueId) {
+    const own = await db.prepare(`SELECT 1 FROM ${effective("data_issues")} AS i WHERE i.id = ?2 AND i.rule_id = 'payments.wrong_lease' AND i.entity_type = 'payments' AND i.entity_id = ?3`).bind(ws, issueId, p.id).first();
+    if (!own) return { status: 400, error: "That data issue isn't this payment's wrong-lease issue." };
+  }
   const at = nowIso(nowMs);
   const [moved] = await db.batch([
     db
       .prepare(overlayUpsertSql("payments", PAYMENT_COLS, { lease_id: "?3", household_id: "?4", charge_id: "?5" },
-        `e.lease_id = ?6 AND e.nsf = 0 AND e.amount_cents <= (SELECT ${chargeOpenSql("t")} FROM ${effective("charges")} AS t WHERE t.id = ?5)`))
+        `e.lease_id = ?6 AND e.nsf = 0 AND e.amount_cents <= (SELECT ${chargeOpenSql("t")} FROM ${effective("charges")} AS t WHERE t.id = ?5) + CASE WHEN e.charge_id = ?5 THEN e.amount_cents ELSE 0 END`))
       .bind(ws, p.id, c.lease_id, c.household_id, c.id, p.lease_id),
   ]);
-  if (!moved.meta.changes) return { status: 409, error: c.open_cents < p.amount_cents ? `Only ${dollars(c.open_cents)} is open on ${c.description}.` : "This payment was already moved." };
+  const room = c.open_cents + (p.charge_id === c.id ? p.amount_cents : 0);
+  if (!moved.meta.changes) return { status: 409, error: room < p.amount_cents ? `Only ${dollars(room)} is open on ${c.description}.` : "This payment was already moved." };
   const before = { lease_id: p.lease_id, charge_id: p.charge_id, household_id: p.household_id };
   const after = { lease_id: c.lease_id, charge_id: c.id, household_id: c.household_id };
   const steps: DbStatement[] = [
@@ -146,7 +153,7 @@ export async function movePayment(ctx: ActionContext, paymentId: string, toCharg
   ];
   if (issueId) {
     steps.push(
-      db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?3", fixed_at: "?4" }, "e.status = 'open'")).bind(ws, issueId, actor.personaId, at),
+      db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?3", fixed_at: "?4" }, "e.status = 'open' AND e.rule_id = 'payments.wrong_lease' AND e.entity_type = 'payments' AND e.entity_id = ?5")).bind(ws, issueId, actor.personaId, at, p.id),
       db
         .prepare("INSERT INTO data_fix_log (workspace_id, id, issue_id, entity_type, entity_id, before_json, after_json, fixed_by, agent, at) VALUES (?1, ?2, ?3, 'payments', ?4, ?5, ?6, ?7, 'data_health', ?8)")
         .bind(ws, uid("fix"), issueId, p.id, JSON.stringify(before), JSON.stringify(after), actor.personaId, at),
