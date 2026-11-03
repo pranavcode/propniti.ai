@@ -37,3 +37,18 @@ describe("staff AI routes and run scope", () => {
     expect((await runDetail({ db, ws: WS, actor: DANIEL }, everyone.runId))!.steps.length).toBeGreaterThan(2);
   });
 });
+
+describe("AI reads follow the entity rules", () => {
+  it("hide fields the role can't see and scope messages through their thread", async () => {
+    const { list } = await import("../data");
+    const { raw, db } = openFixture();
+    const admin = { ...DANIEL, personaId: "sam", role: "admin" as const };
+    const apps = await list({ db, ws: WS, actor: admin }, "applications", { size: 5 });
+    expect(apps.rows.length).toBeGreaterThan(0);
+    expect(apps.rows.every((r) => !("score" in r) && !("recommendation" in r))).toBe(true);
+    expect((await list({ db, ws: WS, actor: DANIEL }, "applications", { size: 1 })).rows[0]).toHaveProperty("score");
+    raw.exec(`INSERT INTO message_threads (workspace_id, id, property_id, party_kind, party_id, subject, last_message_at) VALUES ('base', 't-atl', 'p10', 'resident', 'r3', 'Hi', '2026-11-01'), ('base', 't-aus', 'p01', 'resident', 'r1', 'Hi', '2026-11-01')`);
+    raw.exec(`INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES ('base', 'm1', 't-atl', 'Email', 'in', 'resident', 'r3', 'Atlanta', '2026-11-01'), ('base', 'm2', 't-aus', 'Email', 'in', 'resident', 'r1', 'Austin', '2026-11-01')`);
+    expect((await list({ db, ws: WS, actor: MARCUS }, "messages", {})).rows.map((r) => r.id)).toEqual(["m2"]);
+  });
+});

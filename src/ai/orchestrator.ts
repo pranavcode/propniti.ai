@@ -13,7 +13,8 @@ import type { ApprovalPolicy, AgentDef, Autonomy, EventType, RunContext, Trigger
 // the agent's autonomy and the approval policies. Work runs in the background through waitUntil
 // (Cloudflare ctx.waitUntil, reached via next/server after() in route handlers).
 
-export const SYSTEM_ACTOR: Actor = { personaId: "scheduler", name: "Scheduler", role: "admin", scope: { kind: "org", label: "All properties" }, propertyIds: "all" };
+// The scheduler reads like an org-wide principal, so no field an agent needs is hidden from it.
+export const SYSTEM_ACTOR: Actor = { personaId: "scheduler", name: "Scheduler", role: "principal", scope: { kind: "org", label: "All properties" }, propertyIds: "all" };
 export const SWEEP_EVERY_MS = 15 * 60_000;
 
 export type AgentConfig = { key: AgentKey; enabled: boolean; autonomy: Autonomy; schedule?: string; events: EventType[]; approvalPolicyId: string | null; model: string | null };

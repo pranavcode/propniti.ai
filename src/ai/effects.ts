@@ -5,7 +5,7 @@ import { isAiAction } from "./action-keys";
 import { can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
 import { INTERNAL_ROLES, type ActionKey, type AgentKey, type Row } from "@/entities/types";
-import { eff, get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
+import { eff, get, getRaw, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
 
 // What approving a proposal does. A registered named action (src/extensions, money through
 // src/server/money.ts) always wins. Otherwise the proposal's own `effects` run: messages, tasks and
@@ -162,7 +162,8 @@ async function stillValid(data: DataCtx, proposal: Row, payload: Record<string, 
   if (!isTable(table)) return null;
   const row = await get(data, table, String(proposal.entity_id));
   if (!row) return { ok: false, status: 409, message: "This record no longer exists or is outside your scope" };
-  if (typeof payload._snapshot === "string" && payload._snapshot !== snapshotOf(row)) return { ok: false, status: 409, message: "Record changed since this was proposed; re-run the agent" };
+  const raw = await getRaw(data, table, String(proposal.entity_id));
+  if (typeof payload._snapshot === "string" && raw && payload._snapshot !== snapshotOf(raw)) return { ok: false, status: 409, message: "Record changed since this was proposed; re-run the agent" };
   const action = String(proposal.action);
   const registered = isAiAction(action) ? undefined : getAction(action);
   if (registered?.when) {

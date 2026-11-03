@@ -1,5 +1,6 @@
 import { AS_OF } from "@/seed/constants";
 import type { Actor, ListResult, Row } from "@/entities/types";
+import { allEntities, can } from "@/entities/registry";
 import { MAX_PAGE_SIZE } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 
@@ -40,11 +41,28 @@ export function eff(table: Table, ws: string): { sql: string; params: unknown[] 
   };
 }
 
+// Tables with no property column of their own, scoped through their parent record.
+const SCOPE_VIA: Partial<Record<Table, (alias: string) => string>> = {
+  messages: (a) => `(SELECT mt.property_id FROM message_threads mt WHERE mt.id = ${a}.thread_id LIMIT 1)`,
+  applicants: (a) => `(SELECT ap.property_id FROM applications ap WHERE ap.applicant_id = ${a}.id LIMIT 1)`,
+};
+
 // "property_id IN (…)" for the actor, or nothing for org-wide actors.
 export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: string; params: unknown[] } {
   const col = TABLES[table];
-  if (!col || ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
-  return { sql: `${alias}.${col} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ctx.actor.propertyIds)] };
+  const via = SCOPE_VIA[table];
+  if ((!col && !via) || ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  return { sql: `${via ? via(alias) : `${alias}.${col}`} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ctx.actor.propertyIds)] };
+}
+
+// The entity def for a table, when one exists: its read permission and hidden fields apply to AI
+// reads too (the same rules the entity API enforces).
+function readRules(ctx: DataCtx, table: Table) {
+  const def = allEntities().find((d) => d.table === table);
+  if (!def) return (r: Row) => r;
+  if (!can(ctx.actor.role, "read", def.key)) throw new Error(`${ctx.actor.role.replace(/_/g, " ")} can't view ${def.label.many.toLowerCase()}`);
+  const hidden = Object.entries(def.fields).filter(([, f]) => f.hiddenFor?.includes(ctx.actor.role)).map(([k, f]) => f.column ?? k);
+  return hidden.length ? (r: Row) => Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))) : (r: Row) => r;
 }
 
 export type Filter = { field: string; op: "eq" | "ne" | "in" | "gt" | "gte" | "lt" | "lte" | "like" | "null" | "notnull"; value?: unknown };
@@ -82,6 +100,7 @@ export type ListArgs = { filters?: Filter[]; sort?: [string, "asc" | "desc"]; pa
 
 // Paged, scoped list over one table. Unknown fields are rejected, not ignored.
 export async function list(ctx: DataCtx, table: Table, args: ListArgs = {}): Promise<ListResult> {
+  const visible = readRules(ctx, table);
   const cols = await columns(ctx.db, table);
   for (const f of args.filters ?? []) if (!IDENT.test(f.field) || !cols.has(f.field)) throw new Error(`Unknown field ${table}.${f.field}`);
   if (args.sort && !cols.has(args.sort[0])) throw new Error(`Unknown sort field ${table}.${args.sort[0]}`);
@@ -104,10 +123,20 @@ export async function list(ctx: DataCtx, table: Table, args: ListArgs = {}): Pro
     ctx.db.prepare(`SELECT t.* ${base} ${order} LIMIT ${size} OFFSET ${(page - 1) * size}`).bind(...params).all<Row>(),
     ctx.db.prepare(`SELECT count(*) AS n ${base}`).bind(...params).first<{ n: number }>(),
   ]);
-  return { rows: rows.results.map(clean), total: total?.n ?? 0, page, size };
+  return { rows: rows.results.map((r) => visible(clean(r))), total: total?.n ?? 0, page, size };
 }
 
 export async function get(ctx: DataCtx, table: Table, id: string): Promise<Row | null> {
+  const visible = readRules(ctx, table);
+  const e = eff(table, ctx.ws);
+  const s = scopeClause(ctx, table);
+  const row = await ctx.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ? AND ${s.sql}`).bind(...e.params, id, ...s.params).first<Row>();
+  return row ? visible(clean(row)) : null;
+}
+
+// The effective row without role-based field hiding (still scoped). For internal comparisons such as
+// proposal snapshots, which must not depend on who is looking.
+export async function getRaw(ctx: DataCtx, table: Table, id: string): Promise<Row | null> {
   const e = eff(table, ctx.ws);
   const s = scopeClause(ctx, table);
   const row = await ctx.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ? AND ${s.sql}`).bind(...e.params, id, ...s.params).first<Row>();

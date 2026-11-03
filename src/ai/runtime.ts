@@ -1,7 +1,7 @@
 import { demoNowIso } from "@/lib/clock";
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
-import { asOf, eff, get, insert, isTable, newId, type DataCtx } from "./data";
+import { asOf, eff, getRaw, insert, isTable, newId, type DataCtx } from "./data";
 import { snapshotOf } from "./effects";
 import { addUsage, currentModel, fromWire, RULES, toWire, ZERO, type ChatModel, type ModelInfo, type Turn, type Usage } from "./providers";
 import { getTool } from "./tools/registry";
@@ -147,7 +147,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
 
   const id = newId("prop");
   // What the agent saw, so approval can refuse a proposal whose record has since changed.
-  const target = isTable(p.entity) ? await get(ctx.data, p.entity, p.entityId) : null;
+  const target = isTable(p.entity) ? await getRaw(ctx.data, p.entity, p.entityId) : null;
   const payload = target ? { ...(p.payload as Record<string, unknown>), _snapshot: snapshotOf(target) } : p.payload;
   const stepId = await ctx.step({
     kind: "proposal",
