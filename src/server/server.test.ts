@@ -154,6 +154,11 @@ describe("money", { timeout: 60_000 }, () => {
     const c = await ctx(grace);
     const bill = await one<{ id: string; amount_cents: number; owner_entity_id: string }>(`SELECT b.* FROM ${effective("bills")} AS b WHERE b.status = 'Pending approval' AND b.property_id = 'p02' ORDER BY b.amount_cents LIMIT 1`, c.ws);
     expect(await payBill(c, bill!.id)).toMatchObject({ status: 409, error: expect.stringContaining("Only approved bills") });
+    // A property manager can read payables but not approve them; another region is out of scope.
+    expect(await approveBill({ ...c, actor: marcus }, bill!.id)).toMatchObject({ status: 403 });
+    const austinOnly: Actor = { ...grace, role: "regional_manager", propertyIds: ["p22"] };
+    expect(await approveBill({ ...c, actor: austinOnly }, bill!.id)).toMatchObject({ status: 403, error: expect.stringContaining("scope") });
+    expect(await distributeOwner({ ...c, actor: marcus }, "oe01", "k-forbidden")).toMatchObject({ status: 403 });
     expect(await approveBill(c, bill!.id)).toMatchObject({ status: 200 });
     const before = await available(c.ws, "ba-oe01-trust");
     expect(await payBill(c, bill!.id)).toMatchObject({ status: 200 });

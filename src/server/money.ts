@@ -1,4 +1,5 @@
-import type { ActionContext, Actor } from "@/entities/types";
+import { PERMISSIONS } from "@/auth/personas";
+import type { ActionContext, Actor, ModuleKey } from "@/entities/types";
 import { MANAGEMENT_FEE_RATE, SETTLE_MS } from "@/lib/ledger";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { AS_OF, CURRENT_PERIOD } from "@/seed/constants";
@@ -52,6 +53,14 @@ export function notifyStmt(db: Db, ws: string, at: string, userId: string, title
   return db
     .prepare(`INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, href, entity_type, entity_id, at) SELECT ?1, ?2, ?3, 'In-app', ?4, ?5, ?6, ?7, ?8, ?9 WHERE ${gateSql(gate, 10)}`)
     .bind(ws, uid("nt"), userId, title, body, href, entity?.[0] ?? null, entity?.[1] ?? null, at, ...gateParams(gate));
+}
+
+// Defence in depth: money approvals check role and property scope here too, not only in the
+// action registry, so any caller (routes, agents after approval) gets the same answer.
+function forbidden(actor: Actor, modules: ModuleKey[], propertyId: string | null, extraRoles: string[] = []): Outcome | null {
+  if (!modules.some((m) => PERMISSIONS[actor.role]?.[m] === "approve") && !extraRoles.includes(actor.role)) return { status: 403, error: "Your role can't approve this" };
+  if (propertyId && actor.propertyIds !== "all" && !actor.propertyIds.includes(propertyId)) return { status: 403, error: "That property is outside your scope" };
+  return null;
 }
 
 const transferAt = (db: Db, ws: string, key: string) => db.prepare("SELECT id, status FROM transfers WHERE workspace_id IN ('base', ?1) AND key = ?2 AND status <> 'Returned'").bind(ws, key).first<{ id: string; status: string }>();
@@ -282,6 +291,8 @@ export async function approveBill(ctx: ActionContext, billId: string): Promise<O
   const { db, ws, nowMs, actor } = ctx;
   const bill = await db.prepare(`SELECT * FROM ${effective("bills")} AS b WHERE b.id = ?2`).bind(ws, billId).first<{ id: string; status: string; amount_cents: number; property_id: string; vendor_id: string }>();
   if (!bill) return { status: 404, error: "Bill not found" };
+  const denied = forbidden(actor, ["payables"], bill.property_id);
+  if (denied) return denied;
   const at = nowIso(nowMs);
   const [upsert] = await db.batch([
     db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Approved'", approved_by: "?3", approved_at: "?4" }, "e.status IN ('Pending approval', 'Draft')")).bind(ws, billId, actor.personaId, at),
@@ -302,6 +313,8 @@ export async function payBill(ctx: ActionContext, billId: string): Promise<Outco
     .bind(ws, billId)
     .first<{ id: string; status: string; amount_cents: number; property_id: string; vendor_id: string; owner_entity_id: string; company: string }>();
   if (!bill) return { status: 404, error: "Bill not found" };
+  const denied = forbidden(actor, ["payables"], bill.property_id);
+  if (denied) return denied;
   const at = nowIso(nowMs);
   const id = uid("tr");
   const trust = `'ba-' || b.owner_entity_id || '-trust'`;
@@ -343,6 +356,10 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
     .bind(ws, woId)
     .first<{ id: string; status: string; vendor_id: string | null; company: string | null; amount_cents: number; property_id: string; owner_entity_id: string; title: string }>();
   if (!wo) return { status: 404, error: "Work order not found" };
+  // Maintenance approvers sign off the work, payables approvers pay it, owners approve over-limit
+  // repairs from their portal.
+  const denied = forbidden(actor, ["maintenance", "payables"], wo.property_id, ["owner"]);
+  if (denied) return denied;
   const at = nowIso(nowMs);
   const notSubmitted = `Only submitted work can be approved (this one is ${wo.status.toLowerCase()})`;
   if (!wo.vendor_id) {
@@ -401,6 +418,8 @@ export async function distributeOwner(ctx: ActionContext, ownerEntityId: string,
     .bind(ws, ownerEntityId)
     .first<{ id: string; name: string; owner_id: string; owner_name: string; property_id: string }>();
   if (!oe) return { status: 404, error: "Owner entity not found" };
+  const denied = forbidden(actor, ["owners"], null);
+  if (denied) return denied;
   const st = await ownerStatement({ db, ws }, ownerEntityId);
   const at = nowIso(nowMs);
   const id = uid("tr");
