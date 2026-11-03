@@ -17,9 +17,11 @@ import { PhotoCheckBadge } from "@/extensions/maintenance/tabs";
 import { ActionButton } from "@/extensions/maintenance/ui/client";
 import { DispatchPanel } from "@/extensions/maintenance/ui/Dispatch";
 
-export const metadata = { title: "Triage and dispatch · Propniti" };
-
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ trade?: string }> };
+
+export async function generateMetadata({ params }: Props) {
+  return { title: `Triage ${decodeURIComponent((await params).id)} · Propniti` };
+}
 
 export default async function TriagePage({ params, searchParams }: Props) {
   const { id: raw } = await params;
