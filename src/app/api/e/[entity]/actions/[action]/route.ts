@@ -5,7 +5,9 @@ import { inputSchema, resolveAction, runAction } from "../../../_lib/actions";
 
 type Ctx = { params: Promise<{ entity: string; action: string }> };
 
-const MAX_BULK = 100;
+// Each record costs ~5 D1 queries (scope read, guards, audit); keep a request well under the
+// per-invocation query limit.
+const MAX_BULK = 25;
 
 // POST /api/e/[entity]/actions/[action] { ids, input }: a bulk action (ActionDef.bulk), run one
 // record at a time so each keeps its own guards; the response reports each id.
