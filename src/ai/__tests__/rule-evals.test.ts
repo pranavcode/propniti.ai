@@ -41,12 +41,16 @@ describe("eval cases: rules", () => {
 });
 
 describe("data health score", () => {
-  it("is 100 minus the weighted share of affected records", async () => {
-    const { healthScore } = await import("../views");
-    // 4% of 1,000 records with warnings, and 10 critical: 100 − (40 + 30) / 1000 × 100 = 93.
-    expect(healthScore([{ weighted: 40 * 1 + 10 * 3, records: 1000 }])).toBe(93);
-    // Entities combine by record count: a small table with many problems moves it only a little.
-    expect(healthScore([{ weighted: 5, records: 1000 }, { weighted: 5, records: 20 }])).toBe(99);
+  it("is 100 minus 300 × the average weighted share of affected records per record type", async () => {
+    const { healthScore, issueWeight } = await import("../views");
+    // 3% of one table: 100 − 300 × 0.03 = 91.
+    expect(healthScore([{ weighted: 30, records: 1000 }])).toBe(91);
+    // Each record type has an equal say: a huge clean table doesn't hide a bad small one.
+    expect(healthScore([{ weighted: 0, records: 134_000 }, { weighted: 10, records: 100 }])).toBe(85);
+    // Above property level small tables get 300 extra records: two flags on 44 vendors.
+    expect(healthScore([{ weighted: 2 * issueWeight("vendors.unverified_bank_change", "critical"), records: 44 }], 300)).toBe(93);
+    expect(issueWeight("payments.wrong_lease", "warn")).toBe(4);
+    expect(issueWeight("leases.end_before_start", "critical")).toBe(2.5);
     expect(healthScore([])).toBe(100);
     expect(healthScore([{ weighted: 500, records: 100 }])).toBe(0);
   });

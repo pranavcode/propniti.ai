@@ -121,22 +121,27 @@ export async function proposal(data: DataCtx, id: string) {
   return data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ? AND ${s.sql}`).bind(...e.params, id, ...s.params).first<Row>();
 }
 
-// Data Health score: 100 − the weighted share of affected records. Each open issue weighs by
-// severity (critical 3, warn 1, info 0.25) and is divided by the records of its entity in scope;
-// entities combine by record count, so a big table with a few typos doesn't sink the score.
-export const SEVERITY_WEIGHT: Record<string, number> = { critical: 3, warn: 1, info: 0.25 };
-export const HEALTH_FORMULA = "100 − 100 × Σ(open issues × severity weight) ÷ Σ(records checked). Weights: critical 3, warning 1, info 0.25. Records checked are the rows of every table a data rule covers, in your scope.";
+// Data Health score, per property, module and portfolio. For each record type a rule checks, the
+// affected share is Σ(open issues × weight) ÷ records of that type (capped at 1). The score is
+// 100 − 300 × the average share across record types, so each type has an equal say: a huge clean
+// table (payments) can't hide problems elsewhere, and 3% weighted problems score about 91. Above
+// property level, each type also counts 300 extra records, so two flags on a 44-row vendor table
+// don't sink a whole module. Money and fraud issues weigh most.
+export const HEAVY_RULE = /^(payments\.|bank_transactions\.|owner_distributions\.|vendors\.unverified_bank_change|bills\.possible_duplicate|leases\.rent_outlier)/;
+export const issueWeight = (rule: string, severity: string) => (HEAVY_RULE.test(rule) ? 4 : severity === "critical" ? 2.5 : severity === "warn" ? 1 : 0.25);
+export const HEALTH_FORMULA = "100 − 300 × the average affected share across record types. Affected share = Σ(open issues × weight) ÷ records of that type, capped at 1. Weights: money or fraud 4, critical 2.5, warning 1, info 0.25. Module and portfolio scores add 300 records to each type so small tables don't dominate. About 3% weighted problems scores 91.";
 
-export function healthScore(parts: { weighted: number; records: number }[]) {
-  const records = parts.reduce((s, p) => s + p.records, 0);
-  const weighted = parts.reduce((s, p) => s + p.weighted, 0);
-  if (!records) return 100;
-  return Math.max(0, Math.min(100, Math.round(100 - (100 * weighted) / records)));
+const ORG_FLOOR = 300;
+
+export function healthScore(parts: { weighted: number; records: number }[], floor = 0) {
+  const shares = parts.filter((p) => p.records > 0 || p.weighted > 0).map((p) => Math.min(1, p.weighted / (p.records + floor)));
+  if (!shares.length) return 100;
+  return Math.max(0, Math.min(100, Math.round(100 - (300 * shares.reduce((x, y) => x + y, 0)) / shares.length)));
 }
 
 export async function dataHealth(data: DataCtx) {
   const [issues, rules, props] = await Promise.all([
-    sql<{ entity_type: string; property_id: string | null; severity: string; n: number }>(data, "SELECT entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' GROUP BY entity_type, property_id, severity"),
+    sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, "SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' GROUP BY rule_id, entity_type, property_id, severity"),
     sql<{ id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }>(data,
       "SELECT r.id, r.name, r.severity, r.entity_type, (SELECT count(*) FROM {data_issues} i WHERE i.rule_id = r.id AND i.status = 'open') AS open, (SELECT count(*) FROM {data_issues} i WHERE i.rule_id = r.id AND i.status IN ('fixed', 'auto-fixed')) AS fixed FROM {data_rules} r ORDER BY open DESC", [], { unscoped: true }),
     sql<{ id: string; name: string; metro: string }>(data, "SELECT id, name, metro FROM {properties} ORDER BY id"),
@@ -149,17 +154,17 @@ export async function dataHealth(data: DataCtx) {
     const byProp = col ? await sql<{ p: string; n: number }>(data, `SELECT ${col} AS p, count(*) AS n FROM {${t}} GROUP BY ${col}`) : [];
     return { entity: t, total, byProp: new Map(byProp.map((r) => [r.p, r.n])), scoped: !!col };
   }));
-  const weightOf = (rows: typeof issues) => rows.reduce((s, r) => s + (SEVERITY_WEIGHT[r.severity] ?? 1) * r.n, 0);
+  const weightOf = (rows: typeof issues) => rows.reduce((s, r) => s + issueWeight(r.rule_id, r.severity) * r.n, 0);
   const count = (rows: typeof issues) => rows.reduce((s, r) => s + r.n, 0);
 
   const properties = props.map((p) => {
-    const parts = counts.filter((c) => c.scoped).map((c) => ({ weighted: weightOf(issues.filter((i) => i.entity_type === c.entity && i.property_id === p.id)), records: c.byProp.get(p.id) ?? 0 }));
+    const parts = counts.filter((c) => c.scoped && c.byProp.get(p.id)).map((c) => ({ weighted: weightOf(issues.filter((i) => i.entity_type === c.entity && i.property_id === p.id)), records: c.byProp.get(p.id) ?? 0 }));
     const mine = issues.filter((i) => i.property_id === p.id);
     return { id: p.id, name: p.name, metro: p.metro, open: count(mine), critical: count(mine.filter((i) => i.severity === "critical")), score: healthScore(parts) };
   });
   const modules = new Map<string, { module: string; parts: { weighted: number; records: number }[]; open: number; entities: string[] }>();
   for (const c of counts) {
-    const mod = getEntity(c.entity)?.module ?? c.entity;
+    const mod = getEntity(c.entity)?.module ?? (c.entity === "bill_lines" ? "payables" : c.entity);
     const mine = issues.filter((i) => i.entity_type === c.entity);
     const m = modules.get(mod) ?? { module: mod, parts: [], open: 0, entities: [] };
     m.parts.push({ weighted: weightOf(mine), records: c.total });
@@ -168,9 +173,9 @@ export async function dataHealth(data: DataCtx) {
     modules.set(mod, m);
   }
   return {
-    score: healthScore(counts.map((c) => ({ weighted: weightOf(issues.filter((i) => i.entity_type === c.entity)), records: c.total }))),
+    score: healthScore(counts.map((c) => ({ weighted: weightOf(issues.filter((i) => i.entity_type === c.entity)), records: c.total })), ORG_FLOOR),
     open: count(issues), formula: HEALTH_FORMULA, properties,
-    modules: [...modules.values()].filter((m) => m.open).map((m) => ({ module: m.module, open: m.open, entities: m.entities, score: healthScore(m.parts) })).sort((a, b) => a.score - b.score),
+    modules: [...modules.values()].filter((m) => m.open).map((m) => ({ module: m.module, open: m.open, entities: m.entities, score: healthScore(m.parts, ORG_FLOOR) })).sort((a, b) => a.score - b.score),
     rules,
   };
 }
