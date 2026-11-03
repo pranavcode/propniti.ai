@@ -35,7 +35,7 @@ export function ProposalQueue({ items, empty }: { items: ProposalView[]; empty: 
       toast.error(out.error ?? "Nothing was changed. Try again.");
       throw new Error(out.error);
     }
-    toast.success(decision === "approve" ? out.message ?? "Approved" : "Dismissed. The agent won't propose it again for this record.");
+    toast.success(decision === "approve" ? out.message ?? "Approved" : "Dismissed. Your decision is logged with your name.");
     setGone((g) => [...g, id]);
     router.refresh();
   };

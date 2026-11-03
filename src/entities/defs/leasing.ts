@@ -41,7 +41,7 @@ registerEntity({
     beds: { type: "number", label: "Beds", facet: true, sortable: true, list: { default: true, align: "right" },
       sql: "(SELECT ut.beds FROM {units} u JOIN {unit_types} ut ON ut.id = u.unit_type_id WHERE u.id = listings.unit_id)" },
     rent: { type: "money", label: "Asking rent", column: "rent_cents", required: true, sortable: true, list: { default: true, align: "right" }, editable: [...LEASING],
-      help: { summary: "Advertised monthly rent. Lower it with \"Reduce price\" so the change is kept in the price history.", article: "list-unit-syndication" } },
+      help: { summary: "Advertised monthly rent. Change it with \"Change price\" so the old price and your reason stay in the price history.", article: "list-unit-syndication" } },
     market_rent: { type: "money", label: "Market rent", sortable: true, list: { default: false, align: "right" }, sql: "(SELECT u.market_rent_cents FROM {units} u WHERE u.id = listings.unit_id)" },
     days_on_market: { type: "number", label: "Days on market", sortable: true, list: { default: true, align: "right" },
       sql: `CASE WHEN listings.status IN ('Active', 'Paused') THEN CAST(julianday(${AS_OF}) - julianday(listings.listed_on) AS INTEGER) END`,

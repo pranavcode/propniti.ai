@@ -113,7 +113,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
                   </li>
                 ))}
               </ol>
-            ) : <p className="rounded-md border border-dashed px-3 py-6 text-center text-[12.5px] text-muted-foreground">No photos yet. Listings with photos get far more leads; add some from the library below.</p>}
+            ) : <p className="rounded-md border border-dashed px-3 py-6 text-center text-[12.5px] text-muted-foreground">No photos yet. Add some from the library below; the first one becomes the cover.</p>}
             {data.canEdit && unused.length > 0 && (
               <div className="mt-4">
                 <p className="mb-2 flex items-center gap-1.5 text-[12px] text-muted-foreground"><ImagePlus className="size-3.5" />Library: {data.typeName || "unit type"} and {data.property} photos</p>

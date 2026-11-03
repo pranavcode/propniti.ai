@@ -31,6 +31,9 @@ async function run<T>(actx: ActionContext, agent: "leasing" | "renewals", input:
 const UT = (ctx: AgentCtx) => effective("unit_types", ctx.ws);
 
 // Never let a model's wording touch these in a leasing decision or advert.
+// Stock real-estate and AI phrasing the drafts avoid; plain, specific words read as written by staff.
+const PLAIN = "Use plain, specific words. Don't use: nestled, boasts, oasis, haven, elevate, seamless, unparalleled, stunning, luxurious, \"look no further\", \"don't miss\", or exclamation marks.";
+
 const PROTECTED = /\b(race|racial|colou?r|religio\w*|church|national origin|ethnic\w*|immigra\w*|sex|gender|pregnan\w*|child(ren)?|kids|family size|disab\w*|handicap\w*|age|elderly|young|married|marital|single|voucher|section 8)\b/i;
 
 // Asks the model for prose; returns null (and logs why) when there is no model or the text fails a check.
@@ -125,7 +128,7 @@ export async function draftListing(actx: ActionContext, listing: Row): Promise<R
       description: `${bedLabel}, ${facts.baths}-bath home with ${facts.sqft.toLocaleString("en-US")} sq ft on floor ${facts.floor} at ${facts.property} in ${facts.neighborhood}, ${facts.city}.${amenities.length ? ` The community has ${amenities.slice(0, 4).join(", ").toLowerCase()}.` : ""} Rent is ${dollars(facts.rent_cents)} a month${facts.available_on ? `, available ${facts.available_on}` : ""}. Book a tour to see it in person.`,
     };
     const drafted = await prose(ctx, z.object({ headline: z.string().min(10).max(90), description: z.string().min(80).max(900) }),
-      "You write rental listings for a US property manager. Describe the home, the building and the amenities in a warm, specific, plain style (3–5 sentences). Never describe who should live there or who would suit it (no family, age, religion, origin, disability or gender references), never promise anything not in the facts.",
+      `You write rental listings for a US property manager. Describe the home, the building and the amenities in a warm, specific, plain style (3–5 sentences). Never describe who should live there or who would suit it (no family, age, religion, origin, disability or gender references), never promise anything not in the facts. ${PLAIN}`,
       JSON.stringify(facts),
       (v) => [...textChecks(`${v.headline} ${v.description}`, facts)]);
     return { summary: drafted ? "Drafted the listing description." : "Wrote the listing description from the template.", result: drafted ?? template };
@@ -192,10 +195,10 @@ export async function draftOfferMessage(actx: ActionContext, offer: Row): Promis
     await ctx.step({ kind: "tool_result", toolKey: "records.get", output: { facts }, ok: true });
     const template: MessageDraft = {
       subject: `Your renewal offer at ${f.property}`,
-      body: `Hi ${f.first_name},\n\nYour lease at ${f.property} #${f.unit} ends on ${f.end_on}. We'd love for you to stay. We can renew for ${facts.term_months} months at ${dollars(facts.offer_rent_cents)} a month${facts.offer_rent_cents === f.current_rent_cents ? ", the same as today" : ""}.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${actx.actor.name}`,
+      body: `Hi ${f.first_name},\n\nYour lease at ${f.property} #${f.unit} ends on ${f.end_on}. We can renew for ${facts.term_months} months at ${dollars(facts.offer_rent_cents)} a month${facts.offer_rent_cents === f.current_rent_cents ? ", the same as today" : ""}.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${actx.actor.name}`,
     };
     const drafted = await prose(ctx, z.object({ subject: z.string().min(5).max(120), body: z.string().min(60).max(1500) }),
-      "You write a short, warm renewal offer email from a US property manager to a resident. State the new monthly rent and term from the facts, invite a reply, and sign with the sender's name. Never promise waivers, discounts or anything not in the facts.",
+      `You write a short, warm renewal offer email from a US property manager to a resident. State the new monthly rent and term from the facts, invite a reply, and sign with the sender's name. Never promise waivers, discounts or anything not in the facts. ${PLAIN}`,
       JSON.stringify({ ...facts, sender: actx.actor.name }),
       (v) => [...checkDraft(v.body, facts), ...checkFairHousing(v.body).map((x) => `Fair-housing: "${x.phrase}"`)]);
     return { summary: drafted ? "Drafted the renewal message." : "Wrote the renewal message from the template.", result: drafted ?? template };
