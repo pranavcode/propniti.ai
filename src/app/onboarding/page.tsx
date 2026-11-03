@@ -1,5 +1,6 @@
-import { Onboarding } from "@/components/Onboarding";
+import { redirect } from "next/navigation";
 
+// v1 route; v2 lives at /app.
 export default function Page() {
-  return <Onboarding />;
+  redirect("/app");
 }
