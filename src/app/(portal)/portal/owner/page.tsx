@@ -10,6 +10,9 @@ import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { PortalAsk } from "@/extensions/owners/portal/ui/PortalAsk";
 import { monthLabel } from "@/extensions/owners/statements";
 
+// Chart axes read "Oct 26"; the drill-down keeps the YYYY-MM month.
+const short = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+
 const hero = (photos: string, id: string) => {
   try {
     return (JSON.parse(photos) as string[])[0] ?? `/img/props/${id}.webp`;
@@ -27,7 +30,8 @@ export default async function OwnerHome() {
   const waiting = approvals.filter((a) => !a.decision);
   const byMonth = new Map<string, number>();
   for (const d of dists) byMonth.set(d.period, (byMonth.get(d.period) ?? 0) + d.amount_cents / 100);
-  const distPoints = [...byMonth].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([month, amount]) => ({ month, amount }));
+  const distPoints = [...byMonth].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([month, amount]) => ({ month, label: short(month), amount }));
+  const trend = months.map((x) => ({ ...x, label: short(x.month) }));
   const [last, prev] = [distPoints.at(-1), distPoints.at(-2)];
   const m = months.at(-1);
   const pm = months.at(-2);
@@ -55,13 +59,13 @@ export default async function OwnerHome() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard label={`Distributed, ${last ? monthLabel(last.month) : "last month"}`} value={last?.amount ?? null} previous={prev?.amount} format="money" spark={distPoints.map((p) => p.amount)} href="/portal/owner/statements" />
         <KpiCard label="Net operating income" value={m?.noi ?? null} previous={pm?.noi} format="money" spark={months.map((x) => x.noi)} footnote={m?.budget != null ? <span>Budget <Money value={m.budget} style="whole" /></span> : undefined} href="/portal/owner/properties" />
-        <KpiCard label="Occupancy" value={m?.occupancy ?? null} previous={pm?.occupancy} format="pct" spark={months.map((x) => x.occupancy ?? 0)} href="/portal/owner/properties" />
-        <KpiCard label="Rent collected" value={m?.collections ?? null} previous={pm?.collections} format="pct" spark={months.map((x) => x.collections ?? 0)} help="Rent collected as a share of rent charged in the month." />
+        <KpiCard label="Occupancy" value={m?.occupancy ?? null} previous={pm?.occupancy} format="pct" spark={months.flatMap((x) => (x.occupancy == null ? [] : [x.occupancy]))} href="/portal/owner/properties" />
+        <KpiCard label="Rent collected" value={m?.collections ?? null} previous={pm?.collections} format="pct" spark={months.flatMap((x) => (x.collections == null ? [] : [x.collections]))} help="Rent collected as a share of rent charged in the month." />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Distributions, last 12 months" kind="bar" data={distPoints} x="month" series={[{ key: "amount", label: "Distributed", format: "money" }]} drill="/portal/owner/statements?period={month}" />
-        <ChartCard title="NOI against budget" kind="line" data={months} x="month" series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]} />
+        <ChartCard title="Distributions, last 12 months" kind="bar" data={distPoints} x="label" series={[{ key: "amount", label: "Distributed", format: "money" }]} drill="/portal/owner/statements?period={month}" />
+        <ChartCard title="NOI against budget" kind="line" data={trend} x="label" series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]} />
       </div>
 
       <section aria-labelledby="props-h">

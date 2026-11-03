@@ -24,7 +24,7 @@ export default async function VendorPayments({ searchParams }: Props) {
         <KpiCard label={`Paid in ${pay.year}`} value={pay.ytd_cents / 100} format="money" />
         <KpiCard label="On its way" value={pay.pending_cents / 100} format="money" />
         <KpiCard label="Payments received" value={pay.total} format="count" />
-        <KpiCard label="Last payment" value={null} footnote={<span>{pay.last ? formatDate(pay.last) : "None yet"}</span>} />
+        <div className="rounded-lg border bg-card p-4"><p className="text-[12px] font-medium text-muted-foreground">Last payment</p><p className="mt-1.5 text-[22px] font-semibold tabular-nums">{pay.last ? formatDate(pay.last, "always") : "None yet"}</p></div>
       </div>
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_360px]">
         <section className="overflow-hidden rounded-xl border bg-card">
