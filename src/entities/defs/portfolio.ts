@@ -263,6 +263,9 @@ registerEntity({
 
 // Rollups for org-level records: properties in the region or portfolio, then their units and the
 // latest closed month of metrics_monthly.
+// Org-level records have no property scope and their rollups cover every property, so only
+// roles whose scope is the whole org may read them.
+const ORG_WIDE: Role[] = ["platform_admin", "principal", "admin", "accountant", "broker"];
 const propsWhere = (cond: string) => `(SELECT count(*) FROM {properties} p WHERE ${cond})`;
 const unitsWhere = (cond: string) => `(SELECT count(*) FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE ${cond})`;
 const occWhere = (cond: string) => `(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.status <> 'Model' AND ${cond})`;
@@ -301,7 +304,7 @@ registerEntity({
     { key: "occupancy", label: "Occupancy", metric: "portfolio.occupancy", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/units?f.status=Vacant" },
   ],
   charts: [{ key: "by_region", title: "NOI by region, last closed month", kind: "hbar", metric: "portfolio.by_region", x: "name", series: [{ key: "noi", label: "NOI", format: "money" }], drill: "/app/properties?f.region_id={region_id}" }],
-  permissions: { read: [...STAFF], create: ["principal"], update: ["principal"], delete: ["principal"] },
+  permissions: { read: ORG_WIDE, create: ["principal"], update: ["principal"], delete: ["principal"] },
   writes: "generic",
   help: { summary: "Regions group properties for regional managers: Texas, Southeast and Southwest. Scope and rollups follow the region.", article: "regions-and-portfolios" },
 });
@@ -336,7 +339,7 @@ registerEntity({
     related: ["owner_entity"],
   },
   capabilities: { notes: true, activity: true, documents: true },
-  permissions: { read: [...STAFF, ...OWNER_PORTAL], create: [...LEADERS], update: [...LEADERS], delete: ["principal"] },
+  permissions: { read: ORG_WIDE, create: ["principal"], update: ["principal"], delete: ["principal"] },
   writes: "generic",
   help: { summary: "A portfolio is the set of properties one owner entity holds title to. Owner statements and distributions roll up by portfolio.", article: "regions-and-portfolios" },
 });
