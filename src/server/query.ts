@@ -465,6 +465,14 @@ function assertSystem(def: EntityDef, body: Record<string, unknown>, mode: "crea
   }
 }
 
+// EntityDef.lockedWhen: past approval (Approved, Paid…) generic edits stop; actions take over.
+function assertUnlocked(def: EntityDef, current: Row, changed?: string[]) {
+  const lock = def.lockedWhen;
+  if (!lock || !lock.in.includes(String(current[lock.field]))) return;
+  if (changed && lock.fields && !changed.some((k) => lock.fields!.includes(k))) return;
+  throw new QueryError(409, `This ${def.label.one.toLowerCase()} is ${String(current[lock.field])}; change it through its actions`);
+}
+
 // Initial values for system fields a create didn't set.
 const systemDefaults = (def: EntityDef) =>
   Object.fromEntries(Object.entries(def.fields).filter(([, f]) => f.system && f.initial?.length && !f.sql).map(([k, f]) => [ident(f.column ?? k), f.initial![0]]));
@@ -567,8 +575,10 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
 export async function updateRecord(ctx: WriteCtx, entity: string, id: string, body: Record<string, unknown>): Promise<Row> {
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "update");
-  if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
+  const current = await getRow(ctx, entity, id);
+  if (!current) throw new QueryError(404, `${def.label.one} not found`);
   assertSystem(def, body, "update");
+  assertUnlocked(def, current, Object.keys(body).filter((k) => body[k] !== undefined));
   await assertRefs(ctx, def, body);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
   const changes = changesToColumns(def, body);
@@ -590,7 +600,9 @@ const pick = (r: Row, keys: string[]) => Object.fromEntries(keys.map((k) => [k, 
 export async function deleteRecord(ctx: WriteCtx, entity: string, id: string): Promise<void> {
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "delete");
-  if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
+  const current = await getRow(ctx, entity, id);
+  if (!current) throw new QueryError(404, `${def.label.one} not found`);
+  assertUnlocked(def, current);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
   const pid = await propertyOf(ctx, def, id);
   await ctx.db.batch([upsert(ctx.db, def.table, { ...before, workspace_id: ctx.ws, deleted: 1 }), ...trail(ctx, def, id, "deleted", pid, before, null, `Deleted ${def.label.one.toLowerCase()} ${String(before[def.fields[def.titleField]?.column ?? def.titleField] ?? id)}`)]);

@@ -298,6 +298,19 @@ describe("writes", () => {
     }
   });
 
+  it("refuses generic edits and deletes once lockedWhen applies", async () => {
+    const units = getEntity("units")!;
+    registerEntity({ ...units, lockedWhen: { field: "status", in: ["Occupied"], fields: ["market_rent"] } });
+    try {
+      await expect(updateRecord(await wctx("marcus"), "units", "p01-u1", { market_rent: 1 })).rejects.toMatchObject({ status: 409 });
+      expect((await updateRecord(await wctx("marcus"), "units", "p01-u1", { sqft: 900 })).sqft).toBe(900);
+      expect((await updateRecord(await wctx("marcus"), "units", "p01-u3", { market_rent: 1 })).market_rent).toBe(1); // Vacant: not locked
+      await expect(deleteRecord(await wctx("priya"), "units", "p01-u1")).rejects.toMatchObject({ status: 409 });
+    } finally {
+      registerEntity(units);
+    }
+  });
+
   it("can't update or delete a record outside scope", async () => {
     await expect(updateRecord(await wctx("marcus"), "units", "p05-u1", { sqft: 1 })).rejects.toMatchObject({ status: 404 });
     await expect(deleteRecord(await wctx("priya"), "units", "p05-u1")).rejects.toMatchObject({ status: 404 });

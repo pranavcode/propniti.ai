@@ -219,6 +219,9 @@ export type EntityDef = {
   // Data-health rules for this entity: record pages show a "Data health" badge from open
   // data_issues and an "AI: fix this" affordance that applies data_issues.suggested_fix.
   dataRules?: RuleKey[];
+  // Once `field` reaches one of `in` (Approved, Paid…), generic edits and deletes are refused;
+  // only named actions change the record. `fields` limits the lock to those fields.
+  lockedWhen?: { field: string; in: string[]; fields?: string[] };
   help?: HelpMeta;
 };
 
