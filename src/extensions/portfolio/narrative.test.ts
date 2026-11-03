@@ -14,6 +14,12 @@ const b = (id: string, name: string, over: Partial<Baseline> = {}): Baseline => 
 });
 vi.mock("./whatif-data", () => ({ loadBaselines: async () => ({ rows: [b("p01", "The Lofts"), b("p02", "Barton Creek Commons", { opex_cents: 150_000_000, noi_cents: 131_000_000 })], from: "2025-11", to: "2026-10" }) }));
 
+// maintenance.sla per property (registered by the extensions at runtime): two properties, any month.
+vi.mock("@/extensions/metrics", () => ({ getMetric: () => ({ run: async (_c: unknown, p: { month: string }) => ({ points: [
+  { property_id: "p01", name: "The Lofts", due: 30, met: p.month === "2026-10" ? 27 : 25, missed: p.month === "2026-10" ? 3 : 5, sla: null },
+  { property_id: "p02", name: "Barton Creek Commons", due: 20, met: 18, missed: 2, sla: null },
+] }) }) }));
+
 const texts = (r: { headline: string; bullets: string[] }) => [r.headline, ...r.bullets];
 
 describe("narrative tokens", () => {
@@ -37,7 +43,7 @@ describe("narrative tokens", () => {
     })));
     const noi = { month: "2026-10", prior_month: "2026-09", noi_cents: 1, prior_noi_cents: 1, change_pct: 1.5, budget_noi_cents: 19_000_000, by_property: [],
       drivers: [{ label: "Rent collected", delta_cents: 200_000, detail: "" }, { label: "Operating expenses", delta_cents: -50_000, detail: "" }], expense_lines: [{ gl: "Repairs", delta_cents: 50_000, month_cents: 1, prior_cents: 1 }] };
-    const ctx = { today: "2026-11-04", actor: { scope: { label: "Texas · 14 properties" } }, call: async (k: string) => (k === "metrics.explain_noi" ? noi : { rows }) } as unknown as AgentCtx;
+    const ctx = { today: "2026-11-04", ws: "base", step: async () => "s", actor: { propertyIds: "all", scope: { label: "Texas · 14 properties" } }, call: async (k: string) => (k === "metrics.explain_noi" ? noi : { rows }) } as unknown as AgentCtx;
     for (const key of Object.keys(EXPLAINABLE) as ExplainableKey[]) {
       for (const property of [undefined, ["p01"]]) {
         const r = await explainMetric(ctx, key, property);

@@ -3,6 +3,7 @@ import type { Facts, Row } from "@/entities/types";
 import type { AgentCtx } from "@/ai/runtime";
 import type { NoiExplanation } from "@/ai/facts";
 import { formatMoney, formatPct } from "@/lib/format";
+import { getMetric } from "@/extensions/metrics";
 
 // "Explain this number": the change in a KPI between the last closed month and the one before,
 // split by property (and, for NOI, by income/expense driver). Everything is computed here from
@@ -10,6 +11,7 @@ import { formatMoney, formatPct } from "@/lib/format";
 
 type Agg = { num: (r: Row) => number; den?: (r: Row) => number; kind: "money" | "pct" | "count" };
 const n = (r: Row, k: string) => Number(r[k] ?? 0);
+const addMonths = (ym: string, k: number) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + k, 1)).toISOString().slice(0, 7);
 
 export const EXPLAINABLE = {
   "portfolio.noi": { label: "NOI", goodWhen: "up", agg: { num: (r) => n(r, "noi_cents") / 100, kind: "money" } },
@@ -18,7 +20,7 @@ export const EXPLAINABLE = {
   "receivables.collections_rate": { label: "Collections rate", goodWhen: "up", agg: { num: (r) => n(r, "collected_cents"), den: (r) => n(r, "charged_cents"), kind: "pct" } },
   "receivables.delinquency": { label: "Delinquent balance", goodWhen: "down", agg: { num: (r) => (n(r, "aging_0_30_cents") + n(r, "aging_31_60_cents") + n(r, "aging_61_90_cents") + n(r, "aging_90p_cents")) / 100, kind: "money" } },
   "leasing.vacancy_loss": { label: "Vacancy loss", goodWhen: "down", agg: { num: (r) => n(r, "vacancy_loss_cents") / 100, kind: "money" } },
-  "portfolio.sla": { label: "Work orders within SLA", goodWhen: "up", agg: { num: (r) => Math.max(0, n(r, "wo_opened") - n(r, "wo_sla_breach")), den: (r) => n(r, "wo_opened"), kind: "pct" } },
+  "maintenance.sla": { label: "Work orders within SLA", goodWhen: "up", agg: { num: (r) => n(r, "met"), den: (r) => n(r, "due"), kind: "pct" } },
   "intelligence.ai_minutes_saved": { label: "Staff hours saved by AI", goodWhen: "up", agg: { num: (r) => Math.round(n(r, "ai_minutes_saved") / 60), kind: "count" } },
 } satisfies Record<string, { label: string; goodWhen: "up" | "down"; agg: Agg }>;
 export type ExplainableKey = keyof typeof EXPLAINABLE;
@@ -50,10 +52,23 @@ function driverText(d: NoiExplanation["drivers"][number]) {
   return `${d.label} ${moved}, ${d.delta_cents > 0 ? "adding" : "taking"} ${amt} ${d.delta_cents > 0 ? "to" : "from"} NOI.`;
 }
 
+// SLA comes from work orders (maintenance.sla), not metrics_monthly, so the explanation matches
+// the number on every home. Same row shape as metrics.monthly: one row per property per month.
+async function slaRows(ctx: AgentCtx, propertyIds?: string[]): Promise<{ rows: Row[] }> {
+  const m = getMetric("portfolio.sla_by_property")!;
+  const mctx = { db: ctx.db, ws: ctx.ws === "base" ? null : ctx.ws, actor: ctx.actor, propertyIds: ctx.actor.propertyIds, asOf: ctx.today };
+  const closed = addMonths(ctx.today.slice(0, 7), -1);
+  const months = [addMonths(closed, -1), closed];
+  const rows = (await Promise.all(months.map(async (month) => (await m.run(mctx, { month })).points.map((p): Row => ({ ...p, month, property: p.name })))))
+    .flat().filter((r) => !propertyIds?.length || propertyIds.includes(String(r.property_id)));
+  await ctx.step({ kind: "message", output: { looked_up: "maintenance.sla per property", months, properties: new Set(rows.map((r) => r.property_id)).size }, ok: true });
+  return { rows };
+}
+
 export async function explainMetric(ctx: AgentCtx, metric: ExplainableKey, propertyIds?: string[]) {
   const def = EXPLAINABLE[metric];
   const agg: Agg = def.agg;
-  const { rows } = await ctx.call<{ rows: Row[] }>("metrics.monthly", { months: 3, ...(propertyIds?.length ? { property_ids: propertyIds } : {}) });
+  const { rows } = metric === "maintenance.sla" ? await slaRows(ctx, propertyIds) : await ctx.call<{ rows: Row[] }>("metrics.monthly", { months: 3, ...(propertyIds?.length ? { property_ids: propertyIds } : {}) });
   // Compare whole months: the last closed one against the month before.
   const months = [...new Set(rows.map((r) => String(r.month)))].sort().filter((m) => m < ctx.today.slice(0, 7));
   const month = months.at(-1) ?? "";

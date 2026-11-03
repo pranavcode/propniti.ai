@@ -1,6 +1,6 @@
 import { effective } from "@/server/query";
-import { byProperty, monthly } from "../core-metrics";
-import { registerMetric } from "../metrics";
+import { byProperty } from "../core-metrics";
+import { getMetric, registerMetric } from "../metrics";
 
 // Portfolio-module metrics on top of the shared monthly ones in core-metrics.ts.
 
@@ -16,21 +16,23 @@ byProperty("portfolio.aging_by_property", "Delinquency aging by property", {
   total: (m) => dollars(m.aging_0_30_cents + m.aging_31_60_cents + m.aging_61_90_cents + m.aging_90p_cents),
 }, "total");
 
-// wo_sla_breach counts work orders opened in the month that missed SLA, so SLA is measured
-// against wo_opened (not wo_open, the month-end backlog).
-byProperty("portfolio.sla_by_property", "Maintenance SLA by property", {
-  wo_opened: (m) => m.wo_opened,
-  wo_open: (m) => m.wo_open,
-  breached: (m) => m.wo_sla_breach,
-  within: (m) => Math.max(0, m.wo_opened - m.wo_sla_breach),
-  sla: (m) => (m.wo_opened ? 1 - m.wo_sla_breach / m.wo_opened : null),
-}, "breached");
-
-monthly("portfolio.sla", "Work orders within SLA", (m) => (m.wo_opened ? 1 - m.wo_sla_breach / m.wo_opened : null), {
-  opened: (m) => m.wo_opened,
-  breached: (m) => m.wo_sla_breach,
-  open: (m) => m.wo_open,
-}, "flow");
+// SLA per property is maintenance.sla run for each property, so the principal, regional and
+// maintenance homes always show the same number.
+registerMetric({
+  key: "portfolio.sla_by_property",
+  label: "Maintenance SLA by property",
+  run: async (ctx, params) => {
+    const sla = getMetric("maintenance.sla")!;
+    const scoped = ctx.propertyIds !== "all";
+    const props = await ctx.db.prepare(`SELECT p.id, p.name FROM ${effective("properties", ctx.ws)} p${scoped ? " WHERE p.id IN (SELECT value FROM json_each(?))" : ""} ORDER BY p.name`)
+      .bind(...(scoped ? [JSON.stringify(ctx.propertyIds)] : [])).all<{ id: string; name: string }>();
+    const points = await Promise.all(props.results.map(async (p) => {
+      const m = (await sla.run(ctx, { ...params, property: p.id, months: 1 })).points.at(-1) ?? {};
+      return { property_id: p.id, name: p.name, due: Number(m.due ?? 0), met: Number(m.met ?? 0), missed: Number(m.missed ?? 0), sla: (m.value as number | null) ?? null };
+    }));
+    return { points: points.sort((x, y) => y.missed - x.missed), asOf: params.month ?? ctx.asOf, source: "maintenance.sla per property" };
+  },
+});
 
 // NOI by region for the last closed month (regions list chart, principal home).
 registerMetric({
