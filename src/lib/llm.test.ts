@@ -9,7 +9,7 @@ vi.mock("openai", () => ({ default: class { responses = { parse: openaiParse }; 
 const platform: { ai?: { run: ReturnType<typeof vi.fn>; toMarkdown: ReturnType<typeof vi.fn> } } = {};
 vi.mock("@/lib/platform", () => ({ getPlatform: () => platform }));
 
-const { askAssistant, configuredProvider, extractInvoice, validateWorkOrder } = await import("./llm");
+const { askAssistant, configuredProvider, extractInvoice, parsePortfolioText, validateWorkOrder } = await import("./llm");
 const wo = (id: string) => seed().workOrders.find((w) => w.id === id)!;
 
 beforeEach(() => {
@@ -136,6 +136,16 @@ describe("askAssistant", () => {
     const r = await askAssistant("who is late?", seed());
     expect(r.source).toBe("mock");
     expect(r.answer).toContain("Marcus Lee");
+  });
+});
+
+describe("parsePortfolioText", () => {
+  it("drops vacant units the model returns, since they aren't tenancies", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    const row = (tenant: string, unit: string) => ({ property: "Elm St Duplex", address: "", unit, tenant, email: "", phone: "", rent: "1200", leaseStart: "", leaseEnd: "", owner: "" });
+    anthropicParse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { rows: [row("Joe Park", "L"), row("", "R"), row("Vacant", "R")] } });
+    const r = await parsePortfolioText("Elm St Duplex: Unit L is Joe Park at 1200/mo. Unit R is vacant.");
+    expect(r.rows.map((x) => x.tenant)).toEqual(["Joe Park"]);
   });
 });
 
