@@ -1,2 +1,6 @@
-// Actions, tabs, widgets and agents for the receivables module (registerAction/registerTab/registerWidget/registerAgent).
-export {};
+// Actions, tabs, widgets, metrics and the tour for the receivables module.
+import "./actions";
+import "./metrics";
+import "./tabs";
+import "./widgets";
+import "./tour";
