@@ -36,14 +36,14 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
     if (m) q.set("f.period", m);
     return `/app/gl/journal?${q}`;
   };
-  const chart = data.months.map((m) => ({ month: m, budget: Math.round(data.total.cells[m].budget), actual: data.total.cells[m].actual == null ? null : Math.round(data.total.cells[m].actual!) }));
+  const chart = data.months.map((m) => ({ month: m, label: MONTH(m), budget: Math.round(data.total.cells[m].budget), actual: data.total.cells[m].actual == null ? null : Math.round(data.total.cells[m].actual!) }));
   const worst = (r: BvaRow) => data.closed.map((m) => ({ m, v: (r.cells[m].actual ?? 0) - r.cells[m].budget })).sort((a, b) => (data.type === "Expense" ? b.v - a.v : a.v - b.v)).slice(0, 3);
   const explained = explainKey ? (explainKey.split("@")[0] === "total" ? data.total : data.rows.find((r) => r.id === explainKey.split("@")[0])) : null;
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <ChartCard title={`${data.type}: budget vs actual, ${data.year}`} description={data.propertyName ?? "All properties in your scope"} kind="line" data={chart} x="month"
+        <ChartCard title={`${data.type}: budget vs actual, ${data.year}`} description={data.propertyName ?? "All properties in your scope"} kind="line" data={chart} x="label"
           series={[{ key: "actual", label: "Actual", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]}
           drill={`/app/gl/journal?f.period={month}${data.property ? `&f.property_id=${data.property}` : ""}`} height={220} />
         <section className="rounded-lg border border-tone-ai/25 bg-tone-ai/[0.03] p-3" aria-live="polite">

@@ -154,13 +154,13 @@ registerTab({
     const list = rows.results;
     if (!list.length) return <EmptyState compact kind="chart" title="No readings yet" description="Monthly readings appear here once the meter is read or the utility's bill is imported." />;
     const unit = row.utility === "Electric" ? "kWh" : row.utility === "Gas" ? "therms" : "kgal";
-    const chart = list.slice().reverse().map((r) => ({ month: r.read_on.slice(0, 7), usage: r.usage, cost: r.cost_cents == null ? null : r.cost_cents / 100 }));
+    const chart = list.slice().reverse().map((r) => ({ month: r.read_on.slice(0, 7), label: new Date(`${r.read_on.slice(0, 7)}-15T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }), usage: r.usage, cost: r.cost_cents == null ? null : r.cost_cents / 100 }));
     const avg = list.filter((r) => r.usage != null).reduce((s, r, _, a) => s + Number(r.usage) / a.length, 0);
     return (
       <div className="space-y-3">
         <div className="grid gap-3 lg:grid-cols-2">
-          <ChartCard title={`Usage (${unit}) by month`} kind="bar" data={chart} x="month" series={[{ key: "usage", label: `Usage (${unit})`, format: "count" }]} height={200} />
-          <ChartCard title="Cost by month" kind="line" data={chart} x="month" series={[{ key: "cost", label: "Cost", format: "money" }]} drill={`/app/accounting/utilities/bills?f.period={month}&f.property_id=${String(row.property_id)}`} height={200} />
+          <ChartCard title={`Usage (${unit}) by month`} kind="bar" data={chart} x="label" series={[{ key: "usage", label: `Usage (${unit})`, format: "count" }]} height={200} />
+          <ChartCard title="Cost by month" kind="line" data={chart} x="label" series={[{ key: "cost", label: "Cost", format: "money" }]} drill={`/app/accounting/utilities/bills?f.period={month}&f.property_id=${String(row.property_id)}`} height={200} />
         </div>
         <div className="overflow-hidden rounded-lg border">
           <table className="w-full text-[12.5px] tabular-nums">
