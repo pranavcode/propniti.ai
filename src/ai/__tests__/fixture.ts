@@ -81,6 +81,12 @@ export function openFixture() {
     { id: "bl1", bill_id: "b1", gl_account_id: "gl-6300", description: "Monthly grounds", unit_cents: 64000, amount_cents: 64000 },
     { id: "bl2", bill_id: "b2", gl_account_id: "gl-6100", description: "Drain repair", unit_cents: 22000, amount_cents: 22000 },
   ]);
+  ins(raw, "applicants", [{ id: "apl-1", first_name: "Priyanka", last_name: "Rao", email: "p@rao.example", monthly_income_cents: 600000, created_at: "2026-11-04" }, { id: "apl-2", first_name: "Old", last_name: "Waiter", email: "o@w.example", monthly_income_cents: 300000, created_at: "2026-10-01" }]);
+  ins(raw, "applications", [
+    { id: "app-new", property_id: "p01", unit_id: "u2", applicant_id: "apl-1", stage: "Started", rent_cents: 150000, submitted_at: "2026-11-04T10:00:00Z" },
+    ...Array.from({ length: 12 }, (_, i) => ({ id: `app-old-${i}`, property_id: "p01", unit_id: "u1", applicant_id: "apl-2", stage: "Review", rent_cents: 150000, submitted_at: `2026-10-${String(i + 1).padStart(2, "0")}T10:00:00Z` })),
+  ]);
+  ins(raw, "screening_results", [{ id: "scr-1", application_id: "app-new", applicant_id: "apl-1", property_id: "p01", credit_band: "Excellent", income_verified: 1, decision: "Pass" }]);
   ins(raw, "help_articles", [{ id: "post-late-fee", title: "How to post a late fee", body: "Open the lease ledger, choose Post late fee. The fee is capped by the state rules for the property's state.", tags: '["late fee","receivables"]', route: "/app/receivables/charges", updated_at: "2026-10-01" }]);
   ins(raw, "data_rules", [{ id: "properties.address_format", entity_type: "properties", name: "Address format", severity: "info", description: "Street not in USPS style", check_kind: "sql", check_sql: "SELECT id FROM properties WHERE street GLOB '*[A-Z][A-Z][A-Z]*'" }]);
   ins(raw, "data_issues", [{ id: "di1", rule_id: "properties.address_format", entity_type: "properties", entity_id: "p02", property_id: "p02", detected_at: "2026-11-01", severity: "info", evidence: '{"street":"123 MAIN STREET."}' }]);

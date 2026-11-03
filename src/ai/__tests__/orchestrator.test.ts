@@ -69,6 +69,17 @@ describe("orchestrator, rules only", () => {
     expect(p[2]).toMatchObject({ entity_id: "b2", amount_cents: 22000, assignee_role: "accountant" });
   });
 
+  it("Leasing scores the application named by an application.submitted event first, and records its score", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "leasing", trigger: { kind: "event", input: { application_id: "app-new" } } })).done;
+    const [first] = proposals(raw, r.runId);
+    expect(first).toMatchObject({ entity_id: "app-new", action: "applications.decide", assignee_role: "broker" });
+    expect(first.title).toMatch(/^Approve Priyanka Rao/);
+    expect(String(first.why)).toContain("For: Income is 4.0×");
+    expect(raw.prepare("SELECT recommendation, score, stage FROM applications WHERE workspace_id = ? AND id = 'app-new'").get(WS)).toEqual({ recommendation: "Approve", score: 100, stage: "Started" });
+  });
+
   it("Data Health fills a missing fix and applying it writes the overlay, fix log and issue status", async () => {
     setModelForTests(null);
     const { raw, db } = openFixture();

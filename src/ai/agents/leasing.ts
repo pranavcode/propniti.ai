@@ -1,5 +1,5 @@
 import type { Row } from "@/entities/types";
-import { daysBetween, sql } from "../data";
+import { daysBetween, sql, upsertOverlay } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
 
 // Applicant scoring with plain-English reasons for and against (a broker or manager decides), and
@@ -39,9 +39,11 @@ export default defineAgent({
   entities: ["applications", "applicants", "screening_results", "prospects"],
   actions: ["applications.decide", "prospects.follow_up"],
   maxProposals: 10,
-  async collect(ctx) {
+  async collect(ctx, trigger) {
+    // An application.submitted event names the new application: score it first, whatever its stage.
+    const fresh = (trigger.input as { application_id?: string } | undefined)?.application_id;
     const apps = await ctx.call<{ rows: Row[] }>("records.search", { entity: "applications", filters: [{ field: "stage", op: "in", value: ["Submitted", "Screening", "Review"] }], sort: ["submitted_at", "asc"], size: 25 });
-    const ids = apps.rows.map((a) => String(a.id));
+    const ids = [...new Set([...(fresh ? [fresh] : []), ...apps.rows.map((a) => String(a.id))])];
     const details = ids.length
       ? await sql<Row>(ctx.data,
           `SELECT a.id, a.property_id, a.unit_id, a.rent_cents, a.stage, a.submitted_at, ap.id AS applicant_id, ap.first_name, ap.last_name, ap.monthly_income_cents, ap.employer,
@@ -66,9 +68,17 @@ export default defineAgent({
         facts: { applicant: name, rent_cents: rent, monthly_income_cents: (d.monthly_income_cents as number) ?? null, income_to_rent: Number(s.ratio.toFixed(2)), credit_band: (d.credit_band as string) ?? null, score: s.score, recommendation: s.recommendation },
         evidence: [{ entity_type: "applicants", entity_id: String(d.applicant_id), label: name }, { entity_type: "applications", entity_id: String(d.id), label: `Application ${d.id}` }],
         effects: [{ kind: "update", table: "applications", id: String(d.id), changes: { stage, recommendation: s.recommendation, score: s.score, scoring_factors: JSON.stringify(s.factors), decided_at: new Date().toISOString() } }],
-        priority: 500 + daysBetween(String(d.submitted_at ?? ctx.today).slice(0, 10), ctx.today),
+        priority: (d.id === fresh ? 10_000 : 500) + daysBetween(String(d.submitted_at ?? ctx.today).slice(0, 10), ctx.today),
       };
     });
+    // The new application gets its score and reasons on the record right away (advisory fields only;
+    // the decision stays a proposal for the broker), so the record shows the AI screening summary.
+    const scored = out.find((c) => c.entityId === fresh);
+    if (scored && ctx.ws !== "base") {
+      const changes = (scored.effects[0] as { changes: Record<string, unknown> }).changes;
+      await upsertOverlay(ctx.data, "applications", scored.entityId, { score: changes.score, scoring_factors: changes.scoring_factors, recommendation: changes.recommendation });
+      await ctx.step({ kind: "message", output: { scored: scored.entityId, score: changes.score, recommendation: changes.recommendation }, ok: true });
+    }
 
     const cutoff = new Date(Date.parse(ctx.today) - 3 * 86_400_000).toISOString().slice(0, 10);
     const stale = await ctx.call<{ rows: Row[] }>("records.search", { entity: "prospects", filters: [{ field: "stage", op: "in", value: ["Inquiry", "Contacted", "Toured"] }, { field: "last_contact_at", op: "lt", value: cutoff }], sort: ["last_contact_at", "asc"], size: 10 });
