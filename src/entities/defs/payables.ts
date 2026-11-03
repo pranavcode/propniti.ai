@@ -131,8 +131,6 @@ registerEntity({
     day_of_month: { type: "number", label: "Day of month", list: { default: false, align: "right" } },
     next_on: { type: "date", label: "Next bill", sortable: true, list: { default: true } },
     active: { type: "bool", label: "Active", facet: true, list: { default: true } },
-    billed_12m: { type: "money", label: "Billed (12 mo)", sortable: true, list: { default: false, align: "right" },
-      sql: `(SELECT coalesce(sum(b.amount_cents), 0) FROM {bills} b WHERE b.recurring_bill_id = recurring_bills.id AND b.bill_date >= date(${AS_OF}, '-12 months'))` },
   },
   relations: [
     { name: "vendor", entity: "vendors", fk: "vendor_id", kind: "one" },
@@ -148,7 +146,7 @@ registerEntity({
   detail: {
     facts: ["amount", "frequency", "next_on", "vendor_id", "property_id", "gl_account_id", "active"],
     tabs: [
-      { key: "overview", label: "Overview", fields: ["description", "vendor_id", "property_id", "gl_account_id", "amount", "frequency", "day_of_month", "next_on", "active", "billed_12m"] },
+      { key: "overview", label: "Overview", fields: ["description", "vendor_id", "property_id", "gl_account_id", "amount", "frequency", "day_of_month", "next_on", "active"] },
       { key: "bills", label: "Bills", relation: "bills" },
     ],
     related: ["vendor", "property"],
