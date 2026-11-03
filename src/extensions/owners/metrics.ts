@@ -13,9 +13,9 @@ const addMonths = (ym: string, n: number) => {
   return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
 };
 
-function entityScope(ctx: MetricCtx, alias: string) {
+function entityScope(ctx: MetricCtx, alias: string, col = `${alias}.owner_entity_id`) {
   if (ctx.propertyIds === "all") return { sql: "", binds: [] as unknown[] };
-  return { sql: ` AND EXISTS (SELECT 1 FROM ${effective("properties", ctx.ws)} p WHERE p.owner_entity_id = ${alias}.owner_entity_id AND p.id IN (SELECT value FROM json_each(?)))`, binds: [JSON.stringify(ctx.propertyIds)] };
+  return { sql: ` AND EXISTS (SELECT 1 FROM ${effective("properties", ctx.ws)} p WHERE p.owner_entity_id = ${col} AND p.id IN (SELECT value FROM json_each(?)))`, binds: [JSON.stringify(ctx.propertyIds)] };
 }
 
 async function monthlyDistributions(ctx: MetricCtx, months = 12) {
@@ -72,14 +72,17 @@ registerMetric({
   label: "Owed to owners now",
   roles,
   run: async (ctx) => {
-    const s = entityScope(ctx, "e");
+    const s = entityScope(ctx, "e", "e.id");
     const t = effective("transfers", ctx.ws);
     // Same open-items rule as Lane A's ownerStatement(): everything after the entity's last payout.
+    // Cutoffs are computed once per entity, then CROSS JOIN makes SQLite range-scan transfers_entity
+    // (seq > cutoff) instead of scanning every transfer and re-running the cutoff per row (~100x).
     const r = await ctx.db
-      .prepare(`SELECT coalesce(sum(CASE WHEN x.kind IN ('Rent', 'Other receipt') THEN CASE WHEN x.status = 'Cleared' THEN x.amount_cents ELSE 0 END WHEN x.kind = 'Management fee' THEN CASE WHEN x.status = 'Cleared' THEN -x.amount_cents ELSE 0 END WHEN x.kind = 'Vendor payout' THEN -x.amount_cents ELSE 0 END), 0) AS owed
-        FROM (SELECT e.id AS owner_entity_id FROM ${effective("owner_entities", ctx.ws)} e) e JOIN ${t} x ON x.owner_entity_id = e.owner_entity_id
-        WHERE x.bank_account_id = 'ba-' || e.owner_entity_id || '-trust' AND x.status <> 'Returned' AND x.kind <> 'Owner payout'
-          AND x.seq > coalesce((SELECT max(y.seq) FROM ${t} y WHERE y.owner_entity_id = e.owner_entity_id AND y.kind = 'Owner payout' AND y.status <> 'Returned' AND y.key NOT LIKE 'owner-adj:%'), 0)${s.sql}`)
+      .prepare(`WITH cut AS MATERIALIZED (SELECT e.id, coalesce((SELECT max(y.seq) FROM ${t} y WHERE y.owner_entity_id = e.id AND y.kind = 'Owner payout' AND y.status <> 'Returned' AND y.key NOT LIKE 'owner-adj:%'), 0) AS s
+          FROM ${effective("owner_entities", ctx.ws)} e WHERE 1 = 1${s.sql})
+        SELECT coalesce(sum(CASE WHEN x.kind IN ('Rent', 'Other receipt') THEN CASE WHEN x.status = 'Cleared' THEN x.amount_cents ELSE 0 END WHEN x.kind = 'Management fee' THEN CASE WHEN x.status = 'Cleared' THEN -x.amount_cents ELSE 0 END WHEN x.kind = 'Vendor payout' THEN -x.amount_cents ELSE 0 END), 0) AS owed
+        FROM cut CROSS JOIN ${t} x
+        WHERE x.owner_entity_id = cut.id AND x.seq > cut.s AND x.bank_account_id = 'ba-' || cut.id || '-trust' AND x.status <> 'Returned' AND x.kind <> 'Owner payout'`)
       .bind(...s.binds)
       .first<{ owed: number }>();
     return { value: (r?.owed ?? 0) / 100, points: [], asOf: ctx.asOf, source: "transfers (open statements)" };

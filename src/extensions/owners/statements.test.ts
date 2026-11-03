@@ -1,7 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/platform/types";
 import { openSqlite } from "@/lib/platform/sqlite";
-import { explainLine, periodsOf, statementOf } from "./statements";
+import { getMetric } from "../metrics";
+import type { Actor } from "@/entities/types";
+import { entitiesOf, explainLine, periodsOf, statementOf } from "./statements";
+import "./metrics";
 
 // Runs against the full generated base (in memory), so statements tie to the generator's payouts.
 let db: Db;
@@ -48,5 +51,16 @@ describe("owner statements", () => {
     const owner = (await explainLine(c(), "oe01", "2026-10", "distribution", false))!;
     expect(owner.trace.every((t) => !t.href)).toBe(true);
     expect(await explainLine(c(), "oe01", "1999-01", "rent", true)).toBeNull();
+  });
+
+  it("owed-now equals the sum of every entity's open statement", async () => {
+    let total = 0;
+    for (const e of await entitiesOf(c())) {
+      const [open] = await periodsOf(c(), e.id);
+      total += (await statementOf(c(), e.id, open.period))!.net_cents;
+    }
+    const actor = { personaId: "grace", name: "Grace Kim", role: "accountant", scope: { kind: "org", label: "" }, propertyIds: "all" } as Actor;
+    const m = await getMetric("owners.owed_now")!.run({ db, ws: null, actor, propertyIds: "all", asOf: "2026-11" }, {});
+    expect(Math.round((m.value ?? 0) * 100)).toBe(total);
   });
 });
