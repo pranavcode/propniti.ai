@@ -37,14 +37,6 @@ export const TONE_DOT: Record<Tone, string> = {
   danger: "bg-tone-danger",
   ai: "bg-tone-ai",
 };
-export const TONE_TEXT: Record<Tone, string> = {
-  neutral: "text-tone-neutral",
-  info: "text-tone-info",
-  success: "text-tone-success",
-  warning: "text-tone-warning",
-  danger: "text-tone-danger",
-  ai: "text-tone-ai",
-};
 
 // Sentence case for raw enum values: "pending_approval" → "Pending approval".
 export function humanize(value: unknown): string {

@@ -3,7 +3,7 @@
 import { Building2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/entities/types";
-import { formatDate, formatDue, formatFull, formatMoney, formatNumber, formatPct, formatRelative, initials, type DateInput, type MoneyStyle } from "@/lib/format";
+import { formatDate, formatDue, formatFull, formatMoney, formatPct, formatRelative, initials, type DateInput, type MoneyStyle } from "@/lib/format";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMounted } from "@/hooks/use-mounted";
 import { humanize, TONE_CLASS, TONE_DOT, toneFor } from "./status";
@@ -46,10 +46,6 @@ export function Money({ value, style = "full", tone = "auto", className, cents }
       {dot > 0 ? <>{text.slice(0, dot)}<span className="opacity-60">{text.slice(dot)}</span></> : text}
     </span>
   );
-}
-
-export function Num({ value, compact, className }: { value: number | null | undefined; compact?: boolean; className?: string }) {
-  return <span className={cn("tabular-nums", className)}>{formatNumber(value, { compact })}</span>;
 }
 
 export function Pct({ value, digits, className }: { value: number | null | undefined; digits?: number; className?: string }) {
