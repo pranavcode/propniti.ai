@@ -164,7 +164,7 @@ export async function scopedProperties(c: LeasingCtx) {
 // Renewals workbench
 // ---------------------------------------------------------------------------------------------
 
-export type RenewalRow = { leaseId: string; resident: string; residentId: string | null; property: string; propertyId: string; unit: string; unitType: string; endOn: string; daysLeft: number; rent: number; market: number | null; status: string; offer: { id: string; status: string; rent: number; version: number; sentAt: string | null } | null; agent: { id: string; title: string; runId: string | null; why: string[]; confidence: number; model: string | null } | null };
+export type RenewalRow = { leaseId: string; resident: string; residentId: string | null; property: string; propertyId: string; unit: string; unitType: string; endOn: string; daysLeft: number; rent: number; market: number | null; status: string; offer: { id: string; status: string; rent: number; version: number; sentAt: string | null } | null; agent: { id: string; title: string; runId: string | null; why: string[]; confidence: number; model: string | null; rentCents: number | null } | null };
 
 export async function renewals(c: LeasingCtx, opts: { window: number; status?: string; page: number; size: number }) {
   const s = scope(c, "l.property_id");
@@ -176,7 +176,7 @@ export async function renewals(c: LeasingCtx, opts: { window: number; status?: s
   const [rows, counts] = await Promise.all([
     all(c, `SELECT l.id, l.end_on, l.rent_cents, l.status AS lease_status, l.property_id, p.name AS property, u.number AS unit, ut.name AS unit_type, ut.market_rent_cents,
         r.id AS resident_id, coalesce(r.first_name || ' ' || r.last_name, h.name) AS resident, ${offerSql} AS offer,
-        (SELECT json_object('id', x.id, 'title', x.title, 'run', x.run_id, 'why', json(x.why), 'confidence', x.confidence, 'model', x.model) FROM ${E(c, "ai_proposals")} x WHERE x.agent = 'renewals' AND ((x.entity_type = 'leases' AND x.entity_id = l.id) OR (x.entity_type = 'renewal_offers' AND x.entity_id IN (SELECT o.id FROM ${E(c, "renewal_offers")} o WHERE o.lease_id = l.id))) AND NOT EXISTS (SELECT 1 FROM ${E(c, "ai_decisions")} d WHERE d.proposal_id = x.id) ORDER BY x.created_at DESC LIMIT 1) AS agent
+        (SELECT json_object('id', x.id, 'title', x.title, 'run', x.run_id, 'why', json(x.why), 'confidence', x.confidence, 'model', x.model, 'payload', json(x.payload)) FROM ${E(c, "ai_proposals")} x WHERE x.agent = 'renewals' AND ((x.entity_type = 'leases' AND x.entity_id = l.id) OR (x.entity_type = 'renewal_offers' AND x.entity_id IN (SELECT o.id FROM ${E(c, "renewal_offers")} o WHERE o.lease_id = l.id))) AND NOT EXISTS (SELECT 1 FROM ${E(c, "ai_decisions")} d WHERE d.proposal_id = x.id) ORDER BY x.created_at DESC LIMIT 1) AS agent
       FROM ${E(c, "leases")} l JOIN ${E(c, "properties")} p ON p.id = l.property_id JOIN ${E(c, "units")} u ON u.id = l.unit_id LEFT JOIN ${E(c, "unit_types")} ut ON ut.id = u.unit_type_id
       LEFT JOIN ${E(c, "households")} h ON h.id = l.household_id LEFT JOIN ${E(c, "residents")} r ON r.household_id = l.household_id AND r.is_primary = 1
       WHERE ${where} ORDER BY coalesce(l.end_on, '0000') LIMIT ? OFFSET ?`, [...binds, opts.size, (opts.page - 1) * opts.size]),
@@ -184,15 +184,27 @@ export async function renewals(c: LeasingCtx, opts: { window: number; status?: s
   ]);
   const out: RenewalRow[] = rows.map((r) => {
     const o = r.offer ? String(r.offer).split("|") : null;
-    const a = r.agent ? (JSON.parse(String(r.agent)) as { id: string; title: string; run: string | null; why: string[] | null; confidence: number; model: string | null }) : null;
+    const a = r.agent ? (JSON.parse(String(r.agent)) as { id: string; title: string; run: string | null; why: string[] | null; confidence: number; model: string | null; payload: Record<string, unknown> | null }) : null;
     return {
       leaseId: String(r.id), resident: String(r.resident ?? "Resident"), residentId: (r.resident_id as string) ?? null, property: String(r.property), propertyId: String(r.property_id), unit: String(r.unit), unitType: String(r.unit_type ?? ""),
       endOn: String(r.end_on ?? ""), daysLeft: r.end_on ? Math.round((Date.parse(String(r.end_on)) - Date.parse(AS_OF)) / 86_400_000) : 0, rent: Number(r.rent_cents) / 100,
       market: r.market_rent_cents == null ? null : Number(r.market_rent_cents) / 100, status: o ? o[1] : r.lease_status === "Month-to-month" ? "Month-to-month" : "No offer",
       offer: o ? { id: o[0], status: o[1], rent: Number(o[2]) / 100, version: Number(o[3]), sentAt: o[4] || null } : null,
-      agent: a ? { id: a.id, title: a.title, runId: a.run, why: a.why ?? [], confidence: Number(a.confidence), model: a.model } : null,
+      agent: a ? { id: a.id, title: a.title, runId: a.run, why: a.why ?? [], confidence: Number(a.confidence), model: a.model, rentCents: suggestedCents(a.payload) ?? (/\$([\d,]+)/.exec(a.title) ? Number(/\$([\d,]+)/.exec(a.title)![1].replace(/,/g, "")) * 100 : null) } : null,
     };
   });
   const byStatus = Object.fromEntries(counts.map((x) => [x.st, Number(x.n)]));
   return { rows: out, counts: byStatus, total: Object.values(byStatus).reduce((a, b) => a + b, 0) };
+}
+
+export async function renewalHistory(c: LeasingCtx, leaseId: string) {
+  return all(c, `SELECT id, version, status, rent_cents, term_months, sent_at, responded_at FROM ${E(c, "renewal_offers")} WHERE lease_id = ? ORDER BY version DESC, coalesce(sent_at, '9999') DESC LIMIT 20`, [leaseId]);
+}
+
+// The rent an agent proposal suggests, whichever agent wrote it (seeded, scheduled or on demand).
+export function suggestedCents(payload: Record<string, unknown> | null | undefined): number | null {
+  const p = payload ?? {};
+  const facts = (p.facts ?? {}) as Record<string, unknown>;
+  const v = facts.offer_rent_cents ?? p.rent_cents;
+  return v == null ? null : Number(v);
 }

@@ -6,6 +6,7 @@ import { openRun, runWithContext } from "@/ai/orchestrator";
 import type { AgentCtx } from "@/ai/runtime";
 import { unknownNumbers } from "@/ai/summaries";
 import { checkDraft } from "@/ai/tools/write";
+import { effective } from "@/server/query";
 import { checkFairHousing } from "./fairHousing";
 import { dollars, proposeRenewal, type Reason } from "./pricing";
 
@@ -25,6 +26,9 @@ async function run<T>(actx: ActionContext, agent: "leasing" | "renewals", input:
   const model = r.ctx?.modelUsed.model ?? "rules";
   return { runId, model, source: model === "rules" ? "rules" : "live", result: r.result };
 }
+
+// unit_types isn't in the AI data layer's table list yet (requested); read it through the query layer.
+const UT = (ctx: AgentCtx) => effective("unit_types", ctx.ws);
 
 // Never let a model's wording touch these in a leasing decision or advert.
 const PROTECTED = /\b(race|racial|colou?r|religio\w*|church|national origin|ethnic\w*|immigra\w*|sex|gender|pregnan\w*|child(ren)?|kids|family size|disab\w*|handicap\w*|age|elderly|young|married|marital|single|voucher|section 8)\b/i;
@@ -109,7 +113,7 @@ export async function draftListing(actx: ActionContext, listing: Row): Promise<R
     await ctx.call("records.get", { entity: "listings", id: String(listing.id) });
     const [d] = await sql<Row>(ctx.data,
       `SELECT l.id, l.rent_cents, l.available_on, u.number, u.floor, u.sqft, ut.beds, ut.baths, p.name, p.neighborhood, p.city, p.amenities, p.type, p.year_built
-       FROM {listings} l JOIN {units} u ON u.id = l.unit_id LEFT JOIN {unit_types} ut ON ut.id = u.unit_type_id JOIN {properties} p ON p.id = l.property_id WHERE l.id = ?`, [String(listing.id)], { unscoped: true });
+       FROM {listings} l JOIN {units} u ON u.id = l.unit_id LEFT JOIN ${UT(ctx)} ut ON ut.id = u.unit_type_id JOIN {properties} p ON p.id = l.property_id WHERE l.id = ?`, [String(listing.id)], { unscoped: true });
     if (!d) throw new Error("Listing not found");
     const amenities = JSON.parse(String(d.amenities || "[]")) as string[];
     const beds = Number(d.beds ?? 0);
@@ -140,7 +144,7 @@ export async function renewalFacts(ctx: AgentCtx, leaseId: string): Promise<Rene
     `SELECT l.id, l.unit_id, l.household_id, l.end_on, l.rent_cents, u.number, u.unit_type_id, ut.name AS unit_type, ut.market_rent_cents, p.name AS property,
             (SELECT min(x.start_on) FROM {leases} x WHERE x.household_id = l.household_id AND x.unit_id = l.unit_id) AS first_start,
             r.id AS resident_id, r.first_name, r.last_name
-     FROM {leases} l JOIN {units} u ON u.id = l.unit_id LEFT JOIN {unit_types} ut ON ut.id = u.unit_type_id JOIN {properties} p ON p.id = l.property_id
+     FROM {leases} l JOIN {units} u ON u.id = l.unit_id LEFT JOIN ${UT(ctx)} ut ON ut.id = u.unit_type_id JOIN {properties} p ON p.id = l.property_id
      LEFT JOIN {residents} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ?`, [leaseId]);
   if (!d) throw new Error("Lease not found in your scope");
   const since = new Date(Date.parse(ctx.today) - 365 * 86_400_000).toISOString().slice(0, 10);
