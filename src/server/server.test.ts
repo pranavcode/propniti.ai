@@ -190,6 +190,8 @@ describe("money", { timeout: 60_000 }, () => {
     const austinOnly: Actor = { ...grace, role: "regional_manager", propertyIds: ["p22"] };
     expect(await approveBill({ ...c, actor: austinOnly }, bill!.id)).toMatchObject({ status: 403, error: expect.stringContaining("scope") });
     expect(await distributeOwner({ ...c, actor: marcus }, "oe01", "k-forbidden")).toMatchObject({ status: 403 });
+    const draft = await one<{ id: string }>(`SELECT b.id FROM ${effective("bills")} AS b WHERE b.status = 'Draft' LIMIT 1`, c.ws);
+    expect(await approveBill(c, draft!.id)).toMatchObject({ status: 409 });
     expect(await approveBill(c, bill!.id)).toMatchObject({ status: 200 });
     const before = await available(c.ws, "ba-oe01-trust");
     expect(await payBill(c, bill!.id)).toMatchObject({ status: 200 });

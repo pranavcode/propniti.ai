@@ -109,12 +109,13 @@ export async function settle(db: Db, ws: string, nowMs: number) {
     }
     if (t.kind === "Vendor payout") {
       const ref = String(t.ref);
+      // The ref is a bill or a work order id; each upsert only matches a row that exists.
+      const isBill = !!(await db.prepare(`SELECT 1 FROM ${effective("bills")} AS b WHERE b.id = ?2`).bind(ws, ref).first());
+      const entity = isBill ? "bills" : "work_orders";
       steps.push(
-        ref.startsWith("BILL-")
-          ? db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Paid'" }, pending, "?1", "?3")).bind(ws, id, ref)
-          : db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Paid'" }, pending, "?1", "?3")).bind(ws, id, ref),
-        eventStmt(db, ws, at, "payment.sent", ref.startsWith("BILL-") ? "bills" : "work_orders", ref, String(t.property_id), { transfer_id: id, amount_cents: t.amount_cents, vendor_id: t.to_id }, done(id)),
-        notifyStmt(db, ws, at, String(t.to_id), "Payment sent", `${dollars(Number(t.amount_cents))} for ${ref} has arrived in your account.`, "/portal/vendor/payments", [ref.startsWith("BILL-") ? "bills" : "work_orders", ref], done(id)),
+        db.prepare(overlayUpsertSql(entity, isBill ? BILL_COLS : WO_COLS, { status: "'Paid'" }, pending, "?1", "?3")).bind(ws, id, ref),
+        eventStmt(db, ws, at, "payment.sent", entity, ref, String(t.property_id), { transfer_id: id, amount_cents: t.amount_cents, vendor_id: t.to_id }, done(id)),
+        notifyStmt(db, ws, at, String(t.to_id), "Payment sent", `${dollars(Number(t.amount_cents))} for ${ref} has arrived in your account.`, "/portal/vendor/payments", [entity, ref], done(id)),
       );
     }
     if (t.kind === "Owner payout") {
@@ -298,7 +299,7 @@ export async function approveBill(ctx: ActionContext, billId: string): Promise<O
   if (denied) return denied;
   const at = nowIso(nowMs);
   const [upsert] = await db.batch([
-    db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Approved'", approved_by: "?3", approved_at: "?4" }, "e.status IN ('Pending approval', 'Draft')")).bind(ws, billId, actor.personaId, at),
+    db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Approved'", approved_by: "?3", approved_at: "?4" }, "e.status = 'Pending approval'")).bind(ws, billId, actor.personaId, at),
   ]);
   if (!upsert.meta.changes) return { status: 409, error: `${billId} is already ${bill.status.toLowerCase()}.` };
   await db.batch([
