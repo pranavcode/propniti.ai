@@ -719,10 +719,15 @@ export async function asOfMonth(db: Db): Promise<string> {
 export async function metrics(ctx: QueryCtx, key: string, params: MetricParams = {}): Promise<MetricResult> {
   const m = getMetric(key);
   if (!m) throw new QueryError(404, `Unknown metric "${key}"`);
-  if (m.roles && !m.roles.includes(ctx.actor.role)) throw new QueryError(403, "You can't view this metric");
+  // Metrics are portfolio figures: staff and owners see them by default; residents, vendors and
+  // applicants only when the metric names their role (their scope is per row, not per property).
+  const portal = ctx.actor.role === "resident" || ctx.actor.role === "vendor" || ctx.actor.role === "applicant";
+  if (m.roles ? !m.roles.includes(ctx.actor.role) : portal) throw new QueryError(403, "You can't view this metric");
   if (params.property && ctx.actor.propertyIds !== "all" && !ctx.actor.propertyIds.includes(params.property)) throw new QueryError(403, "That property is outside your scope");
   if (params.month && !/^\d{4}-\d{2}$/.test(params.month)) throw new QueryError(400, "month must be YYYY-MM");
-  return m.run({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, propertyIds: ctx.actor.propertyIds, asOf: await asOfMonth(ctx.db) }, params);
+  // A row-scoped portal user ("self" with no property list) never gets portfolio-wide figures.
+  const propertyIds = ctx.actor.scope.kind === "self" && ctx.actor.propertyIds === "all" ? [] : ctx.actor.propertyIds;
+  return m.run({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, propertyIds, asOf: await asOfMonth(ctx.db) }, params);
 }
 
 // ---------------------------------------------------------------------------------------------

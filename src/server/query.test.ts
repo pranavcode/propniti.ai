@@ -313,6 +313,9 @@ describe("metrics", () => {
     const marcus = await metrics(await ctx("marcus"), "portfolio.noi");
     expect(marcus.value).toBe(950 * 3);
     await expect(metrics(await ctx("marcus"), "portfolio.noi", { property: "p05" })).rejects.toMatchObject({ status: 403 });
+    await expect(metrics(await ctx("vendor"), "portfolio.noi")).rejects.toMatchObject({ status: 403 });
+    await expect(metrics(await ctx("resident"), "portfolio.noi")).rejects.toMatchObject({ status: 403 });
+    expect((await metrics(await ctx("owner"), "portfolio.noi")).value).toBe(950 * 4);
     const byProp = await metrics(await ctx("priya"), "portfolio.by_property");
     expect(byProp.points).toHaveLength(4);
   });
