@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment -- see the next line */
-// @ts-nocheck -- @playwright/test is not a dependency yet (requested from the lead); remove once it is.
 import { expect, test, type BrowserContext } from "@playwright/test";
 
 // Finance flows as Grace Kim (accountant): home briefing → payables aging drill; AP inbox sample
