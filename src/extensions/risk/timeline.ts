@@ -2,6 +2,7 @@ import "server-only";
 import { AS_OF } from "@/entities/common";
 import type { Actor } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
+import { demoNowIso } from "@/lib/clock";
 import { effective } from "@/server/query";
 import { COI_STATUS_SQL, COMPLIANCE_STATUS_SQL, POLICY_STATUS_SQL } from "./sql";
 
@@ -42,5 +43,5 @@ export async function expiries(ctx: { db: Db; ws: string | null; actor: Actor },
     ...pol.results.map(map("policy", "/app/compliance/insurance")),
     ...item.results.map(map("item", "/app/compliance/items")),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
-  return { today: today?.d ?? new Date().toISOString().slice(0, 10), rows };
+  return { today: today?.d ?? demoNowIso().slice(0, 10), rows };
 }
