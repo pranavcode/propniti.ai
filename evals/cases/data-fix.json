@@ -1,0 +1,10 @@
+[
+  { "id": "fix-address-caps", "rule": "properties.address_format", "row": { "street": "123 MAIN STREET." }, "expect": { "changes": { "street": "123 Main St" } } },
+  { "id": "fix-address-dir", "rule": "properties.address_format", "row": { "street": "45 north lamar boulevard" }, "expect": { "changes": { "street": "45 N Lamar Blvd" } } },
+  { "id": "fix-phone-in-email", "rule": "residents.phone_in_email", "row": { "email": "512-555-0199", "phone": "" }, "expect": { "changes": { "phone": "(512) 555-0199", "email": "" } } },
+  { "id": "fix-missing-state", "rule": "properties.missing_zip_state", "row": { "state": "", "metro": "Phoenix" }, "expect": { "changes": { "state": "AZ" } } },
+  { "id": "fix-lease-dates", "rule": "leases.end_before_start", "row": { "start_on": "2026-03-01", "end_on": "2025-02-28", "term_months": 12 }, "expect": { "changes": { "end_on": "2027-02-28" } } },
+  { "id": "fix-bank-change-human", "rule": "vendors.unverified_bank_change", "issue": true, "expect": { "alwaysHuman": true, "risk": "High" } },
+  { "id": "fix-wrong-lease-task", "rule": "payments.wrong_lease", "table": "payments", "issue": true, "expect": { "alwaysHuman": true, "effectKinds": ["task"] } },
+  { "id": "fix-rounding-task", "rule": "owner_distributions.rounding_cent", "table": "owner_distributions", "issue": true, "expect": { "alwaysHuman": true, "effectKinds": ["task"] } }
+]

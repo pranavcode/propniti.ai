@@ -40,7 +40,9 @@ export default defineAgent({
     const input = (trigger.input ?? {}) as { lease_id?: string };
     const res = await ctx.call<{ rows: Delinquent[]; total: number; total_balance_cents: number }>("ledger.delinquency", { min_days: 5, limit: 50 });
     const rows = input.lease_id ? res.rows.filter((r) => r.lease_id === input.lease_id) : res.rows;
-    return rows.map((d): Candidate => {
+    // At most three legal referrals per run, so reminders and plans for newer balances still go out.
+    let legal = 0;
+    return rows.filter((d) => d.days_late <= 90 || legal++ < 3).map((d): Candidate => {
       const facts = {
         resident: d.resident, property: d.property, unit: d.unit, language: d.language, balance_cents: d.balance_cents, days_late: d.days_late,
         oldest_due_on: d.oldest_due_on, aging_90p_cents: d.aging.d90p, installment_cents: Math.ceil(d.balance_cents / 3 / 100) * 100, risk_score: d.risk_score,

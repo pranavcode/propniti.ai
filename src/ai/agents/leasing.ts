@@ -14,7 +14,7 @@ export function scoreApplicant(a: { monthly_income_cents: number | null; rent_ce
   const ratio = a.monthly_income_cents && a.rent_cents ? a.monthly_income_cents / a.rent_cents : 0;
   if (ratio >= 3) factors.push({ factor: "Income", direction: "+", weight: 30, detail: `Income is ${ratio.toFixed(1)}× the rent (3× required)` });
   else if (ratio >= 2.5) factors.push({ factor: "Income", direction: "+", weight: 15, detail: `Income is ${ratio.toFixed(1)}× the rent, a little under the 3× guideline` });
-  else factors.push({ factor: "Income", direction: "-", weight: 25, detail: ratio ? `Income is only ${ratio.toFixed(1)}× the rent` : "No income reported" });
+  else factors.push({ factor: "Income", direction: "-", weight: 15, detail: ratio ? `Income is only ${ratio.toFixed(1)}× the rent` : "No income reported" });
   const credit: Record<string, [number, string]> = { Excellent: [30, "Excellent credit"], Good: [22, "Good credit"], Fair: [10, "Fair credit"], "Thin file": [8, "Thin credit file (little history, not bad history)"], Poor: [-20, "Poor credit"] };
   const [w, label] = credit[a.credit_band ?? ""] ?? [0, "No credit result yet"];
   factors.push({ factor: "Credit", direction: w >= 0 ? "+" : "-", weight: Math.abs(w), detail: label });

@@ -1,0 +1,12 @@
+[
+  { "id": "sum-property-p01", "entity": "properties", "recordId": "p01", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-property-p02", "entity": "properties", "recordId": "p02", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-property-p08", "entity": "properties", "recordId": "p08", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-property-p15", "entity": "properties", "recordId": "p15", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-property-p24", "entity": "properties", "recordId": "p24", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-resident-portal", "entity": "residents", "recordId": "res-p01-0001", "expect": { "noUnknownNumbers": true, "nonEmpty": true, "noPromise": true } },
+  { "id": "sum-vendor-v01", "entity": "vendors", "recordId": "v01", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-vendor-v02", "entity": "vendors", "recordId": "v02", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-property-p30", "entity": "properties", "recordId": "p30", "expect": { "noUnknownNumbers": true, "nonEmpty": true } },
+  { "id": "sum-vendor-v10", "entity": "vendors", "recordId": "v10", "expect": { "noUnknownNumbers": true, "nonEmpty": true } }
+]

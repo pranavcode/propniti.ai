@@ -1,0 +1,9 @@
+[
+  { "id": "score-strong", "input": { "monthly_income_cents": 600000, "rent_cents": 150000, "credit_band": "Excellent", "eviction_found": 0, "criminal_flag": 0, "income_verified": 1 }, "expect": { "recommendation": "Approve", "minScore": 90, "hasFor": "Income is 4.0×" } },
+  { "id": "score-thin-file", "input": { "monthly_income_cents": 480000, "rent_cents": 150000, "credit_band": "Thin file", "eviction_found": 0, "criminal_flag": 0, "income_verified": 1 }, "expect": { "recommendation": "Approve", "hasFor": "Thin credit file" } },
+  { "id": "score-low-income", "input": { "monthly_income_cents": 300000, "rent_cents": 150000, "credit_band": "Good", "eviction_found": 0, "criminal_flag": 0, "income_verified": 1 }, "expect": { "recommendation": "Conditional", "hasAgainst": "only 2.0×" } },
+  { "id": "score-eviction", "input": { "monthly_income_cents": 500000, "rent_cents": 150000, "credit_band": "Fair", "eviction_found": 1, "criminal_flag": 0, "income_verified": 0 }, "expect": { "recommendation": "Deny", "hasAgainst": "Prior eviction" } },
+  { "id": "score-criminal-review", "input": { "monthly_income_cents": 600000, "rent_cents": 150000, "credit_band": "Excellent", "eviction_found": 0, "criminal_flag": 1, "income_verified": 1 }, "expect": { "recommendation": "Conditional", "review": true } },
+  { "id": "score-poor-credit", "input": { "monthly_income_cents": 450000, "rent_cents": 150000, "credit_band": "Poor", "eviction_found": 0, "criminal_flag": 0, "income_verified": 1 }, "expect": { "recommendation": "Conditional", "hasAgainst": "Poor credit" } },
+  { "id": "score-no-income", "input": { "monthly_income_cents": null, "rent_cents": 150000, "credit_band": "Good", "eviction_found": 0, "criminal_flag": 0, "income_verified": 0 }, "expect": { "recommendation": "Deny", "hasAgainst": "No income reported" } }
+]
