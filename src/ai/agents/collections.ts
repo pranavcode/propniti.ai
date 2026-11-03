@@ -4,7 +4,7 @@ import { addDays, defineAgent, money, type Candidate } from "./framework";
 // Delinquency follow-up: a reminder for the recently late, a payment plan offer at 31–90 days,
 // and a legal referral (always a person) past 90 days.
 
-function reminder(d: Delinquent) {
+export function reminder(d: Delinquent) {
   if (d.language === "es") {
     return {
       subject: `Recordatorio de pago — ${d.property} #${d.unit}`,

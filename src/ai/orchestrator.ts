@@ -1,4 +1,4 @@
-import type { Actor, AgentKey } from "@/entities/types";
+import type { ActionKey, Actor, AgentKey } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { allAgents, getAgent } from "./agents";
 import { dueBetween } from "./cron";
@@ -66,31 +66,49 @@ export async function startRun(o: StartOpts): Promise<{ runId: string; done: Pro
 export type RunResult = { runId: string; status: "done" | "failed" | "waiting_approval"; summary: string; proposals: number };
 
 async function executeRun(def: AgentDef, runId: string, o: StartOpts, nowMs: number): Promise<RunResult> {
+  const r = await runWithContext(runId, o, nowMs, def.key, def.autonomy, def.actions, async (ctx) => ({ summary: (await def.run(ctx as unknown as RunContext, o.trigger)).summary, result: null }));
+  return { runId, status: r.status, summary: r.summary, proposals: r.proposals };
+}
+
+// Shared by agent runs and the assistant: builds the run context, records the opening step, runs
+// `body` under the time limit, then closes the run row with status, model, tokens and cost.
+export async function runWithContext<T>(
+  runId: string, o: StartOpts, nowMs: number, agent: AgentKey, defaultAutonomy: Autonomy, actions: ActionKey[],
+  body: (ctx: AgentCtx) => Promise<{ summary: string; result: T }>,
+): Promise<{ status: RunResult["status"]; summary: string; proposals: number; result: T | null; ctx?: AgentCtx }> {
   const { db, ws } = o;
   let ctx: AgentCtx | undefined;
   try {
     const [configs, policies] = await Promise.all([agentConfigs(db, ws), loadPolicies(db, ws)]);
-    const cfg = configs.get(def.key);
     ctx = await createRunContext({
-      db, ws, actor: o.actor, runId, agent: def.key, policies, autonomy: cfg?.autonomy ?? def.autonomy, nowMs,
-      deadlineMs: nowMs + (o.deadlineMs ?? 25_000), waitUntil: o.waitUntil, allowedActions: def.actions,
+      db, ws, actor: o.actor, runId, agent, policies, autonomy: configs.get(agent)?.autonomy ?? defaultAutonomy, nowMs,
+      deadlineMs: nowMs + (o.deadlineMs ?? 25_000), waitUntil: o.waitUntil, allowedActions: actions,
       execute: (data, proposal, by, payload) => executeProposal(data, proposal, by, payload),
     });
     await ctx.step({ kind: "plan", ok: true, output: { trigger: o.trigger.kind, event_id: o.trigger.eventId ?? null, autonomy: ctx.autonomy, model: ctx.model?.info.label ?? "Rules (no model configured)", as_of: ctx.today } });
     const c = ctx;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const hardStop = new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error("Run timed out")), Math.max(5_000, c.deadline - Date.now() + 10_000))));
-    const { summary } = await Promise.race([def.run(ctx as unknown as RunContext, o.trigger), hardStop]).finally(() => clearTimeout(timer));
+    const { summary, result } = await Promise.race([body(ctx), hardStop]).finally(() => clearTimeout(timer));
     const waiting = ctx.proposals.some((p) => !p.duplicate && p.queueState !== "auto_handled");
     const status = waiting ? "waiting_approval" : "done";
     await finish(db, ws, runId, { status, summary, ctx });
-    return { runId, status, summary, proposals: ctx.proposals.filter((p) => !p.duplicate).length };
+    return { status, summary, proposals: ctx.proposals.filter((p) => !p.duplicate).length, result, ctx };
   } catch (err) {
-    console.error(`[ai] run ${runId} (${def.key}) failed:`, errText(err));
+    console.error(`[ai] run ${runId} (${agent}) failed:`, errText(err));
     await ctx?.step({ kind: "message", output: { error: errText(err) }, ok: false }).catch(() => {});
     await finish(db, ws, runId, { status: "failed", error: errText(err), ctx });
-    return { runId, status: "failed", summary: errText(err), proposals: ctx?.proposals.length ?? 0 };
+    return { status: "failed", summary: errText(err), proposals: ctx?.proposals.length ?? 0, result: null, ctx };
   }
+}
+
+// Creates a run row for work that isn't a registered agent loop (the assistant's chat turns).
+export async function openRun(o: StartOpts, nowMs = Date.now()) {
+  const runId = newId("run");
+  await (await insert(o.db, o.ws, "agent_runs", {
+    id: runId, agent_key: o.agent, trigger_kind: o.trigger.kind, event_id: o.trigger.eventId ?? null, started_by: o.actor.personaId, status: "running", started_at: new Date(nowMs).toISOString(),
+  })).run();
+  return runId;
 }
 
 async function finish(db: Db, ws: string, runId: string, r: { status: string; summary?: string; error?: string; ctx?: AgentCtx }) {

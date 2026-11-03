@@ -1,12 +1,14 @@
-import { rateLimit } from "@/lib/guard";
-import { askAssistant } from "@/lib/llm";
-import { AskRequest, parseBody } from "@/lib/requests";
-import type { DemoState } from "@/lib/types";
+import { ask, AskRequest } from "@/ai/assistant";
+import { dataOf, guarded, json, waitUntil, writeSession } from "@/ai/http";
 
+// v1 path, kept for the eval runner and old clients: the same assistant as /api/ai/assistant,
+// with the v1 field names added (suggestedActions, source "mock" when rules answered).
 export async function POST(request: Request) {
-  const limited = await rateLimit(request);
-  if (limited) return limited;
-  const body = await parseBody(request, AskRequest);
-  if (body instanceof Response) return body;
-  return Response.json(await askAssistant(body.question, body.state as DemoState));
+  return guarded(async () => {
+    const w = await writeSession(request, AskRequest, "ai");
+    if (w instanceof Response) return w;
+    const { s, body } = w;
+    const r = await ask({ data: dataOf(s), persona: s.persona, question: body.question, mode: body.mode, threadId: body.threadId, context: body.context, waitUntil });
+    return json({ ...r, suggestedActions: [], source: r.live ? r.model : "mock", label: r.source }, { setCookie: s.setCookie });
+  });
 }
