@@ -221,7 +221,7 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
         const r = await modelLoop(ctx, {
           system:
             `You are Propniti's assistant for ${persona.name} (${persona.title}, scope: ${persona.scope.label}). Answer questions about their portfolio by looking data up with the tools, then reply in a few plain sentences with names and figures. ` +
-            "Money columns end in _cents (divide by 100 and format as dollars). Say what you looked up. If the data doesn't answer it, say so. Never suggest you changed anything: you only read.\n\n" +
+            "Money columns end in _cents (divide by 100 and format as dollars). For a list, start with how many match and the total, then the most important few; a table with every row is shown under your answer. Don't name tools; the person sees what you looked up. If the data doesn't answer it, say so. Never suggest you changed anything: you only read.\n\n" +
             `Tables you can search:\n${await catalog(ctx.db)}` +
             (context?.entity ? `\n\nThe user is looking at ${context.entity} ${context.id ?? ""} (${context.title ?? context.path ?? ""}).` : ""),
           prompt: `${history.results.length ? `Earlier in this conversation (data):\n${history.results.reverse().map((m) => `${m.role}: ${m.content.slice(0, 400)}`).join("\n")}\n\n` : ""}Question: ${question}`,
