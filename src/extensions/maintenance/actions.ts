@@ -17,6 +17,9 @@ import { invoiceInputs, policyFor } from "./queries";
 // double click pays once.
 
 const SUP: Role[] = ["principal", "regional_manager", "property_manager", "maintenance_supervisor"];
+// Vendors reach only their own jobs (portal "self" scope, applied before any handler runs) and only
+// through these actions: accept or decline, add photos, submit an invoice. Never status or amounts directly.
+const SUP_AND_VENDOR: Role[] = [...SUP, "vendor"];
 const ok = (message: string, href?: string): ActionResult => ({ status: 200, message, href });
 const conflict = (error: string): ActionResult => ({ status: 409, error });
 const isOpen = (r: Row) => (OPEN_STATUSES as readonly string[]).includes(String(r.status));
@@ -24,7 +27,8 @@ export const SLA_HOURS: Record<string, number> = { Emergency: 4, Urgent: 24, Nor
 const addHours = (iso: string, h: number) => new Date(Date.parse(iso) + h * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 async function woEvent(c: ActionContext, wo: Row, kind: string, detail: object, status?: string) {
-  return insertStmt(c.db, c.ws, "wo_events", { id: newId("woe"), work_order_id: wo.id, property_id: wo.property_id, at: nowIso(c.nowMs), actor_kind: "staff", actor_id: c.actor.personaId, kind, status: status ?? null, detail });
+  const vendor = c.actor.role === "vendor";
+  return insertStmt(c.db, c.ws, "wo_events", { id: newId("woe"), work_order_id: wo.id, property_id: wo.property_id, at: nowIso(c.nowMs), actor_kind: vendor ? "vendor" : "staff", actor_id: vendor ? wo.vendor_id : c.actor.personaId, kind, status: status ?? null, detail });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -127,6 +131,41 @@ registerAction({
   },
 });
 
+registerAction({
+  key: "work_orders.vendor_accept",
+  label: "Accept job",
+  entity: "work_orders",
+  roles: ["vendor"],
+  icon: CheckCircle2,
+  input: z.strictObject({ scheduled_at: z.string().max(40).refine((s) => !Number.isNaN(Date.parse(s)), "Not a date and time") }),
+  when: (r) => r.status === "Assigned" && !!r.vendor_id,
+  handler: async (c, r, input) => {
+    const at = new Date(input.scheduled_at).toISOString();
+    const [res] = await c.db.batch([await updateStmt(c.db, c.ws, "work_orders", String(r.id), { status: "Scheduled", scheduled_at: at }, `e.status = 'Assigned' AND e.vendor_id = '${String(r.vendor_id).replace(/'/g, "''")}'`)]);
+    if (!res.meta.changes) return conflict(`${r.id} is no longer waiting for you to accept it.`);
+    await (await woEvent(c, r, "Status", { accepted: true, scheduled_at: at }, "Scheduled")).run();
+    return ok(`Accepted. ${r.id} is scheduled.`);
+  },
+});
+
+registerAction({
+  key: "work_orders.vendor_decline",
+  label: "Decline job",
+  entity: "work_orders",
+  roles: ["vendor"],
+  input: z.strictObject({ reason: z.string().trim().min(3).max(300) }),
+  when: (r) => ["Assigned", "Scheduled"].includes(String(r.status)) && !!r.vendor_id,
+  handler: async (c, r, input) => {
+    const [res] = await c.db.batch([await updateStmt(c.db, c.ws, "work_orders", String(r.id), { status: "Triaged", vendor_id: null, scheduled_at: null }, `e.status IN ('Assigned', 'Scheduled') AND e.vendor_id = '${String(r.vendor_id).replace(/'/g, "''")}'`)]);
+    if (!res.meta.changes) return conflict(`${r.id} can't be declined now.`);
+    await c.db.batch([
+      await woEvent(c, r, "Status", { declined: true, reason: input.reason }, "Triaged"),
+      c.db.prepare("INSERT INTO events (workspace_id, id, type, entity_type, entity_id, property_id, payload, created_at) VALUES (?, ?, 'wo.vendor_declined', 'work_orders', ?, ?, ?, ?)").bind(c.ws, newId("evt"), r.id, r.property_id, JSON.stringify({ vendor_id: r.vendor_id, reason: input.reason }), nowIso(c.nowMs)),
+    ]);
+    return ok(`Declined. The property team will reassign ${r.id}.`);
+  },
+});
+
 // ---------------------------------------------------------------------------------------------
 // Technician updates
 // ---------------------------------------------------------------------------------------------
@@ -176,7 +215,7 @@ registerAction({
   key: "work_orders.add_photo",
   label: "Add photo",
   entity: "work_orders",
-  roles: SUP,
+  roles: SUP_AND_VENDOR,
   icon: ImagePlus,
   input: z.strictObject({ url: z.enum(SAMPLE_PHOTOS as [string, ...string[]]), stage: z.enum(["Before", "After", "Evidence"]), caption: z.string().trim().max(200).optional() }),
   handler: async (c, r, input) => {
@@ -223,7 +262,7 @@ registerAction({
   key: "work_orders.submit_invoice",
   label: "Record vendor invoice",
   entity: "work_orders",
-  roles: SUP,
+  roles: SUP_AND_VENDOR,
   icon: DollarSign,
   input: InvoiceInput,
   when: (r) => !!r.vendor_id && ["Assigned", "Scheduled", "In progress", "On hold", "Submitted"].includes(String(r.status)),

@@ -8,6 +8,7 @@ import type { Role } from "../types";
 
 const OPEN = "('Completed', 'Paid', 'Cancelled')";
 const SUP: Role[] = [...OPS, "maintenance_supervisor"];
+const WO_STAFF: Role[] = [...SUP, "leasing_agent"];
 const MAINT_READ: Role[] = [...STAFF];
 const OPEN_LIST = ["New", "Triaged", "Assigned", "Scheduled", "In progress", "On hold", "Submitted"];
 
@@ -24,33 +25,35 @@ registerEntity({
   scopePath: "work_orders.property_id",
   fields: {
     title: { type: "text", label: "Work order", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
-    status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
+    // Status moves through named actions after creation (dispatch, technician updates, invoice, payment).
+    status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, editable: WO_STAFF, enum: [
       { value: "New", tone: "warning" }, { value: "Triaged", tone: "info" }, { value: "Assigned", tone: "info" }, { value: "Scheduled", tone: "info" },
       { value: "In progress", tone: "info" }, { value: "On hold", tone: "warning" }, { value: "Submitted", tone: "warning" },
       { value: "Completed", tone: "success" }, { value: "Paid", tone: "success" }, { value: "Cancelled", tone: "neutral" },
     ] },
-    priority: { type: "enum", label: "Priority", facet: true, required: true, sortable: true, list: { default: true }, enum: [
+    priority: { type: "enum", label: "Priority", facet: true, required: true, sortable: true, list: { default: true }, editable: WO_STAFF, enum: [
       { value: "Emergency", tone: "danger" }, { value: "Urgent", tone: "warning" }, { value: "Normal", tone: "neutral" }, { value: "Low", tone: "neutral" },
     ] },
-    category: { type: "text", label: "Trade", facet: true, required: true, sortable: true, list: { default: true } },
+    category: { type: "text", label: "Trade", facet: true, required: true, sortable: true, list: { default: true }, editable: WO_STAFF },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
     unit_id: { type: "ref", ref: "units", label: "Unit", list: { default: true }, editable: [...OPS, "maintenance_supervisor"] },
     vendor_id: { type: "ref", ref: "vendors", label: "Vendor", facet: true, list: { default: true }, editable: [...OPS, "maintenance_supervisor"] },
     assignee_id: { type: "ref", ref: "staff", label: "Technician", facet: true, list: { default: false }, editable: [...OPS, "maintenance_supervisor"] },
     opened_at: { type: "datetime", label: "Opened", required: true, sortable: true, list: { default: true }, editable: [] },
-    sla_due_at: { type: "datetime", label: "SLA due", sortable: true, list: { default: true } },
+    sla_due_at: { type: "datetime", label: "SLA due", sortable: true, list: { default: true }, editable: WO_STAFF },
     past_sla: { type: "bool", label: "Past SLA", facet: true, list: { default: false },
       sql: `(work_orders.status NOT IN ${OPEN} AND work_orders.sla_due_at IS NOT NULL AND substr(work_orders.sla_due_at, 1, 10) < ${AS_OF})`,
       help: { summary: "Open past its SLA due time. Emergency SLAs are 4 hours, urgent 24, normal 72.", article: "maintenance-triage-agent" } },
     age_days: { type: "number", label: "Age (days)", sortable: true, list: { default: false, align: "right" }, sql: `CAST(julianday(coalesce(work_orders.completed_at, ${AS_OF})) - julianday(work_orders.opened_at) AS INTEGER)` },
-    estimate: { type: "money", label: "Estimate", column: "estimate_cents", sortable: true, list: { default: false, align: "right" } },
+    // Payment amounts derive from estimates, costs and submitted invoices: staff only.
+    estimate: { type: "money", label: "Estimate", column: "estimate_cents", sortable: true, list: { default: false, align: "right" }, editable: SUP },
     cost: { type: "money", label: "Cost", column: "cost_cents", sortable: true, list: { default: true, align: "right" }, editable: [...OPS, "maintenance_supervisor"] },
     source: { type: "enum", label: "Source", facet: true, enum: [
       { value: "Resident", tone: "neutral" }, { value: "Staff", tone: "neutral" }, { value: "Inspection", tone: "neutral" }, { value: "Preventive", tone: "neutral" }, { value: "Turnover", tone: "neutral" },
     ] },
     description: { type: "text", label: "Description", search: true },
     scheduled_at: { type: "datetime", label: "Scheduled", sortable: true },
-    completed_at: { type: "datetime", label: "Completed", sortable: true },
+    completed_at: { type: "datetime", label: "Completed", sortable: true, editable: SUP },
     permission_to_enter: { type: "bool", label: "Permission to enter" },
     pm_schedule_id: { type: "ref", ref: "pm_schedules", label: "Preventive schedule", editable: [] },
     turnover_id: { type: "ref", ref: "turnovers", label: "Turnover", editable: [] },
@@ -118,9 +121,9 @@ registerEntity({
     summaryPrompt: "Summarise this work order for the maintenance supervisor in 2 sentences: what's wrong, where it stands against SLA, and the next step. Use only the facts.",
     agents: ["maintenance_triage", "photo_check", "ap"],
   },
-  permissions: { read: [...STAFF, "vendor", "resident", "owner"], create: [...OPS, "maintenance_supervisor", "leasing_agent", "resident"], update: [...OPS, "maintenance_supervisor", "vendor"], delete: [...LEADERS, "maintenance_supervisor"] },
+  permissions: { read: [...STAFF, "vendor", "resident", "owner"], create: WO_STAFF, update: SUP, delete: [...LEADERS, "maintenance_supervisor"] },
   writes: "generic",
-  actions: ["work_orders.run_triage", "work_orders.dispatch", "work_orders.set_status", "work_orders.log_time", "work_orders.add_photo", "work_orders.check_photos", "work_orders.submit_invoice", "work_orders.approve_and_pay", "work_orders.request_owner_approval"],
+  actions: ["work_orders.vendor_accept", "work_orders.vendor_decline", "work_orders.run_triage", "work_orders.dispatch", "work_orders.set_status", "work_orders.log_time", "work_orders.add_photo", "work_orders.check_photos", "work_orders.submit_invoice", "work_orders.approve_and_pay", "work_orders.request_owner_approval"],
   help: { summary: "Repairs and requests from residents, inspections, preventive schedules and turnovers, tracked against SLA through vendor invoice and payment.", article: "maintenance-triage-agent" },
 });
 

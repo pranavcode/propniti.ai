@@ -27,11 +27,12 @@ export async function invoiceInputs(db: Db, ws: string | null, woId: string) {
 
 // Maintenance spend policy for a property's owner entity, falling back to the org default.
 export async function policyFor(db: Db, ws: string | null, propertyId: string): Promise<(Policy & { id: string; owner_entity_id: string | null }) | null> {
-  return db.prepare(
+  const r = await db.prepare(
     `SELECT a.id, a.owner_entity_id, a.limit_cents, a.owner_approval_over_cents, a.approver_role FROM ${wsEffective("approval_policies")} a
      WHERE a.category = 'Maintenance spend' AND (a.owner_entity_id = (SELECT p.owner_entity_id FROM ${wsEffective("properties")} p WHERE p.id = ?2) OR a.owner_entity_id IS NULL)
      ORDER BY a.owner_entity_id IS NULL LIMIT 1`,
-  ).bind(ws ?? "~", propertyId).first();
+  ).bind(ws ?? "~", propertyId).first<Policy & { id: string; owner_entity_id: string | null }>();
+  return r ? { ...r } : null;
 }
 
 export type RankedVendor = { id: string; company: string; trade: string; rating: number | null; open_jobs: number; on_time: number | null; median_cents: number | null; coi_expires: string | null; coi_ok: boolean; score: number; status: string };

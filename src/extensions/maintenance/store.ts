@@ -17,8 +17,9 @@ export function scoped(propertyIds: Actor["propertyIds"], col: string) {
   return propertyIds === "all" ? { sql: "", binds: [] as unknown[] } : { sql: ` AND ${col} IN (SELECT value FROM json_each(?))`, binds: [JSON.stringify(propertyIds)] as unknown[] };
 }
 
+// Rows from node:sqlite have a null prototype; copy them so they can be passed to client components.
 export async function all<T = Row>(db: Db, sql: string, binds: unknown[] = []): Promise<T[]> {
-  return (await db.prepare(sql).bind(...binds).all<T>()).results;
+  return (await db.prepare(sql).bind(...binds).all<T>()).results.map((r) => ({ ...r }));
 }
 
 const colsCache = new Map<string, string[]>();
