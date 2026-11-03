@@ -38,7 +38,7 @@ export default async function IntegrationsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{i.name}</span><StatusBadge value={status} tone={TONE[status] ?? "neutral"} /></div>
                       <p className="mt-0.5 text-[12.5px] text-muted-foreground">{i.description}</p>
-                      <p className="mt-1.5 text-[12px]">{status === "Not connected" ? <span className="text-muted-foreground">Not connected</span> : i.detail}</p>
+                      {status !== "Not connected" && <p className="mt-1.5 text-[12px]">{i.key === "plaid" && banks.length ? `${banks.length} accounts at ${[...new Set(banks.map((b) => b.bank))].join(", ")}` : i.detail}</p>}
                       {s && <p className="mt-0.5 text-[11.5px] text-muted-foreground">{s.status === "Connected" ? "Connected" : "Changed"} by {s.by} <RelativeDate value={s.at} /></p>}
                       {i.key === "plaid" && status === "Connected" && banks.length > 0 && (
                         <details className="mt-2 text-[12px]">

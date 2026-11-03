@@ -47,20 +47,20 @@ export default async function AiSettingsPage() {
           <div className="overflow-x-auto rounded-lg border bg-card">
             <table className="w-full text-[13px]">
               <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
-                <tr><th className="px-3 py-2 font-medium">Agent</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Autonomy</th><th className="px-3 py-2 text-right font-medium">Runs (30 days)</th><th className="px-3 py-2 text-right font-medium">Success</th><th className="px-3 py-2 text-right font-medium">Waiting on people</th><th className="px-3 py-2 font-medium">Last run</th></tr>
+                <tr className="whitespace-nowrap"><th className="px-3 py-2 font-medium">Agent</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Autonomy</th><th className="px-3 py-2 text-right font-medium">Runs, 30 days</th><th className="px-3 py-2 text-right font-medium">Success</th><th className="px-3 py-2 text-right font-medium">Waiting</th><th className="px-3 py-2 font-medium">Last run</th></tr>
               </thead>
               <tbody>
                 {agents.map((a) => {
                   const au = AUTONOMY[a.autonomy] ?? { label: a.autonomy, tone: "neutral" as const };
                   return (
                     <tr key={a.key} className="border-t">
-                      <td className="px-3 py-2"><div className="font-medium">{a.name}</div><div className="max-w-md truncate text-[12px] text-muted-foreground">{a.goal}</div></td>
+                      <td className="px-3 py-2"><div className="font-medium">{a.name}</div><div className="max-w-[26rem] truncate text-[12px] text-muted-foreground" title={a.goal}>{a.goal}</div></td>
                       <td className="px-3 py-2"><StatusBadge value={a.enabled ? "On" : "Off"} tone={a.enabled ? "success" : "neutral"} /></td>
                       <td className="px-3 py-2"><StatusBadge value={au.label} tone={au.tone} /></td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.runs30}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.successRate == null ? "—" : `${a.successRate}%`}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.pending ? <Link href={`/app/ai/approvals?agent=${a.key}`} className="text-primary hover:underline">{a.pending}</Link> : 0}</td>
-                      <td className="px-3 py-2 text-[12.5px]">{a.lastRun ? <Link href={`/app/ai/runs/${a.lastRun.id}`} className="hover:text-primary hover:underline"><RelativeDate value={a.lastRun.started_at} /></Link> : "Never"}</td>
+                      <td className="px-3 py-2 text-[12.5px] whitespace-nowrap">{a.lastRun ? <Link href={`/app/ai/runs/${a.lastRun.id}`} className="hover:text-primary hover:underline"><RelativeDate value={a.lastRun.started_at} /></Link> : "Never"}</td>
                     </tr>
                   );
                 })}

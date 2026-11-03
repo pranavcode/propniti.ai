@@ -22,8 +22,8 @@ registerEntity({
   scopePath: null,
   fields: {
     name: { type: "text", label: "Name", required: true, search: true, sortable: true, list: { default: true, width: 220 } },
-    title: { type: "text", label: "Title", required: true, search: true, sortable: true, list: { default: true } },
-    email: { type: "text", label: "Email", required: true, search: true, list: { default: true } },
+    title: { type: "text", label: "Title", required: true, search: true, sortable: true, list: { default: false } },
+    email: { type: "text", label: "Email", required: true, search: true, list: { default: false } },
     role: { type: "enum", label: "Role", facet: true, sortable: true, list: { default: true }, enum: ROLE_ENUM,
       sql: "(SELECT ra.role FROM {role_assignments} ra WHERE ra.staff_id = staff.id ORDER BY ra.id LIMIT 1)" },
     scope: { type: "text", label: "Scope", list: { default: true },
