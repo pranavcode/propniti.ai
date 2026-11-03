@@ -152,8 +152,8 @@ registerEntity({
     cam: { type: "money", label: "CAM estimate", column: "cam_cents" },
     tax: { type: "money", label: "Tax estimate", column: "tax_cents" },
     insurance: { type: "money", label: "Insurance estimate", column: "insurance_cents" },
-    signed_by: { type: "ref", ref: "staff", label: "Signed by", editable: ["broker", "principal"] },
-    signed_at: { type: "datetime", label: "Signed", editable: ["broker", "principal"] },
+    signed_by: { system: true, type: "ref", ref: "staff", label: "Signed by", editable: ["broker", "principal"] },
+    signed_at: { system: true, type: "datetime", label: "Signed", editable: ["broker", "principal"] },
     open_issues: issuesField("leases"),
   },
   relations: [
@@ -457,7 +457,7 @@ registerEntity({
   fields: {
     title: { type: "text", label: "Announcement", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, list: { default: true }, editable: [], sql: "json_extract(announcements.audience, '$.property_ids[0]')" },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+    status: { system: true, initial: ["Draft"], type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Draft", tone: "neutral" }, { value: "Scheduled", tone: "info" }, { value: "Sent", tone: "success" },
     ] },
     send_at: { type: "datetime", label: "Send at", sortable: true, list: { default: true } },
@@ -467,7 +467,7 @@ registerEntity({
     channels: { type: "json", label: "Channels", editable: [] },
     audience: { type: "json", label: "Audience", editable: [] },
     body: { type: "text", label: "Message", required: true, search: true },
-    created_by: { type: "ref", ref: "staff", label: "Created by", editable: [] },
+    created_by: { system: true, type: "ref", ref: "staff", label: "Created by", editable: [] },
   },
   relations: [],
   list: { defaultSort: ["send_at", "desc"], statusTabs: "status" },
