@@ -94,7 +94,7 @@ export function formFields(def: EntityDef, role: Role, mode: "create" | "update"
       label: f.label,
       type: f.type,
       required: mode === "create" && f.required,
-      options: f.enum?.map((e) => ({ value: e.value, label: e.label ?? e.value })),
+      options: (f.system ? f.enum?.filter((e) => f.initial?.includes(e.value)) : f.enum)?.map((e) => ({ value: e.value, label: e.label ?? e.value })),
       refEntity: ref?.key,
       refRoute: ref?.route,
       help: f.help?.summary,

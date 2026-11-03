@@ -412,6 +412,7 @@ export type WriteCtx = QueryCtx & { ws: string; nowMs: number };
 // set once at create (e.g. a unit's property) and never changed through the generic API.
 export function editable(role: Role, key: string, f: FieldDef, mode: "create" | "update") {
   if (key === "id" || f.sql || f.type === "image" || f.hiddenFor?.includes(role)) return false;
+  if (f.system) return mode === "create" && !!f.initial?.length;
   if (!f.editable) return true;
   return f.editable.length ? f.editable.includes(role) : mode === "create";
 }
@@ -436,6 +437,11 @@ export function writeSchema(def: EntityDef, role: Role, mode: "create" | "update
   const shape: Record<string, ZodType> = {};
   for (const [key, f] of Object.entries(def.fields)) {
     if (!editable(role, key, f, mode)) continue;
+    // A system field on create takes only its initial values (and defaults to the first).
+    if (f.system) {
+      shape[key] = z.enum(f.initial as [string, ...string[]]).optional();
+      continue;
+    }
     const base = fieldZod(f);
     shape[key] = mode === "create" && f.required ? base : base.nullable().optional();
   }
@@ -447,6 +453,21 @@ const newId = (def: EntityDef) => `${def.key.slice(0, 3)}-${crypto.randomUUID().
 async function rawRow(db: Db, table: string, ws: string, id: string) {
   return db.prepare(`SELECT * FROM ${effective(table, ws)} WHERE id = ?`).bind(id).first<Row>();
 }
+
+// Same rule as writeSchema, for callers that pass a body without the HTTP schema (AI tools,
+// module code): system fields only take their initial values on create, never on edit.
+function assertSystem(def: EntityDef, body: Record<string, unknown>, mode: "create" | "update") {
+  for (const [key, v] of Object.entries(body)) {
+    const f = def.fields[key];
+    if (!f) throw new QueryError(400, `Unknown field "${key}" on ${def.key}`);
+    if (!f.system || v === undefined) continue;
+    if (mode === "update" || !f.initial?.includes(String(v))) throw new QueryError(400, `${f.label} changes only through its actions`);
+  }
+}
+
+// Initial values for system fields a create didn't set.
+const systemDefaults = (def: EntityDef) =>
+  Object.fromEntries(Object.entries(def.fields).filter(([, f]) => f.system && f.initial?.length && !f.sql).map(([k, f]) => [ident(f.column ?? k), f.initial![0]]));
 
 function changesToColumns(def: EntityDef, body: Record<string, unknown>) {
   const cols: Record<string, unknown> = {};
@@ -530,9 +551,10 @@ const constraintError = (e: unknown) => {
 export async function createRecord(ctx: WriteCtx, entity: string, body: Record<string, unknown>): Promise<Row> {
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "create");
+  assertSystem(def, body, "create");
   await assertRefs(ctx, def, body);
   const id = newId(def);
-  const row: Row = { workspace_id: ctx.ws, id, ...changesToColumns(def, body) };
+  const row: Row = { workspace_id: ctx.ws, id, ...systemDefaults(def), ...changesToColumns(def, body) };
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, row), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "created", pidOf(def, row), null, row, `Created ${def.label.one.toLowerCase()}`)]);
   } catch (e) {
@@ -546,6 +568,7 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "update");
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
+  assertSystem(def, body, "update");
   await assertRefs(ctx, def, body);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
   const changes = changesToColumns(def, body);

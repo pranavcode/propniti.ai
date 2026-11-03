@@ -281,6 +281,23 @@ describe("writes", () => {
     }
   });
 
+  it("lets only actions set system fields; create takes their initial values", async () => {
+    const units = getEntity("units")!;
+    registerEntity({ ...units, fields: { ...units.fields, status: { ...units.fields.status, system: true, initial: ["Vacant", "Make-ready"] } } });
+    try {
+      const def = getEntity("units")!;
+      expect(writeSchema(def, "property_manager", "update").safeParse({ status: "Occupied" }).success).toBe(false);
+      expect(writeSchema(def, "property_manager", "create").safeParse({ number: "1", property_id: "p01", status: "Occupied" }).success).toBe(false);
+      expect(writeSchema(def, "property_manager", "create").safeParse({ number: "1", property_id: "p01", status: "Make-ready" }).success).toBe(true);
+      // The query layer enforces it too, for callers that skip the HTTP schema.
+      await expect(updateRecord(await wctx("marcus"), "units", "p01-u3", { status: "Occupied" })).rejects.toMatchObject({ status: 400 });
+      await expect(createRecord(await wctx("marcus"), "units", { number: "90", property_id: "p02", sqft: 1, status: "Occupied" })).rejects.toMatchObject({ status: 400 });
+      expect((await createRecord(await wctx("marcus"), "units", { number: "91", property_id: "p02", sqft: 1 })).status).toBe("Vacant");
+    } finally {
+      registerEntity(units);
+    }
+  });
+
   it("can't update or delete a record outside scope", async () => {
     await expect(updateRecord(await wctx("marcus"), "units", "p05-u1", { sqft: 1 })).rejects.toMatchObject({ status: 404 });
     await expect(deleteRecord(await wctx("priya"), "units", "p05-u1")).rejects.toMatchObject({ status: 404 });

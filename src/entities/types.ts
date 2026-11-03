@@ -116,7 +116,12 @@ export type FieldDef = {
   search?: boolean;                      // included in the q= full-text search
   sortable?: boolean;
   sql?: string;                          // computed column; whitelisted because it lives in a def
-  editable?: Role[];                     // roles that may change it via PATCH (writes: "generic")
+  editable?: Role[];                     // roles that may set it (create and PATCH); [] = set once at create
+  // Workflow fields (status beyond its first state, decisions, approvals, sent/paid markers): only
+  // named actions set them; generic create and PATCH refuse them. `initial` lists the values a
+  // generic create may give it (the first is the default when omitted), e.g. ["Draft"].
+  system?: boolean;
+  initial?: string[];
   hiddenFor?: Role[];
   help?: HelpMeta;
 };
