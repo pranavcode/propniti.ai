@@ -39,8 +39,12 @@ registerMetric({
   key: "accounting.unreconciled",
   label: "Unreconciled items",
   run: async (ctx) => {
+    // Scoped actors see the accounts of owner entities that own one of their properties.
+    const s = scoped(ctx, "p.id");
+    const accounts = ctx.propertyIds === "all" ? "" : ` AND r.bank_account_id IN (SELECT a.id FROM ${effective("bank_accounts", ctx.ws)} a WHERE a.owner_entity_id IN (SELECT p.owner_entity_id FROM ${effective("properties", ctx.ws)} p WHERE 1 = 1${s.sql}))`;
     const r = await ctx.db
-      .prepare(`SELECT i.status, count(*) AS n FROM ${effective("reconciliation_items", ctx.ws)} i JOIN ${effective("bank_reconciliations", ctx.ws)} r ON r.id = i.reconciliation_id WHERE r.status = 'Open' AND i.status IN ('Suggested', 'Unmatched') GROUP BY i.status`)
+      .prepare(`SELECT i.status, count(*) AS n FROM ${effective("reconciliation_items", ctx.ws)} i JOIN ${effective("bank_reconciliations", ctx.ws)} r ON r.id = i.reconciliation_id WHERE r.status = 'Open' AND i.status IN ('Suggested', 'Unmatched')${accounts} GROUP BY i.status`)
+      .bind(...s.binds)
       .all<{ status: string; n: number }>();
     const n = (s: string) => r.results.find((x) => x.status === s)?.n ?? 0;
     return { value: n("Suggested") + n("Unmatched"), points: [{ label: "AI suggested", status: "Suggested", count: n("Suggested") }, { label: "Unmatched", status: "Unmatched", count: n("Unmatched") }], source: "reconciliation items (live)" };

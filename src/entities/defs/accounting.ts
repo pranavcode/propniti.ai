@@ -13,6 +13,12 @@ const BOOK = (account: string) => `(coalesce((SELECT cleared_cents FROM base_bal
   + coalesce((SELECT sum(CASE WHEN t.kind IN ('Rent', 'Deposit', 'Other receipt') THEN CASE WHEN t.status = 'Cleared' THEN t.amount_cents ELSE 0 END ELSE -t.amount_cents END)
      FROM {transfers} t WHERE t.workspace_id <> 'base' AND t.bank_account_id = ${account} AND t.status <> 'Returned'), 0))`;
 
+// Bank records belong to an owner entity, not a property. They are scoped through one property of
+// that entity (properties_entity index). Every owner entity sits in a single region and only org-
+// and region-scoped roles read banking, so this equals "any of the entity's properties is in
+// scope". The management company's own account (no entity) gives NULL: org-wide roles only.
+const ENTITY_PROPERTY = (entity: string) => `(SELECT min(p.id) FROM {properties} p WHERE p.owner_entity_id = ${entity})`;
+
 const itemCount = (status: string) => `(SELECT count(*) FROM {reconciliation_items} i WHERE i.reconciliation_id = bank_reconciliations.id AND i.status = '${status}')`;
 
 registerEntity({
@@ -25,7 +31,7 @@ registerEntity({
   route: "/app/banking/accounts",
   titleField: "name",
   subtitle: (r) => [r.bank, r.last4 ? `••${r.last4}` : null].filter(Boolean).join(" · "),
-  scopePath: null,
+  scopePath: ENTITY_PROPERTY("bank_accounts.owner_entity_id"),
   fields: {
     name: { type: "text", label: "Account", search: true, sortable: true, list: { default: true, width: 280 } },
     kind: { type: "enum", label: "Type", facet: true, sortable: true, list: { default: true }, enum: [{ value: "Trust", tone: "info" }, { value: "Deposit", tone: "neutral" }, { value: "Operating", tone: "neutral" }],
@@ -74,7 +80,7 @@ registerEntity({
   route: "/app/banking/transactions",
   titleField: "description",
   subtitle: (r) => [r.bank_account_id__label, r.posted_on].filter(Boolean).join(" · "),
-  scopePath: null,
+  scopePath: ENTITY_PROPERTY("(SELECT a.owner_entity_id FROM {bank_accounts} a WHERE a.id = bank_transactions.bank_account_id)"),
   fields: {
     description: { type: "text", label: "Description", search: true, sortable: true, list: { default: true, width: 320 } },
     posted_on: { type: "date", label: "Posted", sortable: true, list: { default: true } },
@@ -117,7 +123,7 @@ registerEntity({
   route: "/app/banking/reconciliations",
   titleField: "title",
   subtitle: (r) => [r.status, r.period].filter(Boolean).join(" · "),
-  scopePath: null,
+  scopePath: ENTITY_PROPERTY("(SELECT a.owner_entity_id FROM {bank_accounts} a WHERE a.id = bank_reconciliations.bank_account_id)"),
   fields: {
     title: { type: "text", label: "Reconciliation", sortable: true, list: { default: true, width: 300 },
       sql: "coalesce((SELECT a.name FROM {bank_accounts} a WHERE a.id = bank_reconciliations.bank_account_id), bank_reconciliations.bank_account_id) || ' · ' || bank_reconciliations.period" },
