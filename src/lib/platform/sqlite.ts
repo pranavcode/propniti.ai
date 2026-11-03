@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { ensureBase } from "@/server/base";
 import type { Db, DbResult, DbStatement } from "./types";
 
 // D1-compatible wrapper over node:sqlite for the Node/Docker build and tests.
@@ -58,10 +59,13 @@ export function applyMigrations(raw: DatabaseSync, dir = join(/* turbopackIgnore
   }
 }
 
+// Opens the database, applies migrations and loads the generated base dataset when it is missing
+// or from an older generator (ensureBase).
 export function openSqlite(path: string, migrationsDir?: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const raw = new DatabaseSync(path);
   raw.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000");
   applyMigrations(raw, migrationsDir);
+  ensureBase(raw);
   return sqliteDb(raw);
 }
