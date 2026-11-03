@@ -1,15 +1,11 @@
 import type { Row } from "@/entities/types";
 import { daysBetween, sql } from "../data";
 import { addDays, defineAgent, money, type Candidate } from "./framework";
+import { renewalRent } from "../rules";
+export { renewalRent } from "../rules";
 
 // Renewal offers for leases ending in the next 90 days that have no offer yet. Pricing: move toward
 // market rent, capped at +5%; never raise a resident who is behind on rent without a person.
-
-export function renewalRent(current: number, market: number | null) {
-  if (!market || market <= current) return { rent: current, reason: market ? `Market rent ${money(market)} is at or below current rent; hold rent flat` : "No market rent on file; hold rent flat" };
-  const capped = Math.min(market, Math.round((current * 1.05) / 500) * 500);
-  return { rent: Math.max(current, capped), reason: `Market rent is ${money(market)}; move toward it, capped at +5%` };
-}
 
 export default defineAgent({
   key: "renewals",

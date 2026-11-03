@@ -2,61 +2,13 @@ import type { Row } from "@/entities/types";
 import { effective } from "@/server/query";
 import { fixProposal } from "../tools/write";
 import { defineAgent, type Candidate } from "./framework";
+import { computeFix } from "../rules";
+export { computeFix, normalizeStreet, phoneInEmail } from "../rules";
 
 // Detects and fixes data problems. Detection re-runs each enabled SQL rule (read-only) and reports
 // how many records it flags; fixes come from data_issues.suggested_fix, filled in by the helpers
 // below when the rule left it empty. Safe fixes (formatting, typos) can auto-apply within policy;
 // money, fraud and legal fixes always go to a person.
-
-const SUFFIX: Record<string, string> = { STREET: "St", ST: "St", AVENUE: "Ave", AVE: "Ave", BOULEVARD: "Blvd", BLVD: "Blvd", DRIVE: "Dr", DR: "Dr", ROAD: "Rd", RD: "Rd", LANE: "Ln", LN: "Ln", PARKWAY: "Pkwy", PKWY: "Pkwy", COURT: "Ct", CT: "Ct", PLACE: "Pl", PL: "Pl", HIGHWAY: "Hwy", HWY: "Hwy", TRAIL: "Trl", CIRCLE: "Cir" };
-const DIR: Record<string, string> = { NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W", N: "N", S: "S", E: "E", W: "W" };
-
-// USPS-style street line: title case, standard suffix and direction abbreviations, no trailing period.
-export function normalizeStreet(s: string) {
-  return s
-    .replace(/[.,]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .map((w, i, all) => {
-      const u = w.toUpperCase();
-      if (i === all.length - 1 && SUFFIX[u]) return SUFFIX[u];
-      if (DIR[u] && (i === 1 || i === all.length - 1)) return DIR[u];
-      if (/^\d/.test(w)) return u;
-      return u.charAt(0) + u.slice(1).toLowerCase();
-    })
-    .join(" ");
-}
-
-const PHONE = /^\+?1?[\s.-]?\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})$/;
-export function phoneInEmail(email: string) {
-  const m = email.trim().match(PHONE);
-  return m ? { phone: `(${m[1]}) ${m[2]}-${m[3]}`, email: "" } : null;
-}
-
-const METRO_STATE: Record<string, string> = { Austin: "TX", Dallas: "TX", Atlanta: "GA", Phoenix: "AZ" };
-
-// Fills a fix the rule didn't supply, from the record itself. Returns null when a person must decide.
-export function computeFix(rule: string, row: Row): { changes: Record<string, unknown>; why: string[]; confidence: number } | null {
-  if (rule === "properties.address_format" && typeof row.street === "string") {
-    const street = normalizeStreet(row.street);
-    return street !== row.street ? { changes: { street }, why: [`"${row.street}" → "${street}" (USPS style)`], confidence: 0.95 } : null;
-  }
-  if (rule === "residents.phone_in_email" && typeof row.email === "string") {
-    const f = phoneInEmail(row.email);
-    return f ? { changes: { phone: row.phone || f.phone, email: f.email }, why: [`The email field holds a phone number (${row.email}); move it to phone and ask the resident for an email`], confidence: 0.93 } : null;
-  }
-  if (rule === "properties.missing_zip_state" && !row.state && typeof row.metro === "string" && METRO_STATE[row.metro]) {
-    return { changes: { state: METRO_STATE[row.metro] }, why: [`${row.metro} properties are in ${METRO_STATE[row.metro]}`], confidence: 0.9 };
-  }
-  if (rule === "leases.end_before_start" && typeof row.start_on === "string" && typeof row.end_on === "string" && row.end_on < row.start_on) {
-    const months = Number(row.term_months ?? 12);
-    const d = new Date(row.start_on + "T00:00:00Z");
-    d.setUTCMonth(d.getUTCMonth() + months);
-    d.setUTCDate(d.getUTCDate() - 1);
-    return { changes: { end_on: d.toISOString().slice(0, 10) }, why: [`End date ${row.end_on} is before the start ${row.start_on}; set it to start + ${months} months`], confidence: 0.85 };
-  }
-  return null;
-}
 
 const SEVERITY: Record<string, number> = { critical: 3, warn: 2, info: 1 };
 

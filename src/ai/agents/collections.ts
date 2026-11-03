@@ -1,29 +1,10 @@
 import type { Delinquent } from "../facts";
 import { addDays, defineAgent, money, type Candidate } from "./framework";
+import { planMessage, reminder } from "../rules";
+export { reminder } from "../rules";
 
 // Delinquency follow-up: a reminder for the recently late, a payment plan offer at 31–90 days,
 // and a legal referral (always a person) past 90 days.
-
-export function reminder(d: Delinquent) {
-  if (d.language === "es") {
-    return {
-      subject: `Recordatorio de pago — ${d.property} #${d.unit}`,
-      body: `Hola ${d.resident.split(" ")[0]}, su cuenta en ${d.property} #${d.unit} tiene un saldo de ${money(d.balance_cents)}, vencido desde ${d.oldest_due_on}. Puede pagar en el portal de residentes. Si ya pagó, ignore este mensaje. Si necesita hablar de un plan de pago, responda a este correo.`,
-    };
-  }
-  return {
-    subject: `Rent reminder — ${d.property} #${d.unit}`,
-    body: `Hi ${d.resident.split(" ")[0]}, your account at ${d.property} #${d.unit} shows a balance of ${money(d.balance_cents)}, past due since ${d.oldest_due_on}. You can pay in the resident portal. If you've already paid, please ignore this. If you'd like to talk about a payment plan, just reply.`,
-  };
-}
-
-function planMessage(d: Delinquent, installment: number) {
-  const first = d.resident.split(" ")[0];
-  if (d.language === "es") {
-    return { subject: `Un plan de pagos para su saldo en ${d.property}`, body: `Hola ${first}, su saldo en ${d.property} #${d.unit} es de ${money(d.balance_cents)}. Podemos dividirlo en tres pagos mensuales de aproximadamente ${money(installment)}. Responda para organizarlo, o pague en el portal de residentes.` };
-  }
-  return { subject: `A payment plan for your balance at ${d.property}`, body: `Hi ${first}, your balance at ${d.property} #${d.unit} is ${money(d.balance_cents)}. We can split it into three monthly payments of about ${money(installment)}. Reply to set it up, or pay in the resident portal.` };
-}
 
 export default defineAgent({
   key: "collections",

@@ -1,6 +1,6 @@
 import type { ActionKey, Actor, AgentKey } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
-import { allAgents, getAgent } from "./agents";
+import { allAgents, getAgent } from "./agents/registry";
 import { dueBetween } from "./cron";
 import { eff, insert, newId, parseJson, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
@@ -17,7 +17,12 @@ export const SWEEP_EVERY_MS = 15 * 60_000;
 
 export type AgentConfig = { key: AgentKey; enabled: boolean; autonomy: Autonomy; schedule?: string; events: EventType[]; approvalPolicyId: string | null; model: string | null };
 
+// The agent modules load on first use, not at import: extensions import the orchestrator, and agent
+// modules reach @/entities, so a static import here would be an import cycle.
+export const loadAgents = () => import("./agents");
+
 export async function agentConfigs(db: Db, ws: string): Promise<Map<AgentKey, AgentConfig>> {
+  await loadAgents();
   const e = eff("agent_definitions", ws);
   const { results } = await db.prepare(`SELECT * FROM ${e.sql} t`).bind(...e.params).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] }));
   const rows = new Map(results.map((r) => [String(r.id), r]));
@@ -50,6 +55,7 @@ export type StartOpts = {
 // Creates the run row right away (so the UI can open its trace) and runs it in the background
 // when waitUntil is given; otherwise the returned promise finishes the run.
 export async function startRun(o: StartOpts): Promise<{ runId: string; done: Promise<RunResult> }> {
+  await loadAgents();
   const def = getAgent(o.agent);
   if (!def) throw new Error(`Unknown agent ${o.agent}`);
   const runId = newId("run");

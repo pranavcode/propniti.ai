@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { ActionKey, Row } from "@/entities/types";
 import type { Persona } from "@/auth/personas";
-import { addDays, money } from "./agents/framework";
+import { addDays, money } from "./rules";
 import { columns, insert, list, newId, parseJson, sql, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
 import { openRun, runWithContext } from "./orchestrator";
@@ -109,7 +109,7 @@ async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promis
   if (/\b(noi|net operating income)\b/i.test(q)) {
     const x = await ctx.call<NoiExplanation | { error: string }>("metrics.explain_noi", { metro });
     if ("error" in x) return { answer: "There isn't enough monthly history to compare NOI yet.", citations: [] };
-    const { explainText } = await import("./agents/owner-reporting");
+    const { explainText } = await import("./rules");
     return { answer: `${metro ?? "Portfolio"}: ${explainText(x)}`, citations: x.by_property.slice(0, 5).map((p) => ({ entity_type: "properties", entity_id: p.property_id, label: `${p.property}: ${money(p.change_cents)}`, href: hrefFor("properties", p.property_id) })) };
   }
   if (/\b(occupan\w*|vacan\w*)\b/i.test(q)) {
@@ -159,7 +159,7 @@ async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
   const days = Number(q.match(/(\d+)\s*\+?\s*(?:days?|d\b)/i)?.[1] ?? 0);
   if (/\b(remind\w*|reminders?|nudge|collections?)\b/i.test(q) || (/\b(send|email|text)\b/i.test(q) && /\b(late|delinquen\w*|owe|overdue|rent)\b/i.test(q))) {
     const r = await ctx.call<{ rows: Delinquent[]; total: number }>("ledger.delinquency", { min_days: days || 5, metro, limit: 25 });
-    const { reminder } = await import("./agents/collections");
+    const { reminder } = await import("./rules");
     for (const d of r.rows) {
       if (!d.resident_id) continue;
       const m = reminder(d);

@@ -1,10 +1,11 @@
 import "server-only";
 import { PERMISSIONS } from "@/auth/personas";
-import { reminder } from "@/ai/agents/collections";
+import { reminder } from "@/ai/rules";
 import { delinquency, type Delinquent } from "@/ai/facts";
 import type { Role } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
 import { effective, type QueryCtx } from "@/server/query";
+import { isSelfScope } from "./queries";
 
 // Collections workbench data: delinquent leases (the Collections agent's own facts, first-in
 // first-out aging), a risk score with plain reasons, the next step the agent's rules would take, a
@@ -68,6 +69,7 @@ const canDecideAs = (role: Role, risk: string, amount: unknown) => {
 };
 
 export async function workbench(ctx: QueryCtx, f: { property?: string; band?: string; step?: string; page: number; size: number }) {
+  if (isSelfScope(ctx.actor)) return { rows: [] as WorkbenchRow[], total: 0, balance: 0, counts: { all: 0, High: 0, Medium: 0, Low: 0, reminder: 0, plan: 0, legal: 0, proposed: 0 }, page: f.page, size: f.size };
   const ws = ctx.ws ?? "~";
   const props = f.property ? [f.property] : ctx.actor.propertyIds === "all" ? undefined : ctx.actor.propertyIds;
   const all = await delinquency({ db: ctx.db, ws, actor: ctx.actor }, AS_OF, { minDays: 1, propertyIds: props, limit: 2000 });

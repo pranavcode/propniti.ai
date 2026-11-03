@@ -5,7 +5,6 @@ import { snapshotOf } from "./effects";
 import { addUsage, currentModel, fromWire, RULES, toWire, ZERO, type ChatModel, type ModelInfo, type Turn, type Usage } from "./providers";
 import { getTool } from "./tools/registry";
 import { getAction } from "@/extensions/actions";
-import "./actions";
 import type { ApprovalPolicy, Autonomy, RunContext, Step, ToolDef, ToolKey } from "./types";
 import { z } from "zod";
 

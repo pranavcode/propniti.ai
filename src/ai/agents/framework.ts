@@ -1,5 +1,4 @@
 import type { ActionKey, AgentKey, EntityKey, Role } from "@/entities/types";
-// registry must load before runtime: runtime → actions → entities → leasing agent → defineAgent (cycle).
 import { registerAgent } from "./registry";
 import { modelLoop, truncate, type AgentCtx, type ProposeInput } from "../runtime";
 import type { AgentDef, Autonomy, EventType, RunContext, ToolKey, TriggerKind } from "../types";
@@ -111,5 +110,4 @@ export function defineAgent(spec: AgentSpec): AgentDef {
   return registerAgent(def);
 }
 
-export const money = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
-export const addDays = (date: string, n: number) => new Date(Date.parse(date) + n * 86_400_000).toISOString().slice(0, 10);
+export { money, addDays } from "../rules";

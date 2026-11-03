@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { ActionContext, ActionResult, EntityKey, Role, Row } from "@/entities/types";
 import type { DbStatement } from "@/lib/platform/types";
-import { triage } from "@/ai/agents/maintenance";
+import { triage } from "@/ai/rules";
 import { AS_OF } from "@/seed/constants";
 import { effective, overlayUpsertSql } from "@/server/effective";
-import { eventStmt, notifyStmt, payRent, uid } from "@/server/money";
+import { eventStmt, notifyStmt, payApplicationFee, payRent, uid } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { registerAction } from "../actions";
 import { dollars, notifyManager, ownerLimitCents } from "./actions";
@@ -268,16 +268,21 @@ registerAction({
     const total = input.lines.reduce((a, l) => a + l.amount_cents, 0);
     const at = nowIso(ctx.nowMs);
     const eventId = uid("woe");
+    // Work the owner declined isn't billable, even though it keeps its vendor while on hold.
+    const declined = `NOT EXISTS (SELECT 1 FROM ${effective("wo_events")} AS d WHERE d.work_order_id = ?3 AND d.kind = 'Approval' AND d.actor_kind = 'owner' AND json_extract(d.detail, '$.decision') = 'Declined')`;
     const [r] = await ctx.db.batch([
       ctx.db.prepare(`INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail)
-        SELECT ?1, ?2, ?3, ?4, ?5, 'vendor', ?6, 'Submission', 'Submitted', ?7 FROM ${effective("work_orders")} AS w WHERE w.id = ?3 AND w.status IN ('Scheduled', 'In progress', 'Completed', 'On hold')`)
+        SELECT ?1, ?2, ?3, ?4, ?5, 'vendor', ?6, 'Submission', 'Submitted', ?7 FROM ${effective("work_orders")} AS w WHERE w.id = ?3 AND w.status IN ('Scheduled', 'In progress', 'Completed', 'On hold') AND ${declined}`)
         .bind(ctx.ws, eventId, w.id, w.property_id, at, row.id, JSON.stringify({ invoice_number: input.invoiceNumber, lines: input.lines, total_cents: total, read: input.read })),
       ctx.db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Submitted'", cost_cents: "?3" }, "EXISTS (SELECT 1 FROM wo_events WHERE workspace_id = ?1 AND id = ?4)")).bind(ctx.ws, w.id, total, eventId),
       ctx.db.prepare(`INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, extracted, uploaded_by, uploaded_at)
         SELECT ?1, ?2, ?3, 'work_orders', ?4, ?5, ?6, 'application/pdf', 'Invoice', ?7, ?8, ?9, ?10, ?11 WHERE EXISTS (SELECT 1 FROM wo_events WHERE workspace_id = ?1 AND id = ?12)`)
         .bind(ctx.ws, uid("doc"), w.property_id, w.id, input.fileName || `Invoice ${input.invoiceNumber}`, `/app/maintenance/work-orders/${w.id}`, `Work order ${w.id} › Documents`, input.read.source === "manual" ? row.id : "ap", JSON.stringify({ invoice_number: input.invoiceNumber, total_cents: total, lines: input.lines }), row.id, at, eventId),
     ]);
-    if (!r.meta.changes) return no(409, `${w.id} is ${w.status.toLowerCase()}; invoices can be sent once the work is scheduled or done.`);
+    if (!r.meta.changes) {
+      if (await one(ctx, `SELECT 1 FROM ${effective("wo_events")} AS d WHERE d.work_order_id = ?2 AND d.kind = 'Approval' AND d.actor_kind = 'owner' AND json_extract(d.detail, '$.decision') = 'Declined'`, w.id)) return no(409, `The owner declined ${w.id}, so it can't be invoiced. Message the maintenance team if work was already done.`);
+      return no(409, `${w.id} is ${w.status.toLowerCase()}; invoices can be sent once the work is scheduled or done.`);
+    }
     await ctx.db.batch([
       eventStmt(ctx.db, ctx.ws, at, "invoice.received", "work_orders", w.id, w.property_id, { vendor_id: row.id, total_cents: total, invoice_number: input.invoiceNumber }),
       notifyManager(ctx, w.property_id, `Invoice for ${w.id}`, `${String(row.company)} invoiced ${dollars(total)} (${input.invoiceNumber}).`, `/app/maintenance/work-orders/${w.id}`, ["work_orders", w.id]),
@@ -339,6 +344,21 @@ registerAction({
     ]);
     return ok(`${input.docType} received. We'll review it within one business day.`);
   },
+});
+
+registerAction({
+  key: "applicants.pay_fee",
+  label: "Pay application fee",
+  entity: "applicants",
+  roles: ["applicant"],
+  money: true,
+  input: z.object({}),
+  handler: async (ctx, row) => {
+    const app = await application(ctx, row.id);
+    if (!app) return no(404, "We couldn't find your application");
+    return payApplicationFee(ctx, app.id);
+  },
+  help: { summary: "Pays the application fee by card into the property's trust account. Each application can be paid once.", article: "applicant-portal" },
 });
 
 messageAction("applicants", "applicant", "applicant", async (ctx, row) => (await application(ctx, row.id))?.property_id ?? null);

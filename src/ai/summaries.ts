@@ -4,6 +4,8 @@ import type { Facts, Row } from "@/entities/types";
 import { getRow, relations } from "@/server/query";
 import { eff, insert, type DataCtx } from "./data";
 import { currentModel, RULES } from "./providers";
+import { unknownNumbers } from "./rules";
+export { unknownNumbers } from "./rules";
 
 // Record summaries (AISummaryCard). The facts block comes from the entity def (ai.facts) over the
 // record and its related rows; the model only writes prose from it. A summary that states a number
@@ -47,22 +49,6 @@ export async function factsFor(data: DataCtx, entity: string, id: string): Promi
     facts[k] = typeof v === "boolean" || typeof v === "number" ? v : String(v);
   }
   return { facts, title };
-}
-
-// Numbers a summary may state: every number in the facts, as written and as dollars/cents.
-export function unknownNumbers(text: string, facts: Facts): string[] {
-  const allowed = new Set<number>();
-  for (const v of Object.values(facts)) {
-    if (typeof v === "number") [v, v / 100, v * 100, Math.round(v), Math.round(v * 10) / 10, Math.round(v * 100)].forEach((x) => allowed.add(Math.round(x * 100) / 100));
-    if (typeof v === "string") for (const m of v.matchAll(/\d+(?:\.\d+)?/g)) allowed.add(Number(m[0]));
-  }
-  const out: string[] = [];
-  for (const m of text.matchAll(/\$?\d[\d,]*(?:\.\d+)?%?/g)) {
-    const n = Number(m[0].replace(/[$,%]/g, ""));
-    if (!Number.isFinite(n) || n < 10) continue; // small counts ("2 open work orders") are checked by the eval grader, not here
-    if (![n, Math.round(n * 100) / 100].some((x) => allowed.has(x)) && !/^(19|20)\d\d$/.test(String(n))) out.push(m[0]);
-  }
-  return out;
 }
 
 export function rulesSummary(title: string, facts: Facts): string {

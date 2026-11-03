@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { can, getEntity } from "@/entities";
 import type { EntityDef, FieldDef, Role, ViewState } from "@/entities/types";
-import { addDays } from "./agents/framework";
+import { addDays } from "./rules";
 import { asOf, sql, type DataCtx } from "./data";
 import { matchMetro } from "./facts";
 import { currentModel, type ModelInfo, RULES } from "./providers";

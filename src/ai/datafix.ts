@@ -1,6 +1,6 @@
 import type { Persona } from "@/auth/personas";
 import type { Row } from "@/entities/types";
-import { computeFix } from "./agents/data-health";
+import { computeFix } from "./rules";
 import { get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
 import { openRun, runWithContext } from "./orchestrator";

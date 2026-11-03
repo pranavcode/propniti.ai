@@ -10,5 +10,3 @@ import "./owner-reporting";
 import "./compliance";
 export * from "./registry";
 
-// Display order on the command center.
-export const AGENT_ORDER = ["collections", "leasing", "renewals", "maintenance_triage", "ap", "data_health", "owner_reporting", "compliance"] as const;

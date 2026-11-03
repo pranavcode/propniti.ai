@@ -1,23 +1,11 @@
 import { sql } from "../data";
 import type { NoiExplanation } from "../facts";
 import { defineAgent, money, type Candidate } from "./framework";
+import { explainText } from "../rules";
+export { explainText } from "../rules";
 
 // Variance explanations for owners: when an owner entity's NOI moved more than 3% month over month,
 // explain why from computed drivers and offer the note to the owner.
-
-export function explainText(x: NoiExplanation) {
-  const dir = x.noi_cents < x.prior_noi_cents ? "fell" : "rose";
-  const top = x.drivers.filter((d) => d.delta_cents !== 0).slice(0, 3);
-  const lines = top.map((d) => `${d.label} ${d.delta_cents < 0 ? "lowered" : "raised"} NOI by ${money(Math.abs(d.delta_cents))}`);
-  const prop = x.by_property[0];
-  const gl = x.expense_lines[0];
-  return (
-    `NOI ${dir} ${Math.abs(x.change_pct)}% in ${x.month}, from ${money(x.prior_noi_cents)} to ${money(x.noi_cents)}. ` +
-    (lines.length ? `${lines.join("; ")}. ` : "") +
-    (prop && prop.change_cents < 0 ? `${prop.property} moved most (${money(prop.change_cents)}). ` : "") +
-    (gl && gl.delta_cents > 0 ? `The largest expense increase was ${gl.gl} (+${money(gl.delta_cents)}).` : "")
-  ).trim();
-}
 
 export default defineAgent({
   key: "owner_reporting",

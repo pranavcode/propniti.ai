@@ -1,32 +1,11 @@
 import type { Row } from "@/entities/types";
 import { daysBetween, sql, upsertOverlay } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
+import { scoreApplicant } from "../rules";
+export { scoreApplicant, type Factor } from "../rules";
 
 // Applicant scoring with plain-English reasons for and against (a broker or manager decides), and
 // follow-ups for prospects nobody has contacted in three days.
-
-export type Factor = { factor: string; direction: "+" | "-"; weight: number; detail: string };
-
-// Score from income, credit, rental history and verification. Criminal history is never scored:
-// it routes to an individualized review by a person (fair housing).
-export function scoreApplicant(a: { monthly_income_cents: number | null; rent_cents: number; credit_band: string | null; eviction_found: number; criminal_flag: number; income_verified: number }) {
-  const factors: Factor[] = [];
-  const ratio = a.monthly_income_cents && a.rent_cents ? a.monthly_income_cents / a.rent_cents : 0;
-  if (ratio >= 3) factors.push({ factor: "Income", direction: "+", weight: 30, detail: `Income is ${ratio.toFixed(1)}× the rent (3× required)` });
-  else if (ratio >= 2.5) factors.push({ factor: "Income", direction: "+", weight: 15, detail: `Income is ${ratio.toFixed(1)}× the rent, a little under the 3× guideline` });
-  else factors.push({ factor: "Income", direction: "-", weight: 15, detail: ratio ? `Income is only ${ratio.toFixed(1)}× the rent` : "No income reported" });
-  const credit: Record<string, [number, string]> = { Excellent: [30, "Excellent credit"], Good: [22, "Good credit"], Fair: [10, "Fair credit"], "Thin file": [8, "Thin credit file (little history, not bad history)"], Poor: [-20, "Poor credit"] };
-  const [w, label] = credit[a.credit_band ?? ""] ?? [0, "No credit result yet"];
-  factors.push({ factor: "Credit", direction: w >= 0 ? "+" : "-", weight: Math.abs(w), detail: label });
-  if (a.eviction_found) factors.push({ factor: "Rental history", direction: "-", weight: 30, detail: "Prior eviction on record" });
-  else factors.push({ factor: "Rental history", direction: "+", weight: 15, detail: "No evictions found" });
-  if (a.income_verified) factors.push({ factor: "Verification", direction: "+", weight: 10, detail: "Income verified with documents" });
-  else factors.push({ factor: "Verification", direction: "-", weight: 10, detail: "Income not verified yet" });
-  const score = Math.max(0, Math.min(100, 25 + factors.reduce((s, f) => s + (f.direction === "+" ? f.weight : -f.weight), 0)));
-  const review = !!a.criminal_flag;
-  const recommendation = review ? "Conditional" : score >= 75 ? "Approve" : score >= 55 ? "Conditional" : "Deny";
-  return { score, factors, recommendation, review, ratio };
-}
 
 export default defineAgent({
   key: "leasing",

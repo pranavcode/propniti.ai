@@ -1,32 +1,13 @@
 import type { Row } from "@/entities/types";
 import { daysBetween, parseJson, sql } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
+import { billChecks } from "../rules";
+export { billChecks } from "../rules";
 
 // Bills waiting for approval: read the scanned invoice's extracted fields (from /api/ai/extract,
 // stored on documents.extracted), check the coding against the vendor's trade, compare the amount
 // with the vendor's history, catch duplicates, and stop payment to vendors whose bank details
 // changed without verification.
-
-const TRADE_GL: Record<string, RegExp> = {
-  Plumbing: /repair|maintenance|plumb/i, HVAC: /repair|maintenance|hvac/i, Electrical: /repair|maintenance|electric/i,
-  Landscaping: /landscap|grounds/i, Turn: /turn|make.?ready|repair/i, "Pest control": /pest|repair|maintenance/i,
-};
-
-export function billChecks(b: { amount_cents: number; median_cents: number | null; duplicates: number; bank_changed_days: number | null; gl_names: string[]; trade: string; extracted_total_cents: number | null }) {
-  const issues: string[] = [];
-  let fraud = false;
-  if (b.bank_changed_days != null && b.bank_changed_days <= 60) {
-    fraud = true;
-    issues.push(`Vendor's bank details changed ${b.bank_changed_days} days ago with no verification on file`);
-  }
-  if (b.median_cents && b.amount_cents > b.median_cents * 2.4) issues.push(`Amount is ${(b.amount_cents / b.median_cents).toFixed(1)}× this vendor's median bill (${money(b.median_cents)})`);
-  if (b.duplicates > 0) issues.push("Same invoice number already billed by this vendor");
-  if (b.extracted_total_cents != null && Math.abs(b.extracted_total_cents - b.amount_cents) > 1) issues.push(`Scanned invoice total ${money(b.extracted_total_cents)} doesn't match the bill amount`);
-  const re = TRADE_GL[b.trade];
-  const miscoded = re ? b.gl_names.filter((g) => !re.test(g)) : [];
-  if (miscoded.length) issues.push(`Coded to ${miscoded.join(", ")}, unusual for a ${b.trade.toLowerCase()} vendor`);
-  return { issues, fraud, miscoded };
-}
 
 export default defineAgent({
   key: "ap",

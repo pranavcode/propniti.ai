@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { triage } from "@/ai/agents/maintenance";
+import { triage } from "@/ai/rules";
 import { rateLimit } from "@/lib/guard";
 import { parseBody } from "@/lib/requests";
 import { AS_OF } from "@/seed/constants";

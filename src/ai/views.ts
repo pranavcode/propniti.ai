@@ -1,7 +1,8 @@
 import { getEntity } from "@/entities";
 import type { AgentKey, Row } from "@/entities/types";
-import { AGENT_ORDER, getAgent } from "./agents";
-import { computeFix } from "./agents/data-health";
+import { AGENT_ORDER, getAgent } from "./agents/registry";
+import { loadAgents } from "./orchestrator";
+import { computeFix } from "./rules";
 import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
@@ -17,6 +18,7 @@ export type AgentCard = {
 };
 
 export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<AgentCard[]> {
+  await loadAgents();
   const configs = await agentConfigs(data.db, data.ws);
   const since = new Date(nowMs - 30 * 86_400_000).toISOString();
   const [runs, props, last] = await Promise.all([

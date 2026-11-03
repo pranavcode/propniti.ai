@@ -5,26 +5,14 @@ import { eff, get, isTable, parseJson, type Table } from "../data";
 import type { AgentCtx, ProposeInput } from "../runtime";
 import type { RunContext } from "../types";
 import { registerTool } from "./registry";
+import { checkDraft } from "../rules";
+export { amountsIn, checkDraft } from "../rules";
 
 // Write tools. None of them changes records directly: they create proposals for a person, store a
 // checked message draft, or (execute) run a proposal that a person or the policy already approved.
 
 const ac = (ctx: RunContext) => ctx as unknown as AgentCtx;
 const roles = [...INTERNAL_ROLES];
-
-// Dollar amounts in a draft, in cents: "$1,725" → 172500, "$12.50" → 1250.
-export const amountsIn = (text: string) => [...text.matchAll(/\$\s?(\d{1,3}(?:,\d{3})*|\d+)(\.\d{1,2})?/g)].map((m) => Math.round(Number(m[1].replace(/,/g, "") + (m[2] ?? "")) * 100));
-const PROMISE = /\b(waiv\w*|forgiv\w*|no late fees?|won'?t (be )?charged?|guarantee\w*|cancel (your|the) (debt|balance))\b/i;
-
-// Grader shared by the tool and the evals: figures in a draft must be figures from the facts, and a
-// draft never promises a waiver.
-export function checkDraft(body: string, facts: Record<string, unknown> | undefined): string[] {
-  const problems: string[] = [];
-  if (PROMISE.test(body)) problems.push("Drafts can't promise waivers, forgiveness or guarantees; a person decides those.");
-  const money = new Set(Object.entries(facts ?? {}).filter(([k]) => k.endsWith("_cents")).map(([, v]) => Number(v)));
-  for (const a of amountsIn(body)) if (!money.has(a)) problems.push(`$${(a / 100).toFixed(2)} isn't in the record's figures (${[...money].map((m) => `$${(m / 100).toFixed(2)}`).join(", ") || "none"}).`);
-  return problems;
-}
 
 registerTool({
   key: "actions.propose",

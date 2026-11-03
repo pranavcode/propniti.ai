@@ -1,11 +1,9 @@
 import { z } from "zod";
 import type { ActionContext, Row } from "@/entities/types";
-import { scoreApplicant, type Factor } from "@/ai/agents/leasing";
+import { checkDraft, scoreApplicant, unknownNumbers, type Factor } from "@/ai/rules";
 import { sql } from "@/ai/data";
 import { openRun, runWithContext } from "@/ai/orchestrator";
 import type { AgentCtx } from "@/ai/runtime";
-import { unknownNumbers } from "@/ai/summaries";
-import { checkDraft } from "@/ai/tools/write";
 import { effective } from "@/server/query";
 import { checkFairHousing } from "./fairHousing";
 import { dollars, proposeRenewal, type Reason } from "./pricing";
