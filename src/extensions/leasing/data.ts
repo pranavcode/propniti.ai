@@ -135,13 +135,28 @@ export type Card = { id: string; name: string; property: string; propertyId: str
 export async function pipeline(c: LeasingCtx, property?: string) {
   const s = scope(c, "pr.property_id");
   const pf = property ? " AND pr.property_id = ?" : "";
+  // Prospects first, then their applications, scores and next tours in three batched lookups by id
+  // (json_each), rather than correlated subqueries per card: keeps the board inside D1's CPU limit.
   const rows = await all(c, `SELECT pr.id, pr.name, pr.stage, pr.property_id, p.name AS property, pr.desired_beds, pr.budget_cents, pr.source,
-      CAST(julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) AS INTEGER) AS days,
-      (SELECT a.stage || '|' || a.id || '|' || coalesce(a.score, json_extract((SELECT x.payload FROM ${E(c, "ai_proposals")} x WHERE x.entity_type = 'applications' AND x.entity_id = a.id ORDER BY x.created_at DESC LIMIT 1), '$.facts.score'), '') FROM ${E(c, "applicants")} ap JOIN ${E(c, "applications")} a ON a.applicant_id = ap.id WHERE ap.prospect_id = pr.id ORDER BY a.submitted_at DESC LIMIT 1) AS app,
-      (SELECT min(sh.scheduled_at) FROM ${E(c, "showings")} sh WHERE sh.prospect_id = pr.id AND sh.status = 'Scheduled' AND substr(sh.scheduled_at, 1, 10) >= ?) AS next_tour
+      CAST(julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) AS INTEGER) AS days
     FROM ${E(c, "prospects")} pr JOIN ${E(c, "properties")} p ON p.id = pr.property_id
     WHERE (pr.stage IN ('Inquiry', 'Contacted', 'Tour scheduled', 'Toured', 'Applied') OR (pr.stage = 'Leased' AND substr(coalesce(pr.last_contact_at, pr.created_at), 1, 10) >= ?))${s.sql}${pf}
-    ORDER BY pr.created_at DESC LIMIT 600`, [AS_OF, AS_OF, new Date(Date.parse(AS_OF) - 30 * 86_400_000).toISOString().slice(0, 10), ...s.binds, ...(property ? [property] : [])]);
+    ORDER BY pr.created_at DESC LIMIT 600`, [AS_OF, new Date(Date.parse(AS_OF) - 30 * 86_400_000).toISOString().slice(0, 10), ...s.binds, ...(property ? [property] : [])]);
+  const ids = JSON.stringify(rows.map((r) => String(r.id)));
+  const [apps, tours] = await Promise.all([
+    all(c, `SELECT ap.prospect_id, a.id, a.stage, a.score, a.submitted_at FROM ${E(c, "applicants")} ap JOIN ${E(c, "applications")} a ON a.applicant_id = ap.id WHERE ap.prospect_id IN (SELECT value FROM json_each(?)) ORDER BY a.submitted_at`, [ids]),
+    all(c, `SELECT prospect_id, min(scheduled_at) AS next_tour FROM ${E(c, "showings")} WHERE prospect_id IN (SELECT value FROM json_each(?)) AND status = 'Scheduled' AND substr(scheduled_at, 1, 10) >= ? GROUP BY prospect_id`, [ids, AS_OF]),
+  ]);
+  const appOf = new Map(apps.map((a) => [String(a.prospect_id), a])); // latest submission wins (ordered ascending)
+  const unscored = apps.filter((a) => a.score == null).map((a) => String(a.id));
+  const scores = unscored.length ? await all(c, `SELECT entity_id, json_extract(payload, '$.facts.score') AS score, title FROM ${E(c, "ai_proposals")} WHERE entity_type = 'applications' AND entity_id IN (SELECT value FROM json_each(?)) ORDER BY created_at`, [JSON.stringify(unscored)]) : [];
+  const scoreOf = new Map(scores.map((x) => [String(x.entity_id), x.score ?? /score (\d+)/.exec(String(x.title))?.[1] ?? null]));
+  const tourOf = new Map(tours.map((t) => [String(t.prospect_id), t.next_tour as string]));
+  for (const r of rows) {
+    const a = appOf.get(String(r.id));
+    r.app = a ? `${a.stage}|${a.id}|${a.score ?? scoreOf.get(String(a.id)) ?? ""}` : null;
+    r.next_tour = tourOf.get(String(r.id)) ?? null;
+  }
   const cards: Card[] = [];
   for (const r of rows) {
     const [appStage, appId, score] = r.app ? String(r.app).split("|") : [null, null, null];

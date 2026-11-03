@@ -103,13 +103,19 @@ registerMetric({
   key: "leasing.pipeline_funnel",
   label: "Leasing funnel, last 90 days",
   run: async (ctx, p) => {
+    // Joins instead of per-prospect EXISTS chains: one indexed pass per step (D1 CPU limit).
     const s = scope(ctx, p, "pr.property_id");
-    const r = await one(ctx, `SELECT count(*) AS leads,
-        sum(EXISTS (SELECT 1 FROM ${T(ctx, "showings")} sh WHERE sh.prospect_id = pr.id AND sh.status = 'Completed')) AS tours,
-        sum(EXISTS (SELECT 1 FROM ${T(ctx, "applicants")} ap JOIN ${T(ctx, "applications")} a ON a.applicant_id = ap.id WHERE ap.prospect_id = pr.id AND a.stage <> 'Started')) AS applied,
-        sum(EXISTS (SELECT 1 FROM ${T(ctx, "applicants")} ap JOIN ${T(ctx, "applications")} a ON a.applicant_id = ap.id WHERE ap.prospect_id = pr.id AND a.stage IN ('Approved', 'Conditional', 'Leased'))) AS approved,
-        sum(pr.stage = 'Leased') AS leased
-      FROM ${T(ctx, "prospects")} pr WHERE substr(pr.created_at, 1, 10) >= ?${s.sql}`, [daysAgo(90), ...s.binds]);
+    const from = daysAgo(90);
+    const P = `${T(ctx, "prospects")} pr`;
+    const W = `substr(pr.created_at, 1, 10) >= ?${s.sql}`;
+    const apps = (stages: string) => one(ctx, `SELECT count(DISTINCT ap.prospect_id) AS n FROM ${T(ctx, "applications")} a JOIN ${T(ctx, "applicants")} ap ON ap.id = a.applicant_id JOIN ${P} ON pr.id = ap.prospect_id WHERE a.stage ${stages} AND ${W}`, [from, ...s.binds]);
+    const [l, t, ap, ok] = await Promise.all([
+      one(ctx, `SELECT count(*) AS leads, sum(pr.stage = 'Leased') AS leased FROM ${P} WHERE ${W}`, [from, ...s.binds]),
+      one(ctx, `SELECT count(DISTINCT sh.prospect_id) AS n FROM ${T(ctx, "showings")} sh JOIN ${P} ON pr.id = sh.prospect_id WHERE sh.status = 'Completed' AND ${W}`, [from, ...s.binds]),
+      apps("<> 'Started'"),
+      apps("IN ('Approved', 'Conditional', 'Leased')"),
+    ]);
+    const r = { leads: l.leads, tours: t.n, applied: ap.n, approved: ok.n, leased: l.leased };
     const points = [
       { stage: "Leads", key: "lead", count: Number(r.leads ?? 0) },
       { stage: "Toured", key: "tour", count: Number(r.tours ?? 0) },

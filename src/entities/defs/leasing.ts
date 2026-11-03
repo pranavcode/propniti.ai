@@ -50,8 +50,6 @@ registerEntity({
     listed_on: { type: "date", label: "Listed", sortable: true, list: { default: false }, editable: [] },
     views: { type: "number", label: "Views", sortable: true, list: { default: true, align: "right" }, editable: [] },
     leads: { type: "number", label: "Leads", sortable: true, list: { default: true, align: "right" }, editable: [] },
-    price_changes: { type: "number", label: "Price changes", list: { default: false, align: "right" },
-      sql: "(SELECT count(*) - 1 FROM {listing_price_history} h WHERE h.listing_id = listings.id)" },
     syndication_errors: { type: "bool", label: "Syndication error", facet: true, list: { default: false }, sql: "(listings.syndication LIKE '%\"Error\"%')",
       help: { summary: "A listing site rejected or failed to publish this listing.", article: "list-unit-syndication" } },
     no_description: { type: "bool", label: "Needs description", facet: true, list: { default: false }, sql: "(trim(listings.description) = '')" },
@@ -81,7 +79,7 @@ registerEntity({
     facts: ["status", "property_id", "unit_id", "rent", "market_rent", "available_on", "days_on_market", "leads"],
     tabs: [
       { custom: "leasing.listing_editor" },
-      { key: "overview", label: "Details", fields: ["headline", "status", "property_id", "unit_id", "beds", "rent", "market_rent", "available_on", "listed_on", "days_on_market", "views", "leads", "price_changes"] },
+      { key: "overview", label: "Details", fields: ["headline", "status", "property_id", "unit_id", "beds", "rent", "market_rent", "available_on", "listed_on", "days_on_market", "views", "leads"] },
       { custom: "leasing.price_history" },
       { key: "applications", label: "Applications", relation: "applications" },
     ],
@@ -254,7 +252,8 @@ registerEntity({
   route: "/app/leasing/applicants",
   titleField: "name",
   subtitle: (r) => [r.employer, r.email].filter(Boolean).join(" · "),
-  scopePath: "(SELECT a.property_id FROM {applications} a WHERE a.applicant_id = applicants.id OR a.co_applicants LIKE '%\"' || applicants.id || '\"%' LIMIT 1)",
+  // Both lookups hit an index (prospects by id, applications by applicant_id); no per-row scans on D1.
+  scopePath: "coalesce((SELECT pr.property_id FROM {prospects} pr WHERE pr.id = applicants.prospect_id), (SELECT a.property_id FROM {applications} a WHERE a.applicant_id = applicants.id LIMIT 1))",
   fields: {
     name: { type: "text", label: "Name", sortable: true, list: { default: true, width: 200 }, sql: "applicants.first_name || ' ' || applicants.last_name" },
     first_name: { type: "text", label: "First name", required: true, search: true },
