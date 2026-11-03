@@ -43,11 +43,10 @@ function Card({ w }: { w: Row }) {
       </div>
       <p className="mt-1 truncate pl-4 text-[11.5px] text-muted-foreground">{String(w.property)}{w.unit ? ` · ${w.unit}` : ""}</p>
       <div className="mt-1.5 flex items-center gap-2 pl-4 text-[11.5px]">
-        <span className="text-muted-foreground">{String(w.id)}</span>
-        <span className="truncate text-muted-foreground">{String(w.vendor ?? w.technician ?? "Unassigned")}</span>
-        <span className="flex-1" />
-        {w.past_sla ? <span className="inline-flex items-center gap-0.5 font-medium text-tone-danger"><TriangleAlert className="size-3" />Past SLA</span>
-          : w.sla_due_at ? <span className="text-muted-foreground">Due {formatRelative(String(w.sla_due_at))}</span> : null}
+        <span className="shrink-0 whitespace-nowrap text-muted-foreground tabular-nums">{String(w.id)}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{String(w.vendor ?? w.technician ?? "Unassigned")}</span>
+        {w.past_sla ? <span className="inline-flex shrink-0 items-center gap-0.5 font-medium whitespace-nowrap text-tone-danger"><TriangleAlert className="size-3" />Past SLA</span>
+          : w.sla_due_at ? <span className="shrink-0 whitespace-nowrap text-muted-foreground">Due {formatRelative(String(w.sla_due_at))}</span> : null}
       </div>
     </Link>
   );

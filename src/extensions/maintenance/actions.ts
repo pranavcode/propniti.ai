@@ -89,8 +89,11 @@ registerAction({
     const at = nowIso(c.nowMs);
     const changes: Row = { vendor_id: input.vendor_id, assignee_id: input.assignee_id ?? null, priority: input.priority, category: input.category, status, sla_due_at: addHours(String(r.opened_at), SLA_HOURS[input.priority]) };
     if (estimateCents) changes.estimate_cents = estimateCents;
-    // The guard makes a double click a no-op: the second request finds the job already dispatched.
-    const upd = await updateStmt(c.db, c.ws, "work_orders", String(r.id), changes, `e.status IN ('New', 'Triaged', 'Assigned', 'On hold')`);
+    // The guard compares against the row as this request read it, so of two clicks (or two people)
+    // only the first dispatch lands; the second finds the job already changed.
+    const lit = (v: unknown) => `'${String(v ?? "").replace(/'/g, "''")}'`;
+    const guard = `e.status = ${lit(r.status)} AND coalesce(e.vendor_id, '') = ${lit(r.vendor_id)} AND coalesce(e.assignee_id, '') = ${lit(r.assignee_id)}`;
+    const upd = await updateStmt(c.db, c.ws, "work_orders", String(r.id), changes, guard);
     const [res] = await c.db.batch([upd]);
     if (!res.meta.changes) return conflict(`${r.id} changed while you were dispatching it. Reload and try again.`);
     const stmts = [await woEvent(c, r, "Assigned", { vendor_id: input.vendor_id, assignee_id: input.assignee_id ?? null, priority: input.priority, category: input.category, estimate_cents: estimateCents, policy: pol.text }, status)];
@@ -116,7 +119,7 @@ async function ownerRequestStmts(c: ActionContext, r: Row, amountCents: number) 
   const owner = await c.db.prepare(`SELECT e.owner_id FROM ${effectiveSql("properties")} p JOIN ${effectiveSql("owner_entities")} e ON e.id = p.owner_entity_id WHERE p.id = ?2`).bind(c.ws, r.property_id).first<{ owner_id: string }>();
   const at = nowIso(c.nowMs);
   const out = [await woEvent(c, r, "Approval", { requested_from: "owner", owner_id: owner?.owner_id ?? null, amount_cents: amountCents })];
-  if (owner) out.push(await insertStmt(c.db, c.ws, "notifications", { id: newId("ntf"), user_id: owner.owner_id, title: "Repair needs your approval", body: `${r.title} at ${r.property_id__label ?? r.property_id}: estimate ${usd(amountCents)}, over your approval limit.`, href: "/portal/owner/approvals", entity_type: "work_orders", entity_id: r.id, created_at: at }));
+  if (owner) out.push(await insertStmt(c.db, c.ws, "notifications", { id: newId("ntf"), user_id: owner.owner_id, title: "Repair needs your approval", body: `${r.title} at ${r.property_id__label ?? r.property_id}: estimate ${usd(amountCents)}, over your approval limit.`, href: "/portal/owner/approvals", entity_type: "work_orders", entity_id: r.id, at }));
   return out;
 }
 
@@ -358,7 +361,7 @@ registerAction({
   entity: "turnovers",
   roles: SUP,
   icon: CheckCircle2,
-  when: (r) => ["Not started", "In progress"].includes(String(r.status)),
+  when: (r) => ["Not started", "In progress"].includes(String(r.status)) && Number(r.progress) === 1,
   handler: async (c, r) => {
     const okWrite = await update(c.db, c.ws, "turnovers", String(r.id), { status: "Ready", ready_on: AS_OF }, "NOT EXISTS (SELECT 1 FROM json_each(e.checklist) j WHERE json_extract(j.value, '$.done') = 0) AND e.status IN ('Not started', 'In progress')");
     return okWrite ? ok(`${r.title} is rent-ready. Leasing can list it.`) : conflict("Finish every checklist step first.");
@@ -382,8 +385,10 @@ registerAction({
     const due = String(r.next_due_on);
     const next = nextDue(due, String(r.frequency));
     // Advancing next_due_on is the claim: a second click sees a different date and does nothing.
-    const [claim] = await c.db.batch([await updateStmt(c.db, c.ws, "pm_schedules", String(r.id), { next_due_on: next }, `e.next_due_on = '${due}' AND e.active = 1`)]);
-    if (!claim.meta.changes) return conflict(`${r.name} was already generated for ${due}.`);
+    // One open work order per schedule: the next one is created after this one closes.
+    const noOpen = `NOT EXISTS (SELECT 1 FROM ${effectiveSql("work_orders")} AS w WHERE w.pm_schedule_id = e.id AND w.status NOT IN ('Completed', 'Paid', 'Cancelled'))`;
+    const [claim] = await c.db.batch([await updateStmt(c.db, c.ws, "pm_schedules", String(r.id), { next_due_on: next }, `e.next_due_on = '${due}' AND e.active = 1 AND ${noOpen}`)]);
+    if (!claim.meta.changes) return conflict(`${r.name} already has an open work order. The next one, due ${due}, can be created after it closes.`);
     const at = nowIso(c.nowMs);
     const woId = `WO-PM-${newId("x").slice(2, 10).toUpperCase()}`;
     const priority = String(r.category) === "Life safety" ? "Urgent" : "Normal";

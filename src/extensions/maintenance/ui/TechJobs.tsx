@@ -58,7 +58,7 @@ export function TechJobCard({ job, photos }: { job: TechJob; photos: { url: stri
             </div>
           )}
           <label className="grid gap-1 text-[12px] text-muted-foreground">Note with the update (optional)
-            <input className={cn(FIELD, "h-10 text-[14px]")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Replaced the wax ring, tested 3 flushes" />
+            <input className={cn(FIELD, "h-10 text-[14px]")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="What you did, or what is blocking the job" />
           </label>
           <div className="grid grid-cols-2 gap-2">
             {job.status !== "In progress"
