@@ -319,8 +319,8 @@ describe("metrics", () => {
 
   it("adds the visitor's live payments to the current month", async () => {
     await db.prepare(`INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, charge_id, method, received_on, amount_cents) VALUES ('${WS}', 'pay-live', 'l-p01-u2', 'h-p01-u2', 'p01', 'c-p01-u2', 'ACH', '2026-10-28', 145000)`).run();
-    const before = await metrics(await ctx("marcus", null), "receivables.collections_rate");
-    const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate");
+    const before = await metrics(await ctx("marcus", null), "receivables.collections_rate", { month: "2026-10" });
+    const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate", { month: "2026-10" });
     expect(after.points.at(-1)!.collected).toBe(Number(before.points.at(-1)!.collected) + 1450);
   });
 });

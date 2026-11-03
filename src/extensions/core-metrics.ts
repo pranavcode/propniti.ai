@@ -61,8 +61,9 @@ const ratio = (a: number, b: number) => (b ? a / b : null);
 
 // A metric whose value is one number per month: KPI value = latest month, previous = the month
 // before, spark and points = the trailing window. Flows (NOI, income) end at the last closed
-// month, since the current one is only days old; stocks (occupancy, open work orders, balances)
-// end at the current month and include the visitor's live changes.
+// month, since the current one is only days old (collections and month-end delinquency too:
+// early in a month, rent just billed would read as delinquent); stocks (occupancy, open work
+// orders) end at the current month and include the visitor's live changes.
 export function monthly(key: MetricKey, label: string, value: (m: MonthSums) => number | null, series?: Record<string, (m: MonthSums) => number | null>, kind: "stock" | "flow" = "stock") {
   return registerMetric({
     key,
@@ -120,13 +121,13 @@ monthly("portfolio.units", "Units", (m) => m.units);
 monthly("receivables.collections_rate", "Collections rate", (m) => ratio(m.collected_cents, m.charged_cents), {
   charged: (m) => dollars(m.charged_cents),
   collected: (m) => dollars(m.collected_cents),
-});
+}, "flow");
 monthly("receivables.delinquency", "Delinquent balance", (m) => dollars(aging(m)), {
   d0_30: (m) => dollars(m.aging_0_30_cents),
   d31_60: (m) => dollars(m.aging_31_60_cents),
   d61_90: (m) => dollars(m.aging_61_90_cents),
   d90p: (m) => dollars(m.aging_90p_cents),
-});
+}, "flow");
 monthly("leasing.vacancy_loss", "Vacancy loss", (m) => dollars(m.vacancy_loss_cents), undefined, "flow");
 monthly("leasing.move_ins", "Move-ins", (m) => m.move_ins, { move_ins: (m) => m.move_ins, move_outs: (m) => m.move_outs }, "flow");
 monthly("maintenance.wo_open", "Open work orders", (m) => m.wo_open, { opened: (m) => m.wo_opened, open: (m) => m.wo_open, breached: (m) => m.wo_sla_breach });
