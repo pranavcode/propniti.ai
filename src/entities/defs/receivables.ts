@@ -78,11 +78,12 @@ registerEntity({
   capabilities: { notes: true, activity: true, documents: false },
   kpis: [
     { key: "collections", label: "Collections rate", metric: "receivables.collections_rate", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/receivables/payments" },
-    { key: "delinquent", label: "Delinquent", metric: "receivables.delinquency", format: "money", delta: "mom", goodWhen: "down", drill: "/app/receivables/charges?view=overdue" },
+    { key: "past_due", label: "Past due", metric: "receivables.aging_live", format: "money", goodWhen: "down", drill: "/app/receivables/delinquency", help: { summary: "Open balances on charges past their due date, live from the ledger.", article: "record-a-payment" } },
   ],
   charts: [
     { key: "scheduled_vs_collected", title: "Charged vs collected, trailing 12 months", kind: "bar", metric: "receivables.collections_rate", x: "month", series: [{ key: "charged", label: "Charged", format: "money" }, { key: "collected", label: "Collected", format: "money" }], drill: "/app/receivables/charges?f.period={month}" },
-    { key: "aging", title: "Delinquency aging", kind: "bar", metric: "receivables.aging", x: "label", series: [{ key: "amount", label: "Balance", format: "money" }], drill: "/app/receivables/charges?f.aging={bucket}" },
+    { key: "aging", title: "Delinquency aging", kind: "bar", metric: "receivables.aging_live", x: "label", series: [{ key: "amount", label: "Past due", format: "money" }], drill: "/app/receivables/charges?f.aging={bucket}" },
+    { key: "by_property", title: "Past due by property", kind: "stacked", metric: "receivables.aging_by_property", x: "name", series: [{ key: "d0_30", label: "0–30", format: "money" }, { key: "d31_60", label: "31–60", format: "money" }, { key: "d61_90", label: "61–90", format: "money" }, { key: "d90p", label: "90+", format: "money" }], drill: "/app/receivables/delinquency?property={property_id}" },
   ],
   ai: {
     facts: (r) => ({ charge: String(r.description), status: String(r.status), amount: Number(r.amount ?? 0), balance: Number(r.balance ?? 0), due_on: String(r.due_on), days_late: r.days_late == null ? null : Number(r.days_late) }),

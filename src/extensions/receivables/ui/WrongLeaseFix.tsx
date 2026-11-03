@@ -29,7 +29,9 @@ export function WrongLeaseFix({ issue }: { issue: WrongLeaseIssue }) {
       rule="payments.wrong_lease"
       changes={[
         { field: "lease_id", label: "Lease", before: issue.from.label, after: `${to.lease} (${to.household})` },
-        { field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${to.due_on}` },
+        issue.from.charge === to.charge
+          ? { field: "charge_id", label: "Pays", before: `${to.description}, due ${to.due_on}`, after: "unchanged (that charge is on the other lease)" }
+          : { field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${to.due_on}` },
       ]}
       why={issue.why}
       confidence={issue.confidence}

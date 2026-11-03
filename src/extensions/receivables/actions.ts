@@ -34,7 +34,7 @@ registerAction({
   input: RecordPaymentInput,
   when: open,
   handler: (ctx, row, i) => recordPayment(ctx, { chargeId: String(row.id), amountCents: cents(i.amount), method: i.method, reference: i.reference || `${i.method} received ${new Date(ctx.nowMs).toISOString().slice(0, 10)}`, idempotencyKey: i.idempotencyKey }),
-  help: { summary: "Records a check, money order or other payment received in the office. It is deposited to the property's trust account at once, the 8% management fee is taken, and the charge's balance drops.", article: "record-a-payment" },
+  help: { summary: "Records a check, money order or other payment received in the office. It is deposited to the property's trust account at once, the management fee is taken, and the charge's balance drops.", article: "record-a-payment" },
 });
 
 registerAction({

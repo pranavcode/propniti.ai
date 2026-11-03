@@ -1,7 +1,7 @@
 import "server-only";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
-import { AS_OF, CURRENT_PERIOD } from "@/seed/constants";
+import { AS_OF } from "@/seed/constants";
 import { effective, type QueryCtx } from "@/server/query";
 
 // Receivables reads for the custom pages, tabs and widgets. Every figure is computed the same way
@@ -216,19 +216,4 @@ export async function depositsInTransit(ctx: QueryCtx) {
     .bind(ctx.ws ?? "~", ...s.params)
     .first<{ n: number; cents: number }>();
   return { count: r?.n ?? 0, cents: r?.cents ?? 0 };
-}
-
-// Returned (NSF) payments this month and last, for the trend.
-export async function nsfCounts(ctx: QueryCtx) {
-  const s = scopeSql(ctx.actor, "p.property_id");
-  const prev = (() => {
-    const [y, m] = CURRENT_PERIOD.split("-").map(Number);
-    return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
-  })();
-  const res = await ctx.db
-    .prepare(`SELECT substr(p.received_on, 1, 7) AS month, count(*) AS n, sum(p.amount_cents) AS cents FROM ${effective("payments", ctx.ws)} AS p WHERE p.nsf = 1 AND substr(p.received_on, 1, 7) IN (?, ?) AND ${s.sql} GROUP BY month`)
-    .bind(CURRENT_PERIOD, prev, ...s.params)
-    .all<{ month: string; n: number; cents: number }>();
-  const by = new Map(res.results.map((r) => [r.month, r]));
-  return { month: CURRENT_PERIOD, count: by.get(CURRENT_PERIOD)?.n ?? 0, cents: by.get(CURRENT_PERIOD)?.cents ?? 0, previous: by.get(prev)?.n ?? 0, previousMonth: prev };
 }

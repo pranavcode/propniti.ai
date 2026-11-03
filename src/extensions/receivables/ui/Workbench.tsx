@@ -108,7 +108,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
             <thead className="bg-muted/60 text-[11.5px] text-muted-foreground">
               <tr>
                 <th scope="col" className="w-9 px-3 py-2"><span className="sr-only">Select</span></th>
-                <th scope="col" className="px-2 py-2 text-left font-medium">Resident</th>
+                <th scope="col" className="w-[30%] px-2 py-2 text-left font-medium">Resident</th>
                 <th scope="col" className="px-2 py-2 text-left font-medium">Risk</th>
                 <th scope="col" className="px-2 py-2 text-right font-medium">Balance</th>
                 <th scope="col" className="hidden px-2 py-2 text-left font-medium md:table-cell">Aging</th>
@@ -128,6 +128,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                     <tr className={cn("border-t", isOpen && "bg-muted/30")}>
                       <td className="px-3 py-2 align-top"><Checkbox aria-label={`Select ${r.resident}`} disabled={!canPick} checked={picked.has(r.lease_id)} onCheckedChange={(v) => toggle(r.lease_id, !!v)} /></td>
                       <td className="max-w-0 px-2 py-2">
+                        {r.dataError && <span className="float-right ml-1 mt-0.5 rounded bg-tone-warning/12 px-1.5 text-[10.5px] font-medium text-tone-warning" title="Lease rent looks 10× too high">Rent typo</span>}
                         <button type="button" onClick={() => setOpen(isOpen ? null : r.lease_id)} className="block max-w-full truncate text-left font-medium hover:text-primary">{r.resident}</button>
                         <span className="block truncate text-[11.5px] text-muted-foreground">{r.property} #{r.unit} · {r.lease_id}{r.language === "es" ? " · prefers Spanish" : ""}</span>
                       </td>
@@ -135,14 +136,8 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                       <td className="px-2 py-2 text-right tabular-nums"><span className="font-medium">{usd(r.balance)}</span><span className="block text-[11.5px] text-muted-foreground">{r.days_late} days late</span></td>
                       <td className="hidden px-2 py-2 md:table-cell"><AgingBar a={r.aging} /></td>
                       <td className="px-2 py-2">
-                        {r.dataError ? (
-                          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-tone-warning"><AlertTriangle className="size-3.5" />Check the rent first</span>
-                        ) : (
-                          <>
-                            <span className="inline-flex items-center gap-1.5 font-medium"><step.icon className="size-3.5 text-muted-foreground" />{step.label}</span>
-                            <span className="block text-[11.5px] text-muted-foreground">{r.proposal ? `Proposed by the agent · ${r.proposal.risk} risk` : "Not proposed yet"}</span>
-                          </>
-                        )}
+                        <span className="inline-flex items-center gap-1.5 font-medium"><step.icon className="size-3.5 text-muted-foreground" />{step.label}</span>
+                        <span className="block text-[11.5px] text-muted-foreground">{r.proposal ? `Proposed by the agent · ${r.proposal.risk} risk` : "Not proposed yet"}</span>
                       </td>
                       <td className="px-2 py-2"><button type="button" aria-expanded={isOpen} aria-label={isOpen ? "Hide details" : "Show details"} onClick={() => setOpen(isOpen ? null : r.lease_id)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">{isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</button></td>
                     </tr>
@@ -152,13 +147,13 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                         <td colSpan={6} className="px-2 pb-4 pt-1">
                           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
                             <div className="flex flex-col gap-2">
-                              <h4 className="flex items-center gap-2 text-[12px] font-semibold">Why this score <AIBadge source="rules" size="xs" /></h4>
+                              <h4 className="flex items-center gap-2 text-[12px] font-semibold">Why this score <span className="rounded bg-muted px-1.5 py-px text-[10.5px] font-normal text-muted-foreground">Rules · from the ledger</span></h4>
                               <ul className="flex flex-col gap-1 text-[12.5px]">{r.why.map((w, i) => <li key={i} className="flex gap-1.5"><span className="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/60" />{w}</li>)}</ul>
                               {r.dataError && (
                                 <div className="rounded-md border border-tone-warning/30 bg-tone-warning/[0.07] px-3 py-2 text-[12.5px]">
-                                  <p className="font-medium">Rent is {usd(r.dataError.rent)} on a unit that rents for about {usd(r.dataError.market)}.</p>
-                                  <p className="text-muted-foreground">That looks like a typo (10× off), so this balance is a data error, not delinquency. It’s held out of collections until the lease is fixed.</p>
-                                  <Link href={`/app/leases/${r.lease_id}`} className="mt-1 inline-block font-medium text-primary hover:underline">Open the lease to fix it →</Link>
+                                  <p className="flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5 text-tone-warning" />Lease rent is {usd(r.dataError.rent)} on a unit that rents for about {usd(r.dataError.market)}.</p>
+                                  <p className="text-muted-foreground">Looks like a typo (10× off). Charges bill the right amount, so the balance is real; the score uses the market rent. Fix the lease so renewals and reports are right.</p>
+                                  <Link href={`/app/leases/${r.lease_id}`} className="mt-1 inline-block font-medium text-primary hover:underline">Review the fix on the lease →</Link>
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-3 pt-1 text-[12.5px]">
@@ -168,7 +163,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                               </div>
                             </div>
                             <div className="flex flex-col gap-2">
-                              {r.step === "legal" && !r.dataError ? (
+                              {r.step === "legal" ? (
                                 <div className="rounded-md border bg-card px-3 py-2 text-[12.5px]">
                                   <p className="font-medium">Over 90 days: a manager reviews this for legal action.</p>
                                   <p className="text-muted-foreground">No message is drafted. Check the state’s notice rules before any filing. {r.proposal ? "The agent has opened a legal-review proposal for a person to decide." : "Run the agent to open a legal-review proposal."}</p>
@@ -202,7 +197,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                                     <Button size="sm" variant="outline" disabled={busy === r.lease_id} onClick={() => decide(r, "reject")}>Reject</Button>
                                   </div>
                                 ) : <p className="text-[12px] text-muted-foreground">{r.proposal.risk === "Low" ? "Your role can view this proposal but not act on it." : `${r.proposal.risk}-risk proposals need a regional manager or principal.`}</p>
-                              ) : !r.dataError && <p className="text-[12px] text-muted-foreground">The agent hasn’t proposed this yet. Run it to queue the message for approval.</p>}
+                              ) : <p className="text-[12px] text-muted-foreground">The agent hasn’t proposed this yet. Run it to queue the message for approval.</p>}
                             </div>
                           </div>
                         </td>

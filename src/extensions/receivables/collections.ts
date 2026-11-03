@@ -16,8 +16,9 @@ export type WorkbenchRow = {
   lease_id: string; property_id: string; property: string; unit: string; resident: string; resident_id: string | null; language: string;
   balance: number; days_late: number; oldest_due_on: string; aging: Delinquent["aging"]; lease_status: string; rent: number; nsf12: number;
   score: number; band: "High" | "Medium" | "Low"; why: string[]; step: NextStep; safe: boolean; drafts: { en: Draft; es: Draft } | null;
-  // Rent 10× the unit's market rent is almost always a typo: the "balance" is a data error, not
-  // delinquency, so the row is held out of collections until Data Health fixes the lease.
+  // Lease rent 10× the unit's market rent is a typo (Data Health rule leases.rent_outlier). Charges
+  // bill the right amount, so the balance is real, but "months of rent owed" would read a tenth of
+  // the truth; the score uses the market rent instead and the row links to the fix.
   dataError: { rent: number; market: number; flagged: boolean } | null;
   proposal: { id: string; title: string; risk: "Low" | "Medium" | "High"; confidence: number; run_id: string | null; model: string | null; created_at: string; message: Draft | null; canDecide: boolean } | null;
 };
@@ -88,10 +89,10 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
           .all<{ lease_id: string; n: number }>(),
         ctx.db
           .prepare(
-            `SELECT p.* FROM ${effective("ai_proposals", ctx.ws)} AS p WHERE p.agent = 'collections' AND p.entity_type = 'leases' AND p.queue_state <> 'auto_handled'
+            `SELECT p.* FROM ${effective("ai_proposals", ctx.ws)} AS p WHERE p.agent = 'collections' AND p.entity_type IN ('leases', 'households') AND p.queue_state <> 'auto_handled'
                AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ctx.ws)} AS d WHERE d.proposal_id = p.id) AND p.entity_id IN (SELECT value FROM json_each(?)) ORDER BY p.created_at DESC`,
           )
-          .bind(idList)
+          .bind(JSON.stringify([...ids, ...all.rows.map((r) => r.household_id)]))
           .all<Record<string, unknown>>(),
       ])
     : [{ results: [] }, { results: [] }, { results: [] }];
@@ -103,17 +104,18 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
   let rows: WorkbenchRow[] = all.rows.map((d) => {
     const e = ex.get(d.lease_id);
     const nsf12 = nsfBy.get(d.lease_id) ?? 0;
-    const s = scoreRisk(d, e?.rent_cents ?? 0, nsf12);
     const market = e?.market_rent_cents ?? 0;
     const dataError = e && (e.outlier || (market > 0 && e.rent_cents >= market * 5)) ? { rent: e.rent_cents, market, flagged: !!e.outlier } : null;
-    const p = prop.get(d.lease_id);
+    const s = scoreRisk(d, dataError ? market || Math.round(dataError.rent / 10) : e?.rent_cents ?? 0, nsf12);
+    // The agent proposes per lease; precomputed proposals in the seed are per household.
+    const p = prop.get(d.lease_id) ?? prop.get(d.household_id);
     const payload = p ? safeJson<{ effects?: { kind: string; subject?: string; body?: string }[] }>(p.payload) : null;
     const msg = payload?.effects?.find((x) => x.kind === "message");
     return {
       lease_id: d.lease_id, property_id: d.property_id, property: d.property, unit: d.unit, resident: d.resident, resident_id: d.resident_id, language: d.language,
       balance: d.balance_cents, days_late: d.days_late, oldest_due_on: d.oldest_due_on, aging: d.aging, lease_status: d.lease_status, rent: e?.rent_cents ?? 0, nsf12,
-      ...s, safe: s.step === "reminder" && !dataError, dataError,
-      drafts: s.step === "legal" || dataError ? null : s.step === "plan" ? { en: planDraft(d, "en"), es: planDraft(d, "es") } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
+      ...s, safe: s.step === "reminder", dataError,
+      drafts: s.step === "legal" ? null : s.step === "plan" ? { en: planDraft(d, "en"), es: planDraft(d, "es") } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
       proposal: p ? {
         id: String(p.id), title: String(p.title), risk: p.risk as "Low" | "Medium" | "High", confidence: Number(p.confidence), run_id: (p.run_id as string) ?? null, model: (p.model as string) ?? null, created_at: String(p.created_at),
         message: msg?.subject && msg.body ? { subject: msg.subject, body: msg.body } : null, canDecide: canDecideAs(ctx.actor.role, String(p.risk), p.amount_cents),

@@ -96,8 +96,11 @@ registerTab({
     if (!issue) return <EmptyState compact kind="table" title="No data issues on this payment" description="Data Health checks every payment against the lease and charge it's posted to." />;
     const fix = parse<{ params?: { to_charge_id?: string }; why?: string[]; confidence?: number; source?: string }>(issue.suggested_fix, {});
     const evidence = parse<Record<string, unknown>>(issue.evidence, {});
-    const target = fix.params?.to_charge_id
-      ? await ctx.db.prepare(`SELECT c.id, c.lease_id, c.description, c.due_on, c.amount_cents, (SELECT h.name FROM ${effective("households", ctx.ws)} h WHERE h.id = c.household_id) AS household FROM ${effective("charges", ctx.ws)} AS c WHERE c.id = ?`).bind(fix.params.to_charge_id).first<{ id: string; lease_id: string; description: string; due_on: string; amount_cents: number; household: string }>()
+    // The seed names the charge the payment pays (evidence.charge_id, on the right lease); an agent
+    // proposal may name it as params.to_charge_id.
+    const toCharge = fix.params?.to_charge_id ?? (typeof evidence.charge_id === "string" ? evidence.charge_id : null);
+    const target = toCharge
+      ? await ctx.db.prepare(`SELECT c.id, c.lease_id, c.description, c.due_on, c.amount_cents, (SELECT h.name FROM ${effective("households", ctx.ws)} h WHERE h.id = c.household_id) AS household FROM ${effective("charges", ctx.ws)} AS c WHERE c.id = ? AND c.property_id = ?`).bind(toCharge, String(p.row.property_id ?? "")).first<{ id: string; lease_id: string; description: string; due_on: string; amount_cents: number; household: string }>()
       : null;
     const data: WrongLeaseIssue = {
       id: issue.id, status: issue.status, paymentId: p.id, amount: Number(p.row.amount ?? 0),
