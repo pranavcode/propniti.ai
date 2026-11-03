@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiJson } from "@/components/app/forms/api";
+import { ConfirmDialog } from "@/components/app/forms/ConfirmDialog";
 import { useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,12 @@ export function CompanyForm({ initial, canEdit }: { initial: CompanyProfile; can
   const setup = useSetupProgress();
   const set = (k: keyof CompanyProfile) => (e: React.ChangeEvent<HTMLInputElement>) => setV((p) => ({ ...p, [k]: e.target.value }));
   const dirty = JSON.stringify(v) !== JSON.stringify(initial);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const field = (k: keyof CompanyProfile, label: string, hint?: string, type = "text", autoComplete = "off") => (
     <Row label={label} hint={hint} htmlFor={`co-${k}`}>
       <Input id={`co-${k}`} name={k} type={type} autoComplete={autoComplete} value={v[k]} onChange={set(k)} disabled={!canEdit} />
@@ -110,12 +117,17 @@ export function CompanyForm({ initial, canEdit }: { initial: CompanyProfile; can
 export function IntegrationToggle({ k, name, connected, canEdit }: { k: string; name: string; connected: boolean; canEdit: boolean }) {
   const { busy, save } = useSave();
   const setup = useSetupProgress();
+  const [confirm, setConfirm] = useState(false);
   if (!canEdit) return null;
+  const run = () => save("POST", "/app/settings/integrations/connect", { key: k, connect: !connected }, () => { if (k === "plaid") setup.setDone("bank", !connected); });
   return (
-    <Button size="sm" variant={connected ? "outline" : "default"} disabled={busy} aria-label={`${connected ? "Disconnect" : "Connect"} ${name}`}
-      onClick={() => void save("POST", "/app/settings/integrations/connect", { key: k, connect: !connected }, () => { if (k === "plaid") setup.setDone("bank", !connected); })}>
-      {busy && <Loader2 data-icon="inline-start" className="animate-spin" />}{connected ? "Disconnect" : "Connect"}
-    </Button>
+    <>
+      <Button size="sm" variant={connected ? "outline" : "default"} disabled={busy} aria-label={`${connected ? "Disconnect" : "Connect"} ${name}`} onClick={() => (connected ? setConfirm(true) : void run())}>
+        {busy && <Loader2 data-icon="inline-start" className="animate-spin" />}{connected ? "Disconnect" : "Connect"}
+      </Button>
+      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={`Disconnect ${name}?`} confirmLabel="Disconnect"
+        description="Data stops flowing until someone reconnects it. Anything already imported stays." onConfirm={run} />
+    </>
   );
 }
 
@@ -277,8 +289,8 @@ export function EditPolicy({ p, roles }: { p: PolicyRow; roles: { value: string;
               <Switch id="pol-human" checked={v.human} onCheckedChange={(x) => setV({ ...v, human: x })} />
             </Field>
             <FieldGroup className="grid gap-3 sm:grid-cols-2">
-              <Field><FieldLabel htmlFor="pol-limit">Auto-approve up to ($)</FieldLabel><Input id="pol-limit" aria-invalid={bad || undefined} name="limit" inputMode="decimal" autoComplete="off" disabled={v.human} placeholder="Always a person" value={v.human ? "" : v.limit} onChange={(e) => setV({ ...v, limit: e.target.value })} /></Field>
-              <Field><FieldLabel htmlFor="pol-owner">Owner approves above ($)</FieldLabel><Input id="pol-owner" aria-invalid={bad || undefined} name="owner" inputMode="decimal" autoComplete="off" placeholder="Never" value={v.owner} onChange={(e) => setV({ ...v, owner: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="pol-limit">Auto-approve up to ($)</FieldLabel><Input id="pol-limit" aria-invalid={bad || undefined} name="limit" inputMode="decimal" autoComplete="off" disabled={v.human} placeholder="Blank: always a person…" value={v.human ? "" : v.limit} onChange={(e) => setV({ ...v, limit: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="pol-owner">Owner approves above ($)</FieldLabel><Input id="pol-owner" aria-invalid={bad || undefined} name="owner" inputMode="decimal" autoComplete="off" placeholder="Blank: never…" value={v.owner} onChange={(e) => setV({ ...v, owner: e.target.value })} /></Field>
               <Field className="sm:col-span-2"><FieldLabel htmlFor="pol-role">Approver above the limit</FieldLabel><Pick id="pol-role" value={v.approver} onChange={(x) => setV({ ...v, approver: x })} options={roles} /></Field>
             </FieldGroup>
             {bad && <FieldError>Enter amounts in dollars, for example 1500.</FieldError>}

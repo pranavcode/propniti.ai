@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Lock, Percent } from "lucide-react";
 import { MANAGEMENT_FEE_RATE } from "@/lib/ledger";
+import { formatMoney } from "@/lib/format";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { Money } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
@@ -21,7 +22,8 @@ function exampleFee(p: Policy, rentCents: number, capPct: number) {
   if (capped) fee = Math.floor((rentCents * capPct + 50) / 100);
   return { fee, capped };
 }
-const describe = (p: Policy) => p.kind === "Percent" ? `${p.pct}% of rent` : p.kind === "Flat" ? `$${p.flat_cents / 100} flat` : `$${p.flat_cents / 100} + $${p.daily_cents / 100}/day`;
+const usd = (cents: number) => formatMoney(cents / 100, "whole");
+const describe = (p: Policy) => p.kind === "Percent" ? `${p.pct}% of rent` : p.kind === "Flat" ? `${usd(p.flat_cents)} flat` : `${usd(p.flat_cents)} + ${usd(p.daily_cents)}/day`;
 
 export default async function PaymentsPage() {
   const { session, ctx } = await settingsSession();
@@ -50,7 +52,7 @@ export default async function PaymentsPage() {
           </div>
         </Section>
 
-        <Section title="Late-fee policies" description={`Example fee on ${"$1,500"} rent, 5 days past grace. The state cap applies after the policy maximum.`} actions={<Link href="/app/settings/state-rules" className="text-[12.5px] text-primary hover:underline">State rules</Link>}>
+        <Section title="Late-fee policies" description="Example fee on $1,500 rent, 5 days past grace. The state cap applies after the policy maximum." actions={<Link href="/app/settings/state-rules" className="text-[12.5px] text-primary hover:underline">State rules</Link>}>
           {!policies.length ? (
             <EmptyState compact kind="table" title="No late-fee policies yet" description="Without a policy, late fees post at $50 after a 3-day grace period, capped by the state rule." />
           ) : (

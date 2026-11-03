@@ -24,7 +24,7 @@ export function SettingsNav({ groups }: { groups: SettingsGroup[] }) {
             const on = i.href === active;
             return (
               <Link key={i.href} href={i.href} aria-current={on ? "page" : undefined}
-                className={cn("flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-[13px] whitespace-nowrap transition-colors", on ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
+                className={cn("flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-[13px] whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60", on ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
                 <Icon className="size-4 shrink-0" />{i.label}
               </Link>
             );
