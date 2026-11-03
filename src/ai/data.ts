@@ -11,7 +11,7 @@ export type DataCtx = { db: Db; ws: string; actor: Actor };
 // Tables the AI may read, with the column that scopes them to a property (null = org-level).
 // Identifiers in SQL come only from this map and from column names read back from the database.
 export const TABLES = {
-  properties: "id", units: "property_id", buildings: "property_id", residents: "property_id", households: "property_id",
+  properties: "id", units: "property_id", unit_types: "property_id", buildings: "property_id", residents: "property_id", households: "property_id",
   leases: "property_id", charges: "property_id", payments: "property_id", credits: "property_id",
   work_orders: "property_id", vendors: null, bills: "property_id", bill_lines: null, vendor_cois: null,
   inspections: "property_id", compliance_items: "property_id", applications: "property_id", applicants: null,
