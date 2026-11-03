@@ -60,7 +60,7 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
 
   return (
     <form onSubmit={submit} noValidate className="space-y-3">
-      <fieldset>
+      <fieldset className="min-w-0">
         <legend className="mb-1.5 text-[12.5px] font-medium text-muted-foreground">Tour type</legend>
         <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
           {TOUR_KINDS.map((k) => (
@@ -71,7 +71,7 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
           ))}
         </div>
       </fieldset>
-      <fieldset>
+      <fieldset className="min-w-0">
         <legend className="mb-1.5 text-[12.5px] font-medium text-muted-foreground">Day</legend>
         <div className="-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1">
           {slots.map((s) => (

@@ -147,8 +147,8 @@ export default async function Page({ params }: Props) {
                   </tbody>
                 </table>
               </div>
-              {l.history.length > 0 && (
-                <p className="text-[13px] text-muted-foreground">Price history: {l.history.map((h) => `${usd(h.rent_cents)} until ${fmtDate(h.changed_on)}`).join(" · ")} · now {usd(l.rent_cents)}.</p>
+              {l.history.length > 1 && (
+                <p className="text-[13px] text-muted-foreground">Price history: {[...l.history].reverse().map((h) => `${usd(h.rent_cents)} from ${fmtDate(h.changed_on)}`).join(" → ")}</p>
               )}
             </section>
 
@@ -179,7 +179,7 @@ export default async function Page({ params }: Props) {
             </section>
           </div>
 
-          <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Price, apply and tour">
+          <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start" aria-label="Price, apply and tour">
             <div className="space-y-4 rounded-2xl border bg-card p-5 shadow-sm">
               <div>
                 <p className="flex items-baseline gap-2">
@@ -191,7 +191,7 @@ export default async function Page({ params }: Props) {
               </div>
               <Link href={`/apply/${l.id}`} className="flex h-11 items-center justify-center rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50">Apply now</Link>
               <p className="-mt-2 text-center text-[12px] text-muted-foreground">About 10 minutes · {usd(t.application_fee_cents)} fee per adult</p>
-              <div className="border-t pt-4">
+              <div id="tour" className="scroll-mt-20 border-t pt-4">
                 <h2 className="mb-3 text-[15px] font-semibold">Schedule a tour</h2>
                 <TourForm listingId={l.id} slots={tourSlots()} />
               </div>
@@ -209,6 +209,12 @@ export default async function Page({ params }: Props) {
           </section>
         )}
       </main>
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+        <p className="min-w-0 flex-1 leading-tight"><span className="text-[18px] font-semibold tabular-nums">{usd(l.rent_cents)}</span><span className="text-[12px] text-muted-foreground">/mo</span><span className="block truncate text-[12px] text-muted-foreground">{availableText(l.available_on, now)}</span></p>
+        <a href="#tour" className="inline-flex h-10 items-center rounded-lg border px-3 text-[14px] font-medium hover:bg-muted">Tour</a>
+        <Link href={`/apply/${l.id}`} className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-[14px] font-semibold text-primary-foreground hover:bg-primary/90">Apply now</Link>
+      </div>
+      <div className="h-16 lg:hidden" aria-hidden />
       <PublicFooter />
     </>
   );

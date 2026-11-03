@@ -18,9 +18,11 @@ export default async function Page({ params, searchParams }: Props) {
   const [l, a] = await Promise.all([getListing(ws, listingId), app ? applicationStatus(ws, app) : null]);
   if (!l || !a) notFound();
   const scored = !!a.proposal;
+  // The run can finish without reaching this application (it scores the longest-waiting first).
+  const queued = !scored && !!a.run && a.run.status !== "running" && a.run.status !== "queued";
   const steps = [
     { title: "Application received", detail: `Submitted for ${l.property} unit ${l.unit}. Updates go to ${a.email}.`, done: true },
-    { title: "Screening summary", detail: scored ? "The Leasing agent checked income, rental history and credit against the written criteria and drafted a summary with reasons for and against." : "The Leasing agent is checking income, rental history and credit against the written criteria.", done: scored, busy: !scored },
+    { title: "Screening summary", detail: scored ? "The Leasing agent checked income, rental history and credit against the written criteria and drafted a summary with reasons for and against." : queued ? "Queued for the Leasing agent's next scoring run (every 4 hours); it checks income, rental history and credit against the written criteria." : "The Leasing agent is checking income, rental history and credit against the written criteria.", done: scored, busy: !scored && !queued },
     { title: "A person decides", detail: "The managing broker reviews the summary and your documents and makes the decision, usually within 1 to 3 business days.", done: false },
     { title: "Sign your lease", detail: "Once approved, you'll get the lease to sign online and pay the deposit and first month's rent before move-in.", done: false },
   ];
@@ -28,7 +30,7 @@ export default async function Page({ params, searchParams }: Props) {
   return (
     <>
       <PublicHeader />
-      {!scored && <Refresh />}
+      {!scored && !queued && <Refresh />}
       <main id="main" className="mx-auto max-w-3xl space-y-6 px-4 pt-8 text-[14px] sm:px-6">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-1 size-7 shrink-0 text-tone-success" aria-hidden />
@@ -70,7 +72,7 @@ export default async function Page({ params, searchParams }: Props) {
               <p className="text-[12.5px] text-muted-foreground">Confidence {Math.round(a.proposal.confidence * 100)}% · {a.proposal.model ? `model ${a.proposal.model}` : "rules"} · waiting for the broker&apos;s decision. The applicant never sees this panel in a real deployment.</p>
             </div>
           ) : (
-            <p className="mt-3 text-muted-foreground">The Leasing agent is scoring this application now. This page updates by itself.</p>
+            <p className="mt-3 text-muted-foreground">{queued ? "The Leasing agent's last run scored applications that have waited longer; this one gets scored in a later run. The broker can also run the agent now from the agents page." : "The Leasing agent is scoring this application now. This page updates by itself."}</p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
             <form action="/api/session" method="post">
@@ -78,17 +80,17 @@ export default async function Page({ params, searchParams }: Props) {
               <input type="hidden" name="next" value="/app/ai/approvals" />
               <button type="submit" className="inline-flex h-10 items-center rounded-lg bg-primary px-4 font-medium text-primary-foreground hover:bg-primary/90">Open the broker&apos;s approvals</button>
             </form>
-            {a.proposal?.run_id && (
+            {(a.proposal?.run_id ?? a.run?.id) && (
               <form action="/api/session" method="post">
                 <input type="hidden" name="persona" value="rachel" />
-                <input type="hidden" name="next" value={`/app/ai/runs/${a.proposal.run_id}`} />
+                <input type="hidden" name="next" value={`/app/ai/runs/${a.proposal?.run_id ?? a.run?.id}`} />
                 <button type="submit" className="inline-flex h-10 items-center rounded-lg border bg-background px-4 font-medium hover:bg-muted">See the agent&apos;s steps</button>
               </form>
             )}
           </div>
         </section>
 
-        <p className="text-muted-foreground">Questions? Ask the leasing team on your tour, or <Link href={`/listings/${l.id}`} className="font-medium text-primary underline-offset-2 hover:underline">go back to the listing</Link> to book a tour.</p>
+        <p className="text-muted-foreground">Questions about the home? <Link href={`/listings/${l.id}`} className="font-medium text-primary underline-offset-2 hover:underline">Go back to the listing</Link> to ask or book a tour.</p>
       </main>
       <PublicFooter />
     </>

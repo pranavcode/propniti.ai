@@ -57,18 +57,22 @@ const FROM = `${effective("listings")} AS l
   JOIN ${effective("properties")} AS p ON p.id = l.property_id`;
 const PUBLIC = "l.status = 'Active'";
 const SPECIAL = `(SELECT c.label FROM ${effective("concessions")} AS c WHERE c.property_id = p.id AND c.lease_id IS NULL AND c.status = 'Active' ORDER BY c.amount_cents DESC LIMIT 1)`;
-const PREV = `(SELECT max(h.rent_cents) FROM ${effective("listing_price_history")} AS h WHERE h.listing_id = l.id)`;
+// History rows are prices from changed_on onwards; the previous price is the latest one that differs.
+const PREV = `(SELECT h.rent_cents FROM ${effective("listing_price_history")} AS h WHERE h.listing_id = l.id AND h.rent_cents <> l.rent_cents ORDER BY h.changed_on DESC LIMIT 1)`;
 const CARD_COLS = `l.id, l.headline, l.rent_cents, l.available_on, l.listed_on, l.photos AS l_photos, u.number AS unit, u.floor, u.sqft, ut.beds, ut.baths, ut.name AS plan,
   p.id AS property_id, p.name AS property, p.neighborhood, p.metro, p.city, p.state, p.type, p.photos AS p_photos, ${petsSql("p")} AS pets, ${SPECIAL} AS special, ${PREV} AS prev_rent_cents`;
 
+// Each card's photo is one of its property's photos, picked by unit number, so a results page
+// isn't one image repeated.
 function card(r: Raw): ListingCard {
-  const photos = [...json<string[]>(r.l_photos, []), ...json<string[]>(r.p_photos, [])];
+  const photos = json<string[]>(r.p_photos, []);
   const prev = r.prev_rent_cents == null ? null : Number(r.prev_rent_cents);
   return {
     id: String(r.id), headline: String(r.headline), rent_cents: Number(r.rent_cents), prev_rent_cents: prev != null && prev > Number(r.rent_cents) ? prev : null,
     available_on: (r.available_on as string) ?? null, listed_on: String(r.listed_on), unit: String(r.unit), floor: r.floor == null ? null : Number(r.floor), sqft: Number(r.sqft),
     beds: Number(r.beds), baths: Number(r.baths), plan: String(r.plan), property_id: String(r.property_id), property: String(r.property), neighborhood: String(r.neighborhood),
-    metro: String(r.metro), city: String(r.city), state: String(r.state), type: String(r.type), pets: !!r.pets, photo: photos[0] ?? `/img/props/${r.property_id}.webp`,
+    metro: String(r.metro), city: String(r.city), state: String(r.state), type: String(r.type), pets: !!r.pets,
+    photo: photos.length ? photos[(parseInt(String(r.unit).replace(/\D/g, ""), 10) || 0) % photos.length] : `/img/props/${r.property_id}.webp`,
     special: (r.special as string) ?? null,
   };
 }
@@ -151,7 +155,8 @@ export async function getListing(ws: string, id: string): Promise<ListingDetail 
   const detail = {
     ...base, description: String(r.description ?? ""), unit_id: String(r.unit_id), unit_type_id: String(r.unit_type_id), class: (r.class as string) ?? null, street: String(r.street), zip: String(r.zip),
     year_built: r.year_built == null ? null : Number(r.year_built), stories: r.stories == null ? null : Number(r.stories), amenities,
-    property_photos: [...json<string[]>(r.l_photos, []), ...json<string[]>(r.p_photos, [])], unit_photos: json<string[]>(r.ut_photos, []),
+    property_photos: json<string[]>(r.p_photos, []),
+    unit_photos: [...new Set([...json<string[]>(r.l_photos, []), ...json<string[]>(r.ut_photos, [])])].filter((src) => !src.startsWith("/img/props/")),
     specials: specials.results, history: history.results, parking: parking.results, storage_from_cents: storage?.c ?? null,
     lat: r.lat == null ? null : Number(r.lat), lng: r.lng == null ? null : Number(r.lng), siblings: siblings.results.map(card),
   };
@@ -219,15 +224,18 @@ export function tourSlots(from = AS_OF) {
 
 export type ApplicationStatus = {
   id: string; stage: string; first_name: string; email: string;
+  run: { id: string; status: string } | null;
   proposal: { title: string; why: string[]; confidence: number; model: string | null; run_id: string | null } | null;
 };
 
 // The visitor's own application and the Leasing agent's proposal for it, if the run has finished.
 export async function applicationStatus(ws: string, id: string): Promise<ApplicationStatus | null> {
   const a = await db().prepare(`SELECT a.id, a.stage, ap.first_name, ap.email FROM ${effective("applications")} AS a JOIN ${effective("applicants")} AS ap ON ap.id = a.applicant_id WHERE a.id = ?2 AND a.workspace_id = ?1`)
-    .bind(ws, id).first<Omit<ApplicationStatus, "proposal">>();
+    .bind(ws, id).first<Omit<ApplicationStatus, "proposal" | "run">>();
   if (!a) return null;
   const p = await db().prepare(`SELECT title, why, confidence, model, run_id FROM ${effective("ai_proposals")} AS p WHERE p.entity_type = 'applications' AND p.entity_id = ?2 ORDER BY p.created_at DESC LIMIT 1`)
     .bind(ws, id).first<{ title: string; why: string; confidence: number; model: string | null; run_id: string | null }>();
-  return { ...a, proposal: p ? { ...p, why: json<string[]>(p.why, []) } : null };
+  const run = await db().prepare(`SELECT r.id, r.status FROM ${effective("events")} AS e JOIN ${effective("agent_runs")} AS r ON r.id = e.run_id WHERE e.entity_type = 'applications' AND e.entity_id = ?2 ORDER BY e.created_at DESC LIMIT 1`)
+    .bind(ws, id).first<{ id: string; status: string }>();
+  return { ...a, run: run ?? null, proposal: p ? { ...p, why: json<string[]>(p.why, []) } : null };
 }
