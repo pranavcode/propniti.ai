@@ -67,15 +67,18 @@ registerAction({
   bulk: true,
   async handler(ctx, row, i) {
     const ids = await policyProperties(ctx, row);
+    if (!ids.length) return { status: 403, error: "That policy's property is outside your portfolio." };
     const r = await postLateFees(ctx, ids, i.period);
     return r.status === 200 ? { status: 200, message: r.message, href: `/app/receivables/charges?f.gl_account_id=gl-4100&f.period=${i.period}` } : r;
   },
   help: { summary: "Adds a late fee to each lease whose rent is still unpaid after the grace period, once per month, never above the state cap.", article: "post-late-fees" },
 });
 
+// Policies are org-level records, so the actor's property scope is applied here: a property
+// manager can't post fees on a property outside their portfolio by running its policy.
 async function policyProperties(ctx: ActionContext, policy: Row): Promise<string[]> {
-  if (policy.property_id) return [String(policy.property_id)];
   const scope = ctx.actor.propertyIds;
+  if (policy.property_id) return scope === "all" || scope.includes(String(policy.property_id)) ? [String(policy.property_id)] : [];
   const rows = (await ctx.db
     .prepare(`SELECT p.id FROM ${effective("properties")} AS p WHERE NOT EXISTS (SELECT 1 FROM ${effective("late_fee_policies")} AS l WHERE l.property_id = p.id) ORDER BY p.id`)
     .bind(ctx.ws)

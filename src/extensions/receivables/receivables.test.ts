@@ -102,6 +102,13 @@ describe("late fees", () => {
     for (const f of fees) expect(f.amount_cents).toBeLessThanOrEqual(Math.floor((f.rent * 10 + 50) / 100));
     expect(new Set(fees.map((f) => f.lease_id)).size).toBe(fees.length);
   });
+
+  it("refuses a property policy outside the actor's scope", async () => {
+    const marcus: Actor = { personaId: "marcus", name: "Marcus Bell", role: "property_manager", scope: { kind: "property", ids: ["p01", "p02", "p03"], label: "" }, propertyIds: ["p01", "p02", "p03"] };
+    const c = await ctx(marcus);
+    expect(await act("late_fee_policies.post_late_fees")(c, { id: "x", property_id: "p22" }, { period: "2026-11" })).toMatchObject({ status: 403 });
+    expect(await n("SELECT count(*) AS n FROM charges WHERE workspace_id = ?1", c.ws)).toBe(0);
+  });
 });
 
 describe("deposit disposition", () => {
