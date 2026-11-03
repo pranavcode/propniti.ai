@@ -167,7 +167,7 @@ describe("rows", () => {
 
   it("exports CSV with labels and guards against formula injection", async () => {
     await db.prepare("UPDATE properties SET name = '=HYPERLINK(\"x\")' WHERE id = 'p06'").run();
-    const csv = await exportCsv(await ctx("daniel"), "properties", {});
+    const csv = await new Response(await exportCsv(await ctx("daniel"), "properties", {})).text();
     const lines = csv.trim().split("\r\n");
     expect(lines[0]).toContain("Property");
     expect(lines).toHaveLength(7);

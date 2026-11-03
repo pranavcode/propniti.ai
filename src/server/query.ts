@@ -371,21 +371,34 @@ const csvCell = (v: unknown) => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-export async function exportCsv(ctx: QueryCtx, entity: string, q: ListQuery): Promise<string> {
+// Streams the CSV page by page (keyset cursor), so up to EXPORT_CAP rows never sit in memory.
+// Validation errors (unknown filter, no read access) throw before the stream starts.
+export async function exportCsv(ctx: QueryCtx, entity: string, q: ListQuery): Promise<ReadableStream<Uint8Array>> {
   const def = getDef(entity);
   const cols = visibleFields(def, ctx.actor.role).filter(([, f]) => f.type !== "image" && f.type !== "json");
   const keys = q.columns?.length ? cols.filter(([k]) => q.columns!.includes(k)) : cols.filter(([, f]) => f.list?.default);
   const use = keys.length ? keys : cols;
-  const lines = [["ID", ...use.map(([, f]) => f.label)].map(csvCell).join(",")];
-  let cursor: string | undefined;
-  let n = 0;
-  do {
-    const res = await list(ctx, entity, { ...q, size: PAGE_SIZE_CAP, cursor: cursor ?? undefined, page: 1, rowsOnly: true });
-    for (const r of res.rows) lines.push([r.id, ...use.map(([k, f]) => (f.type === "ref" ? r[`${k}__label`] ?? r[k] : r[k]))].map(csvCell).join(","));
-    n += res.rows.length;
-    cursor = res.nextCursor;
-  } while (cursor && n < EXPORT_CAP);
-  return lines.join("\r\n") + "\r\n";
+  const line = (r: Row) => [r.id, ...use.map(([k, f]) => (f.type === "ref" ? r[`${k}__label`] ?? r[k] : r[k]))].map(csvCell).join(",") + "\r\n";
+  const page = (cursor?: string) => list(ctx, entity, { ...q, size: PAGE_SIZE_CAP, cursor, page: 1, rowsOnly: true });
+  const first = await page();
+  const enc = new TextEncoder();
+  let next = first.nextCursor;
+  let n = first.rows.length;
+  let pending: string | null = ["ID", ...use.map(([, f]) => f.label)].map(csvCell).join(",") + "\r\n" + first.rows.map(line).join("");
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (pending != null) {
+        controller.enqueue(enc.encode(pending));
+        pending = null;
+        return;
+      }
+      if (!next || n >= EXPORT_CAP) return controller.close();
+      const res = await page(next);
+      n += res.rows.length;
+      next = res.nextCursor;
+      controller.enqueue(enc.encode(res.rows.map(line).join("")));
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
