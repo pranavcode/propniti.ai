@@ -34,6 +34,7 @@ const REAL_CLOCK_OK = new Set([
   "src/app/(app)/app/leasing/today/page.tsx", // greeting: time of day only
   "src/app/(portal)/portal/resident/page.tsx", // greeting: time of day only
   "src/app/api/ai/sweep/route.ts", // cron trigger
+  "src/app/api/ai/events/route.ts", // request clock, converted where stamped
   "src/app/api/ai/runs/[id]/stream/route.ts", // stream deadline
   "src/app/api/e/_lib/http.ts", // request clock, converted with nowIso where stamped
   "src/app/api/e/[entity]/export.csv/route.ts", // download file name
