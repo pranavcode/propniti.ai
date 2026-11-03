@@ -209,7 +209,10 @@ export async function recordPayment(ctx: ActionContext, input: RecordPaymentInpu
 // One fee per lease per month: the charge id lf-<lease>-<yyyymm> is the idempotency key.
 export async function postLateFees(ctx: ActionContext, propertyIds: string[], period = CURRENT_PERIOD): Promise<Outcome & { posted?: number }> {
   const { db, ws, nowMs, actor } = ctx;
-  if (!propertyIds.length) return { status: 400, error: "Choose at least one property" };
+  // Only properties in the actor's scope; the caller's list is never trusted on its own.
+  const inScope = actor.propertyIds === "all" ? propertyIds : propertyIds.filter((id) => (actor.propertyIds as string[]).includes(id));
+  if (!inScope.length) return { status: 403, error: "None of those properties are in your scope" };
+  propertyIds = inScope;
   const props = JSON.stringify(propertyIds.slice(0, 50));
   const rules = (await db.prepare(`SELECT state, rule, value FROM ${effective("state_rules")} AS s WHERE s.effective_from <= ?2 ORDER BY s.effective_from`).bind(ws, AS_OF).all<{ state: string; rule: string; value: string }>()).results;
   const rule = (state: string, name: string) => rules.filter((r) => r.state === state && r.rule === name).at(-1)?.value;
@@ -220,7 +223,7 @@ export async function postLateFees(ctx: ActionContext, propertyIds: string[], pe
         `SELECT c.id, c.lease_id, c.amount_cents, c.due_on, c.property_id, p.state, p.name AS property_name, ${chargeOpenSql("c")} AS open_cents
          FROM ${effective("charges")} AS c JOIN ${effective("properties")} AS p ON p.id = c.property_id
          WHERE c.period = ?2 AND c.gl_account_id IN ('gl-4000', 'gl-4010') AND c.property_id IN (SELECT value FROM json_each(?3))
-         ORDER BY c.id LIMIT 400`,
+         ORDER BY c.id LIMIT 900`,
       )
       .bind(ws, period, props)
       .all<{ id: string; lease_id: string; amount_cents: number; due_on: string; property_id: string; state: string; property_name: string; open_cents: number }>()
@@ -254,6 +257,9 @@ export async function postLateFees(ctx: ActionContext, propertyIds: string[], pe
     );
   }
   if (!stmts.length) return { status: 409, error: "No unpaid rent is past its grace period in the selected properties." };
+  // D1 counts every statement in a batch toward its per-request query limit: post at most 90.
+  stmts.splice(90);
+  posted.splice(90);
   const results = await db.batch(stmts);
   const n = results.reduce((s, r) => s + r.meta.changes, 0);
   if (!n) return { status: 409, error: `Late fees for ${period} are already posted.` };

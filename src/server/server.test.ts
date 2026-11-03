@@ -213,6 +213,8 @@ describe("money", { timeout: 60_000 }, () => {
     // Texas: at most 10% of monthly rent for buildings with more than 4 units.
     for (const f of fees) expect(f.amount_cents).toBeLessThanOrEqual(Math.floor((f.rent * 10 + 50) / 100));
     expect(await postLateFees(c, ["p01", "p02", "p03"])).toMatchObject({ status: 409 });
+    // Outside Marcus's scope (Phoenix) is refused.
+    expect(await postLateFees(c, ["p22"])).toMatchObject({ status: 403 });
   });
 
   it("double clicks move money once: pay, record, approve, pay bill, distribute, late fees", async () => {
