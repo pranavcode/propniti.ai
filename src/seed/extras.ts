@@ -413,11 +413,19 @@ class Extras {
   personaScenarios() {
     const { c } = this;
     const r = rng("personas");
+    // A curated job keeps only its opening event; the scenario then writes the rest of its trail, so
+    // a job never carries a second submission from the random simulation.
+    const resetTrail = (w: R) => {
+      const evs = c.t.wo_events;
+      for (let i = evs.length - 1; i >= 0; i--) if (evs[i].work_order_id === w.id && !String(evs[i].id).endsWith("-e1")) evs.splice(i, 1);
+      c.t.photos = (c.t.photos ?? []).filter((ph) => ph.entity_id !== w.id || ph.stage === "Before");
+    };
     const p01 = c.propById.p01, p02 = c.propById.p02, p03 = c.propById.p03;
     const jordan = c.households.find((h) => h.residents[0]?.id === "res-p01-0001")!;
     const jUnit = jordan.leases.at(-1)!.u;
     // Jordan's AC repair: scheduled for tomorrow with Hill Country HVAC.
     const ac = createWorkOrder(c, p01, jUnit, WO_TYPES[5], ASOF - 1, `WO-${++c.woN}`, r, "Resident", null);
+    resetTrail(ac);
     Object.assign(ac, { status: "Scheduled", vendor_id: "v02", priority: "Urgent", assignee_id: null, scheduled_at: ts(ASOF + 1, 600), completed_at: null, cost_cents: null, title: "AC not cooling", description: "AC not cooling · #412. Thermostat set to 72, unit reads 81. Resident works from home; okay to enter 9–12." });
     this.add("service_requests", { id: `sr-${ac.id}`, property_id: "p01", unit_id: jUnit.id, resident_id: "res-p01-0001", body: "My AC is blowing warm air. Thermostat says 81 even set to 72. I work from home so mornings are best.", category: "HVAC", urgency: "Urgent", status: "Converted", work_order_id: ac.id, submitted_at: ac.opened_at });
     this.add("wo_events", { id: `${ac.id}-sched`, work_order_id: ac.id, property_id: "p01", at: ts(ASOF - 1, 700), actor_kind: "vendor", actor_id: "v02", kind: "Status", status: "Scheduled", detail: JSON.stringify({ window: "Tomorrow 9:00–11:00" }) });
@@ -429,10 +437,13 @@ class Extras {
       const w = createWorkOrder(c, p, u, spec, ASOF - r.int(1, 4), `WO-${++c.woN}`, r, "Resident", null);
       const cost = round(spec[3] + r() * (spec[4] - spec[3]), 100);
       Object.assign(w, { status, vendor_id: "v01", assignee_id: null, completed_at: null, cost_cents: null, estimate_cents: cost, scheduled_at: status === "Assigned" ? null : ts(ASOF + (status === "Scheduled" ? 1 : -1), 600) });
+      resetTrail(w);
+      this.add("wo_events", { id: `${w.id}-asg`, work_order_id: w.id, property_id: p.id, at: ts(day(w.opened_at as string), 700), actor_kind: "staff", actor_id: p.supervisor, kind: "Assigned", status: "Assigned", detail: JSON.stringify({ vendor_id: "v01" }) });
       if (status === "Submitted") this.add("wo_events", { id: `${w.id}-sub`, work_order_id: w.id, property_id: p.id, at: ts(ASOF, 540), actor_kind: "vendor", actor_id: "v01", kind: "Submission", status: "Submitted", detail: JSON.stringify({ total_cents: cost, invoice_number: `LSP-${r.int(40000, 49999)}`, lines: [{ description: "Labor (2 hrs)", amount_cents: round(cost * 0.55, 100) }, { description: "Parts", amount_cents: cost - round(cost * 0.55, 100) }] }) });
     }
     // Owner persona: a repair above the owner's approval limit, waiting in the owner portal.
     const big = createWorkOrder(c, p02, p02.units.find((u) => u.status === "Occupied" && u.beds >= 2)!, WO_TYPES[3], ASOF - 2, `WO-${++c.woN}`, r, "Resident", null);
+    resetTrail(big);
     Object.assign(big, { status: "On hold", vendor_id: "v01", estimate_cents: 485_000, cost_cents: null, completed_at: null, title: "Water heater failed — replace 50-gal unit", description: "Tank leaking at the base; replacement quoted at $4,850 including haul-away and permit. Over the owner approval limit ($2,500)." });
     this.task({ title: "Owner approval needed: water heater replacement $4,850", detail: "Over Bluebonnet's $2,500 owner approval limit. Sent to Helen Carter in the owner portal.", entity: ["work_orders", big.id as string], property: "p02", assignee: null, role: "owner", due: ASOF + 1, created: ASOF - 1, queue: "waiting", source: "Agent" });
     this.add("notifications", { id: `nt-owner-approve-${big.id}`, user_id: "ow01", channel: "In-app", title: "Approval needed: $4,850 repair at Barton Creek Commons", body: "Water heater replacement is over your $2,500 approval limit.", href: "/portal/owner/approvals", entity_type: "work_orders", entity_id: big.id, read_at: null, at: ts(ASOF - 1, 610) });
@@ -440,7 +451,9 @@ class Extras {
     for (const pid of ["p08", "p09", "p11"]) {
       const p = c.propById[pid];
       const w = createWorkOrder(c, p, p.units.find((u) => u.status === "Occupied")!, WO_TYPES[4], ASOF - 2, `WO-${++c.woN}`, r, "Resident", null);
+      resetTrail(w);
       Object.assign(w, { status: "In progress", priority: "Emergency", completed_at: null, cost_cents: null, sla_due_at: ts(ASOF - 2, 900) });
+      this.add("wo_events", { id: `${w.id}-ip`, work_order_id: w.id, property_id: p.id, at: ts(ASOF - 2, 640), actor_kind: "staff", actor_id: p.supervisor, kind: "Status", status: "In progress", detail: "{}" });
     }
   }
 
@@ -638,6 +651,27 @@ class Extras {
       const bill = c.bills.find((b) => b.work_order_id === w.id);
       if (bill) bill.po_id = id;
     }
+    // Every submitted vendor job has a PO to check the invoice against. Two differ on purpose (the
+    // invoice is above the PO) so the AI invoice check has something to flag.
+    const subs = new Map<string, R>();
+    for (const e of c.t.wo_events) if (e.kind === "Submission" && JSON.parse(e.detail as string).lines?.length) subs.set(e.work_order_id as string, e);
+    let mismatches = 0;
+    for (const w of c.workOrders.filter((x) => x.status === "Submitted" && x.vendor_id).sort((a, b) => (a.id! < b.id! ? -1 : 1))) {
+      const sub = subs.get(w.id as string);
+      if (!sub) continue;
+      const lines = JSON.parse(sub.detail as string).lines as { description: string; amount_cents: number }[];
+      const off = mismatches < 2 && w.vendor_id === "v01" ? ++mismatches : 0;
+      const poLines = lines.map((l, i) => ({ ...l, amount_cents: off && i === lines.length - 1 ? round(l.amount_cents * 0.6, 100) : l.amount_cents }));
+      const existingPo = c.t.purchase_orders.find((x) => x.work_order_id === w.id);
+      const id = (existingPo?.id as string) ?? `po-${++po}`;
+      if (existingPo) {
+        c.t.purchase_orders.splice(c.t.purchase_orders.indexOf(existingPo), 1);
+        c.t.po_lines = c.t.po_lines.filter((x) => x.po_id !== id);
+      }
+      add("purchase_orders", { id, property_id: w.property_id, vendor_id: w.vendor_id, work_order_id: w.id, number: `PO-${5000 + Number(id.slice(3))}`, status: "Open", total_cents: poLines.reduce((t, l) => t + l.amount_cents, 0), issued_on: iso(day(w.opened_at as string) + 1), approved_by: "tom" });
+      poLines.forEach((l, i) => add("po_lines", { id: `${id}-${i + 1}`, po_id: id, gl_account_id: "gl-6000", description: l.description, qty: 1, unit_cents: l.amount_cents, amount_cents: l.amount_cents }));
+    }
+
     // 1099s: vendor payouts per payer entity, 2025 filed, 2026 in draft.
     const by = new Map<string, number>();
     for (const t of c.t.transfers) if (t.kind === "Vendor payout" && t.status === "Cleared") {
