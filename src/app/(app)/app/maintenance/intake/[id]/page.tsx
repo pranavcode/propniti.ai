@@ -72,7 +72,8 @@ export default async function TriagePage({ params, searchParams }: Props) {
                     <ActionButton entity="work_orders" id={id} action="work_orders.run_triage" label="Triage with AI" variant="default" follow />
                   </div>
                 )}
-                <DispatchPanel
+                {/* Keyed by trade: a new trade brings a new vendor list, so the picks start over. */}
+                <DispatchPanel key={trade}
                   wo={{ id, priority: String(wo.priority), category: String(wo.category), estimate: wo.estimate == null ? null : Number(wo.estimate) }}
                   trade={trade} suggestion={suggestion} vendors={vendors} techs={techs} policy={policy}
                 />

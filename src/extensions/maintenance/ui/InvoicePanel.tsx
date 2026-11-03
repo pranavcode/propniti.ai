@@ -13,7 +13,9 @@ import { FIELD, useAction } from "./client";
 // Vendor invoice → validate against the PO → approve and pay (the v1 flow on v2 data).
 // Reading a file goes through /api/ai/extract; the comparison and the payment run on the server.
 
-type Line = { description: string; amount: string };
+type Line = { key: number; description: string; amount: string };
+let nextKey = 0;
+const line = (description: string, amount: string): Line => ({ key: ++nextKey, description, amount });
 type Extract = {
   invoice?: { isInvoice: boolean; vendor: string; invoiceNumber: string; invoiceDate: string; lineItems: { description: string; amount: number }[]; total: number; currency: string; confidence: number; issues: string[] };
   checks: { label: string; ok: boolean }[];
@@ -30,7 +32,7 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
   const [read, setRead] = useState<Extract | null>(null);
   const [number, setNumber] = useState(initial?.invoice_number ?? "");
   const [lines, setLines] = useState<Line[]>(
-    (initial?.lines.length ? initial.lines : poLines).map((l) => ({ description: l.description.split(":")[0], amount: (l.amount_cents / 100).toFixed(2) })),
+    () => (initial?.lines.length ? initial.lines : poLines).map((l) => line(l.description.split(":")[0], (l.amount_cents / 100).toFixed(2))),
   );
   const [source, setSource] = useState<"read" | "manual">("manual");
   const total = lines.reduce((a, l) => a + (Number(l.amount) || 0), 0);
@@ -46,7 +48,7 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
     setRead(out);
     if (out.invoice?.isInvoice) {
       setNumber(out.invoice.invoiceNumber);
-      setLines(out.invoice.lineItems.map((l) => ({ description: l.description, amount: l.amount.toFixed(2) })));
+      setLines(out.invoice.lineItems.map((l) => line(l.description, l.amount.toFixed(2))));
       setSource("read");
     }
   };
@@ -97,7 +99,7 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
         <thead><tr className="text-left text-[11.5px] text-muted-foreground"><th className="pb-1 font-normal">Line</th><th className="w-32 pb-1 text-right font-normal">Amount ($)</th><th className="w-8" /></tr></thead>
         <tbody>
           {lines.map((l, i) => (
-            <tr key={i}>
+            <tr key={l.key}>
               <td className="py-0.5 pr-2"><input aria-label={`Line ${i + 1} description`} className={FIELD} value={l.description} maxLength={200} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} /></td>
               <td className="py-0.5"><input aria-label={`Line ${i + 1} amount`} inputMode="decimal" className={cn(FIELD, "text-right tabular-nums")} value={l.amount} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, amount: e.target.value.replace(/[^\d.]/g, "") } : x)))} /></td>
               <td className="py-0.5 pl-1"><Button size="icon-sm" variant="ghost" aria-label={`Remove line ${i + 1}`} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, j) => j !== i))}><Trash2 className="size-3.5" /></Button></td>
@@ -106,7 +108,7 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
         </tbody>
         <tfoot>
           <tr>
-            <td className="pt-1.5"><Button size="xs" variant="ghost" disabled={lines.length >= 20} onClick={() => setLines([...lines, { description: "", amount: "" }])}><Plus className="size-3" />Add line</Button></td>
+            <td className="pt-1.5"><Button size="xs" variant="ghost" disabled={lines.length >= 20} onClick={() => setLines([...lines, line("", "")])}><Plus className="size-3" />Add line</Button></td>
             <td className="pt-1.5 text-right font-medium tabular-nums">{formatMoney(total)}</td>
             <td />
           </tr>
