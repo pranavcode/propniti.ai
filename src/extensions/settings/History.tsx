@@ -23,7 +23,7 @@ export async function ChangeHistory({ ctx, entityTypes, entityId, limit = 15, la
   const list = await rows<Entry>(ctx, `SELECT id, at, actor, role, action, entity_id, detail, before_json, after_json FROM {audit} WHERE entity_type IN (SELECT value FROM json_each(?))${entityId ? " AND entity_id = ?" : ""} ORDER BY at DESC LIMIT ${Math.min(50, limit)}`, params);
   if (!list.length) return <EmptyState compact kind="table" title="No changes yet" description={empty} />;
   return (
-    <ol className="divide-y rounded-lg border bg-card">
+    <ol aria-label="Change history" className="divide-y rounded-lg border bg-card">
       {list.map((e) => {
         const before = parseJson<Record<string, unknown>>(e.before_json, {});
         const after = parseJson<Record<string, unknown>>(e.after_json, {});
@@ -31,7 +31,7 @@ export async function ChangeHistory({ ctx, entityTypes, entityId, limit = 15, la
         return (
           <li key={e.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-3 py-2.5">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px]"><span className="font-medium">{e.actor}</span> <span className="text-muted-foreground">{e.detail || e.action}</span></div>
+              <div className="text-[13px]"><span className="font-medium">{e.actor}</span> <span className="text-muted-foreground">{e.before_json && keys.length ? `changed ${keys.map((k) => labels[k] ?? k.replace(/_cents$/, "").replace(/_/g, " ")).join(", ")}` : e.detail || e.action.replace(/[._]/g, " ")}</span></div>
               {e.before_json && keys.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px]">
                   {keys.map((k) => (
