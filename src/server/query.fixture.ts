@@ -1,4 +1,14 @@
+import { DatabaseSync } from "node:sqlite";
+import { applyMigrations, sqliteDb } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
+
+// A fresh database with the schema only (no generated base), for the fixture below.
+export function emptyDb(): Db {
+  const raw = new DatabaseSync(":memory:");
+  raw.exec("PRAGMA foreign_keys = ON");
+  applyMigrations(raw);
+  return sqliteDb(raw);
+}
 
 // Fixture: 6 properties across 3 regions, 3 units each, one lease per occupied unit, a few
 // charges and payments, and two months of metrics_monthly. All rows are base rows.

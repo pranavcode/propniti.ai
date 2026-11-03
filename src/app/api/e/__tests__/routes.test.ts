@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { getPlatform } from "@/lib/platform";
 import { registerAction } from "@/extensions/actions";
 import { getPersona } from "@/auth/personas";
@@ -12,9 +12,11 @@ import * as notesRoute from "../[entity]/[id]/notes/route";
 import * as metricRoute from "../../metrics/[key]/route";
 import * as sessionRoute from "../../session/route";
 
-// The generic entity API over HTTP. getPlatform() opens DATABASE_PATH, so tests run on a
-// fresh in-memory database with the shared fixture.
-process.env.DATABASE_PATH = ":memory:";
+// The generic entity API over HTTP, on a fresh in-memory database with the shared fixture.
+vi.mock("@/lib/platform", async () => {
+  const db = (await import("@/server/query.fixture")).emptyDb();
+  return { getPlatform: () => ({ db }) };
+});
 
 const host = "propniti.test";
 const req = (path: string, init: RequestInit & { persona?: string; origin?: string | null } = {}) => {

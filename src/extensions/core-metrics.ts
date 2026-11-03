@@ -60,13 +60,15 @@ export async function monthSeries(ctx: MetricCtx, params: MetricParams): Promise
 const ratio = (a: number, b: number) => (b ? a / b : null);
 
 // A metric whose value is one number per month: KPI value = latest month, previous = the month
-// before, spark and points = the trailing window.
-export function monthly(key: MetricKey, label: string, value: (m: MonthSums) => number | null, series?: Record<string, (m: MonthSums) => number | null>) {
+// before, spark and points = the trailing window. Flows (NOI, income) end at the last closed
+// month, since the current one is only days old; stocks (occupancy, open work orders, balances)
+// end at the current month and include the visitor's live changes.
+export function monthly(key: MetricKey, label: string, value: (m: MonthSums) => number | null, series?: Record<string, (m: MonthSums) => number | null>, kind: "stock" | "flow" = "stock") {
   return registerMetric({
     key,
     label,
     run: async (ctx, params): Promise<MetricResult> => {
-      const rows = await monthSeries(ctx, params);
+      const rows = await monthSeries(ctx, kind === "flow" && !params.month ? { ...params, month: addMonths(ctx.asOf, -1) } : params);
       const vals = rows.map(value);
       const points = rows.map((m, i) => {
         const p: Row = { month: m.month, value: vals[i] };
@@ -84,7 +86,8 @@ export function byProperty(key: MetricKey, label: string, cols: Record<string, (
     key,
     label,
     run: async (ctx, params) => {
-      const month = params.month ?? ctx.asOf;
+      // NOI and collections need a whole month: compare properties on the last closed one.
+      const month = params.month ?? addMonths(ctx.asOf, -1);
       const s = scopeSql(ctx, params, "m.property_id");
       const res = await ctx.db.prepare(`SELECT m.property_id, p.name, p.metro, m.month, ${SUMS.map((c) => `coalesce(m.${c}, 0) AS ${c}`).join(", ")}, m.occupancy_econ * m.gpr_cents AS econ_weighted FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id WHERE m.workspace_id = 'base' AND m.month = ?${s.sql}`).bind(month, ...s.binds).all<MonthSums & { property_id: string; name: string; metro: string }>();
       const points = res.results.map((r) => {
@@ -108,11 +111,11 @@ monthly("portfolio.economic_occupancy", "Economic occupancy", (m) => ratio(m.eco
 monthly("portfolio.noi", "Net operating income", (m) => dollars(m.noi_cents), {
   noi: (m) => dollars(m.noi_cents),
   budget: (m) => (m.budget_noi_cents ? dollars(m.budget_noi_cents) : null),
-});
+}, "flow");
 monthly("portfolio.income_expense", "Income vs expenses", (m) => dollars(m.collected_cents - m.opex_cents), {
   income: (m) => dollars(m.collected_cents),
   expenses: (m) => dollars(m.opex_cents),
-});
+}, "flow");
 monthly("portfolio.units", "Units", (m) => m.units);
 monthly("receivables.collections_rate", "Collections rate", (m) => ratio(m.collected_cents, m.charged_cents), {
   charged: (m) => dollars(m.charged_cents),
@@ -124,11 +127,11 @@ monthly("receivables.delinquency", "Delinquent balance", (m) => dollars(aging(m)
   d61_90: (m) => dollars(m.aging_61_90_cents),
   d90p: (m) => dollars(m.aging_90p_cents),
 });
-monthly("leasing.vacancy_loss", "Vacancy loss", (m) => dollars(m.vacancy_loss_cents));
-monthly("leasing.move_ins", "Move-ins", (m) => m.move_ins, { move_ins: (m) => m.move_ins, move_outs: (m) => m.move_outs });
+monthly("leasing.vacancy_loss", "Vacancy loss", (m) => dollars(m.vacancy_loss_cents), undefined, "flow");
+monthly("leasing.move_ins", "Move-ins", (m) => m.move_ins, { move_ins: (m) => m.move_ins, move_outs: (m) => m.move_outs }, "flow");
 monthly("maintenance.wo_open", "Open work orders", (m) => m.wo_open, { opened: (m) => m.wo_opened, open: (m) => m.wo_open, breached: (m) => m.wo_sla_breach });
 monthly("maintenance.sla", "Within SLA", (m) => (m.wo_open ? 1 - m.wo_sla_breach / m.wo_open : null));
-monthly("intelligence.ai_minutes_saved", "Staff hours saved by AI", (m) => Math.round(m.ai_minutes_saved / 60), { hours: (m) => Math.round(m.ai_minutes_saved / 60), actions: (m) => m.ai_actions });
+monthly("intelligence.ai_minutes_saved", "Staff hours saved by AI", (m) => Math.round(m.ai_minutes_saved / 60), { hours: (m) => Math.round(m.ai_minutes_saved / 60), actions: (m) => m.ai_actions }, "flow");
 
 byProperty("portfolio.by_property", "Property comparison", {
   units: (m) => m.units,

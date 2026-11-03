@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { allEntities, can } from "@/entities";
 import { getPersona } from "@/auth/personas";
-import { openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { actorFor, permissionMatrix } from "./permissions";
-import { OTHER, seed, WS } from "./query.fixture";
+import { emptyDb, OTHER, seed, WS } from "./query.fixture";
 import { createRecord, deleteRecord, effective, exportCsv, getRow, list, metrics, parseListQuery, QueryError, relations, updateRecord, writeSchema, type QueryCtx, type WriteCtx } from "./query";
 
 let db: Db;
@@ -13,7 +12,7 @@ const ctx = async (personaId: string, ws: string | null = null): Promise<QueryCt
 const wctx = async (personaId: string, ws = WS): Promise<WriteCtx> => ({ db, ws, actor: await actor(personaId, ws), nowMs: Date.parse("2026-10-28T15:00:00Z") });
 
 beforeEach(async () => {
-  db = openSqlite(":memory:");
+  db = emptyDb();
   await seed(db);
 });
 
@@ -310,5 +309,15 @@ describe("metrics", () => {
     const before = await metrics(await ctx("marcus", null), "receivables.collections_rate");
     const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate");
     expect(after.points.at(-1)!.collected).toBe(Number(before.points.at(-1)!.collected) + 1450);
+  });
+});
+
+describe("facets", () => {
+  it("counts facet values under the other filters and the scope", async () => {
+    const { facetOptions } = await import("./query");
+    const f = await facetOptions(await ctx("priya"), "properties", { filters: { metro: "Austin" } });
+    expect(f.region_id).toEqual([{ value: "r-tx", label: undefined, count: 3 }]);
+    const units = await facetOptions(await ctx("daniel"), "units", { filters: { property_id: "p01" } });
+    expect(units.property_id.find((o) => o.value === "p05")).toMatchObject({ label: "Inman Park Flats", count: 3 });
   });
 });

@@ -1,7 +1,7 @@
 import { listViews, QueryError, saveView, viewSchema } from "@/server/query";
 import { handle, json, readCtx, writeCtx } from "../e/_lib/http";
 
-// Saved views for a list: built-in ones from the def, shared ones and the persona's own.
+// Saved views for a list: shared ones and the persona's own. Built-in views ship in the def.
 export async function GET(request: Request) {
   return handle(async () => {
     const entity = new URL(request.url).searchParams.get("entity");

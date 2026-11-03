@@ -632,9 +632,8 @@ export async function listViews(ctx: QueryCtx, entity: string) {
   const def = getDef(entity);
   assertRead(def, ctx.actor.role);
   const res = await ctx.db.prepare(`SELECT id, name, owner_id, state, position FROM ${effective("saved_views", ctx.ws)} WHERE entity_type = ? AND (owner_id IS NULL OR owner_id = ?) ORDER BY position, name LIMIT 100`).bind(def.key, ctx.actor.personaId).all();
-  const stored = res.results.map((r) => ({ key: String(r.id), label: String(r.name), shared: r.owner_id == null, mine: r.owner_id === ctx.actor.personaId, ...JSON.parse(String(r.state)) }));
-  const builtIn = (def.list.savedViews ?? []).map((v) => ({ ...v, builtIn: true, shared: true, mine: false }));
-  return [...builtIn, ...stored];
+  // Built-in views come from the def (EntityDef.list.savedViews); these are the stored ones.
+  return res.results.map((r) => ({ key: String(r.id), label: String(r.name), shared: r.owner_id == null, mine: r.owner_id === ctx.actor.personaId, ...JSON.parse(String(r.state)) }));
 }
 
 export async function saveView(ctx: WriteCtx, body: z.infer<typeof viewSchema>) {
@@ -707,4 +706,33 @@ export async function metrics(ctx: QueryCtx, key: string, params: MetricParams =
   if (params.property && ctx.actor.propertyIds !== "all" && !ctx.actor.propertyIds.includes(params.property)) throw new QueryError(403, "That property is outside your scope");
   if (params.month && !/^\d{4}-\d{2}$/.test(params.month)) throw new QueryError(400, "month must be YYYY-MM");
   return m.run({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, propertyIds: ctx.actor.propertyIds, asOf: await asOfMonth(ctx.db) }, params);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Facet options with counts (filter chips): for each facet field, its values under every other
+// active filter, the search and the scope. Enum facets keep the def's order.
+// ---------------------------------------------------------------------------------------------
+
+export type FacetOptions = Record<string, { value: string; label?: string; count: number }[]>;
+const FACET_LIMIT = 60;
+
+export async function facetOptions(ctx: QueryCtx, entity: string, q: ListQuery = {}): Promise<FacetOptions> {
+  const def = getDef(entity);
+  const { ws, actor } = ctx;
+  assertRead(def, actor.role);
+  const keys = visibleFields(def, actor.role).filter(([k, f]) => f.facet && ["enum", "ref", "text", "bool"].includes(f.type) && k !== def.list.statusTabs);
+  const from = ` FROM ${effective(def.table, ws)} AS ${def.table}`;
+  const scope = scopeWhere(def, actor, ws);
+  const search = searchWhere(def, actor.role, ws, q.q);
+  const out: FacetOptions = {};
+  await Promise.all(keys.map(async ([key, f]) => {
+    const w = merge(scope, search, filterWhere(def, actor.role, ws, q.filters ?? {}, key));
+    const label = f.type === "ref" ? refLabel(def, key, f, ws) : null;
+    const res = await ctx.db.prepare(`SELECT ${expr(def, key, f, ws)} AS v${label ? `, ${label} AS l` : ""}, count(*) AS n${from}${whereSql(w)} GROUP BY v ORDER BY n DESC LIMIT ${FACET_LIMIT}`).bind(...w.params).all();
+    let opts = res.results.filter((r) => r.v != null && r.v !== "").map((r) => ({ value: f.type === "bool" ? (r.v ? "true" : "false") : String(r.v), label: f.type === "bool" ? (r.v ? "Yes" : "No") : r.l != null ? String(r.l) : f.enum?.find((e) => e.value === String(r.v))?.label, count: Number(r.n) }));
+    if (f.enum) opts = f.enum.map((e) => opts.find((o) => o.value === e.value) ?? { value: e.value, label: e.label, count: 0 });
+    else if (f.type === "ref" || f.type === "text") opts.sort((a, b) => (a.label ?? a.value).localeCompare(b.label ?? b.value));
+    out[key] = opts;
+  }));
+  return out;
 }
