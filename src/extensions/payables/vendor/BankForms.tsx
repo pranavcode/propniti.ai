@@ -7,7 +7,8 @@ import { Landmark, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 const post = async (vendor: string, action: string, body: unknown) => {
@@ -23,7 +24,7 @@ export function BankForms({ vendor, company, held, canChange, canVerify, changed
   const [mode, setMode] = useState<"change" | "verify" | null>(null);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ bank_last4: "", received_via: "Email", requested_by: "", note: "", spoke_with: "", phone_on_file: false });
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,32 +50,51 @@ export function BankForms({ vendor, company, held, canChange, canVerify, changed
         {held && canVerify && <Button size="sm" onClick={() => setMode(mode === "verify" ? null : "verify")} disabled={changedByMe} title={changedByMe ? "You entered this change; someone else has to verify it" : undefined}><ShieldCheck />Verify by callback</Button>}
       </div>
       {mode && (
-        <form onSubmit={submit} className="grid max-w-xl gap-3 rounded-lg border bg-muted/30 p-3">
-          {mode === "change" ? (
-            <>
-              <p className="text-[12.5px] text-muted-foreground">Payments to {company} stop until a different person calls the vendor on the phone number already on file and confirms the new account.</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1"><Label htmlFor="bank_last4">New account, last 4 digits</Label><Input id="bank_last4" inputMode="numeric" maxLength={4} pattern="\d{4}" required value={f.bank_last4} onChange={set("bank_last4")} autoComplete="off" /></div>
-                <div className="grid gap-1"><Label htmlFor="received_via">Request received by</Label>
-                  <select id="received_via" className="h-8 rounded-md border bg-background px-2 text-[13px]" value={f.received_via} onChange={set("received_via")}>
-                    {["Email", "Vendor portal", "Letter", "Phone call"].map((o) => <option key={o}>{o}</option>)}
-                  </select>
+        <form onSubmit={submit} className="max-w-xl rounded-lg border bg-muted/30 p-3">
+          <FieldGroup className="gap-3">
+            {mode === "change" ? (
+              <>
+                <FieldDescription>Payments to {company} stop until a different person calls the vendor on the phone number already on file and confirms the new account.</FieldDescription>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field>
+                    <FieldLabel htmlFor="bank_last4">New account, last 4 digits</FieldLabel>
+                    <Input id="bank_last4" inputMode="numeric" maxLength={4} pattern="\d{4}" required value={f.bank_last4} onChange={set("bank_last4")} autoComplete="off" spellCheck={false} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="received_via">Request received by</FieldLabel>
+                    <Select value={f.received_via} onValueChange={(v) => setF({ ...f, received_via: v })}>
+                      <SelectTrigger id="received_via" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectGroup>{["Email", "Vendor portal", "Letter", "Phone call"].map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectGroup></SelectContent>
+                    </Select>
+                  </Field>
                 </div>
-              </div>
-              <div className="grid gap-1"><Label htmlFor="requested_by">Requested by</Label><Input id="requested_by" required minLength={2} value={f.requested_by} onChange={set("requested_by")} placeholder="Name and role at the vendor…" /></div>
-              <div className="grid gap-1"><Label htmlFor="note">Note (optional)</Label><Textarea id="note" rows={2} value={f.note} onChange={set("note")} /></div>
-            </>
-          ) : (
-            <>
-              <p className="text-[12.5px] text-muted-foreground">Call {company} on the number already on file, not one from the change request, and confirm the new account ending.</p>
-              <div className="grid gap-1"><Label htmlFor="spoke_with">Spoke with</Label><Input id="spoke_with" required minLength={2} value={f.spoke_with} onChange={set("spoke_with")} placeholder="Name of the person you reached…" /></div>
-              <label className="flex items-center gap-2 text-[13px]"><Checkbox checked={f.phone_on_file} onCheckedChange={(v) => setF({ ...f, phone_on_file: v === true })} />I called the phone number already on file</label>
-            </>
-          )}
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={busy || (mode === "verify" && !f.phone_on_file)}>{busy ? "Saving…" : mode === "change" ? "Record change and hold payments" : "Verify and release payments"}</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setMode(null)}>Cancel</Button>
-          </div>
+                <Field>
+                  <FieldLabel htmlFor="requested_by">Requested by</FieldLabel>
+                  <Input id="requested_by" required minLength={2} value={f.requested_by} onChange={set("requested_by")} placeholder="Name and role at the vendor…" autoComplete="off" />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="note">Note (optional)</FieldLabel>
+                  <Textarea id="note" rows={2} value={f.note} onChange={set("note")} />
+                </Field>
+              </>
+            ) : (
+              <>
+                <FieldDescription>Call {company} on the number already on file, not one from the change request, and confirm the last 4 digits of the new account.</FieldDescription>
+                <Field>
+                  <FieldLabel htmlFor="spoke_with">Spoke with</FieldLabel>
+                  <Input id="spoke_with" required minLength={2} value={f.spoke_with} onChange={set("spoke_with")} placeholder="Name of the person you reached…" autoComplete="off" />
+                </Field>
+                <Field orientation="horizontal">
+                  <Checkbox id="phone_on_file" checked={f.phone_on_file} onCheckedChange={(v) => setF({ ...f, phone_on_file: v === true })} />
+                  <FieldLabel htmlFor="phone_on_file" className="font-normal">I called the phone number already on file</FieldLabel>
+                </Field>
+              </>
+            )}
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={busy || (mode === "verify" && !f.phone_on_file)}>{busy ? "Saving…" : mode === "change" ? "Record change and hold payments" : "Verify and release payments"}</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setMode(null)}>Cancel</Button>
+            </div>
+          </FieldGroup>
         </form>
       )}
     </div>

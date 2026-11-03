@@ -7,9 +7,9 @@ import { toast } from "sonner";
 import { FilePlus2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
-import { cn } from "@/lib/utils";
 
 export type PrepRow = {
   vendor_id: string; company: string; owner_entity_id: string; payer: string; paid: number; payments: number;
@@ -57,17 +57,12 @@ export function Prep1099({ rows, year }: { rows: PrepRow[]; year: number }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-        <div role="tablist" aria-label="Filter" className="flex flex-wrap gap-1">
+        <ToggleGroup type="single" size="sm" variant="outline" value={filter} onValueChange={(v) => v && setFilter(v as (typeof FILTERS)[number])} aria-label="Filter vendors">
           {FILTERS.map((f) => {
             const n = f === "All" ? rows.length : f === "Needs attention" ? rows.filter((r) => r.flags.length).length : rows.filter((r) => r.state === f).length;
-            return (
-              <button key={f} role="tab" aria-selected={filter === f} onClick={() => setFilter(f)}
-                className={cn("rounded-md px-2 py-1 text-[12.5px] transition-colors", filter === f ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}>
-                {f} <span className="tabular-nums text-muted-foreground">{n}</span>
-              </button>
-            );
+            return <ToggleGroupItem key={f} value={f} className="gap-1.5 px-2.5">{f}<span className="tabular-nums text-muted-foreground">{n}</span></ToggleGroupItem>;
           })}
-        </div>
+        </ToggleGroup>
         <div className="ml-auto flex items-center gap-2">
           {creatable.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => setPicked(picked.size === creatable.length ? new Set() : new Set(creatable.map(keyOf)))}>

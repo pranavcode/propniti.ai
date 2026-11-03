@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, BadgeCheck, Check, ShieldAlert, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AIBadge, Confidence } from "@/components/app/ai";
 import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
@@ -109,14 +110,11 @@ export function ReconcileView({ r }: { r: ReconJson }) {
       <Summary r={r} diff={diff} />
 
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Filter statement lines" className="flex rounded-md border p-0.5 text-[12.5px]">
+        <ToggleGroup type="single" size="sm" variant="outline" value={filter} onValueChange={(v) => v && setFilter(v as Filter)} aria-label="Filter statement lines">
           {([["attention", "Needs review", r.counts.Suggested + r.counts.Unmatched], ["Suggested", "AI suggested", r.counts.Suggested], ["Unmatched", "Unmatched", r.counts.Unmatched], ["Matched", "Matched", r.counts.Matched], ["all", "All", r.lines.length]] as const).map(([k, label, n]) => (
-            <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)}
-              className={cn("rounded px-2.5 py-1 transition-colors", filter === k ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}>
-              {label} <span className="tabular-nums text-muted-foreground">{n}</span>
-            </button>
+            <ToggleGroupItem key={k} value={k} className="gap-1.5 px-2.5">{label}<span className="tabular-nums text-muted-foreground">{n}</span></ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
         <div className="ml-auto flex items-center gap-2">
           <AIBadge source={r.source === "live" ? "rules" : "precomputed"} model={r.source === "live" ? undefined : "reconciliation agent"} />
           {open && r.canAct && sure.length > 0 && (

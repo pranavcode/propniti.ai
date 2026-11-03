@@ -5,6 +5,7 @@ import { useState } from "react";
 import { BadgeCheck, CircleDollarSign, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { AISuggestion, ApprovalItem, type AISource, type Evidence, type Risk } from "@/components/app/ai";
 import { ConfirmDialog } from "@/components/app/forms";
@@ -62,7 +63,7 @@ export function ConfirmBankForm({ billId, company }: { billId: string; company: 
         <Input value={name} onChange={(e) => setName(e.target.value)} name="spoke_with" autoComplete="off" placeholder="Name and title…" className="max-w-sm" />
       </label>
       <label className="flex items-start gap-2 text-[12.5px]">
-        <input type="checkbox" checked={called} onChange={(e) => setCalled(e.target.checked)} className="mt-0.5" />
+        <Checkbox checked={called} onCheckedChange={(v) => setCalled(v === true)} className="mt-0.5" />
         <span>I called the phone number already on file, not one from the invoice or the change request.</span>
       </label>
       <div><Button type="submit" size="sm" disabled={busy || name.trim().length < 2 || !called}>{busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}Confirm bank change</Button></div>
