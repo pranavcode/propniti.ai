@@ -352,12 +352,12 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
   const wo = await db
     .prepare(
       `SELECT w.*, p.owner_entity_id, v.company,
-         coalesce((SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC LIMIT 1), w.cost_cents, w.estimate_cents) AS amount_cents
+         coalesce((SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC LIMIT 1), w.cost_cents) AS amount_cents
        FROM ${effective("work_orders")} AS w JOIN ${effective("properties")} AS p ON p.id = w.property_id LEFT JOIN ${effective("vendors")} AS v ON v.id = w.vendor_id
        WHERE w.id = ?2`,
     )
     .bind(ws, woId)
-    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; amount_cents: number; property_id: string; owner_entity_id: string; title: string }>();
+    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; amount_cents: number | null; property_id: string; owner_entity_id: string; title: string }>();
   if (!wo) return { status: 404, error: "Work order not found" };
   // Maintenance approvers sign off the work, payables approvers pay it, owners approve over-limit
   // repairs from their portal.
@@ -371,12 +371,16 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
     await auditStmt(db, ws, at, actor, { action: "Job completed", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId} completed in-house` }).run();
     return { status: 200, message: `${woId} completed.` };
   }
+  // Pay only an invoiced amount (the vendor's submission, or a cost staff recorded), never the
+  // estimate, which the vendor can edit.
+  if (wo.amount_cents == null) return { status: 409, error: `${woId} has no invoice yet. Ask ${wo.company} to submit one.` };
+  const amount = wo.amount_cents;
   const policy = await db
     .prepare(`SELECT owner_approval_over_cents FROM ${effective("approval_policies")} AS a WHERE a.category = 'Maintenance spend' AND (a.owner_entity_id = ?2 OR a.owner_entity_id IS NULL) ORDER BY a.owner_entity_id IS NULL LIMIT 1`)
     .bind(ws, wo.owner_entity_id)
     .first<{ owner_approval_over_cents: number | null }>();
-  if (policy?.owner_approval_over_cents != null && wo.amount_cents > policy.owner_approval_over_cents && actor.role !== "owner")
-    return { status: 409, error: `${dollars(wo.amount_cents)} is over the owner's approval limit of ${dollars(policy.owner_approval_over_cents)}. Send it to the owner to approve.` };
+  if (policy?.owner_approval_over_cents != null && amount > policy.owner_approval_over_cents && actor.role !== "owner")
+    return { status: 409, error: `${dollars(amount)} is over the owner's approval limit of ${dollars(policy.owner_approval_over_cents)}. Send it to the owner to approve.` };
   const id = uid("tr");
   const trust = `ba-${wo.owner_entity_id}-trust`;
   const [insert] = await db.batch([
@@ -389,22 +393,22 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
            AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")}
          ON CONFLICT DO NOTHING`,
       )
-      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, wo.amount_cents, at, nowMs + SETTLE_MS),
-    db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Completed'", cost_cents: "?4", completed_at: "?5" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, woId, id, wo.amount_cents, at),
+      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS),
+    db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Completed'", cost_cents: "?4", completed_at: "?5" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, woId, id, amount, at),
     db
       .prepare(`INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) SELECT ?1, ?2, ?3, ?4, ?5, 'staff', ?6, 'Approval', 'Completed', ?7 WHERE EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?8)`)
-      .bind(ws, uid("woe"), woId, wo.property_id, at, actor.personaId, JSON.stringify({ amount_cents: wo.amount_cents, transfer_id: id }), id),
-    eventStmt(db, ws, at, "wo.approved", "work_orders", woId, wo.property_id, { transfer_id: id, amount_cents: wo.amount_cents, vendor_id: wo.vendor_id }, done(id)),
-    notifyStmt(db, ws, at, wo.vendor_id, "Work approved", `${woId} approved. ${dollars(wo.amount_cents)} sent by ACH, arriving in 1–2 business days.`, "/portal/vendor/payments", ["work_orders", woId], done(id)),
-    auditStmt(db, ws, at, actor, { action: "Payment approved", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId}: ${dollars(wo.amount_cents)} to ${wo.company} by ACH` }, done(id)),
+      .bind(ws, uid("woe"), woId, wo.property_id, at, actor.personaId, JSON.stringify({ amount_cents: amount, transfer_id: id }), id),
+    eventStmt(db, ws, at, "wo.approved", "work_orders", woId, wo.property_id, { transfer_id: id, amount_cents: amount, vendor_id: wo.vendor_id }, done(id)),
+    notifyStmt(db, ws, at, wo.vendor_id, "Work approved", `${woId} approved. ${dollars(amount)} sent by ACH, arriving in 1–2 business days.`, "/portal/vendor/payments", ["work_orders", woId], done(id)),
+    auditStmt(db, ws, at, actor, { action: "Payment approved", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId}: ${dollars(amount)} to ${wo.company} by ACH` }, done(id)),
     auditStmt(db, ws, at, actor, { action: "Approval refused", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId}: not paid (status, trust balance or payment hold)` }, refused(id)),
   ]);
-  if (insert.meta.changes) return { status: 200, message: `${woId} approved; ${dollars(wo.amount_cents)} is on its way to ${wo.company}.` };
+  if (insert.meta.changes) return { status: 200, message: `${woId} approved; ${dollars(amount)} is on its way to ${wo.company}.` };
   // A double click's losing request saw the job as Submitted; report what actually happened.
   if (await transferAt(db, ws, `vendor:${woId}`)) return { status: 409, error: `${woId} is already approved` };
   if (wo.status !== "Submitted") return { status: 409, error: notSubmitted };
   const avail = await db.prepare(`SELECT ${AVAILABLE_SQL("?2")} AS a`).bind(ws, trust).first<{ a: number }>();
-  if ((avail?.a ?? 0) < wo.amount_cents) return { status: 409, error: `Trust account can't cover ${dollars(wo.amount_cents)} (available ${dollars(avail?.a ?? 0)})` };
+  if ((avail?.a ?? 0) < amount) return { status: 409, error: `Trust account can't cover ${dollars(amount)} (available ${dollars(avail?.a ?? 0)})` };
   return { status: 409, error: `${wo.company} has a payment hold (unverified bank change).` };
 }
 

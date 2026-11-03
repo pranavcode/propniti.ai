@@ -216,8 +216,11 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await n("SELECT count(*) AS n FROM events WHERE workspace_id = ?1 AND type IN ('wo.approved', 'payment.sent')", c.ws)).toBe(2);
     const open = await one<{ id: string }>(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'In progress' LIMIT 1`, c.ws);
     expect(await approveAndPayWorkOrder(c, open!.id)).toMatchObject({ status: 409, error: expect.stringContaining("in progress") });
+    // No invoice, no payout: a vendor-edited estimate is never paid.
+    await db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, estimate_cents, opened_at) VALUES (?1, 'WO-T1', 'p02', 'Test', 'Plumbing', 'Normal', 'Submitted', 'v01', 99000, '2026-11-03T10:00:00Z')").bind(c.ws).run();
+    expect(await approveAndPayWorkOrder(c, "WO-T1")).toMatchObject({ status: 409, error: expect.stringContaining("no invoice") });
     // Fraud hold: an open unverified-bank-change issue on the vendor blocks payment.
-    const held = await one<{ id: string; vendor_id: string }>(`SELECT w.id, w.vendor_id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id IS NOT NULL AND w.id <> ?2 LIMIT 1`, c.ws, wo!.id);
+    const held = await one<{ id: string; vendor_id: string }>(`SELECT w.id, w.vendor_id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id IS NOT NULL AND w.id NOT IN (?2, 'WO-T1') LIMIT 1`, c.ws, wo!.id);
     await db.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, detected_at, severity, status) VALUES (?1, 'hold-1', 'vendors.unverified_bank_change', 'vendors', ?2, 'x', 'critical', 'open')").bind(c.ws, held!.vendor_id).run();
     expect(await approveAndPayWorkOrder(c, held!.id)).toMatchObject({ status: 409, error: expect.stringContaining("payment hold") });
     expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Approval refused'", c.ws)).toBe(1);
