@@ -222,7 +222,7 @@ export type EntityDef = {
 // ---------------------------------------------------------------------------------------------
 
 export const DEFAULT_PAGE_SIZE = 50;
-export const MAX_PAGE_SIZE = 200;
+export const MAX_PAGE_SIZE = 100;
 
 export type ListQuery = ViewState & {
   page?: number;                         // 1-based offset paging (with total)
