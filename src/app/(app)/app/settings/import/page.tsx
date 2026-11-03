@@ -22,9 +22,10 @@ export default async function ImportPage() {
   const options: ImportOptions = {
     canCreateProperties: can(session.actor.role, "create", "properties"),
     canCreateUnits: can(session.actor.role, "create", "units"),
-    portfolios: portfolios.results,
+    // SQLite rows have a null prototype; copy them into plain objects for the client.
+    portfolios: portfolios.results.map((p) => ({ id: p.id, name: p.name, owner_entity_id: p.owner_entity_id, owner: p.owner })),
     regions: regions.results.map((r) => ({ id: r.id, name: r.name, states: (() => { try { return JSON.parse(r.states) as string[]; } catch { return []; } })() })),
-    existing: props.results,
+    existing: props.results.map((p) => ({ id: p.id, name: p.name, street: p.street })),
   };
   return (
     <>

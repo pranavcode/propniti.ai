@@ -10,7 +10,7 @@ import { AIBadge } from "@/components/app/ai/AIBadge";
 import { StatusBadge } from "@/components/app/display";
 import { useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
 import { apiJson, recordUrl } from "@/components/app/forms/api";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, plural } from "@/lib/format";
 import { applyMapping, FIELD_LABELS, guessMapping, IMPORT_FIELDS, parseCsv, parseDate, parseMoney, REQUIRED, validateRows, widthProblems, type ImportField, type ImportRow, type Mapping } from "@/lib/importer";
 
 // Rent-roll import (port of the v1 onboarding importer onto v2 properties and units):
@@ -41,6 +41,9 @@ The Lofts at Riverside,"1500 S Pleasant Valley Rd, Austin, TX 78741",9901,Hannah
 const STEPS = ["Source", "Map columns", "Review values", "Preview", "Import"] as const;
 const PROPERTY_TYPES = ["Garden multifamily", "Mid-rise multifamily", "High-rise multifamily", "Townhomes", "Small residential", "Mixed-use"];
 const METROS: Record<string, string> = { austin: "Austin", dallas: "Dallas", atlanta: "Atlanta", phoenix: "Phoenix" };
+
+// Units can be vacant, so a resident isn't required here (the v1 importer created tenancies).
+const REQ: ImportField[] = REQUIRED.filter((f) => f !== "tenant");
 
 const norm = (s?: string) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 const ADDRESS = /^(.+?),\s*([^,]+?),\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?$/;
@@ -95,7 +98,9 @@ export function ImportWizard({ options }: { options: ImportOptions }) {
   const guess = useMemo(() => guessMapping(headers), [headers]);
   const rows = useMemo(() => (table ? applyMapping(table, mapping) : []), [table, mapping]);
   const checks = useMemo(() => validateRows(rows).map((c) => {
-    const errors = [...c.errors];
+    const vacant = !c.row.tenant?.trim();
+    const errors = c.errors.filter((e) => e !== `${FIELD_LABELS.tenant} is missing`);
+    if (vacant) c.warnings = c.warnings.filter((w) => !w.startsWith("No lease end"));
     if (c.row.address && !parseAddress(c.row.address)) c.warnings.push(`Address "${c.row.address}" isn't "street, city, ST 12345"`);
     return { ...c, errors };
   }), [rows]);
@@ -150,8 +155,13 @@ export function ImportWizard({ options }: { options: ImportOptions }) {
     // Units already on file for matched properties: update their rent instead of duplicating.
     await Promise.all([...groups.values()].filter((g) => g.existingId).map(async (g) => {
       try {
-        const res = await apiJson<{ rows: { id: string; number: string; market_rent: number | null }[] }>("GET", `${recordUrl("units")}?f.property_id=${encodeURIComponent(g.existingId!)}&size=100&q=`);
-        const byNumber = new Map(res.rows.map((u) => [norm(u.number), u]));
+        const numbers = [...new Set(g.units.map((u) => u.row.unit!.trim()))];
+        const found: { id: string; number: string; market_rent: number | null }[] = [];
+        for (let i = 0; i < numbers.length; i += 50) {
+          const res = await apiJson<{ rows: typeof found }>("GET", `${recordUrl("units")}?f.property_id=${encodeURIComponent(g.existingId!)}&f.number=${encodeURIComponent(numbers.slice(i, i + 50).join(","))}&size=100`);
+          found.push(...res.rows);
+        }
+        const byNumber = new Map(found.map((u) => [norm(u.number), u]));
         for (const u of g.units) {
           const hit = byNumber.get(norm(u.row.unit));
           if (hit) Object.assign(u, { existingId: hit.id, currentRent: hit.market_rent ?? undefined });
@@ -285,7 +295,7 @@ export function ImportWizard({ options }: { options: ImportOptions }) {
                   const conf = h ? Math.round((guess[f] === h ? 0.97 : 0.86) * (0.35 + 0.65 * v) * 100) : null;
                   return (
                     <tr key={f} className="border-t">
-                      <td className="px-3 py-1.5 font-medium">{FIELD_LABELS[f]}{REQUIRED.includes(f) && <span className="ml-1 text-tone-danger" aria-label="required">*</span>}</td>
+                      <td className="px-3 py-1.5 font-medium">{FIELD_LABELS[f]}{REQ.includes(f) && <span className="ml-1 text-tone-danger" aria-label="required">*</span>}</td>
                       <td className="px-3 py-1.5">
                         <select aria-label={`Column for ${FIELD_LABELS[f]}`} value={h ?? ""} onChange={(e) => setMapping((m) => ({ ...m, [f]: e.target.value || null }))} className="h-8 w-56 rounded-md border bg-background px-2 text-[13px]">
                           <option value="">Not in this file</option>
@@ -302,7 +312,7 @@ export function ImportWizard({ options }: { options: ImportOptions }) {
           </div>
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(0)}><ArrowLeft /> Back</Button>
-            <Button onClick={() => setStep(2)} disabled={REQUIRED.some((f) => !mapping[f])}>Review values <ArrowRight /></Button>
+            <Button onClick={() => setStep(2)} disabled={REQ.some((f) => !mapping[f])}>Review values <ArrowRight /></Button>
           </div>
         </div>
       )}
@@ -408,7 +418,7 @@ export function ImportWizard({ options }: { options: ImportOptions }) {
           <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={progress.done} aria-valuemin={0} aria-valuemax={progress.total} aria-label="Import progress">
             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 100}%` }} />
           </div>
-          <p className="text-[12.5px] text-muted-foreground">{progress.created.properties} properties created · {progress.created.units} units created · {progress.created.updated} rents updated</p>
+          <p className="text-[12.5px] text-muted-foreground">{plural(progress.created.properties, "property", "properties")} created · {plural(progress.created.units, "unit")} created · {plural(progress.created.updated, "rent")} updated</p>
           {progress.errors.length > 0 && <ul className="flex flex-col gap-1 text-[12.5px] text-tone-danger">{progress.errors.slice(0, 20).map((e) => <li key={e} className="flex items-start gap-1.5"><CircleAlert className="mt-0.5 size-3 shrink-0" />{e}</li>)}</ul>}
           {progress.done >= progress.total && (
             <div className="flex gap-2">
