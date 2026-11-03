@@ -31,7 +31,7 @@ export function AbstractControls({ leaseId, hasResult }: { leaseId: string; hasR
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" disabled={busy} onClick={() => run({})} data-tour="abstract-run">
           {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}{hasResult ? "Re-run on lease on file" : "Abstract lease on file"}
@@ -49,7 +49,7 @@ export function AbstractControls({ leaseId, hasResult }: { leaseId: string; hasR
         {busy && <span className="text-[12px] text-muted-foreground">Reading the document and checking each term against the record…</span>}
       </div>
       {paste && (
-        <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
           <div className="flex items-center justify-between text-[12.5px] font-medium">{paste.name}<Button size="icon-xs" variant="ghost" aria-label="Cancel" onClick={() => setPaste(null)}><X /></Button></div>
           <Textarea value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} rows={8} placeholder="Paste the lease text. Page breaks like “Page 2” keep page references accurate…" className="font-mono text-[12px]" maxLength={60_000} />
           <div className="flex items-center gap-2">

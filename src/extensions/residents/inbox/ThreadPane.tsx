@@ -62,7 +62,7 @@ export async function ThreadPane({ id, actor }: { id: string; actor: Actor }) {
         {canReply && <ThreadActions id={id} status={String(t.status)} unread={!!t.unread} />}
       </header>
 
-      <ol className="flex-1 space-y-3 overflow-y-auto bg-muted/20 px-4 py-4" aria-label="Messages">
+      <ol className="flex flex-1 flex-col gap-3 overflow-y-auto bg-muted/20 px-4 py-4" aria-label="Messages">
         {messages.length === 0 && <li className="text-center text-[12.5px] text-muted-foreground">No messages in this conversation yet.</li>}
         {messages.map((m) => {
           const out = m.direction === "out";

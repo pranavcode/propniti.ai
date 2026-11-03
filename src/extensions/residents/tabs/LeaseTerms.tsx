@@ -49,7 +49,7 @@ export async function LeaseTerms({ id }: TabProps) {
   const history: Row[] = [...chainBack.map((x) => ({ ...x, rel: "Previous" })), { id: l.id, start_on: l.start_on, end_on: l.end_on, rent_cents: l.rent_cents, status: meta?.status, term_months: l.term_months, rel: "This lease" }, ...chainFwd.map((x) => ({ ...x, rel: "Renewal" }))];
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <section className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3 lg:grid-cols-6">
         {[
           ["Tenant", l.tenant || "—"],
@@ -144,7 +144,7 @@ export async function LeaseTerms({ id }: TabProps) {
           {offers.length > 0 && (
             <div className="border-t px-3 py-2">
               <div className="text-[11px] text-muted-foreground">Renewal offers</div>
-              <ul className="mt-1 space-y-1 text-[12.5px]">
+              <ul className="mt-1 flex flex-col gap-1 text-[12.5px]">
                 {offers.map((o) => (
                   <li key={String(o.id)} className="flex items-center gap-2">
                     <span>v{String(o.version)} · {String(o.term_months)} mo at <Money value={Number(o.rent_cents)} cents style="whole" /></span>

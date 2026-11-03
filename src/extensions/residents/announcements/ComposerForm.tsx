@@ -8,8 +8,9 @@ import { CalendarClock, Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AIBadge } from "@/components/app/ai";
-import { cn } from "@/lib/utils";
 import { fillTemplate } from "../lib";
 import { runAction } from "../ui/client";
 
@@ -77,22 +78,23 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
   const ready = title.trim().length >= 3 && body.trim().length >= 10 && channels.length > 0 && (when === "now" || !!sendAt);
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-4">
-        <section className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="flex flex-col gap-4">
+        <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <label className="space-y-1">
+            <div className="flex flex-col gap-1">
               <span className="text-[12px] font-medium">Property</span>
-              <select value={property} disabled={locked} onChange={(e) => setProperty(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-70">
-                {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </label>
-            <div className="space-y-1">
+              <Select value={property} disabled={locked} onValueChange={setProperty}>
+                <SelectTrigger className="w-full" aria-label="Property"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectGroup>{properties.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectGroup></SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
               <span className="text-[12px] font-medium">Recipients</span>
               <p className="h-8 text-[13px] leading-8 tabular-nums"><b>{prop?.recipients ?? 0}</b> current and notice residents</p>
             </div>
           </div>
           {!draft && (
-            <div className="space-y-2 rounded-lg border border-tone-ai/25 bg-tone-ai/[0.04] p-3">
+            <div className="flex flex-col gap-2 rounded-lg border border-tone-ai/25 bg-tone-ai/[0.04] p-3">
               <label htmlFor="topic" className="flex items-center gap-1.5 text-[12.5px] font-medium"><Sparkles className="size-3.5 text-tone-ai" />What is it about?</label>
               <Textarea id="topic" rows={2} maxLength={500} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Water shutoff Thursday Nov 12, 9 am to 1 pm, building B, for a valve replacement…" />
               <div className="flex flex-wrap items-center gap-2">
@@ -111,7 +113,7 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
           )}
         </section>
 
-        <section className="space-y-3 rounded-lg border bg-card p-4">
+        <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
           {provenance && (
             <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
               <AIBadge source={provenance.source} />
@@ -120,11 +122,11 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
               {provenance && <Button size="xs" variant="ghost" disabled={busy !== null} onClick={() => { setTopic(`${title}. ${body}`); void aiDraft(); }}>{busy === "draft" ? <Loader2 className="animate-spin" /> : <Sparkles />}Redraft</Button>}
             </div>
           )}
-          <label className="block space-y-1">
+          <label className="flex flex-col gap-1">
             <span className="text-[12px] font-medium">Title</span>
             <Input value={title} maxLength={160} onChange={(e) => setTitle(e.target.value)} placeholder="Water shutoff on Thursday…" />
           </label>
-          <label className="block space-y-1">
+          <label className="flex flex-col gap-1">
             <span className="text-[12px] font-medium">Message</span>
             <Textarea value={body} rows={9} maxLength={4000} onChange={(e) => setBody(e.target.value)} placeholder="Residents of …" />
           </label>
@@ -132,24 +134,21 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
         </section>
       </div>
 
-      <aside className="space-y-3">
-        <section className="space-y-3 rounded-lg border bg-card p-4">
-          <fieldset className="space-y-1.5">
+      <aside className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+          <fieldset className="flex flex-col gap-1.5">
             <legend className="text-[12px] font-medium">Channels</legend>
-            <div className="flex gap-1.5">
-              {CHANNELS.map((c) => {
-                const on = channels.includes(c);
-                return <button key={c} type="button" aria-pressed={on} onClick={() => setChannels((x) => (on ? x.filter((y) => y !== c) : [...x, c]))} className={cn("rounded-md border px-2.5 py-1 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50", on ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground hover:text-foreground")}>{c}</button>;
-              })}
-            </div>
+            <ToggleGroup type="multiple" variant="outline" size="sm" spacing={1} aria-label="Channels" value={channels} onValueChange={(v) => v.length && setChannels(v)}>
+              {CHANNELS.map((c) => <ToggleGroupItem key={c} value={c}>{c}</ToggleGroupItem>)}
+            </ToggleGroup>
             {channels.includes("SMS") && body.length > 320 && <p className="text-[11.5px] text-tone-warning">SMS sends the first 320 characters with a link to the full notice.</p>}
           </fieldset>
-          <fieldset className="space-y-1.5">
+          <fieldset className="flex flex-col gap-1.5">
             <legend className="text-[12px] font-medium">When</legend>
-            <div className="flex gap-1.5">
-              <button type="button" aria-pressed={when === "now"} onClick={() => setWhen("now")} className={cn("rounded-md border px-2.5 py-1 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50", when === "now" ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground")}>Send now</button>
-              <button type="button" aria-pressed={when === "later"} onClick={() => setWhen("later")} className={cn("inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50", when === "later" ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground")}><CalendarClock className="size-3.5" />Schedule</button>
-            </div>
+            <ToggleGroup type="single" variant="outline" size="sm" spacing={1} aria-label="When" value={when} onValueChange={(v) => v && setWhen(v as "now" | "later")}>
+              <ToggleGroupItem value="now">Send now</ToggleGroupItem>
+              <ToggleGroupItem value="later"><CalendarClock data-icon="inline-start" />Schedule</ToggleGroupItem>
+            </ToggleGroup>
             {when === "later" && <Input type="datetime-local" aria-label="Send at" value={sendAt} onChange={(e) => setSendAt(e.target.value)} />}
           </fieldset>
           <Button className="w-full" variant={armed ? "destructive" : "default"} disabled={!ready || busy !== null || /\[(date|time)\]/i.test(`${title} ${body}`)}

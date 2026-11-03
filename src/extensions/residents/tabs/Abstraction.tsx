@@ -38,7 +38,7 @@ export async function Abstraction({ id, actor }: TabProps) {
   const differs = r?.comparisons.filter((c) => c.match === false) ?? [];
 
   return (
-    <div className="space-y-3" data-tour="lease-abstraction">
+    <div className="flex flex-col gap-3" data-tour="lease-abstraction">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-[14px] font-semibold"><FileText className="size-4 text-muted-foreground" />{r?.documentName ?? `Signed lease ${lease.id}.pdf`}<span className="text-[12px] font-normal text-muted-foreground">{pages.length} pages</span></h3>
@@ -75,7 +75,7 @@ export async function Abstraction({ id, actor }: TabProps) {
           ))}
         </section>
 
-        <section aria-label="Abstracted terms" className="space-y-3">
+        <section aria-label="Abstracted terms" className="flex flex-col gap-3">
           {!r ? (
             <EmptyState compact kind="table" title="No abstraction yet" description={canRun ? "Run it on the lease on file, or upload a text copy of a lease to check it against this record." : "A property manager or broker can run abstraction on this lease."} />
           ) : (

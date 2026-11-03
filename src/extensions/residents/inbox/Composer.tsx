@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Archive, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AIBadge, Confidence } from "@/components/app/ai";
 import { apiJson } from "@/components/app/forms/api";
@@ -100,7 +101,7 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
             <Confidence value={suggestion.confidence} className="ml-auto" />
           </div>
           <p className="whitespace-pre-wrap px-3 py-2 text-[13px] leading-relaxed">{suggestion.body}</p>
-          <ul className="space-y-0.5 px-3 pb-2 text-[11.5px] text-muted-foreground">
+          <ul className="flex flex-col gap-0.5 px-3 pb-2 text-[11.5px] text-muted-foreground">
             {suggestion.why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
           </ul>
           <div className="flex flex-wrap items-center gap-1.5 border-t border-tone-ai/15 px-3 py-1.5">
@@ -122,13 +123,9 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
         <Textarea id={`reply-${threadId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={4} maxLength={2000} placeholder={closed ? "This conversation is closed. Reply to reopen it…" : `Write a reply${language === "es" ? " (resident prefers Spanish)" : ""}…`}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && body.trim() && !busy) void send(false); }} />
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <div role="radiogroup" aria-label="Channel" className="flex rounded-md border p-0.5"
-            onKeyDown={(e) => { if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return; e.preventDefault(); const i = CHANNELS.indexOf(channel as (typeof CHANNELS)[number]); setChannel(CHANNELS[(i + (e.key === "ArrowRight" ? 1 : CHANNELS.length - 1)) % CHANNELS.length]); }}>
-            {CHANNELS.map((ch) => (
-              <button key={ch} type="button" role="radio" aria-checked={channel === ch} tabIndex={channel === ch ? 0 : -1} onClick={() => setChannel(ch)}
-                className={cn("rounded px-2 py-0.5 text-[12px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50", channel === ch ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{ch}</button>
-            ))}
-          </div>
+          <ToggleGroup type="single" variant="outline" size="sm" aria-label="Channel" value={channel} onValueChange={(v) => v && setChannel(v)}>
+            {CHANNELS.map((ch) => <ToggleGroupItem key={ch} value={ch}>{ch}</ToggleGroupItem>)}
+          </ToggleGroup>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="sm" variant="ghost"><FileText />Templates</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-80 w-72 overflow-y-auto">

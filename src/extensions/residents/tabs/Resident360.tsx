@@ -132,7 +132,7 @@ export async function Resident360({ id, actor }: TabProps) {
   const maxMonth = Math.max(1, ...months.map((m) => Math.max(Number(m.charged), Number(m.paid))));
 
   return (
-    <div className="space-y-3" data-tour="resident-360">
+    <div className="flex flex-col gap-3" data-tour="resident-360">
       {merge}
       {contactFixes.length > 0 && (
         <IssueFix issueId={pieIssue ? String(pieIssue.id) : undefined} title={pieIssue ? "Phone number in the email field" : "Contact details need tidying"} rule={pieIssue ? "residents.phone_in_email" : undefined}
@@ -149,7 +149,7 @@ export async function Resident360({ id, actor }: TabProps) {
                 <span className="text-[12px] text-muted-foreground">/ 100</span>
                 <StatusBadge value={`${band} risk`} tone={band === "High" ? "danger" : band === "Medium" ? "warning" : "success"} className="ml-1" />
               </div>
-              <ul className="mt-3 space-y-1 text-[12.5px]">
+              <ul className="mt-3 flex flex-col gap-1 text-[12.5px]">
                 {drivers.map((d) => <li key={d.label} className="flex items-start gap-1.5"><span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", d.bad ? "bg-tone-danger" : "bg-tone-success")} />{d.label}</li>)}
               </ul>
               <p className="mt-2 text-[11.5px] text-muted-foreground">Higher means more likely to fall behind. Scored nightly from payment history; a person decides any action.</p>
@@ -206,7 +206,7 @@ export async function Resident360({ id, actor }: TabProps) {
           </dl>
           <div className="mt-3 border-t pt-2">
             <div className="text-[11px] text-muted-foreground">Household · {members.length + 1} {members.length ? "people" : "person"}</div>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1 flex flex-col gap-1">
               {members.length === 0 && <li className="text-[12.5px] text-muted-foreground">Lives alone</li>}
               {members.map((m) => <li key={String(m.id)} className="flex items-center justify-between text-[12.5px]"><Link href={`/app/residents/${encodeURIComponent(String(m.id))}`} className="hover:text-primary hover:underline">{String(m.name)}</Link><span className="text-muted-foreground">{m.is_primary ? "Primary" : "Occupant"}</span></li>)}
             </ul>
@@ -215,7 +215,7 @@ export async function Resident360({ id, actor }: TabProps) {
 
         <Card title="Communications" icon={MessageSquare} href={`?tab=threads`} hrefLabel="All messages" className="lg:col-span-2">
           {threads.length === 0 ? <p className="text-[12.5px] text-muted-foreground">No conversations yet. Messages by email, SMS, portal and phone show here.</p> : (
-            <ol className="relative space-y-2.5 before:absolute before:inset-y-1 before:left-[7px] before:w-px before:bg-border">
+            <ol className="relative flex flex-col gap-2.5 before:absolute before:inset-y-1 before:left-[7px] before:w-px before:bg-border">
               {threads.map((t) => {
                 const Icon = CHANNEL_ICON[String(t.channel) as keyof typeof CHANNEL_ICON] ?? MessageSquare;
                 return (

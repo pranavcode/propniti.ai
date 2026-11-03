@@ -24,7 +24,7 @@ export async function Composer({ id, run, src, property }: { id?: string; run?: 
   if (a && a.status === "Sent") return <main className="p-6"><EmptyState title="This announcement was already sent" action={{ label: "Open it", href: `/app/communications/announcements/${encodeURIComponent(String(a.id))}` }} /></main>;
 
   return (
-    <main className="space-y-4 px-4 pt-5 pb-10 md:px-6">
+    <main className="flex flex-col gap-4 px-4 pt-5 pb-10 md:px-6">
       <div>
         <div className="flex items-center gap-1 text-[12px] text-muted-foreground"><Link href="/app/communications/announcements" className="hover:text-foreground hover:underline">Announcements</Link><ChevronRight className="size-3" />{a ? "Draft" : "New"}</div>
         <h1 className="mt-0.5 flex items-center gap-2 text-[20px] font-semibold tracking-tight"><Megaphone className="size-5 text-muted-foreground" />{a ? String(a.title) : "New announcement"}</h1>

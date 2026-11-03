@@ -95,7 +95,7 @@ export async function TodayPage() {
   const kpi = (m: Awaited<typeof kColl>) => ({ value: m?.value ?? null, previous: m?.previous ?? null, spark: m?.spark });
 
   return (
-    <main className="space-y-5 px-4 pt-5 pb-10 md:px-6">
+    <main className="flex flex-col gap-5 px-4 pt-5 pb-10 md:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[20px] font-semibold tracking-tight">{personaGreeting(persona)}</h1>
@@ -127,7 +127,7 @@ export async function TodayPage() {
           <div className="border-t border-tone-ai/15 p-3"><AskToday suggestions={persona.assistantPrompts} /></div>
         </section>
 
-        <aside className="space-y-3">
+        <aside className="flex flex-col gap-3">
           <section className="rounded-lg border bg-card">
             <header className="flex items-center justify-between border-b px-3 py-2">
               <h2 className="flex items-center gap-1.5 text-[12.5px] font-semibold"><MessageSquare className="size-3.5 text-muted-foreground" />Conversations waiting</h2>
@@ -185,7 +185,7 @@ export async function TodayPage() {
         <ChartCard title="Open work orders by priority" description="Within SLA and past SLA" kind="stacked" data={(woPri?.points ?? []) as never} x="priority" series={[{ key: "within", label: "Within SLA", format: "count", color: "var(--chart-1)" }, { key: "past_sla", label: "Past SLA", format: "count", color: "var(--tone-danger)" }]} drill={`/app/maintenance/work-orders?${WO_OPEN_Q}&f.priority={priority}`} height={220} />
       </div>
 
-      <section data-tour="queue" aria-labelledby="queue-h" className="space-y-2">
+      <section data-tour="queue" aria-labelledby="queue-h" className="flex flex-col gap-2">
         <div className="flex items-end justify-between gap-2">
           <div>
             <h2 id="queue-h" className="text-[14px] font-semibold tracking-tight">Approvals</h2>

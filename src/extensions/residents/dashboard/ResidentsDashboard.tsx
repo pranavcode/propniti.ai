@@ -22,7 +22,7 @@ export async function ResidentsDashboard() {
     Promise.all(charts.map(async (c: ChartDef) => ({ c, m: await metrics(ctx, c.metric).catch(() => null) }))),
   ]);
   return (
-    <main className="space-y-4 px-4 pt-5 pb-10 md:px-6">
+    <main className="flex flex-col gap-4 px-4 pt-5 pb-10 md:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[20px] font-semibold tracking-tight">Residents and leases</h1>

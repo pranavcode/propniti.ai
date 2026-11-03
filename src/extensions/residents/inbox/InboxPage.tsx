@@ -68,7 +68,7 @@ export async function InboxPage(p: Params) {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col border-r" aria-label="Conversations" data-tour="inbox">
-          <div className="space-y-2 border-b p-3">
+          <div className="flex flex-col gap-2 border-b p-3">
             <form action="/app/communications/inbox" className="relative">
               {status && <input type="hidden" name="status" value={status} />}
               {p.kind && <input type="hidden" name="kind" value={p.kind} />}
