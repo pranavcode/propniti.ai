@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BadgeCheck, Link2 } from "lucide-react";
+import { Ban, BadgeCheck, Link2 } from "lucide-react";
 import type { Role, Row } from "@/entities/types";
 import { uid } from "@/server/money";
 import { effective, overlayUpsertSql } from "@/server/effective";
@@ -59,6 +59,34 @@ registerAction({
     return { status: 200, message: `${String(row.description ?? line)} matched to ${t.id}` };
   },
   help: { summary: "Links a bank statement line to the ledger transfer it represents. Accepting an AI-suggested match does the same.", article: "bank-reconciliation-ai-matches" },
+});
+
+// Rejecting a suggested match is saved as an Unmatched item for that line, with the rejected
+// transfer in the note, so the suggestion doesn't come back on the next load.
+registerAction({
+  key: "bank_transactions.reject_match",
+  label: "Reject suggested match",
+  entity: "bank_transactions",
+  roles: RECON,
+  icon: Ban,
+  when: (r: Row) => r.match === "Unmatched",
+  input: z.strictObject({ transfer_id: z.string().min(1).max(80), reconciliation_id: z.string().min(1).max(80) }),
+  handler: async (ctx, row, input) => {
+    const { db, ws } = ctx;
+    const line = String(row.id);
+    const rec = await db.prepare(`SELECT r.status FROM ${effective("bank_reconciliations", "?1")} r WHERE r.id = ?2 AND r.bank_account_id = ?3`).bind(ws, input.reconciliation_id, String(row.bank_account_id)).first<{ status: string }>();
+    if (!rec) return { status: 404, error: "Reconciliation not found for this account" };
+    if (rec.status === "Approved") return { status: 409, error: "This reconciliation is already approved" };
+    const note = `Suggested match to ${input.transfer_id} rejected by ${ctx.actor.name}`;
+    const item = await db.prepare(`SELECT id FROM ${effective("reconciliation_items", "?1")} WHERE reconciliation_id = ?2 AND bank_transaction_id = ?3`).bind(ws, input.reconciliation_id, line).first<{ id: string }>();
+    await db.batch([
+      item
+        ? db.prepare(overlayUpsertSql("reconciliation_items", ITEM_COLS, { status: "'Unmatched'", transfer_id: "NULL", confidence: "NULL", note: "?3" }, "e.status <> 'Matched'")).bind(ws, item.id, note)
+        : db.prepare("INSERT INTO reconciliation_items (workspace_id, id, reconciliation_id, bank_transaction_id, transfer_id, status, confidence, note) VALUES (?, ?, ?, ?, NULL, 'Unmatched', NULL, ?)").bind(ws, uid("ri"), input.reconciliation_id, line, note),
+    ]);
+    return { status: 200, message: "Suggestion rejected. The line stays unmatched until you match it by hand." };
+  },
+  help: { summary: "Rejects an AI-suggested match. The line stays unmatched and the suggestion isn't offered again.", article: "bank-reconciliation-ai-matches" },
 });
 
 registerAction({

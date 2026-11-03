@@ -62,6 +62,17 @@ describe("reconciliation", () => {
     expect((await match.handler(ctx, b3, { transfer_id: "t-plumb" })).status).toBe(400);
   });
 
+  it("remembers a rejected suggestion across loads", async () => {
+    const reject = getAction("bank_transactions.reject_match")!;
+    const b2 = { ...(await row("bank_transactions", "b2")), match: "Unmatched", amount: -480 };
+    expect((await reject.handler(ctx, b2, { transfer_id: "t-plumb", reconciliation_id: "rec-1" })).status).toBe(200);
+    const v = (await loadReconciliation(db, WS, "rec-1"))!;
+    const m = v.matches.find((x) => x.line.id === "b2")!;
+    expect(m.status).toBe("Unmatched");
+    expect(m.transfer).toBeNull();
+    expect(v.counts.Suggested).toBe(0);
+  });
+
   it("closes the unexplained-deposit issue when that deposit is matched", async () => {
     await db.prepare(tr("t-late", "Rent", 31337, "Operating trust", "2026-10-20")).run();
     const b3 = { ...(await row("bank_transactions", "b3")), match: "Unmatched", amount: 313.37 };

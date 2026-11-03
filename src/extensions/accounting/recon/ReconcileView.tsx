@@ -65,6 +65,15 @@ export function ReconcileView({ r }: { r: ReconJson }) {
     setBusy(l.id);
     try { await accept(l); router.refresh(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
   };
+  const reject = async (l: ReconLineJson) => {
+    if (!l.transfer) return;
+    setBusy(l.id);
+    try {
+      await post(`/api/e/bank_transactions/${encodeURIComponent(l.id)}/actions/bank_transactions.reject_match`, { transfer_id: l.transfer.id, reconciliation_id: r.id });
+      setDone((d) => ({ ...d, [l.id]: "dismissed" }));
+      router.refresh();
+    } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
+  };
   const acceptAll = async () => {
     setBusy("all");
     let ok = 0;
@@ -167,14 +176,14 @@ export function ReconcileView({ r }: { r: ReconJson }) {
                 {l.status === "Suggested" && l.transfer && (
                   <div className="col-span-3 flex flex-wrap items-center gap-x-3 gap-y-1 pl-0.5">
                     {state ? (
-                      <span className="text-[12px] text-muted-foreground">{state === "accepted" ? "Accepted" : "Dismissed for now"}</span>
+                      <span className="text-[12px] text-muted-foreground">{state === "accepted" ? "Accepted" : "Rejected"}</span>
                     ) : (
                       <>
                         <Confidence value={l.confidence} />
                         <span className="text-[12px] text-muted-foreground">{l.why.join(" · ")}</span>
                         {open && r.canAct && (
                           <span className="ml-auto flex gap-1.5">
-                            <Button size="xs" variant="ghost" onClick={() => setDone((d) => ({ ...d, [l.id]: "dismissed" }))} disabled={busy !== null}><X className="size-3" /> Reject</Button>
+                            <Button size="xs" variant="ghost" onClick={() => reject(l)} disabled={busy !== null}><X className="size-3" /> Reject</Button>
                             <Button size="xs" variant="outline" onClick={() => acceptOne(l)} disabled={busy !== null}><Check className="size-3" /> Accept match</Button>
                           </span>
                         )}
