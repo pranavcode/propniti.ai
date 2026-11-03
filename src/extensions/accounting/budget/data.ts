@@ -99,16 +99,21 @@ export async function explainVariance(ctx: Ctx, data: BvaData, key: string): Pro
           WHERE b.status <> 'Void' AND substr(b.bill_date, 1, 7) IN (SELECT value FROM json_each(?))${scope(actor, "b.property_id").sql}${property ? " AND b.property_id = ?" : ""}${gl ? " AND l.gl_account_id = ?" : ""} ORDER BY l.amount_cents DESC LIMIT 3`)
         .bind(JSON.stringify(periods), ...scope(actor, "b.property_id").binds, ...pb).all<{ id: string; company: string; description: string; c: number; bill_date: string }>()
       : Promise.resolve({ results: [] as { id: string; company: string; description: string; c: number; bill_date: string }[] }),
-    db.prepare(`SELECT coalesce(sum(${amountSql(data.type, "x")}), 0) AS c FROM ${effective("journal_entries", ws)} x JOIN ${effective("gl_accounts", ws)} g ON g.id = x.gl_account_id WHERE g.type = ? AND ${inP}${s.sql}${pf}`)
-      .bind(data.type, JSON.stringify(prior), ...s.binds, ...pb).first<{ c: number }>(),
+    db.prepare(`SELECT x.period, sum(${amountSql(data.type, "x")}) AS c FROM ${effective("journal_entries", ws)} x JOIN ${effective("gl_accounts", ws)} g ON g.id = x.gl_account_id WHERE g.type = ? AND ${inP}${s.sql}${pf} GROUP BY x.period`)
+      .bind(data.type, JSON.stringify(prior), ...s.binds, ...pb).all<{ period: string; c: number }>(),
   ]);
   const scopeLabel = rowId === "total" ? (data.propertyName ?? "All properties") : data.property ? `${r.label} at ${data.propertyName}` : r.label;
   const when = month ? monthName(month) : `${data.year} year to date (${monthName(periods[0])}–${monthName(periods[periods.length - 1])})`;
-  const lastYear = (last?.c ?? 0) / 100;
+  // Compare only the months that have history a year back (the ledger starts May 2025).
+  const lastYear = last.results.reduce((t, x) => t + x.c, 0) / 100;
+  const covered = last.results.map((x) => `${Number(x.period.slice(0, 4)) + 1}${x.period.slice(4)}`);
+  const actualSame = covered.reduce((t, m) => t + (r.cells[m]?.actual ?? 0), 0);
+  const lastLabel = covered.length === periods.length ? "same_period_last_year" : `last_year_same_${covered.length}_months`;
   const facts: Record<string, string | number> = {
     scope: scopeLabel, period: when, kind: data.type.toLowerCase(), budget: usd(budget), actual: usd(actual), variance: `${usd(variance)} (${pct(variance, budget)})`,
-    favourable: favourable(data.type, budget, actual) ? "yes" : "no", same_period_last_year: usd(lastYear),
+    favourable: favourable(data.type, budget, actual) ? "yes" : "no",
   };
+  if (covered.length) facts[lastLabel] = `${usd(lastYear)} vs ${usd(actualSame)} this year (${pct(actualSame - lastYear, lastYear)})`;
   drivers.results.forEach((d, i) => { facts[`driver_${i + 1}`] = `${d.label}: actual ${usd(d.actual / 100)} vs budget ${usd(d.budget / 100)} (${usd((d.actual - d.budget) / 100)})`; });
   bills.results.forEach((b, i) => { facts[`largest_bill_${i + 1}`] = `${b.company}, ${b.description}, ${usd(b.c / 100)} on ${b.bill_date} (${b.id})`; });
 
@@ -135,6 +140,6 @@ export async function explainVariance(ctx: Ctx, data: BvaData, key: string): Pro
   const top = drivers.results.filter((d) => d.actual !== d.budget).slice(0, 2);
   if (top.length) bullets.push(`Biggest drivers: ${top.map((d) => `${d.label} ${usd((d.actual - d.budget) / 100)}`).join("; ")}.`);
   if (bills.results.length) bullets.push(`Largest bills behind it: ${bills.results.slice(0, 2).map((b) => `${b.company} ${usd(b.c / 100)} (${b.id})`).join(", ")}.`);
-  if (lastYear) bullets.push(`Same period last year was ${usd(lastYear)} (${pct(actual - lastYear, lastYear)} year over year)${data.type === "Expense" && actual > lastYear * 1.1 ? ", so check whether the budget assumed last year's run rate" : ""}.`);
+  if (lastYear) bullets.push(`${covered.length === periods.length ? "Same period" : `The same ${covered.length} month${covered.length === 1 ? "" : "s"}`} last year: ${usd(lastYear)} against ${usd(actualSame)} this year (${pct(actualSame - lastYear, lastYear)})${data.type === "Expense" && actualSame > lastYear * 1.1 && !fav ? ", so the budget may be based on last year's lower run rate" : ""}.`);
   return { title, bullets, facts, source: "rules" };
 }
