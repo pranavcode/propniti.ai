@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, Check, ExternalLink, Loader2, MessageCircleQuestion, Sparkles } from "lucide-react";
+import { ArrowRight, ExternalLink, Loader2, MessageCircleQuestion, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatPct } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ type Result = { text: string; bullets: string[]; source: "live" | "rules"; model
 const fmt = (kind: Kind, v: number | null) => (v == null ? "—" : kind === "money" ? formatMoney(v, "whole") : kind === "pct" ? formatPct(v, 1) : Math.round(v).toLocaleString("en-US"));
 const fmtChange = (kind: Kind, d: number) => (kind === "pct" ? `${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)} pts` : `${d >= 0 ? "+" : "−"}${fmt(kind, Math.abs(d))}`);
 const monthName = (ym: string) => (ym ? new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : "");
+// Lower-case a label for mid-sentence use, but keep acronyms like NOI and SLA.
+const lower = (s: string) => s.replace(/\b([A-Z])([a-z])/g, (_, a: string, b: string) => a.toLowerCase() + b);
 const STEPS = ["Reading monthly metrics in your scope", "Splitting the change by property and driver", "Writing the explanation from those figures"];
 
 type State = { status: "loading" | "done" | "error"; data?: Result; error?: string };
@@ -54,7 +56,7 @@ function ExplainSheet({ label, state, run, open, onOpenChange }: { label: string
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-[460px]">
         <SheetHeader className="border-b px-5 py-4">
-          <SheetTitle className="flex items-center gap-2 text-[15px]"><Sparkles className="size-4 text-tone-ai" />Why did {label.toLowerCase()} change?</SheetTitle>
+          <SheetTitle className="flex items-center gap-2 text-[15px]"><Sparkles className="size-4 text-tone-ai" />Why did {lower(label)} change?</SheetTitle>
           <SheetDescription className="text-[12.5px]">
             {d ? `${d.scope} · ${monthName(d.month)} vs ${monthName(d.prior_month)}` : "Month over month, from computed figures. The model only words them."}
           </SheetDescription>
@@ -64,7 +66,8 @@ function ExplainSheet({ label, state, run, open, onOpenChange }: { label: string
           {state.status === "loading" && (
             <>
               <ol className="flex flex-col gap-2 text-[12.5px] text-muted-foreground">
-                {STEPS.map((s, i) => <li key={s} className="flex items-center gap-2">{i < 2 ? <Check className="size-3.5 text-tone-ai" /> : <Loader2 className="size-3.5 animate-spin text-tone-ai motion-reduce:animate-none" />}{s}…</li>)}
+                <li className="flex items-center gap-2 font-medium text-foreground"><Loader2 className="size-3.5 animate-spin text-tone-ai motion-reduce:animate-none" />Working on it</li>
+                {STEPS.map((s) => <li key={s} className="flex items-center gap-2 pl-[22px]"><span className="size-1 rounded-full bg-muted-foreground/50" />{s}</li>)}
               </ol>
               <div className="flex flex-col gap-2">{[95, 88, 76, 60].map((w) => <Skeleton key={w} className="h-3 bg-tone-ai/10" style={{ width: `${w}%` }} />)}</div>
             </>
@@ -140,7 +143,7 @@ function ExplainSheet({ label, state, run, open, onOpenChange }: { label: string
                 <span className="ml-auto flex gap-1.5">
                   <Button size="sm" variant="ghost" onClick={() => void run()}>Regenerate</Button>
                   {shell && (
-                    <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); shell.assistant.ask(`Why did ${d.label.toLowerCase()} change in ${monthName(d.month)} for ${d.scope}?`, { path: "/app" }); }}>
+                    <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); shell.assistant.ask(`Why did ${lower(d.label)} change in ${monthName(d.month)} for ${d.scope}?`, { path: "/app" }); }}>
                       <MessageCircleQuestion className="size-3.5" /> Ask a follow-up
                     </Button>
                   )}
