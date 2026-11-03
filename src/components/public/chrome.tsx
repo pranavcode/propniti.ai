@@ -7,6 +7,8 @@ import { METROS } from "./catalog";
 
 export function PublicHeader() {
   return (
+    <>
+    <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:shadow">Skip to content</a>
     <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6">
         <Link href="/listings" className="flex items-center gap-2 rounded-md font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -21,6 +23,7 @@ export function PublicHeader() {
         <Link href="/" className="ml-auto text-[13.5px] text-muted-foreground hover:text-foreground">For property managers</Link>
       </div>
     </header>
+    </>
   );
 }
 

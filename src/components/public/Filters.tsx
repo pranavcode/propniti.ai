@@ -84,9 +84,9 @@ export function Filters({ value, sorts, total }: { value: FilterState; sorts: { 
         <fieldset className="min-w-0">
           <legend className="mb-1 text-[12px] font-medium text-muted-foreground">Monthly rent</legend>
           <div className="flex items-center gap-1.5">
-            <input key={`min${value.min}`} type="number" name="min" inputMode="numeric" min={0} step={50} defaultValue={value.min ?? ""} placeholder="Min $" aria-label="Minimum rent" className={cn(field, "w-24 tabular-nums")} />
+            <input key={`min${value.min}`} type="number" name="min" inputMode="numeric" min={0} step={50} defaultValue={value.min ?? ""} placeholder="Min $…" aria-label="Minimum rent" className={cn(field, "w-24 tabular-nums")} />
             <span className="text-muted-foreground" aria-hidden>–</span>
-            <input key={`max${value.max}`} type="number" name="max" inputMode="numeric" min={0} step={50} defaultValue={value.max ?? ""} placeholder="Max $" aria-label="Maximum rent" className={cn(field, "w-24 tabular-nums")} />
+            <input key={`max${value.max}`} type="number" name="max" inputMode="numeric" min={0} step={50} defaultValue={value.max ?? ""} placeholder="Max $…" aria-label="Maximum rent" className={cn(field, "w-24 tabular-nums")} />
           </div>
         </fieldset>
         <label className="min-w-0">

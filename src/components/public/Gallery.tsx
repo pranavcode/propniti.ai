@@ -32,6 +32,8 @@ export function Gallery({ photos }: { photos: Photo[] }) {
               srcSet={i === 0 ? `${thumb(p.src)} 400w, ${p.src} 1600w` : undefined}
               sizes={i === 0 ? "(min-width: 640px) 50vw, 100vw" : undefined}
               alt={p.alt}
+              width={i === 0 ? 1600 : 400}
+              height={i === 0 ? 1200 : 300}
               loading={i === 0 ? "eager" : "lazy"}
               fetchPriority={i === 0 ? "high" : undefined}
               decoding="async"
@@ -59,7 +61,7 @@ export function Gallery({ photos }: { photos: Photo[] }) {
           <DialogDescription className="sr-only">Use the left and right arrow keys to move between photos.</DialogDescription>
           {current && (
             <div className="relative">
-              <img src={current.src} alt={current.alt} className="max-h-[75vh] w-full rounded-lg bg-muted object-contain" />
+              <img src={current.src} alt={current.alt} width={1600} height={1200} className="max-h-[75vh] w-full rounded-lg bg-muted object-contain" />
               <button type="button" onClick={() => show(open! - 1)} aria-label="Previous photo" className="absolute top-1/2 left-2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background/90 shadow hover:bg-background"><ChevronLeft className="size-5" /></button>
               <button type="button" onClick={() => show(open! + 1)} aria-label="Next photo" className="absolute top-1/2 right-2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-background/90 shadow hover:bg-background"><ChevronRight className="size-5" /></button>
             </div>
@@ -67,7 +69,7 @@ export function Gallery({ photos }: { photos: Photo[] }) {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {photos.map((p, i) => (
               <button key={p.src + i} type="button" onClick={() => setOpen(i)} aria-label={`Photo ${i + 1}: ${p.alt}`} aria-current={i === open} className={cn("h-14 w-20 shrink-0 overflow-hidden rounded-md ring-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring", i === open ? "ring-2 ring-primary" : "opacity-70 hover:opacity-100")}>
-                <img src={thumb(p.src)} alt="" loading="lazy" className="size-full object-cover" />
+                <img src={thumb(p.src)} alt="" width={80} height={56} loading="lazy" className="size-full object-cover" />
               </button>
             ))}
           </div>

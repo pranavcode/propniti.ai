@@ -28,9 +28,9 @@ export default async function Page({ params }: Props) {
   return (
     <>
       <PublicHeader />
-      <main className="mx-auto max-w-6xl px-4 pt-6 text-[14px] sm:px-6">
+      <main id="main" className="mx-auto max-w-6xl px-4 pt-6 text-[14px] sm:px-6">
         <Link href={`/listings/${l.id}`} className="mb-4 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"><ChevronLeft className="size-4" aria-hidden />Back to the listing</Link>
-        <h1 className="mb-6 text-[26px] font-semibold tracking-tight">Apply for unit {l.unit}</h1>
+        <h1 className="text-balance mb-6 text-[26px] font-semibold tracking-tight">Apply for unit {l.unit}</h1>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           <ApplyWizard listingId={l.id} leaseMonths={l.terms.lease_months} earliest={earliest} fee={usd(l.terms.application_fee_cents)} />
           <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start" aria-label="The home you're applying for">

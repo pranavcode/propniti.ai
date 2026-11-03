@@ -29,11 +29,11 @@ export default async function Page({ params, searchParams }: Props) {
     <>
       <PublicHeader />
       {!scored && <Refresh />}
-      <main className="mx-auto max-w-3xl space-y-6 px-4 pt-8 text-[14px] sm:px-6">
+      <main id="main" className="mx-auto max-w-3xl space-y-6 px-4 pt-8 text-[14px] sm:px-6">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-1 size-7 shrink-0 text-tone-success" aria-hidden />
           <div>
-            <h1 className="text-[26px] font-semibold tracking-tight">Thanks, {a.first_name}. Your application is in.</h1>
+            <h1 className="text-balance text-[26px] font-semibold tracking-tight">Thanks, {a.first_name}. Your application is in.</h1>
             <p className="text-[15px] text-muted-foreground">Reference {a.id} · {l.property}, unit {l.unit} · {usd(l.rent_cents)}/mo</p>
           </div>
         </div>

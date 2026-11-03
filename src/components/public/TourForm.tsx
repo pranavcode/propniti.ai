@@ -95,7 +95,7 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
       {(["name", "email", "phone"] as const).map((f) => (
         <label key={f} className="block">
           <span className="mb-1.5 block text-[12.5px] font-medium text-muted-foreground">{f === "name" ? "Full name" : f === "email" ? "Email" : "Phone"}</span>
-          <input name={f} type={f === "email" ? "email" : f === "phone" ? "tel" : "text"} autoComplete={f === "name" ? "name" : f === "email" ? "email" : "tel"} aria-invalid={!!errors[f]} className={input} />
+          <input name={f} type={f === "email" ? "email" : f === "phone" ? "tel" : "text"} autoComplete={f === "name" ? "name" : f === "email" ? "email" : "tel"} aria-invalid={!!errors[f]} spellCheck={f === "email" ? false : undefined} className={input} />
           {errors[f] && <span className="mt-1 block text-[12px] text-destructive">{errors[f]}</span>}
         </label>
       ))}

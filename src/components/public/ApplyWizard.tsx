@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, FileText, Loader2, Lock, Paperclip, X } from "lucide-react";
 import type { z } from "zod";
@@ -52,6 +52,22 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const submitted = useRef(false);
+
+  // Warn before leaving with a half-finished application.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (!submitted.current && Object.keys(v).some((k) => ["first_name", "last_name", "email", "street"].includes(k) && v[k])) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [v]);
+
+  function fail(e: Errors) {
+    setErrors(e);
+    requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+  }
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setV((s) => ({ ...s, [k]: e.target.value }));
   const opt = (k: string) => (v[k]?.trim() ? v[k].trim() : undefined);
@@ -75,15 +91,18 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
   async function next() {
     const s = STEPS[step];
     const r = s.schema.safeParse(payload()[s.key]);
-    if (!r.success) return setErrors(issues(r.error));
+    if (!r.success) return fail(issues(r.error));
     if (step < STEPS.length - 1) return go(step + 1);
     const all = ApplyRequest.safeParse(payload());
-    if (!all.success) return setErrors(issues(all.error));
+    if (!all.success) return fail(issues(all.error));
     setBusy(true);
     try {
       const res = await fetch(`/apply/${encodeURIComponent(listingId)}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(all.data) });
       const body = await res.json().catch(() => ({}));
-      if (res.ok) return router.push(`/apply/${encodeURIComponent(listingId)}/status?app=${encodeURIComponent(body.applicationId)}`);
+      if (res.ok) {
+        submitted.current = true;
+        return router.push(`/apply/${encodeURIComponent(listingId)}/status?app=${encodeURIComponent(body.applicationId)}`);
+      }
       setErrors({ form: res.status === 429 ? "Too many requests. Try again in a minute." : (body.error ?? "Couldn't submit your application. Try again.") });
     } catch {
       setErrors({ form: "You seem to be offline. Your answers are still here; try again when you're connected." });
@@ -122,7 +141,7 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
         ))}
       </ol>
 
-      <form onSubmit={(e) => (e.preventDefault(), next())} noValidate className="space-y-5 rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
+      <form ref={form} onSubmit={(e) => (e.preventDefault(), next())} noValidate className="space-y-5 rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
         <div>
           <p className="text-[12.5px] text-muted-foreground">Step {step + 1} of {STEPS.length}</p>
           <h2 ref={heading} tabIndex={-1} className="text-[20px] font-semibold outline-none">{STEPS[step].title}</h2>
@@ -132,7 +151,7 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
           <div className="grid gap-4 sm:grid-cols-2">
             <Field k="first_name" error={errors.first_name} label="First name">{text("first_name", { autoComplete: "given-name" })}</Field>
             <Field k="last_name" error={errors.last_name} label="Last name">{text("last_name", { autoComplete: "family-name" })}</Field>
-            <Field k="email" error={errors.email} label="Email" hint="We send your application status here.">{text("email", { type: "email", autoComplete: "email" })}</Field>
+            <Field k="email" error={errors.email} label="Email" hint="We send your application status here.">{text("email", { type: "email", autoComplete: "email", spellCheck: false })}</Field>
             <Field k="phone" error={errors.phone} label="Mobile phone">{text("phone", { type: "tel", autoComplete: "tel" })}</Field>
             <Field k="move_in" error={errors.move_in} label="Move-in date">{text("move_in", { type: "date", min: earliest })}</Field>
             <Field k="lease_months" error={errors.lease_months} label="Lease length">

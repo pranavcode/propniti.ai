@@ -89,7 +89,7 @@ export function AskUnit({ listingId, unit }: { listingId: string; unit: string }
               value={q}
               onChange={(e) => setQ(e.target.value)}
               maxLength={300}
-              placeholder="e.g. Is there a washer and dryer?"
+              placeholder="e.g. Is there a washer and dryer…"
               autoComplete="off"
               className="h-11 w-full rounded-xl border border-input bg-background pr-12 pl-3.5 text-[15px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
             />

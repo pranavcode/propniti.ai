@@ -57,7 +57,7 @@ export default async function Page({ params }: Props) {
   return (
     <>
       <PublicHeader />
-      <main className="mx-auto max-w-7xl px-4 pt-4 text-[14px] sm:px-6 sm:pt-6">
+      <main id="main" className="mx-auto max-w-7xl px-4 pt-4 text-[14px] sm:px-6 sm:pt-6">
         <nav aria-label="Breadcrumb" className="mb-3 text-[13px] text-muted-foreground">
           <ol className="flex flex-wrap items-center gap-1">
             <li><Link href="/listings" className="hover:text-foreground">Homes</Link></li>
@@ -80,7 +80,7 @@ export default async function Page({ params }: Props) {
                 <Pill>{homeKind(l.type)}</Pill>
                 {l.prev_rent_cents && <Pill tone="success"><TrendingDown className="size-3.5" aria-hidden />Price reduced</Pill>}
               </div>
-              <h1 className="text-[24px] leading-tight font-semibold tracking-tight sm:text-[30px]">{l.headline}</h1>
+              <h1 className="text-balance text-[24px] leading-tight font-semibold tracking-tight sm:text-[30px]">{l.headline}</h1>
               <p className="text-[15px] text-muted-foreground">{l.property} · Unit {l.unit} · {l.street}, {l.city}, {l.state} {l.zip}</p>
             </header>
 

@@ -48,9 +48,9 @@ export default async function Page({ searchParams }: Props) {
   return (
     <>
       <PublicHeader />
-      <main className="mx-auto max-w-7xl space-y-6 px-4 pt-6 text-[14px] sm:px-6 sm:pt-8">
+      <main id="main" className="mx-auto max-w-7xl space-y-6 px-4 pt-6 text-[14px] sm:px-6 sm:pt-8">
         <div className="space-y-1.5">
-          <h1 className="text-[26px] font-semibold tracking-tight sm:text-[32px]">{f.metro ? `Homes for rent in ${f.metro}` : "Find your next home"}</h1>
+          <h1 className="text-balance text-[26px] font-semibold tracking-tight sm:text-[32px]">{f.metro ? `Homes for rent in ${f.metro}` : "Find your next home"}</h1>
           <p className="max-w-2xl text-[15px] text-muted-foreground">Real prices with the full move-in cost, floor plans and current specials. Ask our AI anything about a home, no account needed.</p>
         </div>
 
