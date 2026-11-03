@@ -166,7 +166,7 @@ function QueueGroup({ title, count, children }: { title: string; count: number; 
 function QueueRow({ href, active, title, sub, amount, badge }: { href: string; active: boolean; title: string; sub: string; amount: number; badge: React.ReactNode }) {
   return (
     <li>
-      <Link href={href} scroll={false} aria-current={active ? "page" : undefined} className={cn("flex flex-col gap-0.5 px-3 py-2 hover:bg-muted/50", active && "bg-primary/[0.06] shadow-[inset_2px_0_0_var(--primary)]")}>
+      <Link href={href} scroll={false} aria-current={active ? "page" : undefined} className={cn("flex flex-col gap-0.5 px-3 py-2 hover:bg-muted/50", active && "bg-primary/[0.08] font-medium")}>
         <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate font-medium">{title}</span><span className="tabular-nums">{formatMoney(amount, "full")}</span></span>
         <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">{sub}</span>{badge}</span>
       </Link>
