@@ -502,8 +502,9 @@ function trail(ctx: WriteCtx, def: EntityDef, id: string, verb: "created" | "upd
       .bind(ws, rid(), at, actor.name, actor.personaId, actor.role, `${def.key}.${verb}`, def.key, id, pid, summary, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null),
     db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?, ?, ?, ?, ?, ?, 'staff', ?, ?, ?, ?)")
       .bind(ws, rid(), def.key, id, pid, at, actor.personaId, verb, summary, JSON.stringify({ actor: actor.name, changes: after && before ? diffKeys(before, after) : undefined })),
-    db.prepare("INSERT INTO events (workspace_id, id, type, entity_type, entity_id, property_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(ws, rid(), `${def.key}.${verb}`, def.key, id, pid, JSON.stringify({ by: actor.personaId }), at),
+    ...[`${def.key}.${verb}`, def.events?.[verb]].filter((t): t is string => !!t).map((type) =>
+      db.prepare("INSERT INTO events (workspace_id, id, type, entity_type, entity_id, property_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(ws, rid(), type, def.key, id, pid, JSON.stringify({ by: actor.personaId }), at)),
   ];
 }
 

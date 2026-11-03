@@ -222,6 +222,9 @@ export type EntityDef = {
   // Once `field` reaches one of `in` (Approved, Paid…), generic edits and deletes are refused;
   // only named actions change the record. `fields` limits the lock to those fields.
   lockedWhen?: { field: string; in: string[]; fields?: string[] };
+  // Domain events (agent triggers in src/ai/types.ts EventType, e.g. "wo.created") emitted by
+  // generic writes, in addition to "<entity>.<verb>".
+  events?: { created?: `${string}.${string}`; updated?: `${string}.${string}`; deleted?: `${string}.${string}` };
   help?: HelpMeta;
 };
 

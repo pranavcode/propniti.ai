@@ -337,6 +337,20 @@ describe("writes", () => {
     }
   });
 
+  it("emits a def's domain events alongside the generic ones", async () => {
+    const wo = getEntity("work_orders")!;
+    registerEntity({ ...wo, events: { created: "wo.created" } });
+    try {
+      const row = await createRecord(await wctx("marcus"), "work_orders", { title: "Leak", category: "Plumbing", priority: "Urgent", property_id: "p01", opened_at: "2026-10-28T10:00:00Z" });
+      const types = (await db.prepare("SELECT type FROM events WHERE entity_id = ? ORDER BY type").bind(row.id).all()).results.map((r) => r.type);
+      expect(types).toEqual(["wo.created", "work_orders.created"]);
+      await updateRecord(await wctx("marcus"), "work_orders", String(row.id), { title: "Leak under sink" });
+      expect((await db.prepare("SELECT count(*) AS n FROM events WHERE entity_id = ? AND type = 'wo.created'").bind(row.id).first())!.n).toBe(1);
+    } finally {
+      registerEntity(wo);
+    }
+  });
+
   it("can't update or delete a record outside scope", async () => {
     await expect(updateRecord(await wctx("marcus"), "units", "p05-u1", { sqft: 1 })).rejects.toMatchObject({ status: 404 });
     await expect(deleteRecord(await wctx("priya"), "units", "p05-u1")).rejects.toMatchObject({ status: 404 });
