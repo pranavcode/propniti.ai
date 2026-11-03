@@ -238,7 +238,9 @@ function keysetWhere(e: string, dir: "asc" | "desc", c: Cursor, idExpr: string):
   return { sql: [`(${e} ${gt} ? OR (${e} = ? AND ${idExpr} ${gt} ?)${tail})`], params: [c.v, c.v, c.id] };
 }
 
-export type ListOptions = ListQuery & { where?: { column: string; value: unknown } };
+// rowsOnly skips the total, status-tab counts and footer (CSV export pages through with cursors,
+// so re-counting per page would multiply D1 queries).
+export type ListOptions = ListQuery & { where?: { column: string; value: unknown }; rowsOnly?: boolean };
 export type ListOut = ListResult & { footer?: Record<string, number | null> };
 
 function assertRead(def: EntityDef, role: Role) {
@@ -281,15 +283,15 @@ export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOpt
   const rowsSql = `SELECT ${selectList(def, role, ws)}, ${sortExpr} AS __sort${from}${whereSql(pageWhere)} ORDER BY ${sortExpr} ${dir}, ${idExpr} ${dir} LIMIT ? OFFSET ?`;
   const statements: DbStatement[] = [
     db.prepare(rowsSql).bind(...pageWhere.params, size + 1, offset),
-    db.prepare(`SELECT count(*) AS n${from}${whereSql(all)}`).bind(...all.params),
+    db.prepare(q.rowsOnly ? "SELECT -1 AS n" : `SELECT count(*) AS n${from}${whereSql(all)}`).bind(...(q.rowsOnly ? [] : all.params)),
   ];
-  const tabKey = def.list.statusTabs;
+  const tabKey = q.rowsOnly ? undefined : def.list.statusTabs;
   if (tabKey && visibleFields(def, role).some(([k]) => k === tabKey)) {
     const tf = def.fields[tabKey];
     const tabWhere = merge(fixed, scope, search, filterWhere(def, role, ws, filters, tabKey));
     statements.push(db.prepare(`SELECT ${expr(def, tabKey, tf, ws)} AS v, count(*) AS n${from}${whereSql(tabWhere)} GROUP BY v`).bind(...tabWhere.params));
   }
-  const footer = (def.list.footer ?? []).filter((a) => a.fn === "count" || visibleFields(def, role).some(([k]) => k === a.field));
+  const footer = (q.rowsOnly ? [] : def.list.footer ?? []).filter((a) => a.fn === "count" || visibleFields(def, role).some(([k]) => k === a.field));
   if (footer.length) {
     const aggs = footer.map((a, i) => (a.fn === "count" ? `count(*) AS a${i}` : `${a.fn}(${expr(def, a.field, def.fields[a.field], ws)}) AS a${i}`));
     statements.push(db.prepare(`SELECT ${aggs.join(", ")}${from}${whereSql(all)}`).bind(...all.params));
@@ -379,7 +381,7 @@ export async function exportCsv(ctx: QueryCtx, entity: string, q: ListQuery): Pr
   let cursor: string | undefined;
   let n = 0;
   do {
-    const res = await list(ctx, entity, { ...q, size: PAGE_SIZE_CAP, cursor: cursor ?? undefined, page: 1 });
+    const res = await list(ctx, entity, { ...q, size: PAGE_SIZE_CAP, cursor: cursor ?? undefined, page: 1, rowsOnly: true });
     for (const r of res.rows) lines.push([r.id, ...use.map(([k, f]) => (f.type === "ref" ? r[`${k}__label`] ?? r[k] : r[k]))].map(csvCell).join(","));
     n += res.rows.length;
     cursor = res.nextCursor;
