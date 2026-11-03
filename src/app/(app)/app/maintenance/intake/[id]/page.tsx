@@ -39,6 +39,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
     all<Row>(db, `SELECT * FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 6`, [id]),
   ]);
   const pending = ["New", "Triaged"].includes(String(wo.status));
+  const dispatchable = ["New", "Triaged", "Assigned", "On hold"].includes(String(wo.status));
   const canAct = can(actor.role, "work_orders.dispatch", "work_orders");
 
   return (
@@ -51,20 +52,21 @@ export default async function TriagePage({ params, searchParams }: Props) {
       <PageBody>
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0">
-            {!pending ? (
-              <div className="rounded-lg border border-tone-success/30 bg-tone-success/[0.05] p-4">
+            {!pending && (
+              <div className="mb-4 rounded-lg border border-tone-success/30 bg-tone-success/[0.05] p-4">
                 <p className="flex items-center gap-2 text-[14px] font-medium"><CheckCircle2 className="size-4 text-tone-success" />Dispatched{wo.vendor_id__label ? ` to ${wo.vendor_id__label}` : wo.assignee_id__label ? ` to ${wo.assignee_id__label}` : ""}</p>
-                <p className="mt-1 text-[13px] text-muted-foreground">{String(wo.category)} · {String(wo.priority)} · status {String(wo.status).toLowerCase()}. {suggestion?.queue_state === "auto_handled" ? "The triage agent applied this on its own, inside your auto-approve limit. It's in the audit log." : ""}</p>
+                <p className="mt-1 text-[13px] text-muted-foreground">{String(wo.category)} · {String(wo.priority)} · {String(wo.status).toLowerCase()}. {suggestion?.queue_state === "auto_handled" ? "The triage agent applied its suggestion on its own because the estimate is inside your auto-approve limit. It's in the audit log; change it below if you'd send someone else." : ""}</p>
                 <div className="mt-3 flex gap-2">
                   <Button asChild size="sm"><Link href={`/app/maintenance/work-orders/${encodeURIComponent(id)}?tab=wo_timeline`}>See the timeline</Link></Button>
                   <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/intake">Log another request</Link></Button>
                 </div>
               </div>
-            ) : !canAct ? (
+            )}
+            {!canAct ? (
               <EmptyState compact title="Only maintenance and property managers dispatch work" description="You can read the request and the agent's suggestion." />
-            ) : (
+            ) : dispatchable ? (
               <>
-                {!suggestion && (
+                {!suggestion && pending && (
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-4">
                     <p className="flex items-center gap-2 text-[13px]"><Sparkles className="size-4 text-tone-ai" />The triage agent hasn&apos;t looked at this request yet.</p>
                     <ActionButton entity="work_orders" id={id} action="work_orders.run_triage" label="Triage with AI" variant="default" follow />
@@ -75,7 +77,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
                   trade={trade} suggestion={suggestion} vendors={vendors} techs={techs} policy={policy}
                 />
               </>
-            )}
+            ) : null}
           </div>
           <aside className="space-y-3">
             <section className="rounded-lg border bg-card p-3">

@@ -47,6 +47,10 @@ registerAction({
     const { runId, done } = await startRun({ db: c.db, ws: c.ws, actor: c.actor, agent: "maintenance_triage", trigger: { kind: "manual", input: { work_order_id: r.id } }, deadlineMs: 20_000 });
     const res = await done;
     if (res.status === "failed") return { status: 400, error: `The triage run failed: ${res.summary}` };
+    // The agent may have changed the trade; re-check the request's photos against it.
+    const wo = await readRow<{ category: string; title: string }>(c.db, c.ws, "work_orders", String(r.id));
+    const { results: photos } = await c.db.prepare(`SELECT id, url FROM ${effectiveSql("photos")} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ?2`).bind(c.ws, r.id).all<{ id: string; url: string }>();
+    if (wo && photos.length) await c.db.batch(await Promise.all(photos.map((p) => { const k = checkPhoto(p.url, wo.category, wo.title); return updateStmt(c.db, c.ws, "photos", p.id, { check_result: k.result, check_confidence: k.confidence, check_note: k.note }); })));
     return ok(res.summary, `/app/maintenance/intake/${encodeURIComponent(String(r.id))}?run=${runId}`);
   },
 });
