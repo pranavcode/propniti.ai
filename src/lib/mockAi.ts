@@ -75,9 +75,9 @@ export function mockValidate(wo: WorkOrder): Omit<ValidationResult, "source" | "
 
 // The question types the computed facts answer. mockAsk, isFactQuestion and expectedMentions
 // share them, so every question routed to computed figures gets an answer built from them.
-const OVERDUE_Q = /(late|overdue|owe|arrear|unpaid)/i;
-const LEASE_Q = /(lease|renew|expir)/i;
-const WORK_Q = /(work order|vendor|repair|invoice|po\b|maintenance)/i;
+const OVERDUE_Q = /\b(late|overdue|owes?|owed|owing|arrears?|unpaid)\b/i;
+const LEASE_Q = /\b(leases?|renew\w*|expir\w*)\b/i;
+const WORK_Q = /\b(work orders?|vendors?|repairs?|invoices?|po|maintenance)\b/i;
 
 export function mockAsk(question: string, s: DemoState): Omit<AskResult, "source" | "note"> {
   const q = question.toLowerCase();

@@ -102,9 +102,7 @@ The unit tests mock the model, so `evals/` measures the real one. `npm run eval`
 
 A case passes only if every check passes; accuracy is the share of checks passed. An answer that fell back to mock counts as "fallback", not a pass. The run prints a table per area, saves `evals/results/<time>.json` (not committed) and [`evals/results/latest.md`](evals/results/latest.md), and exits 1 if fewer than `MIN_PASS` (default 0.8) pass. It is not part of CI because it costs money, is rate limited and varies run to run; run it from GitHub with the manual **AI eval** workflow.
 
-**Latest: 27/29 (93%) on Workers AI**, about 3–4 s per call. Invoice reading, invoice-vs-PO and column mapping passed every case; neither injection attempt worked. The two failures:
-- "Which property has the lowest occupancy?" gets the overdue-rent list, because "l**owe**st" matches the word "owe" in the question router (`OVERDUE_Q` in `mockAi.ts`). This is a product bug, not a model error.
-- In pasted notes, the model adds a row for a vacant unit (no tenant). The import's row checks flag rows without a tenant, so it isn't imported silently.
+**Latest: 28/29 (97%) on Workers AI**, about 3–4 s per call. Invoice reading, invoice-vs-PO, the assistant and column mapping passed every case; neither injection attempt worked. An earlier run caught a question-router bug ("l**owe**st occupancy" matched "owe" and returned the overdue list); the router now matches whole words. The one failure: in pasted notes, the model adds a row for a vacant unit (no tenant). The import's row checks flag rows without a tenant, so it isn't imported silently.
 
 Results vary between runs: in the previous run the model also mapped "Site Location" to the property name instead of the address.
 

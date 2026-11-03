@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mockAsk, mockValidate } from "./mockAi";
+import { mockAsk, mockValidate, isFactQuestion } from "./mockAi";
 import { seed } from "./seed";
 import type { WorkOrder } from "./types";
 
@@ -62,6 +62,13 @@ describe("mockValidate", () => {
 });
 
 describe("mockAsk", () => {
+  it("matches question words whole, so lowest occupancy isn't an overdue question", () => {
+    expect(isFactQuestion("Which property has the lowest occupancy?")).toBe(false);
+    expect(isFactQuestion("Translate this for a related tenant")).toBe(false);
+    for (const q of ["Who is late on rent?", "Who owes rent?", "Which leases are up for renewal?", "Which vendors have open jobs?", "Any unpaid invoices?"]) expect(isFactQuestion(q)).toBe(true);
+    expect(mockAsk("Which property has the lowest occupancy?", seed()).answer).toMatch(/^Portfolio:/);
+  });
+
   it("lists overdue tenants", () => {
     const r = mockAsk("Who is late on rent?", seed());
     expect(r.answer).toContain("Marcus Lee");
