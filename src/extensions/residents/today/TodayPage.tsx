@@ -115,8 +115,8 @@ export async function TodayPage() {
           </header>
           {bullets.length === 0 ? <p className="px-4 py-6 text-[13px] text-muted-foreground">Nothing needs you right now. Agents will flag anything new here.</p> : (
             <ul className="divide-y divide-tone-ai/10">
-              {bullets.map((b, i) => (
-                <li key={i} className="flex items-start gap-3 px-4 py-2.5">
+              {bullets.map((b) => (
+                <li key={b.href} className="flex items-start gap-3 px-4 py-2.5">
                   <span className={cn("mt-0.5 grid size-6 shrink-0 place-items-center rounded-md", { ai: "bg-tone-ai/10 text-tone-ai", danger: "bg-tone-danger/10 text-tone-danger", warning: "bg-tone-warning/12 text-tone-warning", info: "bg-tone-info/10 text-tone-info", success: "bg-tone-success/10 text-tone-success" }[b.tone])}><b.icon className="size-3.5" /></span>
                   <p className="min-w-0 flex-1 text-[13px] leading-relaxed">{b.text}</p>
                   <Link href={b.href} className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 text-[12px] font-medium text-primary hover:underline">{b.cta}<ArrowRight className="size-3" /></Link>

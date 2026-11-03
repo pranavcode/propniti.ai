@@ -66,7 +66,7 @@ export async function Abstraction({ id, actor }: TabProps) {
       <div className="grid gap-3 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <section aria-label="Lease document" className="max-h-[720px] overflow-y-auto rounded-lg border bg-muted/30 p-3">
           {pages.map((p, i) => (
-            <article key={i} id={`page-${i + 1}`} className="mb-3 scroll-mt-3 rounded-md border bg-card px-5 py-4 font-serif text-[12.5px] leading-relaxed shadow-xs last:mb-0">
+            <article key={`page-${i + 1}`} id={`page-${i + 1}`} className="mb-3 scroll-mt-3 rounded-md border bg-card px-5 py-4 font-serif text-[12.5px] leading-relaxed shadow-xs last:mb-0">
               {p.split("\n").map((line, j) => (
                 <p key={j} className={cn("min-h-[1em] whitespace-pre-wrap", quoted.has(`${i + 1}|${line.trim()}`) && "-mx-1 rounded bg-tone-ai/10 px-1 ring-1 ring-tone-ai/20")}>{line}</p>
               ))}

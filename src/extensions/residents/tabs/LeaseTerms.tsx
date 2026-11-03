@@ -108,7 +108,7 @@ export async function LeaseTerms({ id }: TabProps) {
             <table className="w-full text-[12.5px]">
               <tbody>
                 {charges.map((c, i) => (
-                  <tr key={i} className="border-b last:border-0">
+                  <tr key={`${c.label}-${c.start_on}-${i}`} className="border-b last:border-0">
                     <td className="px-3 py-1.5">{String(c.label)}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{String(c.frequency)}</td>
                     <td className="px-3 py-1.5 text-muted-foreground tabular-nums">{formatDate(String(c.start_on), "always")} – {c.end_on ? formatDate(String(c.end_on), "always") : "open"}</td>
