@@ -28,7 +28,7 @@ registerEntity({
       sql: "(SELECT ra.role FROM {role_assignments} ra WHERE ra.staff_id = staff.id ORDER BY ra.id LIMIT 1)" },
     scope: { type: "text", label: "Scope", list: { default: true },
       sql: "(SELECT CASE ra.scope_kind WHEN 'org' THEN 'Whole org' WHEN 'platform' THEN 'Platform' ELSE ra.scope_kind || ': ' || group_concat(ra.scope_id, ', ') END FROM {role_assignments} ra WHERE ra.staff_id = staff.id GROUP BY ra.scope_kind ORDER BY count(*) DESC LIMIT 1)",
-      help: { summary: "Which records the role reaches: the whole org, a region, or listed properties.", article: "roles-and-permissions" } },
+      help: { summary: "Which records the role reaches: the whole org, a region, or listed properties.", article: "invite-users-roles-scope" } },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Active", tone: "success" }, { value: "Invited", tone: "info" }, { value: "Deactivated", tone: "neutral" },
     ], sql: "(CASE WHEN staff.active = 1 THEN 'Active' WHEN staff.last_active_at IS NULL THEN 'Invited' ELSE 'Deactivated' END)" },
@@ -54,7 +54,7 @@ registerEntity({
   capabilities: { activity: true, notes: true },
   permissions: { read: READERS, update: ADMINS },
   writes: "generic",
-  help: { summary: "People who sign in to Propniti, their role and the properties their role reaches.", article: "users-and-invites" },
+  help: { summary: "People who sign in to Propniti, their role and the properties their role reaches.", article: "invite-users-roles-scope" },
 });
 
 const CATEGORY = ["Maintenance spend", "Bill payment", "Concession", "Write-off", "Legal", "Safety", "Owner distribution"] as const;
@@ -75,12 +75,12 @@ registerEntity({
     owner_entity_id: { type: "ref", ref: "owner_entities", label: "Owner entity", facet: true, editable: [] },
     applies_to: { type: "text", label: "Applies to", list: { default: true }, sql: "(CASE WHEN approval_policies.owner_entity_id IS NULL THEN 'Org default' ELSE coalesce((SELECT oe.name FROM {owner_entities} oe WHERE oe.id = approval_policies.owner_entity_id), approval_policies.owner_entity_id) END)" },
     limit: { type: "money", label: "Auto-approve up to", column: "limit_cents", sortable: true, list: { default: true, align: "right" }, editable: ADMINS,
-      help: { summary: "Agents and staff may act alone up to this amount. Blank means a person always approves.", article: "approval-policies" } },
+      help: { summary: "Agents and staff may act alone up to this amount. Blank means a person always approves.", article: "approval-policies-limits" } },
     approver_role: { type: "enum", label: "Approver above limit", facet: true, list: { default: true }, editable: ADMINS, enum: ROLE_ENUM },
     owner_approval_over: { type: "money", label: "Owner approves above", column: "owner_approval_over_cents", sortable: true, list: { default: true, align: "right" }, editable: ADMINS,
-      help: { summary: "Above this amount the owner approves in their portal, after your approver.", article: "approval-policies" } },
+      help: { summary: "Above this amount the owner approves in their portal, after your approver.", article: "approval-policies-limits" } },
     always_human: { type: "bool", label: "Always a person", facet: true, list: { default: true }, editable: ADMINS,
-      help: { summary: "Legal and safety decisions are never automated, whatever the amount.", article: "approval-policies" } },
+      help: { summary: "Legal and safety decisions are never automated, whatever the amount.", article: "approval-policies-limits" } },
   },
   relations: [],
   list: { defaultSort: ["category", "asc"], savedViews: [{ key: "defaults", label: "Org defaults", filters: { "owner_entity_id.null": "1" } }, { key: "overrides", label: "Owner overrides", filters: { "owner_entity_id.null": "0" } }] },
@@ -92,7 +92,7 @@ registerEntity({
   capabilities: { activity: true, notes: true },
   permissions: { read: READERS, update: ADMINS, create: ADMINS, delete: ADMINS },
   writes: "generic",
-  help: { summary: "How much agents and staff may approve alone, who approves above that, and when the owner signs off. Money, legal and safety thresholds.", article: "approval-policies" },
+  help: { summary: "How much agents and staff may approve alone, who approves above that, and when the owner signs off. Money, legal and safety thresholds.", article: "approval-policies-limits" },
 });
 
 export const STATE_RULES = {
@@ -181,7 +181,7 @@ registerEntity({
   capabilities: { activity: true, notes: true },
   permissions: { read: READERS, update: ADMINS },
   writes: "generic",
-  help: { summary: "Rules and workflows that run on events or a schedule: reminders, late fees, renewal offers, COI requests. Anything that moves money still waits for approval.", article: "automation-rules" },
+  help: { summary: "Rules and workflows that run on events or a schedule: reminders, late fees, renewal offers, COI requests. Anything that moves money still waits for approval.", article: "automations-trigger-condition-action" },
 });
 
 registerEntity({
@@ -216,7 +216,7 @@ registerEntity({
   },
   permissions: { read: READERS },
   writes: "none",
-  help: { summary: "Every time an automation ran, on which record, and whether it succeeded.", article: "automation-rules" },
+  help: { summary: "Every time an automation ran, on which record, and whether it succeeded.", article: "automations-trigger-condition-action" },
 });
 
 registerEntity({
@@ -261,6 +261,6 @@ registerEntity({
   },
   permissions: { read: READERS },
   writes: "none",
-  help: { summary: "Every change and approval, by a person or an agent: who, when, acting as which role, and what changed.", article: "audit-log" },
+  help: { summary: "Every change and approval, by a person or an agent: who, when, acting as which role, and what changed.", article: "approvals-inbox-audit-log" },
 });
 
