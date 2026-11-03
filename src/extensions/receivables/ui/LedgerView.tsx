@@ -66,8 +66,8 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
             <caption className="sr-only">Ledger for lease {lease.id}, newest first</caption>
             <thead className="sticky top-0 z-10 bg-muted/80 text-[11.5px] text-muted-foreground backdrop-blur">
               <tr>
-                <th scope="col" className="px-3 py-2 text-left font-medium">Date</th>
-                <th scope="col" className="px-3 py-2 text-left font-medium">Item</th>
+                <th scope="col" className="w-28 px-3 py-2 text-left font-medium">Date</th>
+                <th scope="col" className="w-[34%] px-3 py-2 text-left font-medium">Item</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Charge</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Payment / credit</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Balance</th>

@@ -62,7 +62,7 @@ export default async function RecordPaymentPage({ searchParams }: Props) {
               {open.length === 0 ? <p className="px-3 py-2.5 text-[12.5px] text-muted-foreground">Nothing open on this lease.</p> : (
                 <table className="w-full text-[13px]">
                   <tbody>
-                    {open.map((c) => (
+                    {open.slice(0, 5).map((c) => (
                       <tr key={c.id} className="border-t first:border-0">
                         <td className="px-3 py-1.5"><Link href={c.href} className="font-medium hover:text-primary hover:underline">{c.description}</Link><span className="ml-2 text-[11.5px] text-muted-foreground">due {c.date}</span></td>
                         <td className="px-3 text-right tabular-nums"><Money value={c.open ?? 0} cents tone="none" /> open</td>
@@ -70,6 +70,9 @@ export default async function RecordPaymentPage({ searchParams }: Props) {
                       </tr>
                     ))}
                   </tbody>
+                  {open.length > 5 && (
+                    <tfoot><tr className="border-t"><td colSpan={3} className="px-3 py-1.5 text-[12px] text-muted-foreground"><Link href={`/app/receivables/ledger/${h.lease_id}`} className="hover:text-foreground hover:underline">{open.length - 5} older open charges on the ledger →</Link></td></tr></tfoot>
+                  )}
                 </table>
               )}
             </li>

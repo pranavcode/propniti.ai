@@ -29,14 +29,12 @@ export function WrongLeaseFix({ issue }: { issue: WrongLeaseIssue }) {
       rule="payments.wrong_lease"
       changes={[
         { field: "lease_id", label: "Lease", before: issue.from.label, after: `${to.lease} (${to.household})` },
-        issue.from.charge === to.charge
-          ? { field: "charge_id", label: "Pays", before: `${to.description}, due ${to.due_on}`, after: "unchanged (that charge is on the other lease)" }
-          : { field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${to.due_on}` },
+        ...(issue.from.charge === to.charge ? [] : [{ field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${to.due_on}` }]),
       ]}
-      why={issue.why}
+      why={[...issue.why, ...(issue.from.charge === to.charge ? [`It already pays ${to.description} (due ${to.due_on}), which is on ${to.lease}`] : []), ...(issue.canApprove ? ["No money moves: same property and trust account. Applying it is your approval; it's audited and logged."] : [])]}
       confidence={issue.confidence}
       source={issue.source}
-      needsPerson={issue.canApprove ? "Moves a ledger entry: you approve it, and it's audited" : "Moves a ledger entry: needs an accountant or a manager with approval"}
+      needsPerson={issue.canApprove ? null : "Moves a ledger entry: needs an accountant or a manager with approval"}
       onApply={issue.canApprove ? async () => {
         const r = await runAction("payments", issue.paymentId, "move_to_lease", { to_charge_id: to.charge, issue_id: issue.id });
         if (!r.ok) {

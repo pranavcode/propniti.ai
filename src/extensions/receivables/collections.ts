@@ -109,13 +109,16 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
     const s = scoreRisk(d, dataError ? market || Math.round(dataError.rent / 10) : e?.rent_cents ?? 0, nsf12);
     // The agent proposes per lease; precomputed proposals in the seed are per household.
     const p = prop.get(d.lease_id) ?? prop.get(d.household_id);
+    // An open proposal decides the next step shown: that is what approving it will do.
+    const proposed = p ? stepOf(String(p.action)) : null;
+    const step = proposed ?? s.step;
     const payload = p ? safeJson<{ effects?: { kind: string; subject?: string; body?: string }[] }>(p.payload) : null;
     const msg = payload?.effects?.find((x) => x.kind === "message");
     return {
       lease_id: d.lease_id, property_id: d.property_id, property: d.property, unit: d.unit, resident: d.resident, resident_id: d.resident_id, language: d.language,
       balance: d.balance_cents, days_late: d.days_late, oldest_due_on: d.oldest_due_on, aging: d.aging, lease_status: d.lease_status, rent: e?.rent_cents ?? 0, nsf12,
-      ...s, safe: s.step === "reminder", dataError,
-      drafts: s.step === "legal" ? null : s.step === "plan" ? { en: planDraft(d, "en"), es: planDraft(d, "es") } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
+      ...s, step, safe: step === "reminder", dataError,
+      drafts: step === "legal" ? null : step === "plan" ? { en: planDraft(d, "en"), es: planDraft(d, "es") } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
       proposal: p ? {
         id: String(p.id), title: String(p.title), risk: p.risk as "Low" | "Medium" | "High", confidence: Number(p.confidence), run_id: (p.run_id as string) ?? null, model: (p.model as string) ?? null, created_at: String(p.created_at),
         message: msg?.subject && msg.body ? { subject: msg.subject, body: msg.body } : null, canDecide: canDecideAs(ctx.actor.role, String(p.risk), p.amount_cents),
@@ -135,6 +138,8 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
   const balance = rows.reduce((s, r) => s + r.balance, 0);
   return { rows: rows.slice((f.page - 1) * f.size, f.page * f.size), total, balance, counts, page: f.page, size: f.size };
 }
+
+const stepOf = (action: string): NextStep | null => (/reminder/.test(action) ? "reminder" : /plan/.test(action) ? "plan" : /legal/.test(action) ? "legal" : null);
 
 function safeJson<T>(v: unknown): T | null {
   try {

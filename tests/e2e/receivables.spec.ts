@@ -1,0 +1,87 @@
+import { expect, test, type Page } from "@playwright/test";
+
+// Receivables flows in a real browser. Each test gets a fresh context, so a fresh visitor overlay.
+// BASE_URL defaults to the shared dev server.
+const BASE = process.env.BASE_URL ?? "http://localhost:3201";
+
+async function as(page: Page, persona: string) {
+  await page.context().addCookies([{ name: "pn_as", value: persona, url: BASE }]);
+  // Product tours open on first visit; mark them dismissed so they don't cover the page.
+  await page.addInitScript(() => {
+    const at = new Date().toISOString();
+    localStorage.setItem("pn_tours", JSON.stringify(Object.fromEntries(["app-basics", "receivables"].map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: at }]))));
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && !/favicon|404/.test(m.text()) && errors.push(m.text()));
+  return errors;
+}
+async function go(page: Page, path: string) {
+  await page.goto(BASE + path, { waitUntil: "load" });
+}
+
+test.describe.configure({ timeout: 300_000 });
+
+test("aging drills from a cell to the residents, a ledger and the charges behind a figure", async ({ page }) => {
+  const errors = await as(page, "grace");
+  await go(page, "/app/receivables/delinquency");
+  await expect(page.getByRole("heading", { name: "Delinquency aging" })).toBeVisible();
+  await page.getByRole("link", { name: /^Residents: .*90\+ days/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Delinquent residents" })).toBeVisible();
+  await page.getByRole("link", { name: "Ledger →" }).first().click();
+  await expect(page.getByText("Resident ledger:")).toBeVisible();
+  await page.getByRole("link", { name: /Past due/ }).click();
+  await expect(page).toHaveURL(/receivables\/charges\?.*f\.status=Overdue/);
+  expect(errors).toEqual([]);
+});
+
+test("record payment: a double click records one payment", async ({ page }) => {
+  const errors = await as(page, "marcus");
+  await go(page, "/app/receivables/record-payment");
+  await page.getByRole("button", { name: "Record payment" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount received").fill("25.00");
+  await dialog.getByLabel("Reference").fill("Check #1001");
+  const submit = dialog.getByRole("button", { name: /Record \$25\.00/ });
+  await submit.dblclick();
+  await expect(page.getByText(/Recorded \$25\.00 against/)).toBeVisible();
+  await expect(page.getByText(/Recorded \$25\.00 against/)).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("collections workbench explains each score and drafts in English or Spanish", async ({ page }) => {
+  const errors = await as(page, "marcus");
+  await go(page, "/app/receivables/collections?step=reminder");
+  await expect(page.getByRole("heading", { name: "Collections" })).toBeVisible();
+  await expect(page.getByText("Why this score")).toBeVisible();
+  await page.getByRole("radio", { name: "Español" }).first().click();
+  await expect(page.getByText(/Recordatorio de pago/).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("deposit disposition: itemise, send once, settled", async ({ page }) => {
+  const errors = await as(page, "grace");
+  await go(page, "/app/receivables/deposits?view=due");
+  await page.getByRole("row").nth(1).getByRole("cell").first().click();
+  await expect(page).toHaveURL(/receivables\/deposits\/dep-/);
+  // Open charges come pre-selected up to the deposit; clear them so a damage line fits.
+  await page.waitForLoadState("networkidle");
+  const checked = page.getByRole("checkbox", { checked: true });
+  while (await checked.count()) await checked.first().click();
+  await page.getByRole("button", { name: "Add line" }).click();
+  await page.getByLabel("Damage description").fill("Carpet cleaning, bedroom 2");
+  await page.getByLabel("Damage amount").fill("125");
+  await page.getByRole("button", { name: /Send disposition and refund/ }).click();
+  await expect(page.getByText(/Disposition sent/).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Disposition sent/ })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("data health: a payment on the wrong lease is moved after approval", async ({ page }) => {
+  const errors = await as(page, "grace");
+  await go(page, "/app/receivables/payments/pay-000211?tab=payment_health");
+  await expect(page.getByText("payment looks posted to the wrong lease")).toBeVisible();
+  await page.getByRole("button", { name: "Apply fix" }).click();
+  await expect(page.getByText(/Moved \$125\.00 to L-10018/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
