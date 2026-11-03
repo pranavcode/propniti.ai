@@ -102,6 +102,8 @@ export function generate(): Base {
   budgetsAndMetrics(ctx, jeMap);
   ctx.sealed = true;
   generateExtras(ctx);
+  storeBalances(ctx);
+  capToToday(t);
 
   // Transfers go in chronological order so seq order is time order (owner statements close by seq).
   t.transfers.sort((a, b) => (a.created === b.created ? (a.id! < b.id! ? -1 : 1) : a.created! < b.created! ? -1 : 1));
@@ -116,6 +118,56 @@ export function generate(): Base {
 }
 
 export const INFLOW = new Set(["Rent", "Deposit", "Other receipt"]);
+
+// Columns that record something that already happened. On the demo's "today" they are squeezed
+// into 00:00–08:00 (order kept) and never land after it, so the UI never shows a past event as
+// "later today" or "tomorrow". Scheduled columns (due, SLA, scheduled_at, send_at, expiry) are left.
+const PAST_COLUMNS = new Set([
+  "created_at", "created", "cleared", "at", "opened_at", "completed_at", "sent_at", "submitted_at", "decided_at", "detected_at", "fixed_at",
+  "started_at", "ended_at", "generated_at", "uploaded_at", "approved_at", "signed_at", "last_contact_at", "last_message_at", "responded_at",
+  "taken_at", "processed_at", "read_at", "last_active_at", "updated_at", "done_at", "completed_at",
+]);
+export const TODAY_CAP = `${AS_OF}T08:00:00Z`;
+function capToToday(t: Tables) {
+  for (const rows of Object.values(t)) {
+    for (const r of rows) {
+      for (const k in r) {
+        const v = r[k];
+        if (typeof v !== "string" || v.length < 16 || v[10] !== "T" || !PAST_COLUMNS.has(k)) continue;
+        if (v.startsWith(AS_OF)) {
+          const minutes = Math.floor((Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16))) / 3);
+          r[k] = `${AS_OF}T${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${v.slice(17, 19) || "00"}Z`;
+        } else if (v > TODAY_CAP) r[k] = TODAY_CAP;
+      }
+    }
+  }
+}
+
+// Stored balances for list views: charges − payments (not NSF) − credits, per lease and household,
+// as the rows stand after corrupted cases are planted (a misposted payment counts where it is posted).
+function storeBalances(c: Ctx) {
+  const lease = new Map<string, number>(), hh = new Map<string, number>(), lastL = new Map<string, string>(), lastH = new Map<string, string>();
+  const bump = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+  const householdOf = new Map(c.t.leases.map((l) => [l.id as string, l.household_id as string]));
+  for (const x of c.t.charges) {
+    bump(lease, x.lease_id as string, x.amount_cents as number);
+    bump(hh, x.household_id as string, x.amount_cents as number);
+  }
+  for (const x of c.t.payments) {
+    if (x.nsf) continue;
+    bump(lease, x.lease_id as string, -(x.amount_cents as number));
+    bump(hh, x.household_id as string, -(x.amount_cents as number));
+    const d = x.received_on as string;
+    if (d > (lastL.get(x.lease_id as string) ?? "")) lastL.set(x.lease_id as string, d);
+    if (d > (lastH.get(x.household_id as string) ?? "")) lastH.set(x.household_id as string, d);
+  }
+  for (const x of c.t.credits) {
+    bump(lease, x.lease_id as string, -(x.amount_cents as number));
+    bump(hh, householdOf.get(x.lease_id as string)!, -(x.amount_cents as number));
+  }
+  for (const l of c.t.leases) Object.assign(l, { balance_cents: lease.get(l.id as string) ?? 0, last_payment_at: lastL.get(l.id as string) ?? null });
+  for (const h of c.t.households) Object.assign(h, { balance_cents: hh.get(h.id as string) ?? 0, last_payment_at: lastH.get(h.id as string) ?? null });
+}
 
 // Content hash of a generated base (determinism test and meta.base_hash).
 export function baseHash(b: Base) {

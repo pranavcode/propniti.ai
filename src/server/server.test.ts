@@ -4,7 +4,7 @@ import type { Actor } from "@/entities/types";
 import { SETTLE_MS } from "@/lib/ledger";
 import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
-import { chargeStatusSql, get, list, ownerStatement, trustBalances } from "./data";
+import { chargeStatusSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
 import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payRent, postLateFees, recordPayment, settle } from "./money";
 import { randomId } from "./repo";
@@ -48,13 +48,43 @@ describe("migrations and base", () => {
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
     expect(raw.prepare("SELECT count(*) AS n FROM sqlite_master").get()).toEqual(before);
-    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql"]);
+    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql"]);
   });
 
   it("loads the base once, with its version, as-of date and trust constants", async () => {
     expect(await one("SELECT value FROM meta WHERE key = 'as_of'")).toEqual({ value: "2026-11-04" });
     expect(await n("SELECT count(*) AS n FROM properties WHERE workspace_id = 'base'")).toBe(30);
     expect(await n("SELECT count(*) AS n FROM base_balances")).toBe(16);
+  });
+});
+
+describe("stored balances", { timeout: 120_000 }, () => {
+  const full = (ws: string, lease: string) =>
+    one<{ b: number }>(
+      `SELECT (SELECT coalesce(sum(amount_cents), 0) FROM ${effective("charges")} AS c WHERE c.lease_id = ?2)
+        - (SELECT coalesce(sum(amount_cents), 0) FROM ${effective("payments")} AS p WHERE p.lease_id = ?2 AND p.nsf = 0)
+        - (SELECT coalesce(sum(amount_cents), 0) FROM ${effective("credits")} AS x WHERE x.lease_id = ?2) AS b`,
+      ws, lease,
+    ).then((r) => r!.b);
+  const stored = (ws: string, lease: string) => one<{ b: number; last: string | null }>(withEffective(`SELECT ${leaseBalanceSql("l")} AS b, ${leaseLastPaymentSql("l")} AS last FROM {leases} AS l WHERE l.id = ?2`), ws, lease).then((r) => r!);
+
+  it("base balance plus the overlay delta equals a full recompute after payments and a moved payment", async () => {
+    const c = await ctx(grace);
+    const ch = await one<{ id: string; lease_id: string; household_id: string }>(`SELECT c.* FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws);
+    expect((await stored(c.ws, ch!.lease_id)).b).toBe(await full(c.ws, ch!.lease_id));
+    await recordPayment(c, { chargeId: ch!.id, amountCents: 30_000, method: "Check", reference: "Check #9", idempotencyKey: "bal-1" });
+    const after = await stored(c.ws, ch!.lease_id);
+    expect(after.b).toBe(await full(c.ws, ch!.lease_id));
+    expect(after.last).toBe("2026-11-04");
+    // Copy-on-write move of a base payment to another lease (what the wrong-lease fix does).
+    const pay = await one<{ id: string; lease_id: string }>("SELECT id, lease_id FROM payments WHERE workspace_id = 'base' AND property_id = 'p03' AND nsf = 0 AND lease_id <> ?1 LIMIT 1", ch!.lease_id);
+    await db.prepare("INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, charge_id, transfer_id, method, reference, received_on, amount_cents, nsf) SELECT ?1, id, ?2, ?3, property_id, charge_id, transfer_id, method, reference, received_on, amount_cents, nsf FROM payments WHERE workspace_id = 'base' AND id = ?4").bind(c.ws, ch!.lease_id, ch!.household_id, pay!.id).run();
+    for (const lease of [ch!.lease_id, pay!.lease_id]) expect((await stored(c.ws, lease)).b, lease).toBe(await full(c.ws, lease));
+    const hh = await one<{ b: number }>(withEffective(`SELECT ${householdBalanceSql("h")} AS b FROM {households} AS h WHERE h.id = ?2`), c.ws, ch!.household_id);
+    const leases = (await db.prepare(`SELECT l.id FROM ${effective("leases")} AS l WHERE l.household_id = ?2`).bind(c.ws, ch!.household_id).all<{ id: string }>()).results;
+    let sumLeases = 0;
+    for (const l of leases) sumLeases += await full(c.ws, l.id);
+    expect(hh!.b).toBe(sumLeases);
   });
 });
 

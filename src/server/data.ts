@@ -88,6 +88,37 @@ export const chargeStatusSql = (c = "c", ws = "?1") => `(CASE
     WHEN ${chargeOpenSql(c, ws)} < ${c}.amount_cents THEN 'Partial'
     ELSE 'Due' END)`;
 
+// ---------------------------------------------------------------------------------------------
+// Stored balances (leases.balance_cents, households.balance_cents) plus the visitor's overlay delta
+// ---------------------------------------------------------------------------------------------
+// Written with {table} placeholders, so a def's computed `sql` can use them as is (query.ts expands
+// {table} to that table's effective rows). The delta is: overlay ledger rows, minus base rows that an
+// overlay copy shadows (a moved payment is a copy-on-write of a base row). Overlay ledger rows are
+// few, so this stays cheap per row; base rows are read through their (workspace_id, *_id) indexes.
+const LEDGER = [
+  { table: "charges", sign: "+", extra: "" },
+  { table: "payments", sign: "-", extra: " AND x.nsf = 0" },
+  { table: "credits", sign: "-", extra: "" },
+] as const;
+const neg = (sign: string) => (sign === "+" ? "-" : "+");
+function deltaSql(owner: "lease_id" | "household_id", ref: string) {
+  return LEDGER.map(({ table, sign, extra }) => {
+    // credits carry lease_id only; a household's credits are those on its leases.
+    const match = table === "credits" && owner === "household_id" ? `x.lease_id IN (SELECT l.id FROM {leases} AS l WHERE l.household_id = ${ref})` : `x.${owner} = ${ref}`;
+    return `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${table}} AS x WHERE x.workspace_id <> 'base' AND ${match}${extra}), 0)
+      ${neg(sign)} coalesce((SELECT sum(x.amount_cents) FROM ${table} AS x WHERE x.workspace_id = 'base' AND ${match}${extra} AND x.id IN (SELECT o.id FROM {${table}} AS o WHERE o.workspace_id <> 'base')), 0)`;
+  }).join(" ");
+}
+const lastPaymentSql = (owner: "lease_id" | "household_id", alias: string) =>
+  `nullif(max(coalesce(${alias}.last_payment_at, ''), coalesce((SELECT max(x.received_on) FROM {payments} AS x WHERE x.workspace_id <> 'base' AND x.${owner} = ${alias}.id AND x.nsf = 0), '')), '')`;
+
+export const leaseBalanceSql = (alias = "leases") => `(${alias}.balance_cents ${deltaSql("lease_id", `${alias}.id`)})`;
+export const householdBalanceSql = (alias = "households") => `(${alias}.balance_cents ${deltaSql("household_id", `${alias}.id`)})`;
+export const leaseLastPaymentSql = (alias = "leases") => lastPaymentSql("lease_id", alias);
+export const householdLastPaymentSql = (alias = "households") => lastPaymentSql("household_id", alias);
+// Expands {table} placeholders for queries written here (query.ts has its own expand for defs).
+export const withEffective = (sql: string, ws = "?1") => sql.replace(/\{([a-z_][a-z0-9_]*)\}/g, (_, t: string) => effective(t, ws));
+
 // Trust money per bank account: base constant + overlay (cleared in, less cleared and pending out).
 export const AVAILABLE_SQL = (account: string, ws = "?1") => `(coalesce((SELECT cleared_cents FROM base_balances WHERE account_id = ${account}), 0)
   + coalesce((SELECT sum(CASE WHEN kind IN ('Rent', 'Deposit', 'Other receipt') THEN CASE WHEN status = 'Cleared' THEN amount_cents ELSE 0 END ELSE -amount_cents END)

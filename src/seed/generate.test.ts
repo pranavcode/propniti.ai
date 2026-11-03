@@ -47,6 +47,20 @@ describe("seed generator", () => {
     expect(T.transfers.every((t) => (t.created as string) < `${AS_OF}T23:59`)).toBe(true);
   });
 
+  it("dates nothing that already happened after the demo's today morning", () => {
+    const past = ["created_at", "at", "opened_at", "completed_at", "sent_at", "submitted_at", "decided_at", "detected_at", "generated_at", "uploaded_at", "approved_at", "signed_at", "started_at", "ended_at", "cleared", "created"];
+    for (const [name, rows] of Object.entries(T)) for (const r of rows) for (const k of past) if (typeof r[k] === "string" && (r[k] as string)[10] === "T") expect((r[k] as string) <= `${AS_OF}T08:00:00Z`, `${name}.${k} = ${r[k]}`).toBe(true);
+  });
+
+  it("stores lease and household balances that match the ledger rows", () => {
+    const bal = new Map<string, number>();
+    for (const x of T.charges) bal.set(x.lease_id as string, (bal.get(x.lease_id as string) ?? 0) + cents(x));
+    for (const x of T.payments) if (!x.nsf) bal.set(x.lease_id as string, (bal.get(x.lease_id as string) ?? 0) - cents(x));
+    for (const x of T.credits) bal.set(x.lease_id as string, (bal.get(x.lease_id as string) ?? 0) - cents(x));
+    for (const l of T.leases) expect(l.balance_cents, l.id as string).toBe(bal.get(l.id as string) ?? 0);
+    expect(sum(T.households, (h) => h.balance_cents as number)).toBe(sum(T.leases, (l) => l.balance_cents as number));
+  });
+
   it("rent roll: each current lease bills its scheduled rent this month", () => {
     const nov = new Map(T.charges.filter((c) => c.period === "2026-11" && c.gl_account_id === "gl-4000").map((c) => [c.lease_id as string, c]));
     const corrupted = new Set([...flagged("leases.rent_outlier"), ...flagged("leases.end_before_start")]);
