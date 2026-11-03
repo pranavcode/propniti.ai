@@ -8,12 +8,15 @@ import { actorFor } from "@/server/permissions";
 
 // Used only by scripts/ai-precompute.mjs against a local dev server: generates summaries and the
 // home briefings with the configured model and stores them as base rows. Off unless
-// PRECOMPUTE_TOKEN is set in the server's environment and the request carries it.
+// PRECOMPUTE_TOKEN is set in the server's environment and the request carries it, or (Workers dev,
+// where the worker can't see shell variables) it's a development server on localhost.
 const Body = z.object({ items: z.array(z.object({ entity: z.string().max(40), id: z.string().max(80) })).max(25).default([]), briefings: z.boolean().default(false) });
 
 function allowed(request: Request) {
   const token = process.env.PRECOMPUTE_TOKEN;
-  return !!token && token !== "unset" && request.headers.get("x-precompute-token") === token && new URL(request.url).hostname.match(/^(localhost|127\.0\.0\.1)$/);
+  const given = request.headers.get("x-precompute-token");
+  if (!given || !/^(localhost|127\.0\.0\.1)$/.test(new URL(request.url).hostname)) return false;
+  return token && token !== "unset" ? given === token : process.env.NODE_ENV === "development";
 }
 
 export async function GET(request: Request) {
