@@ -447,7 +447,20 @@ export function writeSchema(def: EntityDef, role: Role, mode: "create" | "update
   return z.strictObject(shape);
 }
 
-const newId = (def: EntityDef) => `${def.key.slice(0, 3)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+// A fresh id: the def's idFormat when it has one (never one already used in base or this
+// workspace, so an overlay row can't shadow a base record), else "<key>-<random>".
+async function newId(ctx: WriteCtx, def: EntityDef): Promise<string> {
+  const f = def.idFormat;
+  if (f) {
+    const lo = 10 ** (f.digits - 1), span = 9 * lo;
+    for (let i = 0; i < 12; i++) {
+      const id = `${f.prefix}-${lo + (crypto.getRandomValues(new Uint32Array(1))[0] % span)}`;
+      const taken = await ctx.db.prepare(`SELECT 1 FROM ${ident(def.table)} WHERE workspace_id IN ('base', ?) AND id = ? LIMIT 1`).bind(ctx.ws, id).first();
+      if (!taken) return id;
+    }
+  }
+  return `${def.key.slice(0, 3)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+}
 
 async function rawRow(db: Db, table: string, ws: string, id: string) {
   return db.prepare(`SELECT * FROM ${effective(table, ws)} WHERE id = ?`).bind(id).first<Row>();
@@ -561,7 +574,7 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
   assertWrite(def, ctx.actor.role, "create");
   assertSystem(def, body, "create");
   await assertRefs(ctx, def, body);
-  const id = newId(def);
+  const id = await newId(ctx, def);
   const row: Row = { workspace_id: ctx.ws, id, ...systemDefaults(def), ...changesToColumns(def, body) };
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, row), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "created", pidOf(def, row), null, row, `Created ${def.label.one.toLowerCase()}`)]);

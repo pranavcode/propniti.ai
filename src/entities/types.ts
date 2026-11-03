@@ -225,6 +225,9 @@ export type EntityDef = {
   // Domain events (agent triggers in src/ai/types.ts EventType, e.g. "wo.created") emitted by
   // generic writes, in addition to "<entity>.<verb>".
   events?: { created?: `${string}.${string}`; updated?: `${string}.${string}`; deleted?: `${string}.${string}` };
+  // Ids for records created through the generic API, e.g. { prefix: "WO", digits: 5 } → "WO-48213";
+  // never an id already used in the base data or this workspace. Default: "<key>-<random>".
+  idFormat?: { prefix: string; digits: number };
   help?: HelpMeta;
 };
 

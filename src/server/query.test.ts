@@ -337,17 +337,34 @@ describe("writes", () => {
     }
   });
 
-  it("emits a def's domain events alongside the generic ones", async () => {
+  it("emits a def's domain events and uses its id format", async () => {
     const wo = getEntity("work_orders")!;
-    registerEntity({ ...wo, events: { created: "wo.created" } });
+    registerEntity({ ...wo, events: { created: "wo.created" }, idFormat: { prefix: "WO", digits: 5 } });
     try {
       const row = await createRecord(await wctx("marcus"), "work_orders", { title: "Leak", category: "Plumbing", priority: "Urgent", property_id: "p01", opened_at: "2026-10-28T10:00:00Z" });
+      expect(String(row.id)).toMatch(/^WO-\d{5}$/);
       const types = (await db.prepare("SELECT type FROM events WHERE entity_id = ? ORDER BY type").bind(row.id).all()).results.map((r) => r.type);
       expect(types).toEqual(["wo.created", "work_orders.created"]);
       await updateRecord(await wctx("marcus"), "work_orders", String(row.id), { title: "Leak under sink" });
       expect((await db.prepare("SELECT count(*) AS n FROM events WHERE entity_id = ? AND type = 'wo.created'").bind(row.id).first())!.n).toBe(1);
     } finally {
       registerEntity(wo);
+    }
+  });
+
+  it("never reuses a base id for a formatted id", async () => {
+    const u = getEntity("units")!;
+    // Two-digit ids from 10 to 99: fill all but one in base, so the generator must find it.
+    const stmts = [];
+    for (let n = 10; n <= 99; n++) if (n !== 57) stmts.push(db.prepare("INSERT INTO units (workspace_id, id, property_id, number) VALUES ('base', ?, 'p01', ?)").bind(`U-${n}`, `x${n}`));
+    await db.batch(stmts);
+    registerEntity({ ...u, idFormat: { prefix: "U", digits: 2 } });
+    try {
+      const ids = new Set<string>();
+      for (let i = 0; i < 3; i++) ids.add(String((await createRecord(await wctx("marcus"), "units", { number: `n${i}`, property_id: "p02", sqft: 1 })).id));
+      for (const id of ids) expect(id === "U-57" || !id.startsWith("U-")).toBe(true);
+    } finally {
+      registerEntity(u);
     }
   });
 
