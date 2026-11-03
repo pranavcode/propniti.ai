@@ -388,13 +388,12 @@ registerEntity({
   module: "portfolio",
   nav: { section: "portfolio", order: 25 },
   route: "/app/floor-plans",
-  titleField: "label",
+  titleField: "name",
   subtitle: (r) => [r.property_id__label, r.sqft != null && `${r.sqft} sq ft`].filter(Boolean).join(" · "),
   image: (r) => thumb(r.photo),
   scopePath: "unit_types.property_id",
   fields: {
-    label: { type: "text", label: "Floor plan", sortable: true, list: { default: true, width: 260 }, sql: "(SELECT p.name FROM {properties} p WHERE p.id = unit_types.property_id) || ' · ' || unit_types.name" },
-    name: { type: "text", label: "Plan name", required: true, search: true, sortable: true, editable: [...OPS] },
+    name: { type: "text", label: "Floor plan", required: true, search: true, sortable: true, list: { default: true, width: 200 }, editable: [...OPS] },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
     beds: { type: "number", label: "Beds", facet: true, sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
     baths: { type: "number", label: "Baths", sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
@@ -413,7 +412,7 @@ registerEntity({
     { name: "units", entity: "units", fk: "unit_type_id", kind: "many" },
   ],
   list: {
-    defaultSort: ["label", "asc"],
+    defaultSort: ["property_id", "asc"],
     savedViews: [
       { key: "available", label: "With availability", filters: { "available.min": "1" }, sort: ["available", "desc"] },
       { key: "two-bed", label: "2 bedrooms", filters: { beds: "2" } },
@@ -427,7 +426,7 @@ registerEntity({
   },
   capabilities: { notes: true, activity: true, documents: true },
   ai: {
-    facts: (r) => ({ plan: String(r.label), beds: Number(r.beds ?? 0), sqft: Number(r.sqft ?? 0), market_rent: Number(r.market_rent ?? 0), avg_lease_rent: r.avg_rent == null ? null : Number(r.avg_rent), units: Number(r.units ?? 0), available: Number(r.available ?? 0) }),
+    facts: (r) => ({ plan: `${String(r.property_id__label ?? r.property_id)} · ${String(r.name)}`, beds: Number(r.beds ?? 0), sqft: Number(r.sqft ?? 0), market_rent: Number(r.market_rent ?? 0), avg_lease_rent: r.avg_rent == null ? null : Number(r.avg_rent), units: Number(r.units ?? 0), available: Number(r.available ?? 0) }),
     agents: ["leasing", "renewals"],
   },
   permissions: { read: [...STAFF, ...OWNER_PORTAL], create: [...OPS], update: [...OPS], delete: ["principal", "regional_manager"] },
