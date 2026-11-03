@@ -140,6 +140,20 @@ describe("overlay fast path", () => {
     expect((await getRow(after, "charges", "c-p06-u1"))!.property_id__label).toBeNull();
   });
 
+  it("reuses base aggregates across requests until the visitor's overlay touches the table", async () => {
+    const first = await list(await ctx("grace", WS), "charges", { size: 1 });
+    // A second request (new actor) is served the cached total, tabs and footer.
+    const again = await list(await ctx("grace", WS), "charges", { size: 1 });
+    expect([again.total, again.counts, again.footer]).toEqual([first.total, first.counts, first.footer]);
+    // Overlay rows in a table the def reads switch to live aggregates.
+    await db.prepare(`INSERT INTO charges (workspace_id, id, lease_id, household_id, property_id, unit_id, gl_account_id, description, period, due_on, amount_cents) VALUES ('${WS}', 'c-live', 'l-p01-u1', 'h-p01-u1', 'p01', 'p01-u1', 'gl-4000', 'Late fee', '2026-10', '2026-10-05', 5000)`).run();
+    const live = await list(await ctx("grace", WS), "charges", { size: 1 });
+    expect(live.total).toBe(first.total + 1);
+    expect(live.footer!["sum:amount"]).toBe((first.footer!["sum:amount"] as number) + 50);
+    // Another visitor with no overlay still gets the base figures.
+    expect((await list(await ctx("grace", OTHER), "charges", { size: 1 })).total).toBe(first.total);
+  });
+
   it("drops the per-request overlay cache after a write in the same request", async () => {
     const w = await wctx("marcus");
     expect((await getRow(w, "units", "p01-u2"))!.sqft).toBe(800); // caches "no overlay rows"

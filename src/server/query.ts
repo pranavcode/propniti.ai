@@ -282,6 +282,33 @@ export function getDef(key: string): EntityDef {
   return def;
 }
 
+// Totals, status-tab counts and footers over base data. Base rows only change on a redeploy, so
+// when none of the tables a def reads has overlay rows for this visitor, the aggregates for the
+// same scope and filters are the same for everyone and are kept for a few minutes per isolate.
+type Aggregates = Pick<ListOut, "total" | "counts" | "footer">;
+const AGG_TTL_MS = 10 * 60_000;
+const AGG_MAX = 500;
+const aggCaches = new WeakMap<Db, Map<string, { at: number; v: Aggregates }>>();
+const defTables = new WeakMap<EntityDef, string[]>();
+
+// Tables a def's aggregates depend on: its own, plus those its computed fields and scope read.
+function tablesRead(def: EntityDef): string[] {
+  let t = defTables.get(def);
+  if (!t) {
+    const sql = [def.scopePath ?? "", ...Object.values(def.fields).map((f) => f.sql ?? "")].join(" ");
+    // Reference labels don't enter counts or sums, so only computed SQL and the scope path count.
+    t = [...new Set([def.table, ...[...sql.matchAll(/\{([a-z_][a-z0-9_]*)\}/g)].map((m) => m[1])])];
+    defTables.set(def, t);
+  }
+  return t;
+}
+
+function aggKey(def: EntityDef, actor: Actor, ws: Ws, q: ListOptions): string | null {
+  if (typeof ws !== "object" || !ws || q.rowsOnly || tablesRead(def).some((t) => ws.overlay.has(t))) return null;
+  const who = actor.scope.kind === "self" ? `self:${actor.personaId}` : JSON.stringify(actor.propertyIds);
+  return JSON.stringify([def.key, actor.role, who, q.q ?? "", q.filters ?? {}, q.where ?? null]);
+}
+
 export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOptions = {}): Promise<ListOut> {
   const def = getDef(entity);
   const { db, actor } = ctx;
@@ -311,17 +338,23 @@ export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOpt
     offset = 0;
   }
   const rowsSql = `SELECT ${selectList(def, role, ws)}, ${sortExpr} AS __sort${from}${whereSql(pageWhere)} ORDER BY ${sortExpr} ${dir}, ${idExpr} ${dir} LIMIT ? OFFSET ?`;
+  const key = aggKey(def, actor, ws, q);
+  let aggCache = aggCaches.get(db);
+  if (!aggCache) aggCaches.set(db, (aggCache = new Map()));
+  const hit = key ? aggCache.get(key) : undefined;
+  const cached = hit && Date.now() - hit.at < AGG_TTL_MS ? hit.v : undefined;
+  const skipAggs = q.rowsOnly || !!cached;
   const statements: DbStatement[] = [
     db.prepare(rowsSql).bind(...pageWhere.params, size + 1, offset),
-    db.prepare(q.rowsOnly ? "SELECT -1 AS n" : `SELECT count(*) AS n${from}${whereSql(all)}`).bind(...(q.rowsOnly ? [] : all.params)),
+    db.prepare(skipAggs ? "SELECT -1 AS n" : `SELECT count(*) AS n${from}${whereSql(all)}`).bind(...(skipAggs ? [] : all.params)),
   ];
-  const tabKey = q.rowsOnly ? undefined : def.list.statusTabs;
+  const tabKey = skipAggs ? undefined : def.list.statusTabs;
   if (tabKey && visibleFields(def, role).some(([k]) => k === tabKey)) {
     const tf = def.fields[tabKey];
     const tabWhere = merge(fixed, scope, search, filterWhere(def, role, ws, filters, tabKey));
     statements.push(db.prepare(`SELECT ${expr(def, tabKey, tf, ws)} AS v, count(*) AS n${from}${whereSql(tabWhere)} GROUP BY v`).bind(...tabWhere.params));
   }
-  const footer = (q.rowsOnly ? [] : def.list.footer ?? []).filter((a) => a.fn === "count" || visibleFields(def, role).some(([k]) => k === a.field));
+  const footer = (skipAggs ? [] : def.list.footer ?? []).filter((a) => a.fn === "count" || visibleFields(def, role).some(([k]) => k === a.field));
   if (footer.length) {
     const aggs = footer.map((a, i) => (a.fn === "count" ? `count(*) AS a${i}` : `${a.fn}(${expr(def, a.field, def.fields[a.field], ws)}) AS a${i}`));
     statements.push(db.prepare(`SELECT ${aggs.join(", ")}${from}${whereSql(all)}`).bind(...all.params));
@@ -345,6 +378,11 @@ export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOpt
       const money = a.fn !== "count" && def.fields[a.field]?.type === "money";
       return [`${a.fn}:${a.field}`, v != null && money ? v / 100 : v];
     }));
+  }
+  if (cached) Object.assign(out, cached);
+  else if (key) {
+    if (aggCache.size >= AGG_MAX) aggCache.delete(aggCache.keys().next().value!);
+    aggCache.set(key, { at: Date.now(), v: { total: out.total, counts: out.counts, footer: out.footer } });
   }
   return out;
 }
