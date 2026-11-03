@@ -69,6 +69,14 @@ const transferAt = (db: Db, ws: string, key: string) => db.prepare("SELECT id, s
 // Settle: overlay transfers whose ACH window has passed clear on the next request.
 // ---------------------------------------------------------------------------------------------
 
+// Settle-on-read for every request: called from actorFor (permissions.ts), which both page
+// sessions and API sessions go through. One indexed EXISTS check when nothing is due.
+export async function settleIfDue(db: Db, ws: string | null, nowMs: number) {
+  if (!ws) return;
+  const due = await db.prepare("SELECT 1 FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 LIMIT 1").bind(ws, nowMs).first();
+  if (due) await settle(db, ws, nowMs);
+}
+
 // At most SETTLE_BATCH transfers per call (up to 5 statements each), to stay well inside D1's
 // per-request query limit; anything left settles on the next request.
 const SETTLE_BATCH = 10;

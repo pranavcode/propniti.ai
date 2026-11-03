@@ -4,6 +4,7 @@ import { actionsFor, getAction } from "@/extensions/actions";
 import { PERMISSIONS, type Persona } from "@/auth/personas";
 import { ROLES, type Actor, type EntityKey, type ModuleKey, type Role } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
+import { settleIfDue } from "./money";
 import { effective } from "./query";
 
 // Role × scope permissions. What a role may do comes from the defs (registry.can, which also
@@ -42,6 +43,8 @@ export async function scopeProperties(db: Db, ws: string | null, persona: Person
 }
 
 export async function actorFor(db: Db, ws: string | null, persona: Persona): Promise<Actor> {
+  // Every page and API request resolves its actor here, so pending ACH transfers settle on read.
+  await settleIfDue(db, ws, Date.now());
   return { personaId: persona.id, name: persona.name, role: persona.role, scope: persona.scope, propertyIds: await scopeProperties(db, ws, persona) };
 }
 
