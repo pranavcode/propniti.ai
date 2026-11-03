@@ -3,9 +3,10 @@
 import { useEffect, useRef } from "react";
 
 // Keyboard shortcuts. Combos: "mod+k" (⌘ on Mac, Ctrl elsewhere), "shift+?", single keys ("j",
-// "/"), and two-key sequences ("g p"). Plain keys never fire while typing in a field.
+// "/"), and two-key sequences ("g p"). Plain keys never fire while typing in a field. A handler
+// that returns false declines the key, so the browser default (and other handlers) still run.
 
-export type Hotkeys = Record<string, (e: KeyboardEvent) => void>;
+export type Hotkeys = Record<string, (e: KeyboardEvent) => unknown>;
 
 export function isTypingTarget(t: EventTarget | null) {
   const el = t as HTMLElement | null;
@@ -35,15 +36,15 @@ export function useHotkeys(keys: Hotkeys, enabled = true) {
       const typing = isTypingTarget(e.target);
       for (const [combo, fn] of Object.entries(ref.current)) {
         if (combo.includes("mod+")) {
-          if (matches(combo, e)) { e.preventDefault(); fn(e); return; }
+          if (matches(combo, e) && fn(e) !== false) { e.preventDefault(); return; }
           continue;
         }
         if (typing || e.metaKey || e.ctrlKey || e.altKey) continue;
         const seq = combo.split(" ");
         if (seq.length === 2) {
-          if (pending === seq[0] && e.key.toLowerCase() === seq[1]) { pending = null; e.preventDefault(); fn(e); return; }
-        } else if (e.key === combo || (combo.startsWith("shift+") && e.key === combo.slice(6))) {
-          e.preventDefault(); fn(e); return;
+          if (pending === seq[0] && e.key.toLowerCase() === seq[1]) { pending = null; if (fn(e) !== false) { e.preventDefault(); return; } }
+        } else if ((e.key === combo || (combo.startsWith("shift+") && e.key === combo.slice(6))) && fn(e) !== false) {
+          e.preventDefault(); return;
         }
       }
       // Arm a sequence prefix ("g") for one second.

@@ -51,6 +51,11 @@
   --color-tone-ai: var(--tone-ai);
 }
 
+@keyframes pn-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
 @keyframes marquee {
   to { transform: translateX(-50%); }
 }

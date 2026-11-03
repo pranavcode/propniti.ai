@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Tone } from "@/entities/types";
 import { formatDate, formatDue, formatFull, formatMoney, formatNumber, formatPct, formatRelative, initials, type DateInput, type MoneyStyle } from "@/lib/format";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMounted } from "@/hooks/use-mounted";
 import { humanize, TONE_CLASS, TONE_DOT, toneFor } from "./status";
 
 // Small display atoms used by tables, record pages and dashboards. Every number is tabular.
@@ -41,7 +42,7 @@ export function Money({ value, style = "full", tone = "auto", className, cents }
   // Mercury-style: whole dollars full weight, cents lighter.
   const dot = style === "full" || style === "accounting" ? text.lastIndexOf(".") : -1;
   return (
-    <span className={cn("tabular-nums whitespace-nowrap", tone === "auto" && negative && "text-tone-danger", className)}>
+    <span className={cn("tabular-nums whitespace-nowrap", tone === "auto" && negative && "text-tone-danger", tone === "auto" && v === 0 && "text-muted-foreground/70", className)}>
       {dot > 0 ? <>{text.slice(0, dot)}<span className="opacity-60">{text.slice(dot)}</span></> : text}
     </span>
   );
@@ -57,16 +58,18 @@ export function Pct({ value, digits, className }: { value: number | null | undef
 
 // Relative date ("3 days ago") with the exact timestamp in a tooltip.
 export function RelativeDate({ value, className, mode = "relative" }: { value: DateInput; className?: string; mode?: "relative" | "date" | "due" }) {
+  const mounted = useMounted();
   if (value == null || value === "") return <span className="text-muted-foreground">—</span>;
   let text: string, late = false, soon = false;
-  if (mode === "due") ({ text, late, soon } = formatDue(value));
+  if (!mounted) text = formatDate(value);
+  else if (mode === "due") ({ text, late, soon } = formatDue(value));
   else text = mode === "date" ? formatDate(value) : formatRelative(value);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <time className={cn("tabular-nums whitespace-nowrap decoration-dotted underline-offset-2 hover:underline", late && "font-medium text-tone-danger", soon && "text-tone-warning", className)}>{text}</time>
+        <time suppressHydrationWarning className={cn("tabular-nums whitespace-nowrap decoration-dotted underline-offset-2 hover:underline", late && "font-medium text-tone-danger", soon && "text-tone-warning", className)}>{text}</time>
       </TooltipTrigger>
-      <TooltipContent>{formatFull(value)}</TooltipContent>
+      <TooltipContent suppressHydrationWarning>{formatFull(value)}</TooltipContent>
     </Tooltip>
   );
 }
