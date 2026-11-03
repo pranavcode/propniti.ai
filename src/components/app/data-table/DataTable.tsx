@@ -432,7 +432,7 @@ function SaveViewDialog({ open, onOpenChange, onSave }: { open: boolean; onOpenC
           <DialogDescription>Keeps the current search, filters, sort and columns.</DialogDescription>
         </DialogHeader>
         <form className="space-y-3" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; setBusy(true); try { await onSave(name.trim(), shared); onOpenChange(false); setName(""); } finally { setBusy(false); } }}>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Austin 2-beds on notice" className="h-9 w-full rounded-md border bg-background px-3 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" />
+          <input autoFocus name="view-name" autoComplete="off" aria-label="View name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Austin 2-beds on notice…" className="h-9 w-full rounded-md border bg-background px-3 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" />
           <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
             <span><span className="block font-medium">Share with the team</span><span className="text-[12px] text-muted-foreground">Everyone in your org sees it under Shared.</span></span>
             <Switch checked={shared} onCheckedChange={setShared} />

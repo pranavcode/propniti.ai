@@ -29,6 +29,10 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
       <Search className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground" />
       <input
         data-table-search
+        type="search"
+        name="q"
+        autoComplete="off"
+        spellCheck={false}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") { setText(""); onChange(""); (e.target as HTMLInputElement).blur(); } if (e.key === "Enter") onChange(text); }}
@@ -88,7 +92,7 @@ function OptionList({ options, selected, onChange, onClear }: { options: FacetOp
   return (
     <div>
       {options.length > 7 && (
-        <div className="border-b p-1.5"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter options…" className="h-7 w-full rounded bg-muted/60 px-2 text-[12.5px] outline-none" /></div>
+        <div className="border-b p-1.5"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} name="facet-q" autoComplete="off" aria-label="Filter options" placeholder="Filter options…" className="h-7 w-full rounded bg-muted/60 px-2 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40" /></div>
       )}
       <ul className="max-h-64 overflow-y-auto p-1" role="listbox" aria-multiselectable>
         {shown.map((o) => {
@@ -139,8 +143,8 @@ function RangeEditor({ facet, initial, onApply }: { facet: Facet; initial: { min
         </div>
       )}
       <div className="grid grid-cols-2 gap-1.5">
-        <label className="space-y-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "From" : "Min"}</span><input type={type} value={min} onChange={(e) => setMin(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
-        <label className="space-y-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "To" : "Max"}</span><input type={type} value={max} onChange={(e) => setMax(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
+        <label className="space-y-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "From" : "Min"}</span><input type={type} name={`${facet.key}-min`} autoComplete="off" inputMode={type === "number" ? "decimal" : undefined} value={min} onChange={(e) => setMin(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
+        <label className="space-y-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "To" : "Max"}</span><input type={type} name={`${facet.key}-max`} autoComplete="off" inputMode={type === "number" ? "decimal" : undefined} value={max} onChange={(e) => setMax(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
       </div>
       <div className="flex justify-end gap-1.5">
         <Button size="sm" variant="ghost" onClick={() => onApply(undefined, undefined)}>Clear</Button>
@@ -185,11 +189,14 @@ export function AiFilter({ onAiFilter, apply, undo, applied }: { onAiFilter: AiF
         {busy ? <Loader2 className="size-3.5 animate-spin text-tone-ai" /> : <Sparkles className="size-3.5 text-tone-ai" />}
         <input
           autoFocus
+          name="ai-filter"
+          autoComplete="off"
+          aria-label="Describe the rows you want"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void run(); if (e.key === "Escape") setOpen(false); }}
           onBlur={() => { if (!text && !busy) setOpen(false); }}
-          placeholder="e.g. 2-beds vacant over 30 days in Austin"
+          placeholder="e.g. 2-beds vacant over 30 days in Austin…"
           className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-muted-foreground/70"
           disabled={busy}
         />

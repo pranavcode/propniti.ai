@@ -36,6 +36,8 @@ export function AskBox({ onAsk, suggestions = [], placeholder = "Ask or tell Pro
         <div className="flex items-start gap-2.5">
           <span className={cn("mt-0.5 flex shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary", size === "lg" ? "size-7" : "size-6")}><Sparkles className="size-3.5" /></span>
           <textarea
+            name="ask"
+            autoComplete="off"
             ref={ref}
             value={q}
             autoFocus={autoFocus}

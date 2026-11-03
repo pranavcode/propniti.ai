@@ -199,6 +199,7 @@
 /* Table density (profile menu / ⌘K): the shell root carries data-density. */
 [data-surface="app"] [data-density="compact"] { --row-h: 30px; }
 
+[data-surface="app"] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 [data-surface="app"] ::selection { background: color-mix(in oklab, var(--primary) 22%, transparent); }
 [data-surface="app"] :focus-visible { outline-offset: 2px; }
 

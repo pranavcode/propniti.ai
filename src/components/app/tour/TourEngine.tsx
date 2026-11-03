@@ -120,7 +120,7 @@ export function TourOverlay({ active, go, dismiss }: Pick<ReturnType<typeof useT
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={`${active.tour.title}: step ${active.step + 1} of ${n}`}>
       {rect ? (
         <div
-          className="pointer-events-none fixed rounded-lg ring-2 ring-primary transition-all duration-300 ease-out motion-reduce:transition-none"
+          className="pointer-events-none fixed rounded-lg ring-2 ring-primary transition-[top,left,width,height] duration-300 ease-out motion-reduce:transition-none"
           style={{ top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2, boxShadow: "0 0 0 9999px oklch(0.15 0.01 265 / 0.5)" }}
         />
       ) : (
