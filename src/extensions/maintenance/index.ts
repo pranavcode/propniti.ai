@@ -1,2 +1,5 @@
-// Actions, tabs, widgets and agents for the maintenance module (registerAction/registerTab/registerWidget/registerAgent).
-export {};
+// Actions, tabs, metrics and tours for the maintenance module.
+import "./metrics";
+import "./actions";
+import "./tabs";
+import "./tours";
