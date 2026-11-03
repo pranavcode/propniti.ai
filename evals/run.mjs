@@ -4,7 +4,7 @@
 //   EVAL_ONLY=extract npm run eval                 # only cases whose id contains "extract"
 // Exits 1 when the pass rate is below MIN_PASS (default 0.8). Fallbacks to mock count as not passed.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { gradeAgentRun, gradeAsk, gradeExtract, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
+import { gradeAgentRun, gradeExtract, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
 
 const BASE_URL = (process.env.BASE_URL || "https://propniti.ai").replace(/\/$/, "");
 const MIN_PASS = Number(process.env.MIN_PASS ?? 0.8);
@@ -100,7 +100,7 @@ async function main() {
       const wo = state.workOrders.find((w) => w.id === c.workOrder);
       return postJson("/api/ai/validate", { workOrder: { id: wo.id, title: wo.title, po: wo.po, submission: c.submission } });
     }, gradeValidate],
-    ["Assistant", "ask", (c) => postJson("/api/ai/ask", { question: c.question, state }), (c, res) => gradeAsk(c, res, state)],
+    ["Assistant (v1 path)", "ask", (c) => postJson("/api/ai/ask", { question: c.question }, c.persona), gradePlan],
     ["Column mapping", "import-map", (c) => {
       const table = c.csv ? parseCsv(read(c.csv).toString()) : [c.headers, ...c.samples];
       return postJson("/api/ai/import-map", { headers: table[0], samples: table.slice(1, 6) });
@@ -112,7 +112,7 @@ async function main() {
   for (const [label, area, send, grade] of areas) {
     const list = cases(area);
     if (!list.length) continue;
-    if (!state && (area === "validate" || area === "ask")) {
+    if (!state && area === "validate") {
       console.log(`${label}: skipped (this server has no v1 demo state)`);
       continue;
     }
