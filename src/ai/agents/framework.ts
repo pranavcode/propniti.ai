@@ -52,7 +52,8 @@ function finalize(ctx: AgentCtx, c: Candidate, modelWhy: string[] = [], modelCon
     risk: c.risk, category: c.category, evidence: c.evidence, alwaysHuman: c.alwaysHuman, assignee: c.assignee,
     why: [...c.why, ...modelWhy.slice(0, 2).map((w) => `AI: ${w}`)].slice(0, 6),
     confidence: modelConfidence == null ? c.confidence : Math.min(c.confidence, modelConfidence),
-    payload: { ...c.extra, effects, facts: c.facts, drafted_by: draft ? ctx.modelUsed.model : "template" },
+    // subject/body at the top too, for registered actions that send their own message from input.
+    payload: { ...c.extra, ...(c.message ? { subject: draft?.subject ?? c.message.subject, body: draft?.body ?? c.message.body } : {}), effects, facts: c.facts, drafted_by: draft ? ctx.modelUsed.model : "template" },
   };
 }
 

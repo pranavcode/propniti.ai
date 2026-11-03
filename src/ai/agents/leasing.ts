@@ -37,7 +37,7 @@ export default defineAgent({
   triggers: { schedule: "0 */4 * * *", events: ["application.submitted", "screening.completed"] },
   autonomy: "act_with_approval",
   entities: ["applications", "applicants", "screening_results", "prospects"],
-  actions: ["applications.decide", "prospects.follow_up"],
+  actions: ["applications.decide", "prospects.send_follow_up"],
   maxProposals: 10,
   async collect(ctx, trigger) {
     // An application.submitted event names the new application: score it first, whatever its stage.
@@ -85,7 +85,7 @@ export default defineAgent({
     for (const p of stale.rows) {
       const days = daysBetween(String(p.last_contact_at).slice(0, 10), ctx.today);
       out.push({
-        entity: "prospects", entityId: String(p.id), propertyId: String(p.property_id), action: "prospects.follow_up",
+        entity: "prospects", entityId: String(p.id), propertyId: String(p.property_id), action: "prospects.send_follow_up",
         title: `Follow up with ${p.name} — no contact in ${days} days`, why: [`Stage ${p.stage}, last contact ${String(p.last_contact_at).slice(0, 10)}`, p.budget_cents ? `Budget ${money(Number(p.budget_cents))}` : "Came in through " + (p.source || "the website")],
         confidence: 0.85, risk: "Low", facts: { prospect: String(p.name), days_since_contact: days, budget_cents: (p.budget_cents as number) ?? null, desired_beds: (p.desired_beds as number) ?? null },
         message: { party_kind: "prospect", party_id: String(p.id), subject: "Still looking for a new home?", body: `Hi ${String(p.name).split(" ")[0]}, thanks again for your interest. We have homes available that fit what you told us. Would you like to book a tour this week? Just reply with a time that works.` },

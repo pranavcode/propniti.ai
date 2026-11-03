@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getAction } from "@/extensions/actions";
+import { isAiAction } from "./action-keys";
 import { can } from "@/entities";
 import type { ActionKey, AgentKey, Row } from "@/entities/types";
 import { eff, get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
@@ -161,7 +162,7 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
   const action = String(proposal.action) as ActionKey;
   let result: ExecResult;
   try {
-    const registered = getAction(action);
+    const registered = isAiAction(action) ? undefined : getAction(action);
     if (registered) {
       if (!can(data.actor.role, action, registered.entity)) throw new Error(`${data.actor.role.replace(/_/g, " ")} can't ${registered.label.toLowerCase()}`);
       const row = isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;

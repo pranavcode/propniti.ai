@@ -197,6 +197,23 @@ describe("sweep and events", () => {
   });
 });
 
+describe("every agent", () => {
+  it("proposes only registered actions", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const { allAgents } = await import("../agents");
+    const { getAction } = await import("@/extensions/actions");
+    for (const a of allAgents()) {
+      for (const key of a.actions) expect(getAction(key), `${a.key} declares ${key}`).toBeTruthy();
+      const r = await (await startRun({ db, ws: WS, actor: DANIEL, agent: a.key, trigger: { kind: "manual" } })).done;
+      expect(r.status, `${a.key}: ${r.summary}`).not.toBe("failed");
+    }
+    const used = raw.prepare("SELECT DISTINCT action FROM ai_proposals").all().map((x) => String(x.action));
+    expect(used.length).toBeGreaterThan(5);
+    for (const key of used) expect(getAction(key), key).toBeTruthy();
+  });
+});
+
 describe("helpers", () => {
   it("normalizes street lines to USPS style", () => {
     expect(normalizeStreet("123 MAIN STREET.")).toBe("123 Main St");

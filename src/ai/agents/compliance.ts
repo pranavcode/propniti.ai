@@ -14,14 +14,14 @@ export default defineAgent({
   triggers: { schedule: "0 15 * * *", events: ["coi.expiring"] },
   autonomy: "auto_within_policy",
   entities: ["vendor_cois", "compliance_items", "inspections"],
-  actions: ["vendor_cois.request_renewal", "vendors.stop_assigning", "compliance_items.schedule"],
+  actions: ["vendor_cois.request_certificate", "vendors.stop_assigning", "compliance_items.schedule"],
   maxProposals: 10,
   async collect(ctx) {
     const soon = addDays(ctx.today, 30);
     const cois = await ctx.call<{ rows: Row[] }>("records.search", { entity: "vendor_cois", filters: [{ field: "expires_on", op: "lte", value: soon }], sort: ["expires_on", "asc"], size: 40 });
     const vendorIds = [...new Set(cois.rows.map((c) => String(c.vendor_id)))];
     const vendors = vendorIds.length
-      ? await sql<Row>(ctx.data, "SELECT v.id, v.company, v.email, (SELECT count(*) FROM {work_orders} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs, (SELECT max(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = v.id) AS latest FROM {vendors} v WHERE v.id IN (SELECT value FROM json_each(?))", [JSON.stringify(vendorIds)], { unscoped: true })
+      ? await sql<Row>(ctx.data, "SELECT v.id, v.company, v.email, (SELECT count(*) FROM {work_orders} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs, (SELECT max(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = v.id) AS latest, (SELECT c.id FROM {vendor_cois} c WHERE c.vendor_id = v.id ORDER BY c.expires_on DESC LIMIT 1) AS coi_id FROM {vendors} v WHERE v.id IN (SELECT value FROM json_each(?))", [JSON.stringify(vendorIds)], { unscoped: true })
       : [];
     const out: Candidate[] = [];
     for (const v of vendors) {
@@ -39,8 +39,9 @@ export default defineAgent({
           priority: 3000 - days,
         });
       }
+      if (!v.coi_id) continue;
       out.push({
-        entity: "vendors", entityId: String(v.id), action: "vendor_cois.request_renewal", title: `Ask ${v.company} for a renewed insurance certificate (${expired ? "expired" : "expires"} ${v.latest})`,
+        entity: "vendor_cois", entityId: String(v.coi_id), action: "vendor_cois.request_certificate", title: `Ask ${v.company} for a renewed insurance certificate (${expired ? "expired" : "expires"} ${v.latest})`,
         why: [expired ? `Expired ${-days} days ago` : `Expires in ${days} days`, Number(v.open_jobs) ? `${v.open_jobs} open jobs` : "No open jobs right now"], confidence: 0.95, risk: "Low", facts, evidence: ev,
         message: { party_kind: "vendor", party_id: String(v.id), subject: "Updated certificate of insurance needed", body: `Hello ${v.company}, our records show your certificate of insurance ${expired ? "expired" : "expires"} on ${v.latest}. Please upload a current certificate in the vendor portal so we can keep assigning you work.` },
         effects: [], priority: 2000 - days,

@@ -3,6 +3,8 @@ import type { Db } from "@/lib/platform/types";
 import { asOf, eff, insert, newId, type DataCtx } from "./data";
 import { addUsage, currentModel, fromWire, RULES, toWire, ZERO, type ChatModel, type ModelInfo, type Turn, type Usage } from "./providers";
 import { getTool } from "./tools/registry";
+import { getAction } from "@/extensions/actions";
+import "./actions";
 import type { ApprovalPolicy, Autonomy, RunContext, Step, ToolDef, ToolKey } from "./types";
 import { z } from "zod";
 
@@ -118,6 +120,8 @@ export async function createRunContext(opts: {
 
 async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): Promise<Proposed> {
   const { db, ws } = ctx;
+  // Every proposal must name an action that exists, so approving it can never dead-end.
+  if (!getAction(p.action)) throw new Error(`${p.action} isn't a registered action; agents may only propose registered actions`);
   // One open proposal per agent, record and action: a re-run doesn't flood the inbox.
   const e = eff("ai_proposals", ws);
   const d = eff("ai_decisions", ws);
