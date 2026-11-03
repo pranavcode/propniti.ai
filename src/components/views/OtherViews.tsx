@@ -352,6 +352,7 @@ function VendorWorkOrder({ wo }: { wo: WorkOrder }) {
 export function AdminView() {
   const { state, act, busy } = useDemo();
   const mode = useAiMode();
+  const [resetDone, setResetDone] = useState(false);
   const users = (
     <Card title="Users">
       <Table
@@ -375,7 +376,8 @@ export function AdminView() {
       </Card>
       <Card title="Demo data">
         <p className="mb-3 text-sm text-[#57534E]">Your demo data is private to you and resets at midnight {DEMO_RESET_ZONE_NAME}. Reset now to start the demo over.</p>
-        <Button variant="danger" disabled={busy} onClick={act.reset}>Reset demo data</Button>
+        <Button variant="danger" disabled={busy} onClick={async () => setResetDone(await act.reset())}>Reset demo data</Button>
+        {resetDone && <p className="mt-3 text-sm text-[#4A6340]" role="status">Demo data reset. Every persona is back to the starting sample.</p>}
       </Card>
     </>
   );
