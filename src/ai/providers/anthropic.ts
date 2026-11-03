@@ -1,11 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { BetaContentBlockParam, BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { ChatModel, Turn } from "./types";
 import { usageOf } from "./types";
 
-// Native tool use on the Messages API. Server-side fallbacks re-run a refused request on the
-// default fallback model inside the same call.
+// Native tool use on the Messages API. Both calls opt into server-side fallbacks, which re-run a
+// refused request on the default fallback model inside the same call.
 export function anthropicModel(): ChatModel {
   const model = process.env.ANTHROPIC_MODEL || "claude-opus-5";
   const client = new Anthropic({ timeout: 60_000, maxRetries: 1 });
@@ -45,8 +45,12 @@ export function anthropicModel(): ChatModel {
     },
     async structured(schema, system, user, opts) {
       const t0 = Date.now();
-      const res = await client.messages.parse(
-        { model, max_tokens: 16000, system, messages: [{ role: "user", content: user }], output_config: { effort: "low", format: zodOutputFormat(schema) } },
+      const res = await client.beta.messages.parse(
+        {
+          model, max_tokens: 16000, system, messages: [{ role: "user", content: user }],
+          betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
+          output_config: { effort: "low", format: betaZodOutputFormat(schema) },
+        },
         { timeout: opts?.timeoutMs ?? 60_000 },
       );
       if (res.stop_reason === "refusal") throw new Error("model declined the request");
