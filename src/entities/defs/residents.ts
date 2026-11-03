@@ -523,6 +523,7 @@ registerEntity({
   capabilities: { notes: true, activity: true },
   permissions: { read: [...STAFF, "resident"], create: [...OPS, "resident"], update: [...OPS, "maintenance_supervisor"], delete: [...LEADERS] },
   writes: "generic",
+  events: { created: "service_request.created" },
   actions: ["service_requests.convert"],
   help: { summary: "What residents report from the portal, by text or by phone, before it becomes a work order.", article: "service-requests" },
 });
