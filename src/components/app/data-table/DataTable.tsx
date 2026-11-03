@@ -13,7 +13,7 @@ import { useUrlState } from "@/hooks/use-url-state";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -344,7 +344,7 @@ export function DataTable(props: DataTableProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="ghost" size="xs" className="tabular-nums">{size} <ChevronDown className="size-3" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                {PAGE_SIZES.map((s) => <DropdownMenuItem key={s} onSelect={() => set({ size: s, page: null })}>{s}{s === size && <Check className="ml-auto" />}</DropdownMenuItem>)}
+                <DropdownMenuGroup>{PAGE_SIZES.map((s) => <DropdownMenuItem key={s} onSelect={() => set({ size: s, page: null })}>{s}{s === size && <Check className="ml-auto" />}</DropdownMenuItem>)}</DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </span>
@@ -390,13 +390,13 @@ function ViewsMenu({ views, active, onApply, onSave, onDelete }: { views: SavedV
   const section = (title: string, list: SavedView[], deletable?: boolean) => list.length > 0 && (
     <>
       <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">{title}</DropdownMenuLabel>
-      {list.map((v) => (
+      <DropdownMenuGroup>{list.map((v) => (
         <DropdownMenuItem key={v.key} onSelect={() => onApply(v)} className="group/v">
           <span className="flex-1 truncate">{v.label}</span>
           {active?.key === v.key && <Check className="text-primary" />}
           {deletable && <button onClick={(e) => { e.stopPropagation(); onDelete(v); }} className="opacity-0 group-hover/v:opacity-60 hover:opacity-100" aria-label={`Delete ${v.label}`}><Trash2 className="size-3.5" /></button>}
         </DropdownMenuItem>
-      ))}
+      ))}</DropdownMenuGroup>
     </>
   );
   return (
@@ -409,12 +409,12 @@ function ViewsMenu({ views, active, onApply, onSave, onDelete }: { views: SavedV
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">
-        <DropdownMenuItem onSelect={() => onApply(null)}><span className="flex-1">All records</span>{!active && <Check className="text-primary" />}</DropdownMenuItem>
+        <DropdownMenuGroup><DropdownMenuItem onSelect={() => onApply(null)}><span className="flex-1">All records</span>{!active && <Check className="text-primary" />}</DropdownMenuItem></DropdownMenuGroup>
         {section("Views", builtIn)}
         {section("Shared with the team", shared, true)}
         {section("My views", mine, true)}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onSave}><Bookmark /> Save current view…</DropdownMenuItem>
+        <DropdownMenuGroup><DropdownMenuItem onSelect={onSave}><Bookmark /> Save current view…</DropdownMenuItem></DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -431,7 +431,7 @@ function SaveViewDialog({ open, onOpenChange, onSave }: { open: boolean; onOpenC
           <DialogTitle>Save view</DialogTitle>
           <DialogDescription>Keeps the current search, filters, sort and columns.</DialogDescription>
         </DialogHeader>
-        <form className="space-y-3" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; setBusy(true); try { await onSave(name.trim(), shared); onOpenChange(false); setName(""); } finally { setBusy(false); } }}>
+        <form className="flex flex-col gap-3" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; setBusy(true); try { await onSave(name.trim(), shared); onOpenChange(false); setName(""); } finally { setBusy(false); } }}>
           <input autoFocus name="view-name" autoComplete="off" aria-label="View name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="e.g. Austin 2-beds on notice…" className="h-9 w-full rounded-md border bg-background px-3 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" />
           <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
             <span><span className="block font-medium">Share with the team</span><span className="text-[12px] text-muted-foreground">Everyone in your org sees it under Shared.</span></span>
@@ -453,13 +453,13 @@ function ColumnsMenu({ columns, visible, onChange }: { columns: DataColumn[]; vi
       </Tooltip>
       <DropdownMenuContent align="end" className="max-h-[60vh] w-56 overflow-y-auto">
         <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Show columns</DropdownMenuLabel>
-        {columns.filter((c) => !c.primary).map((c) => (
+        <DropdownMenuGroup>{columns.filter((c) => !c.primary).map((c) => (
           <DropdownMenuCheckboxItem key={c.key} checked={visible.includes(c.key)} onSelect={(e) => e.preventDefault()} onCheckedChange={(on) => onChange(on ? columns.filter((x) => x.key === c.key || visible.includes(x.key)).map((x) => x.key) : visible.filter((k) => k !== c.key))}>
             {c.label}
           </DropdownMenuCheckboxItem>
-        ))}
+        ))}</DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => onChange(columns.filter((c) => !c.defaultHidden).map((c) => c.key))}>Reset to default</DropdownMenuItem>
+        <DropdownMenuGroup><DropdownMenuItem onSelect={() => onChange(columns.filter((c) => !c.defaultHidden).map((c) => c.key))}>Reset to default</DropdownMenuItem></DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

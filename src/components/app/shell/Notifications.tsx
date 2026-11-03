@@ -60,7 +60,7 @@ export function NotificationsMenu() {
         </div>
         <div className="max-h-[420px] overflow-y-auto">
           {loading && !data ? (
-            <div className="space-y-3 p-3">{[0, 1, 2].map((i) => <div key={i} className="flex gap-2"><Skeleton className="size-2 rounded-full" /><div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/2" /></div></div>)}</div>
+            <div className="flex flex-col gap-3 p-3">{[0, 1, 2].map((i) => <div key={i} className="flex gap-2"><Skeleton className="size-2 rounded-full" /><div className="flex-1 flex flex-col gap-1.5"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/2" /></div></div>)}</div>
           ) : !data?.rows.length ? (
             <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
               <span className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground"><BellOff className="size-4" /></span>

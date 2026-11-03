@@ -79,7 +79,7 @@ export function AssistantPanel({ children, onResize }: { children?: React.ReactN
       <div className="min-h-0 flex-1 overflow-y-auto">
         {children ?? (
           <div className="flex h-full flex-col justify-end gap-4 p-4">
-            <div className="space-y-1">
+            <div className="flex flex-col gap-1">
               <div className="text-[15px] font-semibold tracking-tight">What can I help with, {data.persona.name.split(" ")[0]}?</div>
               <p className="text-muted-foreground">Ask about your data, tell me to do something, or ask how a feature works. I show every record I look up, and anything that moves money waits for your approval.</p>
             </div>

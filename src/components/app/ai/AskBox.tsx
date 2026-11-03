@@ -25,7 +25,7 @@ export function AskBox({ onAsk, suggestions = [], placeholder = "Ask or tell Pro
     setQ("");
   };
   return (
-    <div className={cn("space-y-2.5", className)}>
+    <div className={cn("flex flex-col gap-2.5", className)}>
       <div
         onClick={() => ref.current?.focus()}
         className={cn(

@@ -31,7 +31,7 @@ export function PageHeader({ title, description, actions, icon, meta, className,
 }
 
 export function PageBody({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("space-y-5 px-4 pt-4 pb-10 md:px-6", className)}>{children}</div>;
+  return <div className={cn("flex flex-col gap-5 px-4 pt-4 pb-10 md:px-6", className)}>{children}</div>;
 }
 
 // Titled block inside a page (dashboards, settings, the kit).

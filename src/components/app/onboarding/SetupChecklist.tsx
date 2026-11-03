@@ -54,7 +54,7 @@ export function SetupChecklist({ items: given, onNavigate, className }: { items?
   const { items, done, total, setDone } = useSetupProgress(given);
   const next = items.find((i) => !i.done);
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-center gap-3">
         <Ring value={done / total} size={34} />
         <div className="min-w-0">

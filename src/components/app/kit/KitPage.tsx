@@ -22,7 +22,7 @@ export function KitPage({ searchParams }: { searchParams: Record<string, string 
         description="The Propniti app design system: frame, tables, records, dashboards and AI surfaces, with sample data."
         meta={<>{INDEX.map(([id, label]) => <a key={id} href={`#${id}`} className="hover:text-foreground">{label}</a>)}</>}
       />
-      <PageBody className="space-y-10">
+      <PageBody className="gap-10">
         <FoundationsSection />
         <Section id="table" title="DataTable" description="Server-driven: URL state, status tabs with counts, facet chips, AI filter, saved views, column picker, density, export, sum footer, selection with bulk bar, J/K keys, virtualised over 100 rows.">
           <KitTable

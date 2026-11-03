@@ -76,7 +76,7 @@ export function EmptyState({ kind = "table", title, description, action, seconda
   return (
     <div className={cn("flex flex-col items-center justify-center text-center", compact ? "gap-2 px-4 py-8" : "gap-3 px-6 py-14", className)}>
       {kind === "filtered" && compact ? <SearchX className="size-6 text-muted-foreground" /> : <Illustration kind={kind} className={compact ? "h-14 w-20" : undefined} />}
-      <div className="max-w-sm space-y-1">
+      <div className="max-w-sm flex flex-col gap-1">
         <div className="text-[14px] font-semibold tracking-tight">{title}</div>
         {description && <p className="text-muted-foreground">{description}</p>}
       </div>

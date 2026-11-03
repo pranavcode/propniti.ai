@@ -136,15 +136,15 @@ function RangeEditor({ facet, initial, onApply }: { facet: Facet; initial: { min
   const [max, setMax] = useState(initial.max ?? "");
   const type = facet.kind === "date" ? "date" : "number";
   return (
-    <div className="space-y-2 p-2">
+    <div className="flex flex-col gap-2 p-2">
       {facet.kind === "date" && (
         <div className="grid grid-cols-2 gap-1">
           {datePresets().map((p) => <button key={p.label} onClick={() => onApply(p.min, p.max)} className="h-7 rounded border px-2 text-left text-[12px] hover:border-primary/40 hover:bg-primary/5">{p.label}</button>)}
         </div>
       )}
       <div className="grid grid-cols-2 gap-1.5">
-        <label className="space-y-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "From" : "Min"}</span><input type={type} name={`${facet.key}-min`} autoComplete="off" inputMode={type === "number" ? "decimal" : undefined} value={min} onChange={(e) => setMin(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
-        <label className="space-y-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "To" : "Max"}</span><input type={type} name={`${facet.key}-max`} autoComplete="off" inputMode={type === "number" ? "decimal" : undefined} value={max} onChange={(e) => setMax(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
+        <label className="flex flex-col gap-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "From" : "Min"}</span><input type={type} name={`${facet.key}-min`} autoComplete="off" inputMode={type === "number" ? "decimal" : undefined} value={min} onChange={(e) => setMin(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
+        <label className="flex flex-col gap-1"><span className="text-[11px] text-muted-foreground">{facet.kind === "date" ? "To" : "Max"}</span><input type={type} name={`${facet.key}-max`} autoComplete="off" inputMode={type === "number" ? "decimal" : undefined} value={max} onChange={(e) => setMax(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[12.5px] tabular-nums outline-none focus:border-ring" /></label>
       </div>
       <div className="flex justify-end gap-1.5">
         <Button size="sm" variant="ghost" onClick={() => onApply(undefined, undefined)}>Clear</Button>

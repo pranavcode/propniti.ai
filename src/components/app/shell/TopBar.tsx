@@ -102,10 +102,12 @@ function HelpMenu() {
         <TooltipContent>Help</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuGroup>
         <DropdownMenuItem asChild><Link href="/docs"><BookOpen /> Help center and docs</Link></DropdownMenuItem>
         <DropdownMenuItem onSelect={openShortcuts}><Keyboard /> Keyboard shortcuts <Kbd className="ml-auto">?</Kbd></DropdownMenuItem>
         <DropdownMenuItem onSelect={() => startTour()}><Compass /> Restart product tour</DropdownMenuItem>
         <DropdownMenuItem onSelect={openSetup}><ListChecks /> Setup checklist</DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -123,9 +125,11 @@ function ThemeToggle() {
         <TooltipContent>Theme</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuGroup>
         {([["light", Sun, "Light"], ["dark", Moon, "Dark"], ["system", Monitor, "System"]] as const).map(([t, I, label]) => (
           <DropdownMenuItem key={t} onSelect={() => setTheme(t)}><I /> {label}{theme === t && <Check className="ml-auto" />}</DropdownMenuItem>
         ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -152,6 +156,7 @@ function ProfileMenu() {
           </div>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuGroup>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger><UserRoundCog /> Switch role (demo)</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="max-h-[70vh] w-80 overflow-y-auto">
@@ -169,8 +174,9 @@ function ProfileMenu() {
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setDensity(density === "compact" ? "comfortable" : "compact"); }}>
           <Rows3 /> Compact tables {density === "compact" && <Check className="ml-auto" />}
         </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={exitPersona}><LogOut /> Sign out of demo</DropdownMenuItem>
+        <DropdownMenuGroup><DropdownMenuItem onSelect={exitPersona}><LogOut /> Sign out of demo</DropdownMenuItem></DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

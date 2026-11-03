@@ -7,7 +7,7 @@ import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpe
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "../display";
 import { SetupPill } from "../onboarding/SetupChecklist";
 import { useShell } from "./context";
@@ -75,7 +75,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
                 </button>
               )}
               {!(isClosed && !collapsed) && (
-                <ul className="space-y-px">
+                <ul className="flex flex-col gap-px">
                   {entries(section.items).map((e) => e.kind === "item"
                     ? <li key={e.item.key}><NavLink item={e.item} active={active === e.item.href} collapsed={collapsed} onNavigate={onNavigate} /></li>
                     : collapsed
@@ -88,7 +88,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
         })}
       </div>
 
-      <div className={cn("shrink-0 space-y-1 border-t border-sidebar-border/70 py-2", collapsed ? "px-2" : "px-2.5")}>
+      <div className={cn("shrink-0 flex flex-col gap-1 border-t border-sidebar-border/70 py-2", collapsed ? "px-2" : "px-2.5")}>
         <SetupPill collapsed={collapsed} onClick={openSetup} />
         {onToggle && (
           <RailTip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} kbd="⌘B" show={collapsed}>
@@ -145,7 +145,7 @@ function NavGroup({ label, items, active, onNavigate }: { label: string; items: 
         <ChevronRight className={cn("size-3.5 text-muted-foreground/70 transition-transform", open && "rotate-90")} />
       </button>
       {open && (
-        <ul className="relative mt-px ml-[15px] space-y-px border-l border-sidebar-border pl-2">
+        <ul className="relative mt-px ml-[15px] flex flex-col gap-px border-l border-sidebar-border pl-2">
           {items.map((i) => <li key={i.key}><NavLink item={i} active={active === i.href} nested onNavigate={onNavigate} /></li>)}
         </ul>
       )}
@@ -185,13 +185,13 @@ function WorkspaceMenu({ collapsed }: { collapsed: boolean }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Workspace</DropdownMenuLabel>
-        <DropdownMenuItem className="gap-2"><AppMark size={18} /><span className="flex-1">Propniti demo portfolio</span><span className="text-[11px] text-muted-foreground">30 properties</span></DropdownMenuItem>
+        <DropdownMenuGroup><DropdownMenuItem className="gap-2"><AppMark size={18} /><span className="flex-1">Propniti demo portfolio</span><span className="text-[11px] text-muted-foreground">30 properties</span></DropdownMenuItem></DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Your scope as {p.title.toLowerCase()}</DropdownMenuLabel>
-        <DropdownMenuItem disabled className="opacity-100"><span className="size-1.5 rounded-full bg-primary" />{p.scopeLabel}</DropdownMenuItem>
+        <DropdownMenuGroup><DropdownMenuItem disabled className="opacity-100"><span className="size-1.5 rounded-full bg-primary" />{p.scopeLabel}</DropdownMenuItem></DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Other scopes (switch role to see them)</DropdownMenuLabel>
-        {scopes.filter((s) => s !== p.scopeLabel).map((s) => <DropdownMenuItem key={s} disabled className="text-muted-foreground">{s}</DropdownMenuItem>)}
+        <DropdownMenuGroup>{scopes.filter((s) => s !== p.scopeLabel).map((s) => <DropdownMenuItem key={s} disabled className="text-muted-foreground">{s}</DropdownMenuItem>)}</DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
