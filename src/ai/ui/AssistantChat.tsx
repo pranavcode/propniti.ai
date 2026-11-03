@@ -110,7 +110,7 @@ function Answer({ reply }: { reply: Reply }) {
       )}
       {reply.citations.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {reply.citations.slice(0, 8).map((c, i) => c.href ? <Link key={i} href={c.href} className="rounded-full border px-2 py-0.5 text-[11.5px] text-muted-foreground hover:border-primary hover:text-primary">{c.help ? "📖 " : ""}{c.label}</Link> : <span key={i} className="rounded-full border px-2 py-0.5 text-[11.5px] text-muted-foreground">{c.label}</span>)}
+          {reply.citations.slice(0, 8).map((c, i) => c.href ? <Link key={i} href={c.href} className="rounded-full border px-2 py-0.5 text-[11.5px] text-muted-foreground hover:border-primary hover:text-primary">{c.help && <BookOpen className="mr-1 inline size-3" />}{c.label}</Link> : <span key={i} className="rounded-full border px-2 py-0.5 text-[11.5px] text-muted-foreground">{c.label}</span>)}
         </div>
       )}
       <Trace reply={reply} />
@@ -145,7 +145,8 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
   }, [mode, page, pathname, threadId]);
 
   // Questions handed over from ⌘K, AskBox on a page, or "Ask about this" on a record.
-  const pending = shell?.assistant.pending;
+  // Only the dock takes hand-overs; the full page would race it when both are open.
+  const pending = page ? null : shell?.assistant.pending;
   const take = shell?.assistant.take;
   useEffect(() => {
     if (!pending || busy) return;
