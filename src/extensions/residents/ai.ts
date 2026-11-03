@@ -89,7 +89,7 @@ export async function threadContext(data: { db: Db; ws: string | null }, threadI
 export function rulesReply(f: ThreadFacts, lastIn: string): { body: string; why: string[]; confidence: number } {
   const hi = f.first_name ? `Hi ${f.first_name}, ` : "Hello, ";
   const text = `${String(f.subject)} ${lastIn}`.toLowerCase();
-  if (f.work_order && /ac|leak|heat|repair|fix|broken|water|eta|part|technician/.test(text)) {
+  if (f.work_order && /\b(ac|a\/c|leak\w*|heat\w*|repair\w*|fix|broken|water|eta|parts?|technician)\b/.test(text)) {
     const when = f.work_order_scheduled ? ` It's scheduled for ${shortDate(String(f.work_order_scheduled))}.` : "";
     if (f.party_kind === "vendor") return { body: `${hi}thanks for the update on ${f.work_order}. Please go ahead as planned and send the invoice against ${f.work_order} when the work is done.`, why: [`Vendor thread about ${f.work_order}`, `Work order is ${f.work_order_status}`], confidence: 0.72 };
     return { body: `${hi}thanks for letting us know. Work order ${f.work_order} (${f.work_order_title}) is ${String(f.work_order_status).toLowerCase()}.${when} We'll message you before the technician arrives.`, why: [`The thread is about ${f.work_order}, currently ${f.work_order_status}`, "Confirms status without promising a time the record doesn't hold"], confidence: 0.8 };
@@ -104,7 +104,7 @@ export function rulesReply(f: ThreadFacts, lastIn: string): { body: string; why:
     };
   }
   if (/renew|lease (is )?ending|term/.test(text) && f.lease_end) {
-    return { body: `${hi}your lease on #${f.unit} ends ${shortDate(String(f.lease_end))}. I'll send your renewal options this week, including other term lengths, so you can compare them.`, why: [`Lease ends ${f.lease_end}`, "Renewal pricing needs a person; the reply commits only to sending options"], confidence: 0.76 };
+    return { body: `${hi}your lease on #${f.unit} ends ${shortDate(String(f.lease_end))}. I'll send your renewal options this week, including other term lengths, so you can compare them.`, why: [`Lease ends ${shortDate(String(f.lease_end))}`, "Renewal pricing needs a person; the reply commits only to sending options"], confidence: 0.76 };
   }
   if (f.party_kind === "owner") return { body: `${hi}thanks for the question. I'll pull the statement detail for the month and send a line-by-line explanation of the change by tomorrow.`, why: ["Owner question about statements", "Owner Reporting can explain the variance from computed figures"], confidence: 0.7 };
   return { body: `${hi}thanks for reaching out. I've got your message and will follow up today.`, why: ["No specific record matched; a holding reply"], confidence: 0.55 };

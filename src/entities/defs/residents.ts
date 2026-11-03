@@ -29,9 +29,6 @@ registerEntity({
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
     unit: { type: "text", label: "Unit", list: { default: true },
       sql: `(SELECT '#' || u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE ${CURRENT_LEASE} ORDER BY l.start_on DESC LIMIT 1)` },
-    balance: { type: "money", label: "Balance", sortable: true, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"],
-      sql: "(SELECT coalesce(sum(c.amount_cents), 0) FROM {charges} c WHERE c.household_id = residents.household_id) - (SELECT coalesce(sum(p.amount_cents), 0) FROM {payments} p WHERE p.lease_id IN (SELECT l.id FROM {leases} l WHERE l.household_id = residents.household_id) AND p.nsf = 0) - (SELECT coalesce(sum(cr.amount_cents), 0) FROM {credits} cr WHERE cr.lease_id IN (SELECT l.id FROM {leases} l WHERE l.household_id = residents.household_id))",
-      help: { summary: "Charges less payments and credits for the household. Positive means the resident owes money.", article: "resident-ledger" } },
     lease_end: { type: "date", label: "Lease ends", sortable: true, list: { default: true }, sql: `(SELECT l.end_on FROM {leases} l WHERE ${CURRENT_LEASE} ORDER BY l.start_on DESC LIMIT 1)` },
     email: { type: "text", label: "Email", search: true, list: { default: false } },
     phone: { type: "text", label: "Phone", search: true, list: { default: true } },
@@ -58,15 +55,13 @@ registerEntity({
     defaultSort: ["last_name", "asc"],
     statusTabs: "status",
     savedViews: [
-      { key: "owing", label: "Owing money", filters: { "balance.min": "0.01" }, sort: ["balance", "desc"] },
       { key: "high-risk", label: "High delinquency risk", filters: { "risk_score.min": "70" }, sort: ["risk_score", "desc"] },
       { key: "no-autopay", label: "Not on autopay", filters: { autopay: "false", status: "Current" } },
       { key: "spanish", label: "Prefer Spanish", filters: { language: "es" } },
     ],
-    footer: [{ field: "balance", fn: "sum", label: "Balance" }],
   },
   detail: {
-    facts: ["status", "property_id", "unit", "balance", "lease_end", "phone", "email", "risk_score"],
+    facts: ["status", "property_id", "unit", "lease_end", "phone", "email", "risk_score"],
     tabs: [
       { custom: "residents.overview" },
       { key: "profile", label: "Profile", fields: ["first_name", "last_name", "email", "phone", "preferred_channel", "language", "autopay", "is_primary", "status", "property_id", "household_id", "risk_score"] },
@@ -80,7 +75,7 @@ registerEntity({
   },
   capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
   kpis: [
-    { key: "delinquent", label: "Delinquent", metric: "receivables.delinquency", format: "money", delta: "mom", goodWhen: "down", drill: "/app/residents?view=owing" },
+    { key: "delinquent", label: "Delinquent", metric: "receivables.delinquency", format: "money", delta: "mom", goodWhen: "down", drill: "/app/receivables/delinquency" },
     { key: "collections", label: "Collections rate", metric: "receivables.collections_rate", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/receivables/payments" },
     { key: "high_risk", label: "High delinquency risk", metric: "residents.high_risk", format: "count", goodWhen: "down", drill: "/app/residents?view=high-risk", help: { summary: "Current residents scoring 70 or more on delinquency risk.", article: "delinquency-risk" } },
     { key: "insurance_gaps", label: "Insurance lapsed or expiring", metric: "residents.insurance_gaps", format: "count", goodWhen: "down", drill: "/app/residents/insurance?f.status=Lapsed,Expiring", help: { summary: "Active leases whose renters insurance has lapsed or expires within 30 days.", article: "renters-insurance" } },
@@ -91,7 +86,7 @@ registerEntity({
     { key: "insurance", title: "Renters insurance on active leases", kind: "donut", metric: "residents.insurance_status", x: "status", series: [{ key: "count", label: "Policies", format: "count" }], drill: "/app/residents/insurance?f.status={status}" },
   ],
   ai: {
-    facts: (r, rel) => ({ resident: String(r.name), status: String(r.status), unit: (r.unit as string) ?? null, balance: r.balance == null ? null : Number(r.balance), lease_end: (r.lease_end as string) ?? null, risk_score: r.risk_score == null ? null : Number(r.risk_score), autopay: !!r.autopay, nsf_payments: rel.payments?.filter((p) => p.nsf).length ?? 0 }),
+    facts: (r, rel) => ({ resident: String(r.name), status: String(r.status), unit: (r.unit as string) ?? null, lease_end: (r.lease_end as string) ?? null, risk_score: r.risk_score == null ? null : Number(r.risk_score), autopay: !!r.autopay, nsf_payments: rel.payments?.filter((p) => p.nsf).length ?? 0 }),
     summaryPrompt: "Summarise this resident's standing for the property manager in 2-3 sentences: balance and payment pattern, lease timing, and any follow-up. Use only the facts; never promise a waiver.",
     agents: ["collections", "renewals"],
   },
@@ -131,8 +126,6 @@ registerEntity({
       help: { summary: "Monthly base rent. Changing it here does not re-bill past months; future charges follow the new amount.", article: "rent-changes" } },
     deposit: { type: "money", label: "Deposit", column: "deposit_cents", list: { default: false, align: "right" }, editable: [...OPS] },
     market_rent: { type: "money", label: "Market rent", list: { default: false, align: "right" }, sql: "(SELECT u.market_rent_cents FROM {units} u WHERE u.id = leases.unit_id)" },
-    balance: { type: "money", label: "Balance", sortable: true, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"],
-      sql: "(SELECT coalesce(sum(c.amount_cents), 0) FROM {charges} c WHERE c.lease_id = leases.id) - (SELECT coalesce(sum(p.amount_cents), 0) FROM {payments} p WHERE p.lease_id = leases.id AND p.nsf = 0) - (SELECT coalesce(sum(cr.amount_cents), 0) FROM {credits} cr WHERE cr.lease_id = leases.id)" },
     move_in_on: { type: "date", label: "Move-in" },
     move_out_on: { type: "date", label: "Move-out" },
     notice_on: { type: "date", label: "Notice given" },
@@ -164,13 +157,12 @@ registerEntity({
       { key: "expiring-60", label: "Ending in 60 days", filters: { "days_to_end.min": "0", "days_to_end.max": "60", status: ["Active", "Notice"] }, sort: ["end_on", "asc"] },
       { key: "expiring-90", label: "Ending in 90 days", filters: { "days_to_end.min": "0", "days_to_end.max": "90", status: ["Active", "Notice"] }, sort: ["end_on", "asc"] },
       { key: "mtm", label: "Month-to-month", filters: { status: "Month-to-month" } },
-      { key: "owing", label: "With a balance", filters: { "balance.min": "0.01" }, sort: ["balance", "desc"] },
       { key: "commercial", label: "Commercial NNN", filters: { kind: "Commercial" } },
     ],
-    footer: [{ field: "rent", fn: "sum", label: "Rent" }, { field: "balance", fn: "sum", label: "Balance" }],
+    footer: [{ field: "rent", fn: "sum", label: "Rent" }],
   },
   detail: {
-    facts: ["status", "unit_id", "start_on", "end_on", "rent", "deposit", "balance", "market_rent"],
+    facts: ["status", "unit_id", "start_on", "end_on", "rent", "deposit", "market_rent", "days_to_end"],
     tabs: [
       { key: "overview", label: "Overview", fields: ["status", "kind", "property_id", "unit_id", "household_id", "start_on", "end_on", "term_months", "move_in_on", "move_out_on", "notice_on", "rent", "deposit", "market_rent", "renewal_of", "signed_by", "signed_at"] },
       { key: "ledger", label: "Ledger", relation: "charges", roles: [...FINANCE, "resident"] },
@@ -194,7 +186,7 @@ registerEntity({
     { key: "lease_status", title: "Leases by status", kind: "donut", metric: "residents.lease_status", x: "status", series: [{ key: "count", label: "Leases", format: "count" }], drill: "/app/leases?f.status={status}" },
   ],
   ai: {
-    facts: (r, rel) => ({ lease: String(r.label), status: String(r.status), start: String(r.start_on), end: (r.end_on as string) ?? null, rent: Number(r.rent ?? 0), market_rent: r.market_rent == null ? null : Number(r.market_rent), balance: r.balance == null ? null : Number(r.balance), residents: rel.residents?.length ?? 0, days_to_end: r.days_to_end == null ? null : Number(r.days_to_end) }),
+    facts: (r, rel) => ({ lease: String(r.label), status: String(r.status), start: String(r.start_on), end: (r.end_on as string) ?? null, rent: Number(r.rent ?? 0), market_rent: r.market_rent == null ? null : Number(r.market_rent), residents: rel.residents?.length ?? 0, days_to_end: r.days_to_end == null ? null : Number(r.days_to_end) }),
     summaryPrompt: "Summarise this lease for the property manager in 2-3 sentences: term and timing, rent versus market, balance, and the renewal decision if it ends within 90 days. Use only the facts.",
     agents: ["renewals", "collections"],
   },
@@ -225,8 +217,6 @@ registerEntity({
       sql: "(SELECT '#' || u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
     members: { type: "number", label: "Members", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {residents} r WHERE r.household_id = households.id)" },
     lease_status: { type: "text", label: "Lease status", list: { default: true }, sql: "(SELECT l.status FROM {leases} l WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
-    balance: { type: "money", label: "Balance", sortable: true, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"],
-      sql: "(SELECT coalesce(sum(c.amount_cents), 0) FROM {charges} c WHERE c.household_id = households.id) - (SELECT coalesce(sum(p.amount_cents), 0) FROM {payments} p WHERE p.lease_id IN (SELECT l.id FROM {leases} l WHERE l.household_id = households.id) AND p.nsf = 0) - (SELECT coalesce(sum(cr.amount_cents), 0) FROM {credits} cr WHERE cr.lease_id IN (SELECT l.id FROM {leases} l WHERE l.household_id = households.id))" },
   },
   relations: [
     { name: "property", entity: "properties", fk: "property_id", kind: "one" },
@@ -235,7 +225,7 @@ registerEntity({
   ],
   list: { defaultSort: ["name", "asc"] },
   detail: {
-    facts: ["property_id", "unit", "members", "lease_status", "balance"],
+    facts: ["property_id", "unit", "members", "lease_status"],
     tabs: [{ key: "residents", label: "Members", relation: "residents" }, { key: "leases", label: "Leases", relation: "leases" }],
     related: ["property"],
   },

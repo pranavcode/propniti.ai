@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Archive, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,15 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
   threadId: string; channel: string; closed: boolean; suggestion: Suggestion | null; templates: Template[]; vars: Record<string, string | null>; language: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  // In the inbox, keep this conversation open after it leaves the current filter (Open → Waiting).
+  const stay = () => {
+    if (!pathname.endsWith("/communications/inbox") || search.get("t") === threadId) return router.refresh();
+    const sp = new URLSearchParams(search.toString());
+    sp.set("t", threadId);
+    router.replace(`${pathname}?${sp}`, { scroll: false });
+  };
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<string>(CHANNELS.includes(initialChannel as (typeof CHANNELS)[number]) ? initialChannel : "Email");
   const [from, setFrom] = useState<{ kind: "ai"; id: string; text: string } | { kind: "template"; id: string } | null>(null);
@@ -53,7 +62,7 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
       const r = await runAction("message_threads", threadId, "message_threads.suggest_reply");
       toast.success(r.message ?? "Reply drafted");
       setHidden(false);
-      router.refresh();
+      stay();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't draft a reply");
     } finally {
@@ -72,7 +81,7 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
       toast.success(r.message ?? "Sent");
       setBody("");
       setFrom(null);
-      router.refresh();
+      stay();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Not sent. Try again.");
     } finally {

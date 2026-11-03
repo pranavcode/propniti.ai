@@ -132,7 +132,7 @@ export async function LeaseTerms({ id }: TabProps) {
               const change = prev ? (Number(h.rent_cents) - Number(prev.rent_cents)) / Number(prev.rent_cents) : null;
               return (
                 <li key={String(h.id)} className={cn("flex items-center gap-2 px-3 py-1.5 text-[12.5px]", h.id === l.id && "bg-primary/[0.05]")}>
-                  <span className="w-20 shrink-0 text-muted-foreground">{h.rel}</span>
+                  <span className="w-20 shrink-0 text-muted-foreground">{String(h.rel)}</span>
                   {h.id === l.id ? <span className="font-medium">{String(h.id)}</span> : <Link href={`/app/leases/${encodeURIComponent(String(h.id))}?tab=terms`} className="font-medium text-primary hover:underline">{String(h.id)}</Link>}
                   <span className="text-muted-foreground tabular-nums">{formatDate(String(h.start_on), "always")} – {h.end_on ? formatDate(String(h.end_on), "always") : "open"}</span>
                   <span className="ml-auto tabular-nums"><Money value={Number(h.rent_cents)} cents style="whole" /></span>

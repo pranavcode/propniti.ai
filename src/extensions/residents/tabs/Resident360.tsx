@@ -16,11 +16,12 @@ import { ActionButton, IssueFix, MergeDialog } from "../ui/client";
 const FIELD_LABEL: Record<string, string> = { first_name: "First name", last_name: "Last name", email: "Email", phone: "Phone", preferred_channel: "Preferred channel", language: "Language", autopay: "Autopay" };
 const CHANNEL_ICON = { Email: Mail, SMS: Smartphone, Phone, Portal: MessageSquare } as const;
 
-function Card({ title, href, hrefLabel, children, className, icon: Icon }: { title: string; href?: string; hrefLabel?: string; children: React.ReactNode; className?: string; icon?: typeof Home }) {
+function Card({ title, href, hrefLabel, children, className, icon: Icon, action }: { title: string; href?: string; hrefLabel?: string; children: React.ReactNode; className?: string; icon?: typeof Home; action?: React.ReactNode }) {
   return (
     <section className={cn("rounded-lg border bg-card", className)}>
       <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <h3 className="flex items-center gap-1.5 text-[12.5px] font-semibold">{Icon && <Icon className="size-3.5 text-muted-foreground" />}{title}</h3>
+        {action}
         {href && <Link href={href} className="inline-flex items-center gap-0.5 text-[12px] text-primary hover:underline">{hrefLabel ?? "Open"}<ArrowRight className="size-3" /></Link>}
       </header>
       <div className="p-3">{children}</div>
@@ -98,7 +99,16 @@ export async function Resident360({ id, actor }: TabProps) {
   const dupIssue = issues.find((i) => i.rule_id === "residents.possible_duplicate");
   let merge: React.ReactNode = null;
   if (dupIssue) {
-    const ids: string[] = (() => { try { const e = JSON.parse(String(dupIssue.evidence)); return e.ids ?? [dupIssue.entity_id, JSON.parse(String(dupIssue.suggested_fix ?? "{}")).merge_into].filter(Boolean); } catch { return []; } })();
+    // Evidence names the pair as ids[], or duplicate_of; the fix as merge_into or params {keep, merge}.
+    const ids: string[] = (() => {
+      try {
+        const e = JSON.parse(String(dupIssue.evidence));
+        const f = JSON.parse(String(dupIssue.suggested_fix ?? "{}"));
+        return e.ids ?? [dupIssue.entity_id, e.duplicate_of, f.merge_into, f.params?.keep, f.params?.merge].filter(Boolean);
+      } catch {
+        return [];
+      }
+    })();
     const other = ids.find((x) => x !== id);
     const o = other ? await one(ctx, "SELECT * FROM {residents} WHERE id = ?", [other]) : null;
     if (o) {
@@ -131,18 +141,18 @@ export async function Resident360({ id, actor }: TabProps) {
       )}
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Card title="Delinquency risk" className={cn(band === "High" && "border-tone-danger/30")}>
+        <Card title="Delinquency risk" className={cn(band === "High" && "border-tone-danger/30")} action={score == null ? undefined : <AIBadge source="precomputed" model="risk score" size="xs" />}>
           {score == null ? <p className="text-[12.5px] text-muted-foreground">No score yet. Scores need three months of payment history.</p> : (
             <>
-              <div className="flex items-center gap-3">
-                <div className={cn("text-[28px] font-semibold leading-none tabular-nums", band === "High" ? "text-tone-danger" : band === "Medium" ? "text-tone-warning" : "text-tone-success")}>{score}</div>
-                <div className="text-[12px] leading-tight"><StatusBadge value={`${band} risk`} tone={band === "High" ? "danger" : band === "Medium" ? "warning" : "success"} /><div className="mt-1 text-muted-foreground">0–100, higher is riskier</div></div>
-                <AIBadge source="precomputed" model="risk model" className="ml-auto" />
+              <div className="flex items-baseline gap-2">
+                <span className={cn("text-[28px] font-semibold leading-none tabular-nums", band === "High" ? "text-tone-danger" : band === "Medium" ? "text-tone-warning" : "text-tone-success")}>{score}</span>
+                <span className="text-[12px] text-muted-foreground">/ 100</span>
+                <StatusBadge value={`${band} risk`} tone={band === "High" ? "danger" : band === "Medium" ? "warning" : "success"} className="ml-1" />
               </div>
               <ul className="mt-3 space-y-1 text-[12.5px]">
                 {drivers.map((d) => <li key={d.label} className="flex items-start gap-1.5"><span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", d.bad ? "bg-tone-danger" : "bg-tone-success")} />{d.label}</li>)}
               </ul>
-              <p className="mt-2 text-[11.5px] text-muted-foreground">Scored nightly from payment history. A person decides any action.</p>
+              <p className="mt-2 text-[11.5px] text-muted-foreground">Higher means more likely to fall behind. Scored nightly from payment history; a person decides any action.</p>
             </>
           )}
         </Card>
@@ -177,8 +187,8 @@ export async function Resident360({ id, actor }: TabProps) {
             <dl className="grid grid-cols-2 gap-3">
               <Fact label="Unit">#{String(lease.unit)} <StatusBadge value={lease.status} className="ml-1" /></Fact>
               <Fact label="Rent"><Money value={Number(lease.rent_cents)} cents style="whole" />{lease.market_rent_cents ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">mkt <Money value={Number(lease.market_rent_cents)} cents style="whole" /></span> : null}</Fact>
-              <Fact label="Term">{formatDate(String(lease.start_on), "always")} – {lease.end_on ? formatDate(String(lease.end_on), "always") : "open"}</Fact>
-              <Fact label="Ends in">{lease.days_to_end == null ? "—" : Number(lease.days_to_end) < 0 ? `${-Number(lease.days_to_end)} days ago` : `${lease.days_to_end} days`}</Fact>
+              <Fact label="Lease ends">{lease.end_on ? formatDate(String(lease.end_on), "always") : "Month-to-month"}</Fact>
+              <Fact label="Ends in"><span className={cn(lease.days_to_end != null && Number(lease.days_to_end) <= 60 && "text-tone-warning")}>{lease.days_to_end == null ? "—" : Number(lease.days_to_end) < 0 ? `${-Number(lease.days_to_end)} days ago` : `${lease.days_to_end} days`}</span></Fact>
               <Fact label="Renters insurance">{lease.insurance_status ? <StatusBadge value={lease.insurance_status} /> : <span className="text-tone-warning">None on file</span>}</Fact>
               <Fact label="Deposit"><Money value={Number(lease.deposit_cents)} cents style="whole" /></Fact>
             </dl>

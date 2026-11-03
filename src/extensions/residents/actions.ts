@@ -131,6 +131,7 @@ registerAction({
   entity: "residents",
   roles: [...OPS, "leasing_agent"],
   icon: Wand2,
+  when: (r) => normalizeContact({ first_name: String(r.first_name ?? ""), last_name: String(r.last_name ?? ""), email: String(r.email ?? ""), phone: String(r.phone ?? "") }).length > 0,
   help: { summary: "Moves a phone number out of the email field, formats phones as (555) 555-5555 and fixes name capitalisation.", article: "contact-normalization" },
   handler: async (ctx, row) => {
     const raw = await one(ctx, "SELECT first_name, last_name, email, phone FROM {residents} WHERE id = ?", [row.id]);
@@ -223,19 +224,19 @@ registerAction({
   roles: [...OPS, "maintenance_supervisor"],
   icon: Wrench,
   when: (r) => r.status === "New" || r.status === "Triaged",
-  input: z.strictObject({ priority: z.enum(["Emergency", "Urgent", "Normal", "Low"]).optional(), category: z.string().max(60).optional() }),
-  handler: async (ctx, row, input) => {
+  help: { summary: "Turns the request into a work order with the request's trade and urgency, and links the two.", article: "service-requests" },
+  handler: async (ctx, row) => {
     const sr = await one(ctx, "SELECT * FROM {service_requests} WHERE id = ?", [row.id]);
     if (!sr) return fail(404, "Request not found");
     const at = nowIso(ctx);
-    const priority = input.priority ?? (sr.urgency as string) ?? "Normal";
+    const priority = (sr.urgency as string) ?? "Normal";
     const hours = { Emergency: 4, Urgent: 24, Normal: 72, Low: 168 }[priority] ?? 72;
     const wo = `WO-${Math.floor(ctx.nowMs / 1000) % 1_000_000}`;
     await (await insertRow(ctx.db, ctx.ws, "work_orders", {
       id: wo, property_id: sr.property_id, unit_id: sr.unit_id ?? null, title: String(sr.body).split(/[.!?\n]/)[0].slice(0, 80), description: sr.body,
-      category: input.category ?? (sr.category as string) ?? "General", priority, status: "New", source: "Resident", opened_at: at, sla_due_at: new Date(ctx.nowMs + hours * 3_600_000).toISOString(),
+      category: (sr.category as string) ?? "General", priority, status: "New", source: "Resident", opened_at: at, sla_due_at: new Date(ctx.nowMs + hours * 3_600_000).toISOString(),
     })).run();
-    await overlayWrite(ctx.db, ctx.ws, "service_requests", String(row.id), { status: "Converted", work_order_id: wo, category: input.category ?? sr.category ?? "General", urgency: priority });
+    await overlayWrite(ctx.db, ctx.ws, "service_requests", String(row.id), { status: "Converted", work_order_id: wo, category: sr.category ?? "General", urgency: priority });
     return ok(`Work order ${wo} created`, `/app/maintenance/work-orders/${wo}`);
   },
 });
