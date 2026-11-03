@@ -83,6 +83,7 @@ registerAction({
       if (!v.coi || v.coi < AS_OF) return conflict(`${v.company}'s insurance certificate ${v.coi ? `expired on ${v.coi}` : "is missing"}. Request a current COI before dispatching.`);
       vendorName = v.company;
     }
+    if (input.assignee_id && !(await readRow(c.db, c.ws, "staff", input.assignee_id))) return { status: 404, error: "Technician not found" };
     const estimateCents = Math.round((input.estimate ?? Number(r.estimate ?? 0)) * 100);
     const pol = policyCheck(estimateCents, await policyFor(c.db, c.ws, String(r.property_id)));
     const status = pol.level === "owner" ? "On hold" : "Assigned";
@@ -487,8 +488,10 @@ registerAction({
   icon: KeyRound,
   input: z.strictObject({ holder_kind: z.enum(["staff", "vendor"]), holder_id: z.string().trim().min(1).max(40), work_order_id: z.string().max(40).optional() }),
   when: (r) => r.state === "In key box",
-  handler: async (c, r, input) =>
-    (await keyMove(c, r, "Checked out", { kind: input.holder_kind, id: input.holder_id }, "e.holder_id IS NULL", input.work_order_id)) ? ok(`${r.label} checked out.`) : conflict(`${r.label} is already checked out.`),
+  handler: async (c, r, input) => {
+    if (!(await readRow(c.db, c.ws, input.holder_kind === "staff" ? "staff" : "vendors", input.holder_id))) return { status: 404, error: "That person or vendor wasn't found" };
+    return (await keyMove(c, r, "Checked out", { kind: input.holder_kind, id: input.holder_id }, "e.holder_id IS NULL", input.work_order_id)) ? ok(`${r.label} checked out.`) : conflict(`${r.label} is already checked out.`);
+  },
 });
 
 registerAction({
