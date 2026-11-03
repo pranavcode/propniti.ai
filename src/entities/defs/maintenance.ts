@@ -161,7 +161,8 @@ registerEntity({
     w9_on_file: { type: "bool", label: "W-9 on file", facet: true, list: { default: false } },
     is_1099: { type: "bool", label: "1099 vendor", facet: true },
     tin_last4: { type: "text", label: "TIN (last 4)", hiddenFor: ["leasing_agent", "maintenance_supervisor", "property_manager", "vendor"], editable: ["accountant"] },
-    bank_last4: { type: "text", label: "Bank account (last 4)", hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: ["accountant"],
+    // Read-only here (computed from the column): bank changes go only through vendors.change_bank_account.
+    bank_last4: { type: "text", label: "Bank account (last 4)", hiddenFor: ["leasing_agent", "maintenance_supervisor"], sql: "vendors.bank_last4",
       help: { summary: "Only accountants can change bank details. A change holds payments until someone verifies it by phone.", article: "vendor-bank-change-fraud-hold" } },
     bank_changed_at: { type: "datetime", label: "Bank details changed", sortable: true, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [] },
     open_issues: issuesField("vendors"),
@@ -187,6 +188,7 @@ registerEntity({
       { key: "overview", label: "Overview", fields: ["company", "trade", "status", "contact_name", "email", "phone", "metros", "rating", "w9_on_file", "is_1099", "tin_last4", "bank_last4", "bank_changed_at"] },
       { key: "work_orders", label: "Jobs", relation: "work_orders" },
       { key: "bills", label: "Bills", relation: "bills", roles: ["principal", "regional_manager", "property_manager", "accountant"] },
+      { custom: "payables.vendor_finance" },
       { key: "cois", label: "Insurance", relation: "cois" },
     ],
     related: ["cois"],

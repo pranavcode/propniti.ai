@@ -33,3 +33,13 @@ describe("work order write permissions", () => {
     expect(can("resident", "work_orders.approve_and_pay", "work_orders")).toBe(false);
   });
 });
+
+describe("vendor bank details", () => {
+  it("can't be set or changed through generic writes by any role", () => {
+    const def = getEntity("vendors")!;
+    for (const role of ["accountant", "principal", "maintenance_supervisor", "vendor"] as const) {
+      expect(Object.keys(writeSchema(def, role, "update").shape)).not.toContain("bank_last4");
+      expect(Object.keys(writeSchema(def, role, "create").shape)).not.toContain("bank_last4");
+    }
+  });
+});
