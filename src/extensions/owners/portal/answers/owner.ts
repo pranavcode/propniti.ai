@@ -34,7 +34,7 @@ async function distribution(c: PortalCtx, trace: Lookup[]): Promise<Answer> {
   trace.push({ label: "Statements compared", detail: `${monthLabel(now.period)} and ${monthLabel(before.period)}, rebuilt from the trust ledger` });
   const delta = now.amount_cents - before.amount_cents;
   const drivers = [
-    { label: "rent collected", d: (now.income_cents - before.income_cents) },
+    { label: "income collected (after any returned payments)", d: (now.income_cents - before.income_cents) },
     { label: "repairs and vendor payments", d: -(now.expense_cents - before.expense_cents) },
     { label: "the management fee", d: -(now.fee_cents - before.fee_cents) },
     { label: "the operating reserve", d: -(now.reserve_cents - before.reserve_cents) },

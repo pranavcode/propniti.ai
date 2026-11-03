@@ -80,7 +80,7 @@ registerMetric({
     const r = await ctx.db
       .prepare(`WITH cut AS MATERIALIZED (SELECT e.id, coalesce((SELECT max(y.seq) FROM ${t} y WHERE y.owner_entity_id = e.id AND y.kind = 'Owner payout' AND y.status <> 'Returned' AND y.key NOT LIKE 'owner-adj:%'), 0) AS s
           FROM ${effective("owner_entities", ctx.ws)} e WHERE 1 = 1${s.sql})
-        SELECT coalesce(sum(CASE WHEN x.kind IN ('Rent', 'Other receipt') THEN CASE WHEN x.status = 'Cleared' THEN x.amount_cents ELSE 0 END WHEN x.kind = 'Management fee' THEN CASE WHEN x.status = 'Cleared' THEN -x.amount_cents ELSE 0 END WHEN x.kind = 'Vendor payout' THEN -x.amount_cents ELSE 0 END), 0) AS owed
+        SELECT coalesce(sum(CASE WHEN x.kind IN ('Rent', 'Other receipt') THEN CASE WHEN x.status = 'Cleared' THEN x.amount_cents ELSE 0 END WHEN x.kind = 'Management fee' THEN CASE WHEN x.status = 'Cleared' THEN -x.amount_cents ELSE 0 END WHEN x.kind IN ('Vendor payout', 'Returned payment') THEN -x.amount_cents ELSE 0 END), 0) AS owed
         FROM cut CROSS JOIN ${t} x
         WHERE x.owner_entity_id = cut.id AND x.seq > cut.s AND x.bank_account_id = 'ba-' || cut.id || '-trust' AND x.status <> 'Returned' AND x.kind <> 'Owner payout'`)
       .bind(...s.binds)

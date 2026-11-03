@@ -11,14 +11,14 @@ import { effective } from "@/server/query";
 export type Ctx = { db: Db; ws: string | null };
 export type Period = { period: string; closed: boolean; distributionId: string | null; amount_cents: number | null; paid_on: string | null; status: string | null; gap_cents: number };
 export type Entity = { id: string; name: string; owner_id: string; owner_name: string; state: string; reserve_cents: number; agreement_signed_on: string | null };
-export type PropertyRow = { property_id: string; name: string; rent_cents: number; other_cents: number; vendor_cents: number; fee_cents: number; deposits: number };
+export type PropertyRow = { property_id: string; name: string; rent_cents: number; other_cents: number; returned_cents: number; returns: number; vendor_cents: number; fee_cents: number; deposits: number };
 export type Payee = { vendor_id: string; name: string; count: number; amount_cents: number; property: string };
-export type LineKey = "rent" | "other" | "vendor" | "fee" | "reserve" | "distribution" | "gap";
+export type LineKey = "rent" | "other" | "returned" | "vendor" | "fee" | "reserve" | "distribution" | "gap";
 export type Line = { key: LineKey; label: string; amount_cents: number; sign: 1 | -1; detail?: string; children?: { label: string; amount_cents: number; href?: string }[] };
 export type Statement = {
   entity: Entity; period: string; closed: boolean; distributionId: string | null;
   range: { fromSeq: number; toSeq: number | null; fromId: string | null; toId: string | null };
-  totals: { rent_cents: number; other_cents: number; vendor_cents: number; fee_cents: number; pending_in_cents: number; items: number };
+  totals: { rent_cents: number; other_cents: number; returned_cents: number; income_cents: number; vendor_cents: number; fee_cents: number; pending_in_cents: number; items: number };
   distribution: { id: string; amount_cents: number; reserve_cents: number; income_cents: number; expense_cents: number; fee_cents: number; paid_on: string; transfer_id: string; status: string | null } | null;
   net_cents: number; gap_cents: number; properties: PropertyRow[]; payees: Payee[]; lines: Line[];
   issue: { id: string; rule_id: string; status: string } | null;
@@ -96,11 +96,13 @@ async function aggregate(c: Ctx, entityId: string, fromSeq: number, toSeq: numbe
       .prepare(`SELECT t.property_id, p.name,
           coalesce(sum(CASE WHEN t.kind = 'Rent' AND t.status = 'Cleared' THEN t.amount_cents END), 0) AS rent_cents,
           coalesce(sum(CASE WHEN t.kind = 'Other receipt' AND t.status = 'Cleared' THEN t.amount_cents END), 0) AS other_cents,
+          coalesce(sum(CASE WHEN t.kind = 'Returned payment' THEN t.amount_cents END), 0) AS returned_cents,
+          sum(t.kind = 'Returned payment') AS returns,
           coalesce(sum(CASE WHEN t.kind = 'Vendor payout' THEN t.amount_cents END), 0) AS vendor_cents,
           coalesce(sum(CASE WHEN t.kind = 'Management fee' AND t.status = 'Cleared' THEN t.amount_cents END), 0) AS fee_cents,
           coalesce(sum(CASE WHEN t.kind IN ('Rent', 'Other receipt') AND t.status = 'Pending' THEN t.amount_cents END), 0) AS pending_cents,
           sum(t.kind = 'Rent') AS deposits, count(*) AS items
-        FROM ${ITEMS(c.ws, `LEFT JOIN ${effective("properties", c.ws)} p ON p.id = t.property_id`)} AND t.kind IN ('Rent', 'Other receipt', 'Vendor payout', 'Management fee')
+        FROM ${ITEMS(c.ws, `LEFT JOIN ${effective("properties", c.ws)} p ON p.id = t.property_id`)} AND t.kind IN ('Rent', 'Other receipt', 'Returned payment', 'Vendor payout', 'Management fee')
         GROUP BY t.property_id ORDER BY rent_cents DESC`)
       .bind(entityId, fromSeq, toSeq)
       .all<PropertyRow & { pending_cents: number; items: number }>(),
@@ -112,9 +114,9 @@ async function aggregate(c: Ctx, entityId: string, fromSeq: number, toSeq: numbe
   ]);
   const sum = (k: keyof PropertyRow | "pending_cents" | "items") => props.results.reduce((a, r) => a + Number((r as Record<string, unknown>)[k] ?? 0), 0);
   return {
-    properties: props.results.map((r) => ({ property_id: r.property_id, name: r.name, rent_cents: r.rent_cents, other_cents: r.other_cents, vendor_cents: r.vendor_cents, fee_cents: r.fee_cents, deposits: r.deposits })),
+    properties: props.results.map((r) => ({ property_id: r.property_id, name: r.name, rent_cents: r.rent_cents, other_cents: r.other_cents, returned_cents: r.returned_cents, returns: r.returns, vendor_cents: r.vendor_cents, fee_cents: r.fee_cents, deposits: r.deposits })),
     payees: payees.results,
-    totals: { rent_cents: sum("rent_cents"), other_cents: sum("other_cents"), vendor_cents: sum("vendor_cents"), fee_cents: sum("fee_cents"), pending_in_cents: sum("pending_cents"), items: sum("items") },
+    totals: { rent_cents: sum("rent_cents"), other_cents: sum("other_cents"), returned_cents: sum("returned_cents"), income_cents: sum("rent_cents") + sum("other_cents") - sum("returned_cents"), vendor_cents: sum("vendor_cents"), fee_cents: sum("fee_cents"), pending_in_cents: sum("pending_cents"), items: sum("items") },
   };
 }
 
@@ -126,7 +128,7 @@ export async function statementOf(c: Ctx, entityId: string, period: string): Pro
   if (!closed && period !== (await periodsOf(c, entityId))[0].period) return null;
   const agg = await aggregate(c, entityId, r.fromSeq, r.toSeq);
   const { totals } = agg;
-  const net = totals.rent_cents + totals.other_cents - totals.vendor_cents - totals.fee_cents;
+  const net = totals.income_cents - totals.vendor_cents - totals.fee_cents;
   const d = r.dist;
   // A correction (Lane A's payOwnerAdjustment, key owner-adj:<distribution>) settles the gap.
   const adj = d ? await c.db.prepare(`SELECT t.amount_cents, t.created FROM ${effective("transfers", c.ws)} t WHERE t.key = 'owner-adj:' || ? AND t.status <> 'Returned'`).bind(d.id).first<{ amount_cents: number; created: string }>() : null;
@@ -134,10 +136,12 @@ export async function statementOf(c: Ctx, entityId: string, period: string): Pro
   const issue = d
     ? await c.db.prepare(`SELECT id, rule_id, status FROM ${effective("data_issues", c.ws)} i WHERE i.entity_type = 'owner_distributions' AND i.entity_id = ? ORDER BY i.detected_at DESC LIMIT 1`).bind(d.id).first<{ id: string; rule_id: string; status: string }>()
     : null;
-  const byProp = (k: "rent_cents" | "vendor_cents" | "other_cents") => agg.properties.filter((p) => p[k] > 0).map((p) => ({ label: p.name, amount_cents: p[k], href: `/app/properties/${p.property_id}` }));
+  const byProp = (k: "rent_cents" | "vendor_cents" | "other_cents" | "returned_cents") => agg.properties.filter((p) => p[k] > 0).map((p) => ({ label: p.name, amount_cents: p[k], href: `/app/properties/${p.property_id}` }));
   const lines: Line[] = [
     { key: "rent", label: "Rent collected", amount_cents: totals.rent_cents, sign: 1, detail: `${agg.properties.reduce((a, p) => a + p.deposits, 0)} deposits into the operating trust`, children: byProp("rent_cents") },
     ...(totals.other_cents ? [{ key: "other" as const, label: "Other income", amount_cents: totals.other_cents, sign: 1 as const, detail: "Fees, parking, storage and utility recoveries", children: byProp("other_cents") }] : []),
+    // A bounced payment comes back out of trust, so it counts against income (as Lane A's ownerStatement does).
+    ...(totals.returned_cents ? [{ key: "returned" as const, label: "Returned payments", amount_cents: totals.returned_cents, sign: -1 as const, detail: "Rent the bank took back (NSF or a returned ACH)", children: byProp("returned_cents") }] : []),
     { key: "vendor", label: "Repairs and vendor payments", amount_cents: totals.vendor_cents, sign: -1, detail: `${agg.payees.reduce((a, p) => a + p.count, 0) || "No"} vendor payments`, children: byProp("vendor_cents") },
     { key: "fee", label: `Management fee (${Math.round(MANAGEMENT_FEE_RATE * 100)}%)`, amount_cents: totals.fee_cents, sign: -1, detail: "Charged on cleared rent and other income" },
   ];
@@ -209,6 +213,12 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
       text += change(l.amount_cents, p);
       if (deltas[0] && Math.abs(deltas[0].d) >= 100 && Math.abs(l.amount_cents - p) >= 100) text += ` The biggest change was at ${deltas[0].name} (${deltas[0].d > 0 ? "+" : ""}${usd(deltas[0].d)}).`;
     }
+  } else if (line === "returned") {
+    const props = st.properties.filter((p) => p.returned_cents > 0).sort((a, b) => b.returned_cents - a.returned_cents);
+    const n = props.reduce((a, p) => a + p.returns, 0);
+    facts.returns = n;
+    trace.push({ label: "Returned payments", detail: props.map((p) => `${p.name} ${usd(p.returned_cents)} (${p.returns})`).join("; "), href: href(`/app/receivables/payments?f.nsf=true&f.property_id=${props.map((p) => p.property_id).join(",")}`) });
+    text = `${n} resident payment${n === 1 ? "" : "s"} totaling ${usd(l.amount_cents)} bounced (NSF or a returned ACH), so the bank took the money back out of the trust account. It comes off this statement's income${props[0] ? `; the largest was at ${props[0].name} (${usd(props[0].returned_cents)})` : ""}. The residents owe that rent again, and the management fee charged on those payments went back to the trust account.`;
   } else if (line === "vendor") {
     trace.push({ label: "Vendor payouts by payee", detail: st.payees.map((p) => `${p.name} ${usd(p.amount_cents)} (${p.count})`).join("; ") || "None", href: href(`/app/payables/bills?f.property_id=${st.properties.map((p) => p.property_id).join(",")}`) });
     const n = st.payees.reduce((a, p) => a + p.count, 0);
@@ -246,7 +256,7 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
       text += ` ${usd(d.amount_cents)} was paid to ${st.entity.owner_name} on ${d.paid_on} by ACH.`;
       if (prior?.distribution) text += change(d.amount_cents, prior.distribution.amount_cents).replace("the month before", `${monthLabel(prior.period)}'s distribution`);
     } else {
-      text = `So far this month: ${usd(st.totals.rent_cents + st.totals.other_cents)} of income has cleared, less ${usd(st.totals.vendor_cents)} of vendor payments and ${usd(st.totals.fee_cents)} of fees, leaving ${usd(st.net_cents)} to distribute.${st.totals.pending_in_cents ? ` Another ${usd(st.totals.pending_in_cents)} is still clearing.` : ""} The statement closes when the distribution is sent.`;
+      text = `So far this month: ${usd(st.totals.income_cents)} of income has cleared, less ${usd(st.totals.vendor_cents)} of vendor payments and ${usd(st.totals.fee_cents)} of fees, leaving ${usd(st.net_cents)} to distribute.${st.totals.pending_in_cents ? ` Another ${usd(st.totals.pending_in_cents)} is still clearing.` : ""} The statement closes when the distribution is sent.`;
     }
   }
   return { line, label: l.label, text, facts, trace };

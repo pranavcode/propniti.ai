@@ -54,7 +54,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
 
       <dl className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-4">
         {[
-          ["Income", st.totals.rent_cents + st.totals.other_cents],
+          ["Income", st.totals.income_cents],
           ["Expenses", st.totals.vendor_cents],
           ["Management fee", st.totals.fee_cents],
           [st.closed ? "Distributed" : "Available now", payout?.amount_cents ?? 0],

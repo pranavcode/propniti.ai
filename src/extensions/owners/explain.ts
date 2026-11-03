@@ -17,7 +17,7 @@ export type ExplainReply = Explanation & { source: "live" | "rules"; model?: str
 const Query = z.object({
   entity: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/),
   period: z.string().regex(/^\d{4}-\d{2}$/),
-  line: z.enum(["rent", "other", "vendor", "fee", "reserve", "distribution", "gap"]),
+  line: z.enum(["rent", "other", "returned", "vendor", "fee", "reserve", "distribution", "gap"]),
 });
 
 const amounts = (s: string) => [...s.matchAll(/\$[\d,]+(?:\.\d\d)?/g)].map((m) => m[0].replace(/\.00$/, ""));
