@@ -146,7 +146,7 @@ registerEntity({
     savedViews: [{ key: "open", label: "Open", filters: { status: "Open" }, sort: ["unmatched", "desc"] }],
   },
   detail: {
-    facts: ["status", "period", "statement_balance", "book_balance", "difference", "suggested", "unmatched"],
+    facts: ["status", "period", "statement_balance", "book_balance", "difference", "matched", "suggested", "unmatched"],
     tabs: [{ custom: "accounting.reconcile" }, { key: "overview", label: "Details", fields: ["bank_account_id", "period", "status", "statement_balance", "book_balance", "difference", "matched", "suggested", "unmatched", "completed_by", "completed_at"] }],
     related: ["account"],
   },
@@ -306,7 +306,7 @@ registerEntity({
     footer: [{ field: "budget", fn: "sum", label: "Budget" }, { field: "spent", fn: "sum", label: "Spent" }],
   },
   detail: {
-    facts: ["status", "budget", "spent", "pct_spent", "over_budget", "property_id", "target_on", "vendor_id"],
+    facts: ["status", "budget", "spent", "pct_spent", "over_budget", "property_id", "start_on", "target_on", "vendor_id"],
     tabs: [{ custom: "accounting.capex_milestones" }, { key: "overview", label: "Details", fields: ["name", "property_id", "category", "status", "vendor_id", "budget", "spent", "start_on", "target_on"] }],
     related: ["property", "vendor"],
   },

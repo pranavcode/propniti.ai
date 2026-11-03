@@ -95,7 +95,8 @@ registerAction({
   entity: "bank_reconciliations",
   roles: RECON,
   icon: BadgeCheck,
-  when: (r: Row) => ["Open", "Balanced"].includes(String(r.status)),
+  // Shown only when the month can close; the SQL guard in the handler still decides.
+  when: (r: Row) => ["Open", "Balanced"].includes(String(r.status)) && Number(r.difference) === 0 && Number(r.unmatched) === 0 && Number(r.suggested) === 0,
   confirm: { title: "Approve this reconciliation?", body: "The month is closed for this account. The statement and book balances must agree and every statement line must be matched." },
   handler: async (ctx, row) => {
     const { db, ws } = ctx;
