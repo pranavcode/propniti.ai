@@ -226,14 +226,14 @@ registerEntity({
     members: { type: "number", label: "Members", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {residents} r WHERE r.household_id = households.id)" },
     lease_status: { type: "text", label: "Lease status", list: { default: true }, sql: "(SELECT l.status FROM {leases} l WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
     balance: { type: "money", label: "Balance", sortable: true, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"],
-      sql: "(SELECT coalesce(sum(c.amount_cents), 0) FROM {charges} c WHERE c.household_id = households.id) - (SELECT coalesce(sum(p.amount_cents), 0) FROM {payments} p WHERE p.household_id = households.id AND p.nsf = 0) - (SELECT coalesce(sum(cr.amount_cents), 0) FROM {credits} cr JOIN {leases} l ON l.id = cr.lease_id WHERE l.household_id = households.id)" },
+      sql: "(SELECT coalesce(sum(c.amount_cents), 0) FROM {charges} c WHERE c.household_id = households.id) - (SELECT coalesce(sum(p.amount_cents), 0) FROM {payments} p WHERE p.lease_id IN (SELECT l.id FROM {leases} l WHERE l.household_id = households.id) AND p.nsf = 0) - (SELECT coalesce(sum(cr.amount_cents), 0) FROM {credits} cr WHERE cr.lease_id IN (SELECT l.id FROM {leases} l WHERE l.household_id = households.id))" },
   },
   relations: [
     { name: "property", entity: "properties", fk: "property_id", kind: "one" },
     { name: "residents", label: "Members", entity: "residents", fk: "household_id", kind: "many" },
     { name: "leases", entity: "leases", fk: "household_id", kind: "many" },
   ],
-  list: { defaultSort: ["name", "asc"], footer: [{ field: "balance", fn: "sum", label: "Balance" }] },
+  list: { defaultSort: ["name", "asc"] },
   detail: {
     facts: ["property_id", "unit", "members", "lease_status", "balance"],
     tabs: [{ key: "residents", label: "Members", relation: "residents" }, { key: "leases", label: "Leases", relation: "leases" }],
