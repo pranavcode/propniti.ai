@@ -14,7 +14,7 @@ export async function invoiceInputs(db: Db, ws: string | null, woId: string) {
   const [po, lines, sub, photos] = await Promise.all([
     db.prepare(`SELECT p.id, p.number, p.total_cents, p.status FROM ${wsEffective("purchase_orders")} p WHERE p.work_order_id = ?2 ORDER BY p.issued_on DESC LIMIT 1`).bind(w, woId).first<{ id: string; number: string; total_cents: number; status: string }>(),
     all<Line & { po_id: string }>(db, `SELECT l.po_id, l.description, l.amount_cents FROM ${wsEffective("po_lines")} l WHERE l.po_id IN (SELECT p.id FROM ${wsEffective("purchase_orders")} p WHERE p.work_order_id = ?2) ORDER BY l.id`, [w, woId]),
-    db.prepare(`SELECT e.detail, e.at, e.actor_kind FROM ${wsEffective("wo_events")} e WHERE e.work_order_id = ?2 AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1`).bind(w, woId).first<{ detail: string; at: string; actor_kind: string }>(),
+    db.prepare(`SELECT e.detail, e.at, e.actor_kind FROM ${wsEffective("wo_events")} e WHERE e.work_order_id = ?2 AND e.kind = 'Submission' ORDER BY json_extract(e.detail, '$.lines') IS NULL, e.at DESC, e.seq DESC LIMIT 1`).bind(w, woId).first<{ detail: string; at: string; actor_kind: string }>(),
     db.prepare(`SELECT count(*) AS n FROM ${wsEffective("photos")} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ?2`).bind(w, woId).first<{ n: number }>(),
   ]);
   const d = sub ? parse<{ invoice_number?: string; lines?: Line[]; total_cents?: number; source?: string; read_confidence?: number | null }>(sub.detail, {}) : null;
@@ -109,7 +109,7 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
        ORDER BY CASE w.priority WHEN 'Emergency' THEN 0 WHEN 'Urgent' THEN 1 WHEN 'Normal' THEN 2 ELSE 3 END, w.opened_at LIMIT 12`, s.binds),
     all<Row>(db,
       `SELECT w.id, w.title, p.name AS property, v.company AS vendor, w.vendor_id,
-         (SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events", ws)} e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC LIMIT 1) AS invoice_cents,
+         (SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events", ws)} e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY json_extract(e.detail, '$.lines') IS NULL, e.at DESC LIMIT 1) AS invoice_cents,
          (SELECT po.total_cents FROM ${effective("purchase_orders", ws)} po WHERE po.work_order_id = w.id LIMIT 1) AS po_cents
        FROM ${wo} w JOIN ${effective("properties", ws)} p ON p.id = w.property_id LEFT JOIN ${effective("vendors", ws)} v ON v.id = w.vendor_id
        WHERE w.status = 'Submitted'${s.sql} ORDER BY w.opened_at LIMIT 8`, s.binds),

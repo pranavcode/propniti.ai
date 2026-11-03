@@ -63,7 +63,7 @@ registerEntity({
       sql: "(SELECT CASE WHEN sum(ph.check_result = 'Mismatch') > 0 THEN 'Mismatch' WHEN sum(ph.check_result = 'Unclear') > 0 THEN 'Unclear' WHEN count(*) > 0 THEN 'Matches' END FROM {photos} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = work_orders.id)",
       help: { summary: "The worst photo-check result on this work order: does each photo show what the job describes?", article: "photo-checks" } },
     invoice_total: { type: "money", label: "Invoice", list: { default: false, align: "right" }, hiddenFor: ["leasing_agent", "resident"],
-      sql: "(SELECT json_extract(e.detail, '$.total_cents') FROM {wo_events} e WHERE e.work_order_id = work_orders.id AND e.kind = 'Submission' ORDER BY e.at DESC LIMIT 1)" },
+      sql: "(SELECT json_extract(e.detail, '$.total_cents') FROM {wo_events} e WHERE e.work_order_id = work_orders.id AND e.kind = 'Submission' ORDER BY json_extract(e.detail, '$.lines') IS NULL, e.at DESC LIMIT 1)" },
     po_number: { type: "text", label: "PO", list: { default: false }, sql: "(SELECT po.number FROM {purchase_orders} po WHERE po.work_order_id = work_orders.id LIMIT 1)" },
     open_issues: issuesField("work_orders"),
   },
