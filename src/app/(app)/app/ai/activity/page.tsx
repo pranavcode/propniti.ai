@@ -7,6 +7,7 @@ import { AIBadge } from "@/components/app/ai";
 import { cn } from "@/lib/utils";
 import { sql } from "@/ai/data";
 import { AGENT_LABEL } from "@/ai/ui/client";
+import { PERMISSIONS } from "@/auth/personas";
 import { pageData } from "@/ai/ui/server";
 import { runsPage } from "@/ai/views";
 
@@ -24,8 +25,12 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const page = Math.max(1, Number(sp.page) || 1);
   const qs = (o: Record<string, string | number | undefined>) => "?" + new URLSearchParams(Object.entries({ ...sp, ...o }).filter(([, v]) => v != null && v !== "").map(([k, v]) => [k, String(v)])).toString();
   const runs = tab === "runs" ? await runsPage(data, { agent: sp.agent, status: sp.status, trigger: sp.trigger, page, size: 50 }) : null;
+  // Property rows follow the persona's scope; org-level rows (no property) need settings access.
+  const ids = data.actor.propertyIds;
+  const orgRows = (PERMISSIONS[data.actor.role].settings ?? "none") !== "none" ? "audit.property_id IS NULL OR " : "";
+  const auditScope = ids === "all" ? { sql: orgRows ? "1 = 1" : "audit.property_id IS NOT NULL", params: [] as unknown[] } : { sql: `(${orgRows}audit.property_id IN (SELECT value FROM json_each(?)))`, params: [JSON.stringify(ids)] as unknown[] };
   const audit = tab === "audit"
-    ? await sql<Record<string, unknown>>(data, `SELECT at, actor, role, agent, model, action, entity_type, entity_id, detail FROM audit WHERE workspace_id IN (?, 'base') AND (agent IS NOT NULL OR action LIKE '%approved%' OR action LIKE '%rejected%' OR action LIKE 'agent.%' OR action LIKE 'data_issue.%' OR action LIKE 'approval_policy.%') ORDER BY at DESC LIMIT 50 OFFSET ${(page - 1) * 50}`, [data.ws])
+    ? await sql<Record<string, unknown>>(data, `SELECT at, actor, role, agent, model, action, entity_type, entity_id, detail FROM audit WHERE workspace_id IN (?, 'base') AND ${auditScope.sql} AND (agent IS NOT NULL OR action LIKE '%approved%' OR action LIKE '%rejected%' OR action LIKE 'agent.%' OR action LIKE 'data_issue.%' OR action LIKE 'approval_policy.%') ORDER BY at DESC LIMIT 50 OFFSET ${(page - 1) * 50}`, [data.ws, ...auditScope.params])
     : [];
   const filters = [["", "All agents"], ...Object.entries(AGENT_LABEL)];
   return (

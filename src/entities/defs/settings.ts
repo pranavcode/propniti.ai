@@ -228,7 +228,9 @@ registerEntity({
   route: "/app/settings/audit",
   titleField: "detail",
   subtitle: (r) => [r.actor, r.action].filter(Boolean).join(" · "),
-  scopePath: null,
+  // Rows tied to a property follow the reader's property scope. Org-level rows (settings
+  // changes, no property) only reach region-scoped readers through the settings pages.
+  scopePath: "audit.property_id",
   fields: {
     at: { type: "datetime", label: "When", sortable: true, list: { default: true, width: 150 } },
     actor: { type: "text", label: "Who", facet: true, search: true, sortable: true, list: { default: true } },

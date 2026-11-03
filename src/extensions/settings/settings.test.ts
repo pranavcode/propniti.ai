@@ -11,6 +11,8 @@ import * as invite from "@/app/(app)/app/settings/users/invite/route";
 import * as company from "@/app/(app)/app/settings/company/save/route";
 import * as prefs from "@/app/(app)/app/settings/notifications/prefs/route";
 import * as connect from "@/app/(app)/app/settings/integrations/connect/route";
+import * as listRoute from "@/app/api/e/[entity]/route";
+import * as recordRoute from "@/app/api/e/[entity]/[id]/route";
 
 // Settings writes on a fresh in-memory database: state-rule amendments keep history, policy
 // edits are audited with before/after, and the settings POST routes are guarded and idempotent.
@@ -109,5 +111,31 @@ describe("settings routes", () => {
     expect(res.status).toBe(200);
     const step = await db().prepare("SELECT status FROM onboarding_progress WHERE workspace_id = ? AND step = 'bank'").bind(WS).first<{ status: string }>();
     expect(step!.status).toBe("Todo");
+  });
+});
+
+describe("audit scope", () => {
+  const get = (path: string, persona: string) => new Request(`http://${host}${path}`, { headers: { host, cookie: `pn_as=${persona}; pn_ws=${WS}` } });
+  const p = <T extends Record<string, string>>(v: T) => ({ params: Promise.resolve(v) });
+
+  beforeAll(async () => {
+    await db().prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, entity_type, entity_id, property_id, detail, after_json) VALUES
+      ('base', 'au-tx', '2026-11-01T10:00:00Z', 'Grace Kim', 'bills.approve', 'bills', 'BILL-1', 'p01', 'Approved $2,400 bill', '{"amount_cents":240000}'),
+      ('base', 'au-ga', '2026-11-01T11:00:00Z', 'Grace Kim', 'bills.approve', 'bills', 'BILL-2', 'p05', 'Approved $9,100 bill for Inman Park Flats', '{"amount_cents":910000}')`).run();
+  });
+
+  it("keeps a Texas regional manager out of Georgia audit rows in the list and the API", async () => {
+    const res = await list(await wctx("priya"), "audit", { size: 100 });
+    const ids = res.rows.map((r) => r.id);
+    expect(ids).toContain("au-tx");
+    expect(ids).not.toContain("au-ga");
+    const body = await (await listRoute.GET(get("/api/e/audit?f.property_id=p05", "priya"), p({ entity: "audit" }))).json();
+    expect(body.total).toBe(0);
+    expect((await recordRoute.GET(get("/api/e/audit/au-ga", "priya"), p({ entity: "audit", id: "au-ga" }))).status).toBe(404);
+  });
+
+  it("still shows every row to org-wide readers", async () => {
+    const ids = (await list(await wctx("daniel"), "audit", { size: 100 })).rows.map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining(["au-tx", "au-ga"]));
   });
 });
