@@ -4,6 +4,7 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { list } from "@/server/query";
+import { cn } from "@/lib/utils";
 import { AGENT_LABEL } from "@/ai/ui/client";
 import { NoAccess, settingsSession } from "@/extensions/settings/pages";
 import { canEditSettings, canSettings } from "@/extensions/settings/nav";
@@ -45,7 +46,7 @@ export default async function AutomationsPage() {
               </thead>
               <tbody>
                 {all.map((a) => (
-                  <tr key={a.id} className={`border-t ${a.enabled ? "" : "text-muted-foreground"}`}>
+                  <tr key={a.id} className={cn("border-t", a.enabled ? "" : "text-muted-foreground")}>
                     <td className="px-3 py-2"><AutomationSwitch id={a.id} name={a.name} enabled={a.enabled} canEdit={canEdit} /></td>
                     <td className="px-3 py-2">
                       <Link href={`/app/settings/automations/${encodeURIComponent(a.id)}`} className="font-medium text-foreground hover:text-primary hover:underline">{a.name}</Link>

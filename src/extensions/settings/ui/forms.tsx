@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import { Loader2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiJson } from "@/components/app/forms/api";
 import { useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
@@ -41,13 +42,13 @@ function useSave() {
 
 function Row({ label, hint, children, htmlFor }: { label: string; hint?: string; children: React.ReactNode; htmlFor?: string }) {
   return (
-    <div className="grid gap-1.5 sm:grid-cols-[200px_1fr] sm:items-start sm:gap-6">
-      <div className="pt-1.5">
-        <Label htmlFor={htmlFor} className="text-[13px]">{label}</Label>
-        {hint && <p className="mt-0.5 text-[12px] text-muted-foreground">{hint}</p>}
-      </div>
+    <Field orientation="responsive" className="sm:grid sm:grid-cols-[200px_1fr] sm:items-start sm:gap-6">
+      <FieldContent>
+        <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
+        {hint && <FieldDescription>{hint}</FieldDescription>}
+      </FieldContent>
       <div className="max-w-md">{children}</div>
-    </div>
+    </Field>
   );
 }
 
@@ -55,7 +56,7 @@ function Pick({ id, value, options, onChange, disabled }: { id?: string; value: 
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger id={id} className="w-full"><SelectValue /></SelectTrigger>
-      <SelectContent>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+      <SelectContent><SelectGroup>{options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectGroup></SelectContent>
     </Select>
   );
 }
@@ -94,7 +95,7 @@ export function CompanyForm({ initial, canEdit }: { initial: CompanyProfile; can
       </Row>
       {canEdit && (
         <div className="flex items-center gap-2 border-t pt-4 sm:pl-[224px]">
-          <Button type="submit" size="sm" disabled={busy || !dirty}>{busy && <Loader2 className="animate-spin" />}Save changes</Button>
+          <Button type="submit" size="sm" disabled={busy || !dirty}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}Save changes</Button>
           {dirty && <Button type="button" size="sm" variant="ghost" onClick={() => setV(initial)}>Discard</Button>}
         </div>
       )}
@@ -113,7 +114,7 @@ export function IntegrationToggle({ k, name, connected, canEdit }: { k: string; 
   return (
     <Button size="sm" variant={connected ? "outline" : "default"} disabled={busy} aria-label={`${connected ? "Disconnect" : "Connect"} ${name}`}
       onClick={() => void save("POST", "/app/settings/integrations/connect", { key: k, connect: !connected }, () => { if (k === "plaid") setup.setDone("bank", !connected); })}>
-      {busy && <Loader2 className="animate-spin" />}{connected ? "Disconnect" : "Connect"}
+      {busy && <Loader2 data-icon="inline-start" className="animate-spin" />}{connected ? "Disconnect" : "Connect"}
     </Button>
   );
 }
@@ -195,7 +196,7 @@ export function InviteUser({ roles, regions, properties }: { roles: { value: str
   };
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}><Plus />Invite user</Button>
+      <Button size="sm" onClick={() => setOpen(true)}><Plus data-icon="inline-start" />Invite user</Button>
       <Dialog open={open} onOpenChange={close}>
         <DialogContent className="sm:max-w-lg">
           <form onSubmit={submit} className="flex flex-col gap-4">
@@ -203,34 +204,34 @@ export function InviteUser({ roles, regions, properties }: { roles: { value: str
               <DialogTitle>Invite a user</DialogTitle>
               <DialogDescription>They get an email to set a password. Their role decides what they can do; the scope decides which properties.</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5"><Label htmlFor="inv-name">Full name</Label><Input id="inv-name" name="name" autoComplete="off" required value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label htmlFor="inv-email">Work email</Label><Input id="inv-email" name="email" type="email" autoComplete="off" spellCheck={false} required value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label htmlFor="inv-title">Title</Label><Input id="inv-title" name="title" autoComplete="off" required placeholder="Assistant property manager…" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label htmlFor="inv-role">Role</Label><Pick id="inv-role" value={v.role} onChange={(x) => setV({ ...v, role: x })} options={roles} /></div>
-              <div className="grid gap-1.5 sm:col-span-2"><Label htmlFor="inv-scope">Scope</Label>
+            <FieldGroup className="grid gap-3 sm:grid-cols-2">
+              <Field><FieldLabel htmlFor="inv-name">Full name</FieldLabel><Input id="inv-name" name="name" autoComplete="off" required value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="inv-email">Work email</FieldLabel><Input id="inv-email" name="email" type="email" autoComplete="off" spellCheck={false} required value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="inv-title">Title</FieldLabel><Input id="inv-title" name="title" autoComplete="off" required placeholder="Assistant property manager…" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="inv-role">Role</FieldLabel><Pick id="inv-role" value={v.role} onChange={(x) => setV({ ...v, role: x })} options={roles} /></Field>
+              <Field className="sm:col-span-2"><FieldLabel htmlFor="inv-scope">Scope</FieldLabel>
                 <Pick id="inv-scope" value={v.scope_kind} onChange={(x) => setV({ ...v, scope_kind: x, scope_ids: [] })} options={[{ value: "org", label: "Whole org" }, { value: "region", label: "Regions" }, { value: "property", label: "Properties" }]} />
-              </div>
-            </div>
+              </Field>
+            </FieldGroup>
             {v.scope_kind !== "org" && (
-              <fieldset className="max-h-44 overflow-y-auto rounded-md border p-2">
-                <legend className="sr-only">{v.scope_kind === "region" ? "Regions" : "Properties"}</legend>
+              <FieldSet className="max-h-44 overflow-y-auto rounded-md border p-2">
+                <FieldLegend className="sr-only">{v.scope_kind === "region" ? "Regions" : "Properties"}</FieldLegend>
                 <div className="grid gap-1 sm:grid-cols-2">
                   {options.map((o) => {
                     const on = v.scope_ids.includes(o.value);
                     return (
-                      <label key={o.value} className={cn("flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[12.5px] hover:bg-muted", on && "bg-primary/5")}>
-                        <input type="checkbox" className="accent-[var(--primary)]" checked={on} onChange={() => setV({ ...v, scope_ids: on ? v.scope_ids.filter((x) => x !== o.value) : [...v.scope_ids, o.value] })} />
-                        <span className="truncate">{o.label}</span>
-                      </label>
+                      <Field key={o.value} orientation="horizontal" className={cn("rounded px-2 py-1 hover:bg-muted", on && "bg-primary/5")}>
+                        <Checkbox id={`inv-scope-${o.value}`} checked={on} onCheckedChange={() => setV({ ...v, scope_ids: on ? v.scope_ids.filter((x) => x !== o.value) : [...v.scope_ids, o.value] })} />
+                        <FieldLabel htmlFor={`inv-scope-${o.value}`} className="truncate text-[12.5px] font-normal">{o.label}</FieldLabel>
+                      </Field>
                     );
                   })}
                 </div>
-              </fieldset>
+              </FieldSet>
             )}
             <DialogFooter>
               <Button type="button" variant="ghost" size="sm" onClick={() => close(false)}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={busy}>{busy && <Loader2 className="animate-spin" />}Send invite</Button>
+              <Button type="submit" size="sm" disabled={busy}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}Send invite</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -268,19 +269,22 @@ export function EditPolicy({ p, roles }: { p: PolicyRow; roles: { value: string;
               <DialogTitle>{p.name}</DialogTitle>
               <DialogDescription>Agents and staff act alone up to the limit. Above it the approver decides; above the owner threshold the owner also approves in their portal.</DialogDescription>
             </DialogHeader>
-            <label className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-              <span><span className="block font-medium">Always a person</span><span className="text-[12px] text-muted-foreground">Never automated, whatever the amount. Use for legal and safety.</span></span>
-              <Switch checked={v.human} onCheckedChange={(x) => setV({ ...v, human: x })} />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5"><Label htmlFor="pol-limit">Auto-approve up to ($)</Label><Input id="pol-limit" name="limit" inputMode="decimal" autoComplete="off" disabled={v.human} placeholder="Always a person" value={v.human ? "" : v.limit} onChange={(e) => setV({ ...v, limit: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label htmlFor="pol-owner">Owner approves above ($)</Label><Input id="pol-owner" name="owner" inputMode="decimal" autoComplete="off" placeholder="Never" value={v.owner} onChange={(e) => setV({ ...v, owner: e.target.value })} /></div>
-              <div className="grid gap-1.5 sm:col-span-2"><Label htmlFor="pol-role">Approver above the limit</Label><Pick id="pol-role" value={v.approver} onChange={(x) => setV({ ...v, approver: x })} options={roles} /></div>
-            </div>
-            {bad && <p className="text-[12px] text-tone-danger">Enter amounts in dollars, for example 1500.</p>}
+            <Field orientation="horizontal" className="rounded-md border px-3 py-2">
+              <FieldContent>
+                <FieldLabel htmlFor="pol-human">Always a person</FieldLabel>
+                <FieldDescription>Never automated, whatever the amount. Use for legal and safety.</FieldDescription>
+              </FieldContent>
+              <Switch id="pol-human" checked={v.human} onCheckedChange={(x) => setV({ ...v, human: x })} />
+            </Field>
+            <FieldGroup className="grid gap-3 sm:grid-cols-2">
+              <Field><FieldLabel htmlFor="pol-limit">Auto-approve up to ($)</FieldLabel><Input id="pol-limit" aria-invalid={bad || undefined} name="limit" inputMode="decimal" autoComplete="off" disabled={v.human} placeholder="Always a person" value={v.human ? "" : v.limit} onChange={(e) => setV({ ...v, limit: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="pol-owner">Owner approves above ($)</FieldLabel><Input id="pol-owner" aria-invalid={bad || undefined} name="owner" inputMode="decimal" autoComplete="off" placeholder="Never" value={v.owner} onChange={(e) => setV({ ...v, owner: e.target.value })} /></Field>
+              <Field className="sm:col-span-2"><FieldLabel htmlFor="pol-role">Approver above the limit</FieldLabel><Pick id="pol-role" value={v.approver} onChange={(x) => setV({ ...v, approver: x })} options={roles} /></Field>
+            </FieldGroup>
+            {bad && <FieldError>Enter amounts in dollars, for example 1500.</FieldError>}
             <DialogFooter>
               <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={busy || bad}>{busy && <Loader2 className="animate-spin" />}Save policy</Button>
+              <Button type="submit" size="sm" disabled={busy || bad}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}Save policy</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -312,14 +316,14 @@ export function AmendRule({ id, title, value, unit, note, minDate }: { id: strin
               <DialogTitle>Amend {title}</DialogTitle>
               <DialogDescription>Adds a new version from the date you choose. The current version stays in the history and still applies to charges before that date.</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5"><Label htmlFor="sr-value">Value ({unit})</Label><Input id="sr-value" name="value" inputMode="decimal" autoComplete="off" required value={v.value} onChange={(e) => setV({ ...v, value: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label htmlFor="sr-from">Effective from</Label><Input id="sr-from" name="effective_from" type="date" required min={minDate} value={v.effective_from} onChange={(e) => setV({ ...v, effective_from: e.target.value })} /></div>
-              <div className="grid gap-1.5 sm:col-span-2"><Label htmlFor="sr-note">Summary and citation</Label><Textarea id="sr-note" name="note" rows={4} required value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></div>
-            </div>
+            <FieldGroup className="grid gap-3 sm:grid-cols-2">
+              <Field><FieldLabel htmlFor="sr-value">Value ({unit})</FieldLabel><Input id="sr-value" name="value" inputMode="decimal" autoComplete="off" required value={v.value} onChange={(e) => setV({ ...v, value: e.target.value })} /></Field>
+              <Field><FieldLabel htmlFor="sr-from">Effective from</FieldLabel><Input id="sr-from" name="effective_from" type="date" required min={minDate} value={v.effective_from} onChange={(e) => setV({ ...v, effective_from: e.target.value })} /></Field>
+              <Field className="sm:col-span-2"><FieldLabel htmlFor="sr-note">Summary and citation</FieldLabel><Textarea id="sr-note" name="note" rows={4} required value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></Field>
+            </FieldGroup>
             <DialogFooter>
               <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={busy}>{busy && <Loader2 className="animate-spin" />}Add version</Button>
+              <Button type="submit" size="sm" disabled={busy}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}Add version</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cn } from "@/lib/utils";
 import { Check, Minus } from "lucide-react";
 import { PERSONAS, type Access } from "@/auth/personas";
 import { MODULE_KEYS, ROLES, type Role } from "@/entities";
@@ -56,11 +57,11 @@ export default async function RolesPage() {
               {roles.map((r) => {
                 const access = moduleAccess(r);
                 return (
-                  <tr key={r} className={`border-t ${r === me.role ? "bg-primary/5" : ""}`}>
+                  <tr key={r} className={cn("border-t", r === me.role ? "bg-primary/5" : "")}>
                     <th scope="row" className="sticky left-0 bg-background px-3 py-1.5 text-left font-medium">{ROLE_LABEL[r]}</th>
                     {MODULE_KEYS.map((m) => {
                       const a = access[m] ?? "none";
-                      return <td key={m} className="px-2 py-1.5"><span className={`rounded px-1.5 py-0.5 text-[11px] ${ACCESS_TONE[a]}`}>{a === "none" ? "—" : a}</span></td>;
+                      return <td key={m} className="px-2 py-1.5"><span className={cn("rounded px-1.5 py-0.5 text-[11px]", ACCESS_TONE[a])}>{a === "none" ? "—" : a}</span></td>;
                     })}
                   </tr>
                 );
@@ -81,18 +82,18 @@ export default async function RolesPage() {
               <tr>
                 <th className="sticky left-0 z-20 bg-muted px-3 py-2 font-medium">Record</th>
                 <th className="px-2 py-2 font-medium">Changes</th>
-                {roles.map((r) => <th key={r} className={`px-2 py-2 text-center font-medium ${r === me.role ? "text-foreground" : ""}`}><span className="block max-w-24 truncate" title={ROLE_LABEL[r]}>{ROLE_LABEL[r]}</span></th>)}
+                {roles.map((r) => <th key={r} className={cn("px-2 py-2 text-center font-medium", r === me.role ? "text-foreground" : "")}><span className="block max-w-24 truncate" title={ROLE_LABEL[r]}>{ROLE_LABEL[r]}</span></th>)}
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={row.entity} className={`border-t ${i > 0 && rows[i - 1].module !== row.module ? "border-t-2" : ""}`}>
+                <tr key={row.entity} className={cn("border-t", i > 0 && rows[i - 1].module !== row.module ? "border-t-2" : "")}>
                   <th scope="row" className="sticky left-0 bg-background px-3 py-1.5 text-left font-medium">
                     {row.label}
                     <span className="ml-2 text-[11px] font-normal capitalize text-muted-foreground">{row.module}</span>
                   </th>
                   <td className="px-2 py-1.5 text-[11px] text-muted-foreground">{row.writes === "generic" ? "Edit" : row.writes === "actions-only" ? <span className="inline-flex items-center gap-1"><Check className="size-3" />Actions only</span> : "Read-only"}</td>
-                  {roles.map((r) => <td key={r} className={`px-2 py-1.5 text-center ${r === me.role ? "bg-primary/5" : ""}`}><Ops c={row.cells[r]} /></td>)}
+                  {roles.map((r) => <td key={r} className={cn("px-2 py-1.5 text-center", r === me.role ? "bg-primary/5" : "")}><Ops c={row.cells[r]} /></td>)}
                 </tr>
               ))}
             </tbody>

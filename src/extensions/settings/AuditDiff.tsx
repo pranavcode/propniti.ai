@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import { getEntity } from "@/entities";
 import type { TabProps } from "@/extensions/tabs";
 import { EmptyState } from "@/components/app/states";
+import { cn } from "@/lib/utils";
 
 // Audit entry → field-by-field before/after. Generic edits store only the changed columns; named
 // actions store their input as "after".
@@ -40,8 +41,8 @@ export function AuditDiff({ row }: TabProps) {
                 return (
                   <tr key={k} className="border-t align-top">
                     <th scope="row" className="px-3 py-1.5 text-left font-medium">{label(k)}</th>
-                    <td className={`px-3 py-1.5 font-mono text-[12px] break-all ${changed && before ? "bg-tone-danger/5 text-tone-danger line-through decoration-tone-danger/40" : "text-muted-foreground"}`}>{before ? fmt(k, b) : "—"}</td>
-                    <td className={`px-3 py-1.5 font-mono text-[12px] break-all ${changed ? "bg-tone-success/5 text-tone-success" : ""}`}>{after ? fmt(k, a) : "—"}</td>
+                    <td className={cn("px-3 py-1.5 font-mono text-[12px] break-all", changed && before ? "bg-tone-danger/5 text-tone-danger line-through decoration-tone-danger/40" : "text-muted-foreground")}>{before ? fmt(k, b) : "—"}</td>
+                    <td className={cn("px-3 py-1.5 font-mono text-[12px] break-all", changed ? "bg-tone-success/5 text-tone-success" : "")}>{after ? fmt(k, a) : "—"}</td>
                   </tr>
                 );
               })}
