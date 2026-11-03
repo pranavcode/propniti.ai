@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 import { allEntities, getEntityByRoute } from "@/entities";
 import { currentSession, requireStaff } from "@/auth/session";
 import { ListView, ModuleIndex, RecordView } from "@/components/entity/pages";
+import { PageSkeleton } from "@/components/app/PageSkeleton";
 
 // Generic entity pages (lane C). Any /app path without a static route lands here and resolves
 // through the registry:
@@ -41,15 +43,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: `${r.hit.id ? `${r.hit.def.label.one} ${r.hit.id}` : r.hit.def.label.many} · Propniti` };
 }
 
+// Unknown paths 404 here, before the Suspense boundary starts the stream (which fixes the status at
+// 200); the page body loads behind the skeleton.
 export default async function EntityPage({ params, searchParams }: Props) {
-  await requireStaff();
   const { path } = await params;
   const r = resolve(path);
   if (r.redirect) redirect(r.redirect);
+  const hit = r.hit;
+  if (!hit && !allEntities().some((d) => d.route.startsWith(r.path! + "/"))) notFound();
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <EntityBody hit={hit} path={r.path!} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function EntityBody({ hit, path, searchParams }: { hit: ReturnType<typeof getEntityByRoute>; path: string; searchParams: Props["searchParams"] }) {
+  await requireStaff();
   const sp = toParams(await searchParams);
   const session = await currentSession();
-  if (r.hit && !r.hit.id) return <ListView def={r.hit.def} searchParams={sp} session={session} />;
-  if (r.hit?.id) return <RecordView def={r.hit.def} id={r.hit.id} searchParams={sp} session={session} />;
-  if (allEntities().some((d) => d.route.startsWith(r.path! + "/"))) return <ModuleIndex path={r.path!} session={session} />;
-  notFound();
+  if (hit && !hit.id) return <ListView def={hit.def} searchParams={sp} session={session} />;
+  if (hit?.id) return <RecordView def={hit.def} id={hit.id} searchParams={sp} session={session} />;
+  return <ModuleIndex path={path} session={session} />;
 }
