@@ -112,6 +112,12 @@ export async function generateSummary(data: DataCtx, entity: string, id: string,
   return { entity_type: entity, entity_id: id, summary, facts: f.facts, model: info.model, generated_at, source: text ? "live" : "rules" };
 }
 
+export async function cachedBriefing(data: DataCtx, personaId: string): Promise<Summary | null> {
+  const e = eff("ai_summaries", data.ws);
+  const r = await data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ?`).bind(...e.params, summaryId("briefing", personaId)).first<Row>();
+  return r ? { entity_type: "briefing", entity_id: personaId, summary: String(r.summary), facts: JSON.parse(String(r.facts || "{}")), model: String(r.model), generated_at: String(r.generated_at), source: r.model === "rules" ? "rules" : r.workspace_id === "base" ? "precomputed" : "live" } : null;
+}
+
 // The home briefing ("Good morning, here's your portfolio") for a persona: computed counts in,
 // two or three sentences out. Stored as ai_summaries (entity_type "briefing", entity_id = persona).
 export async function generateBriefing(data: DataCtx, personaId: string, opts: { writeTo?: string } = {}): Promise<Summary> {
@@ -145,7 +151,7 @@ export async function generateBriefing(data: DataCtx, personaId: string, opts: {
   const summary = text ?? `In the last day the agents ran ${facts.agent_runs_24h} times and handled ${facts.auto_applied_24h} items on their own. ${facts.approvals_waiting} proposals wait for you. ${facts.residents_late} residents owe $${Number(facts.late_balance).toLocaleString()} in rent, and ${facts.data_issues_open} data issues are open (${facts.data_issues_critical} critical).`;
   const generated_at = new Date().toISOString();
   const ws = opts.writeTo ?? data.ws;
-  if (ws !== "base" || opts.writeTo === "base") {
+  if (ws !== "none" && (ws !== "base" || opts.writeTo === "base")) {
     await data.db.batch([
       data.db.prepare("DELETE FROM ai_summaries WHERE workspace_id = ? AND id = ?").bind(ws, summaryId("briefing", personaId)),
       await insert(data.db, ws, "ai_summaries", { id: summaryId("briefing", personaId), entity_type: "briefing", entity_id: personaId, summary, facts: JSON.stringify(facts), model: info.model, generated_at }),
