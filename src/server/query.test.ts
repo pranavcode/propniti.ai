@@ -230,6 +230,11 @@ describe("writes", () => {
     expect((await db.prepare("SELECT count(*) AS n FROM units WHERE number = '998'").first())!.n).toBe(0);
   });
 
+  it("refuses a portal user's create that falls outside their own records", async () => {
+    await expect(createRecord(await wctx("resident"), "work_orders", { title: "Leak", category: "Plumbing", priority: "Normal", status: "New", property_id: "p05", opened_at: "2026-10-28T10:00:00Z" })).rejects.toMatchObject({ status: 403 });
+    expect((await db.prepare("SELECT count(*) AS n FROM work_orders").first())!.n).toBe(0);
+  });
+
   it("can't update or delete a record outside scope", async () => {
     await expect(updateRecord(await wctx("marcus"), "units", "p05-u1", { sqft: 1 })).rejects.toMatchObject({ status: 404 });
     await expect(deleteRecord(await wctx("priya"), "units", "p05-u1")).rejects.toMatchObject({ status: 404 });

@@ -20,7 +20,7 @@ registerEntity({
   scopePath: "work_orders.property_id",
   fields: {
     title: { type: "text", label: "Work order", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+    status: { type: "enum", label: "Status", required: true, facet: true, sortable: true, list: { default: true }, enum: [
       { value: "New", tone: "warning" }, { value: "Triaged", tone: "info" }, { value: "Assigned", tone: "info" }, { value: "Scheduled", tone: "info" },
       { value: "In progress", tone: "info" }, { value: "On hold", tone: "warning" }, { value: "Submitted", tone: "warning" },
       { value: "Completed", tone: "success" }, { value: "Paid", tone: "success" }, { value: "Cancelled", tone: "neutral" },

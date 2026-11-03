@@ -494,7 +494,9 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
     // Insert first so the scope check below can read the new row; roll back if out of scope.
     await ctx.db.batch(statements);
     const pid = await propertyOf(ctx, def, id);
-    if (ctx.actor.propertyIds !== "all" && def.scopePath && !ctx.actor.propertyIds.includes(String(pid))) {
+    // getRow applies the full scope (properties and portal "self"), so a row it can't read back
+    // was created outside the persona's scope.
+    if (!(await getRow(ctx, entity, id))) {
       await ctx.db.prepare(`DELETE FROM ${def.table} WHERE workspace_id = ? AND id = ?`).bind(ctx.ws, id).run();
       throw new QueryError(403, "That property is outside your scope");
     }
