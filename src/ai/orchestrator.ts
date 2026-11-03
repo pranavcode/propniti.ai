@@ -26,23 +26,26 @@ export const loadAgents = () => import("./agents");
 export async function agentConfigs(db: Db, ws: string): Promise<Map<AgentKey, AgentConfig>> {
   await loadAgents();
   const e = eff("agent_definitions", ws);
-  const { results } = await db.prepare(`SELECT * FROM ${e.sql} t`).bind(...e.params).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] }));
+  // Fail closed: if the settings can't be read, nothing runs on its own (a person approves everything).
+  let failed = false;
+  const { results } = await db.prepare(`SELECT * FROM ${e.sql} t`).bind(...e.params).all<Record<string, unknown>>().catch(() => ((failed = true), { results: [] as Record<string, unknown>[] }));
   const rows = new Map(results.map((r) => [String(r.id), r]));
   const out = new Map<AgentKey, AgentConfig>();
   for (const a of allAgents()) {
     const r = rows.get(a.key);
     const t = parseJson<{ schedule?: string; events?: EventType[] }>(r?.triggers, {});
     out.set(a.key, {
-      key: a.key, enabled: r ? Number(r.enabled) === 1 : true, autonomy: (r?.autonomy as Autonomy) ?? a.autonomy,
+      key: a.key, enabled: r ? Number(r.enabled) === 1 : true, autonomy: failed ? "act_with_approval" : (r?.autonomy as Autonomy) ?? a.autonomy,
       schedule: t.schedule ?? a.triggers.schedule, events: t.events ?? a.triggers.events ?? [], approvalPolicyId: (r?.approval_policy_id as string) ?? null, model: (r?.model as string) ?? null,
     });
   }
   return out;
 }
 
+// Throws when the policies can't be read; callers then run without auto-apply (fail closed).
 export async function loadPolicies(db: Db, ws: string): Promise<(ApprovalPolicy & { id: string })[]> {
   const e = eff("approval_policies", ws);
-  const { results } = await db.prepare(`SELECT * FROM ${e.sql} t WHERE t.owner_entity_id IS NULL`).bind(...e.params).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] }));
+  const { results } = await db.prepare(`SELECT * FROM ${e.sql} t WHERE t.owner_entity_id IS NULL`).bind(...e.params).all<Record<string, unknown>>();
   return results.map((r) => ({
     id: String(r.id), category: String(r.category), limitCents: r.limit_cents == null ? null : Number(r.limit_cents), approverRole: r.approver_role as ApprovalPolicy["approverRole"],
     ownerApprovalOverCents: r.owner_approval_over_cents == null ? null : Number(r.owner_approval_over_cents), alwaysHuman: Number(r.always_human) === 1,
@@ -87,16 +90,18 @@ export async function runWithContext<T>(
   const { db, ws } = o;
   let ctx: AgentCtx | undefined;
   try {
-    const [configs, policies] = await Promise.all([agentConfigs(db, ws), loadPolicies(db, ws)]);
+    let policiesOk = true;
+    const [configs, policies] = await Promise.all([agentConfigs(db, ws), loadPolicies(db, ws).catch(() => ((policiesOk = false), []))]);
+    const autonomy = configs.get(agent)?.autonomy ?? defaultAutonomy;
     ctx = await createRunContext({
-      db, ws, actor: o.actor, runId, agent, policies, autonomy: configs.get(agent)?.autonomy ?? defaultAutonomy, nowMs,
+      db, ws, actor: o.actor, runId, agent, policies, autonomy: policiesOk ? autonomy : autonomy === "suggest" ? "suggest" : "act_with_approval", nowMs,
       deadlineMs: nowMs + (o.deadlineMs ?? 25_000), waitUntil: o.waitUntil, allowedActions: actions,
       execute: (data, proposal, by, payload) => executeProposal(data, proposal, by, payload),
     });
     await ctx.step({ kind: "plan", ok: true, output: { trigger: o.trigger.kind, event_id: o.trigger.eventId ?? null, autonomy: ctx.autonomy, model: ctx.model?.info.label ?? "Rules (no model configured)", as_of: ctx.today } });
     const c = ctx;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const hardStop = new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new Error("Run timed out")), Math.max(5_000, c.deadline - Date.now() + 10_000))));
+    const hardStop = new Promise<never>((_, rej) => (timer = setTimeout(() => ((c.aborted = true), rej(new Error("Run timed out"))), Math.max(5_000, c.deadline - Date.now() + 10_000))));
     const { summary, result } = await Promise.race([body(ctx), hardStop]).finally(() => clearTimeout(timer));
     const waiting = ctx.proposals.some((p) => !p.duplicate && p.queueState !== "auto_handled");
     const status = waiting ? "waiting_approval" : "done";

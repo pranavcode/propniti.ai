@@ -53,6 +53,9 @@ export type AgentCtx = Omit<RunContext, "propose"> & {
   drafts: Map<string, { subject: string; body: string; channel: string; language: string }>;
   // Figures a draft may mention, by record id (money as cents).
   facts: Map<string, Record<string, string | number | boolean | null>>;
+  // Set when the run's hard time limit fires: the body may still be running, but it may not propose
+  // or apply anything after that.
+  aborted: boolean;
   propose(p: ProposeInput): Promise<string>;
   proposeFull(p: ProposeInput): Promise<Proposed>;
   call<O = unknown>(key: ToolKey, input: unknown): Promise<O>;
@@ -79,7 +82,7 @@ export async function createRunContext(opts: {
   const ctx: AgentCtx = {
     db, ws, actor, nowMs: opts.nowMs, runId, agent, policies: opts.policies, waitUntil: opts.waitUntil,
     data, today: await asOf(db), model, autonomy: opts.autonomy, usage: { ...ZERO }, modelUsed: RULES, proposals: [], deadline: opts.deadlineMs,
-    allowedActions: opts.allowedActions ?? [], drafts: new Map(), facts: new Map(),
+    allowedActions: opts.allowedActions ?? [], drafts: new Map(), facts: new Map(), aborted: false,
     async step(s: Omit<Step, "idx" | "at">) {
       const id = `${runId}-s${idx}`;
       const i = idx++;
@@ -121,6 +124,7 @@ export async function createRunContext(opts: {
 
 async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): Promise<Proposed> {
   const { db, ws } = ctx;
+  if (ctx.aborted) throw new Error("Run stopped at its time limit; no further proposals");
   // Every proposal must name an action that exists, so approving it can never dead-end.
   if (!getAction(p.action)) throw new Error(`${p.action} isn't a registered action; agents may only propose registered actions`);
   // One open proposal per agent, record and action: a re-run doesn't flood the inbox.
@@ -136,9 +140,10 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   }
 
   const policy = p.category ? ctx.policies.find((x) => x.category === p.category) : undefined;
-  const risk: Risk = p.risk ?? "Low";
+  // Unstated risk is Medium (a person looks), and an amount with no policy limit is over the limit.
+  const risk: Risk = p.risk ?? "Medium";
   const human = p.alwaysHuman || policy?.alwaysHuman || risk === "High";
-  const overLimit = p.amountCents != null && (policy?.limitCents == null ? !!policy : p.amountCents > policy.limitCents);
+  const overLimit = p.amountCents != null && (policy?.limitCents == null || p.amountCents > policy.limitCents);
   const ownerNeeded = p.amountCents != null && policy?.ownerApprovalOverCents != null && p.amountCents > policy.ownerApprovalOverCents;
   // Auto-run only inside a visitor's workspace: the shared base is never changed by a schedule.
   const auto = ctx.autonomy === "auto_within_policy" && ws !== "base" && !human && !overLimit && risk === "Low";
@@ -161,7 +166,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
     queue_state: queueState, assignee_role: assignee, model: ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
   };
   await (await insert(db, ws, "ai_proposals", row)).run();
-  if (!auto) return { id, queueState, duplicate: false };
+  if (!auto || ctx.aborted) return { id, queueState, duplicate: false };
 
   const result = await execute(ctx.data, row, { id: ctx.agent, name: `${ctx.agent} agent`, agent: ctx.agent });
   await ctx.step({ kind: "message", output: { auto_applied: id, ...result }, ok: result.ok });

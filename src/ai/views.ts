@@ -47,7 +47,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
 
 export async function aiStatus(data: DataCtx) {
   const m = modelInfo();
-  const [last, policies] = await Promise.all([lastSweep(data.db), loadPolicies(data.db, data.ws)]);
+  const [last, policies] = await Promise.all([lastSweep(data.db), loadPolicies(data.db, data.ws).catch(() => [])]);
   return { provider: m.provider, model: m.model, label: m.label, live: m.provider !== "rules", lastSweepAt: last ? new Date(last).toISOString() : null, policies };
 }
 

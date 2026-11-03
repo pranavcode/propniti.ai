@@ -198,6 +198,25 @@ describe("sweep and events", () => {
   });
 });
 
+describe("fail closed", () => {
+  it("applies nothing on its own when the approval policies can't be read", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    raw.exec("DROP TABLE approval_policies");
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "maintenance_triage", trigger: { kind: "manual" } })).done;
+    expect(proposals(raw, r.runId).filter((p) => p.queue_state === "auto_handled")).toEqual([]);
+    expect(raw.prepare("SELECT count(*) AS n FROM work_orders WHERE workspace_id = ?").get(WS)!.n).toBe(0);
+  });
+
+  it("proposes nothing after the hard time limit", async () => {
+    const { createRunContext } = await import("../runtime");
+    const { db } = openFixture();
+    const ctx = await createRunContext({ db, ws: WS, actor: MARCUS, runId: "r-abort", agent: "collections", policies: [], autonomy: "auto_within_policy", nowMs: Date.now(), deadlineMs: Date.now() + 1000, execute: async () => ({ ok: true, message: "" }), allowedActions: [] });
+    ctx.aborted = true;
+    await expect(ctx.proposeFull({ entity: "leases", entityId: "l1", action: "leases.send_reminder", title: "x", payload: {}, why: ["x"], confidence: 1 })).rejects.toThrow(/time limit/);
+  });
+});
+
 describe("approval re-checks the record", () => {
   it("refuses a proposal for an application that was decided meanwhile", async () => {
     setModelForTests(null);
