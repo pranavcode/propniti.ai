@@ -170,9 +170,11 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                                 </div>
                               ) : draft && (
                                 <>
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="flex items-center gap-1.5 text-[12px] font-semibold"><Sparkles className="size-3.5 text-tone-ai" />Drafted message</h4>
-                                    <AIBadge source={r.proposal ? (r.proposal.model && r.proposal.model !== "rules" ? "precomputed" : "rules") : "rules"} model={r.proposal?.model ?? undefined} size="xs" />
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <h4 className="flex items-center gap-1.5 whitespace-nowrap text-[12px] font-semibold"><Sparkles className="size-3.5 text-tone-ai" />Drafted message</h4>
+                                    {r.proposal?.message
+                                      ? <AIBadge source={r.proposal.model && r.proposal.model !== "rules" ? "precomputed" : "rules"} model={r.proposal.model ?? undefined} size="xs" />
+                                      : <span className="rounded bg-muted px-1.5 py-px text-[10.5px] text-muted-foreground">Template · figures from the ledger</span>}
                                     {r.proposal && <Confidence value={r.proposal.confidence} />}
                                     {!r.proposal?.message && (
                                       <ToggleGroup type="single" size="sm" variant="outline" value={l} onValueChange={(v) => v && setLang((x) => ({ ...x, [r.lease_id]: v as "en" | "es" }))} className="ml-auto" aria-label="Message language">
