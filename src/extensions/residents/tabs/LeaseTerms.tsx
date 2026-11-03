@@ -53,7 +53,7 @@ export async function LeaseTerms({ id }: TabProps) {
       <section className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3 lg:grid-cols-6">
         {[
           ["Tenant", l.tenant || "—"],
-          ["Premises", `${commercial ? "Suite" : "Unit"} ${l.unit}`],
+          ["Premises", /^[A-Za-z]/.test(l.unit) ? l.unit : `${commercial ? "Suite" : "Unit"} ${l.unit}`],
           ["Term", `${l.term_months ?? "—"} months`],
           ["Commencement", formatDate(l.start_on, "always")],
           ["Expiration", l.end_on ? formatDate(l.end_on, "always") : "Month-to-month"],
@@ -133,8 +133,8 @@ export async function LeaseTerms({ id }: TabProps) {
               return (
                 <li key={String(h.id)} className={cn("flex items-center gap-2 px-3 py-1.5 text-[12.5px]", h.id === l.id && "bg-primary/[0.05]")}>
                   <span className="w-20 shrink-0 text-muted-foreground">{String(h.rel)}</span>
-                  {h.id === l.id ? <span className="font-medium">{String(h.id)}</span> : <Link href={`/app/leases/${encodeURIComponent(String(h.id))}?tab=terms`} className="font-medium text-primary hover:underline">{String(h.id)}</Link>}
-                  <span className="text-muted-foreground tabular-nums">{formatDate(String(h.start_on), "always")} – {h.end_on ? formatDate(String(h.end_on), "always") : "open"}</span>
+                  {h.id === l.id ? <span className="whitespace-nowrap font-medium">{String(h.id)}</span> : <Link href={`/app/leases/${encodeURIComponent(String(h.id))}?tab=terms`} className="whitespace-nowrap font-medium text-primary hover:underline">{String(h.id)}</Link>}
+                  <span className="min-w-0 truncate text-muted-foreground tabular-nums">{formatDate(String(h.start_on), "always")} – {h.end_on ? formatDate(String(h.end_on), "always") : "open"}</span>
                   <span className="ml-auto tabular-nums"><Money value={Number(h.rent_cents)} cents style="whole" /></span>
                   <span className={cn("w-14 text-right text-[11.5px] tabular-nums", change == null ? "text-muted-foreground" : change > 0 ? "text-tone-warning" : "text-tone-success")}>{change == null ? "" : `${change > 0 ? "+" : ""}${(change * 100).toFixed(1)}%`}</span>
                 </li>

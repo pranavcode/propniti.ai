@@ -152,7 +152,7 @@ export function leaseDocument(l: LeaseRecord): string[] {
     ...(l.residents.length > 1 ? [`Occupants: ${l.residents.join(", ")}`] : []),
     ``,
     `2. PREMISES. Landlord leases to ${party} the premises known as:`,
-    `Premises: ${commercial ? "Suite" : "Unit"} ${l.unit}, ${l.property}${l.address ? `, ${l.address}` : ""}`,
+    `Premises: ${/^[A-Za-z]/.test(l.unit) ? l.unit : `${commercial ? "Suite" : "Unit"} ${l.unit}`}, ${l.property}${l.address ? `, ${l.address}` : ""}`,
     ``,
     `3. TERM. The term of this lease is ${t.term} months.`,
     `Term: ${t.term} months`,
