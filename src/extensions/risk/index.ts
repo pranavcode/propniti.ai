@@ -1,2 +1,3 @@
-// Actions, tabs, widgets and agents for the risk module (registerAction/registerTab/registerWidget/registerAgent).
-export {};
+// Actions and metrics for the risk module (vendor certificates, insurance, compliance, legal).
+import "./actions";
+import "./metrics";
