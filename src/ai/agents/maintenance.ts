@@ -5,13 +5,14 @@ import { defineAgent, money, type Candidate } from "./framework";
 // Triage of new work orders: trade, urgency, a cost estimate from history, ranked vendors and the
 // owner approval limit. Safety issues (gas, smoke, sparks, flooding) always go to a person.
 
+// Most specific first: a roof leak is roofing and a washer leak is the appliance, not plumbing.
 const TRADES: [string, RegExp][] = [
+  ["Roofing", /\b(roof\w*|shingle\w*|gutter\w*)\b/i],
+  ["Appliance", /\b(fridge|refrigerator|dishwasher|oven|stove|range|washer|dryer|microwave)\b/i],
   ["Plumbing", /\b(leak\w*|drip\w*|toilet|faucet|drain|clog\w*|pipe|water heater|disposal|sewer|flood\w*)\b/i],
   ["HVAC", /\b(a\/?c|hvac|heat\w*|furnace|thermostat|cool\w*|condenser|air condition\w*)\b/i],
   ["Electrical", /\b(outlet|breaker|spark\w*|wiring|light\w*|power|electric\w*|gfci)\b/i],
-  ["Appliance", /\b(fridge|refrigerator|dishwasher|oven|stove|range|washer|dryer|microwave)\b/i],
   ["Pest control", /\b(roach\w*|mice|mouse|rodent\w*|ants|bed ?bugs?|pest\w*|termite\w*)\b/i],
-  ["Roofing", /\b(roof\w*|shingle\w*|gutter\w*)\b/i],
   ["Locksmith", /\b(lock\w*|key\w*|deadbolt)\b/i],
 ];
 const SAFETY = /\b(gas smell|smell\w* gas|gas leak|smoke|spark\w*|fire|carbon monoxide|co alarm|sewage|flood\w*|no heat)\b/i;

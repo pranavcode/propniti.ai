@@ -88,7 +88,7 @@ export function defineAgent(spec: AgentSpec): AgentDef {
           "Check the candidates with the read tools where it helps. For each one you agree with, " +
           (top.some((c) => c.message) ? "write the message with messages.draft (figures only from its facts; Spanish when facts.language is es), then " : "") +
           "call actions.propose with your reasons and confidence. Skip a candidate if the data shows it isn't needed, and say why. Finish with a two-sentence summary.";
-        const r = await modelLoop(ctx, { system: `You are the ${spec.name} for a US property management company.`, prompt, tools: spec.tools, maxSteps: 14, budgetCents: 50 });
+        const r = await modelLoop(ctx, { system: `You are the ${spec.name} for a US property management company.`, prompt, tools: spec.tools, maxSteps: Math.min(40, 4 + top.length * 3), budgetCents: 50 });
         modelText = r?.text ?? null;
       }
 
