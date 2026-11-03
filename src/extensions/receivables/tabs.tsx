@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/app/states";
 import { getPlatform } from "@/lib/platform";
 import { AS_OF } from "@/seed/constants";
 import { effective, type QueryCtx } from "@/server/query";
-import { depositRow } from "./money";
+import { depositRow } from "@/server/money";
 import { leaseLedger, leasesOfHousehold } from "./queries";
 import { DispositionForm, type DispositionCharge } from "./ui/Disposition";
 import { LedgerView } from "./ui/LedgerView";

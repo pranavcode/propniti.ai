@@ -6,7 +6,7 @@ import { CURRENT_PERIOD } from "@/seed/constants";
 import { effective } from "@/server/effective";
 import { payRent, postLateFees, recordPayment } from "@/server/money";
 import { householdOf } from "./queries";
-import { disposeDeposit, movePayment } from "./money";
+import { disposeDeposit, movePayment } from "@/server/money";
 
 // Receivables actions. Every one that moves or re-points money goes through the guarded functions
 // (src/server/money.ts, and ./money.ts until Lane A adopts it); the SQL guards decide.
