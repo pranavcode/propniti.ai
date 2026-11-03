@@ -28,12 +28,16 @@ export type ProposalView = { id: string; agent: string; title: string; why: stri
 export function ProposalQueue({ items, empty }: { items: ProposalView[]; empty: string }) {
   const router = useRouter();
   const [gone, setGone] = useState<string[]>([]);
+  // A failed decision remounts its item (new key) so it shows as still open; throwing instead would
+  // surface as an unhandled rejection, since the item calls this from a void click handler.
+  const [tries, setTries] = useState<Record<string, number>>({});
   const decide = async (id: string, decision: "approve" | "reject") => {
     const res = await fetch(`/api/ai/proposals/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) }).catch(() => null);
     const out = res ? await res.json().catch(() => ({})) : {};
     if (!res || !res.ok) {
       toast.error(out.error ?? "Nothing was changed. Try again.");
-      throw new Error(out.error);
+      setTries((t) => ({ ...t, [id]: (t[id] ?? 0) + 1 }));
+      return;
     }
     toast.success(decision === "approve" ? out.message ?? "Approved" : "Dismissed. Your decision is logged with your name.");
     setGone((g) => [...g, id]);
@@ -44,7 +48,7 @@ export function ProposalQueue({ items, empty }: { items: ProposalView[]; empty: 
   return (
     <div className="flex flex-col gap-2">
       {shown.map((p) => (
-        <ApprovalItem key={p.id} variant="row" agent={p.agent} title={p.title} risk={p.risk} why={p.why} evidence={p.evidence} confidence={p.confidence} runHref={runHref(p.runId)} recordHref={p.recordHref}
+        <ApprovalItem key={`${p.id}-${tries[p.id] ?? 0}`} variant="row" agent={p.agent} title={p.title} risk={p.risk} why={p.why} evidence={p.evidence} confidence={p.confidence} runHref={runHref(p.runId)} recordHref={p.recordHref}
           createdAt={p.createdAt} source={p.source} model={p.model} canApprove={p.canApprove} policy={p.canApprove ? undefined : "Needs the broker"}
           onApprove={() => decide(p.id, "approve")} onReject={() => decide(p.id, "reject")} />
       ))}
