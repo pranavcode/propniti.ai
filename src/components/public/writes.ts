@@ -106,7 +106,8 @@ export async function submitApplication({ db, ws, body, nowMs }: Ctx<ApplyReques
   const data = { db, ws, actor: SYSTEM_ACTOR };
   await emitEvent(data, { type: "application.submitted", entityType: "applications", entityId: ids.application, propertyId: l.property_id });
   after(async () => {
-    const { runs } = await drainEvents(db, ws, Date.now());
+    // waitUntil work is cut off after 30 seconds on Workers, so the run gets 25.
+    const { runs } = await drainEvents(db, ws, Date.now(), 5, 25_000);
     await Promise.all(runs.map((r) => r.done));
   });
   return { status: 200, body: { applicationId: ids.application } };
