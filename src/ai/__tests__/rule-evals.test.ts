@@ -39,3 +39,15 @@ describe("eval cases: rules", () => {
     });
   }
 });
+
+describe("data health score", () => {
+  it("is 100 minus the weighted share of affected records", async () => {
+    const { healthScore } = await import("../views");
+    // 4% of 1,000 records with warnings, and 10 critical: 100 − (40 + 30) / 1000 × 100 = 93.
+    expect(healthScore([{ weighted: 40 * 1 + 10 * 3, records: 1000 }])).toBe(93);
+    // Entities combine by record count: a small table with many problems moves it only a little.
+    expect(healthScore([{ weighted: 5, records: 1000 }, { weighted: 5, records: 20 }])).toBe(99);
+    expect(healthScore([])).toBe(100);
+    expect(healthScore([{ weighted: 500, records: 100 }])).toBe(0);
+  });
+});

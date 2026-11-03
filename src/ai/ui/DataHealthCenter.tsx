@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCheck } from "lucide-react";
+import { CheckCheck, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FixPreview } from "@/components/app/ai";
 import { Meter } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { api } from "./client";
 
 type Health = {
-  score: number; open: number;
+  score: number; open: number; formula: string;
   properties: { id: string; name: string; metro: string; open: number; critical: number; score: number }[];
   modules: { module: string; open: number; entities: string[]; score: number }[];
   rules: { id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }[];
@@ -59,7 +60,13 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           <div className="text-[12px] text-muted-foreground">Portfolio data health</div>
           <div className={cn("mt-1 text-[34px] leading-none font-semibold tabular-nums", TEXT[tone(health.score)])}>{health.score}</div>
           <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" />
-          <p className="mt-2 text-[12px] text-muted-foreground">{health.open} open issues. Score: 100 minus open issues weighted by severity (critical 8, warning 3, info 1) per record checked.</p>
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            {health.open.toLocaleString()} open issues.{" "}
+            <Tooltip>
+              <TooltipTrigger asChild><button className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 hover:text-foreground"><Info className="size-3" /> How is this scored?</button></TooltipTrigger>
+              <TooltipContent className="max-w-xs">{health.formula}</TooltipContent>
+            </Tooltip>
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {health.modules.slice(0, 8).map((m) => (
