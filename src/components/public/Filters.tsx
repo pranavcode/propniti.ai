@@ -47,7 +47,7 @@ export function Filters({ value, sorts, total }: { value: FilterState; sorts: { 
       role="search"
       onSubmit={(e) => (e.preventDefault(), apply())}
       onChange={(e) => apply(["search", "number"].includes((e.target as HTMLElement).getAttribute("type") ?? "") ? 450 : 0)}
-      className="space-y-3"
+      className="flex flex-col gap-3"
     >
       <div className="flex flex-col gap-2 sm:flex-row">
         <label className="relative flex-1">

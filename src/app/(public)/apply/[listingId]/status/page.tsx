@@ -6,6 +6,7 @@ import { PublicFooter, PublicHeader, usd } from "@/components/public/chrome";
 import { applicationStatus, getListing, visitorWorkspace } from "@/components/public/data";
 import { Refresh } from "@/components/public/Refresh";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Application status · Propniti Rentals", robots: { index: false, follow: false } };
 
@@ -31,7 +32,7 @@ export default async function Page({ params, searchParams }: Props) {
     <>
       <PublicHeader />
       {!scored && !queued && <Refresh />}
-      <main id="main" className="mx-auto max-w-3xl space-y-6 px-4 pt-8 text-[14px] sm:px-6">
+      <main id="main" className="mx-auto max-w-3xl flex flex-col gap-6 px-4 pt-8 text-[14px] sm:px-6">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-1 size-7 shrink-0 text-tone-success" aria-hidden />
           <div>
@@ -42,7 +43,7 @@ export default async function Page({ params, searchParams }: Props) {
 
         <section aria-labelledby="next" className="rounded-2xl border bg-card p-5">
           <h2 id="next" className="mb-4 text-[17px] font-semibold">What happens next</h2>
-          <ol className="space-y-5">
+          <ol className="flex flex-col gap-5">
             {steps.map((s, i) => (
               <li key={s.title} className="relative flex gap-3">
                 {i < steps.length - 1 && <span className={cn("absolute top-7 left-[11px] h-[calc(100%-4px)] w-px", s.done ? "bg-tone-success/50" : "bg-border")} aria-hidden />}
@@ -57,12 +58,12 @@ export default async function Page({ params, searchParams }: Props) {
         </section>
 
         <section aria-labelledby="broker" className="rounded-2xl border border-tone-ai/25 bg-tone-ai/[0.04] p-5">
-          <p className="mb-1 text-[12px] font-medium tracking-wide text-tone-ai uppercase">Demo: what the broker sees</p>
+          <p className="mb-1 text-[12.5px] font-medium text-tone-ai">Demo view of what the broker sees</p>
           <h2 id="broker" className="flex items-center gap-2 text-[17px] font-semibold"><Sparkles className="size-5 text-tone-ai" aria-hidden />AI screening summary</h2>
           {a.proposal ? (
-            <div className="mt-3 space-y-3">
+            <div className="mt-3 flex flex-col gap-3">
               <p className="font-medium">{a.proposal.title}</p>
-              <ul className="space-y-1">
+              <ul className="flex flex-col gap-1">
                 {a.proposal.why.map((w) => (
                   <li key={w} className={cn("flex gap-2", w.startsWith("Against") ? "text-tone-warning" : w.startsWith("For") ? "text-tone-success" : "text-muted-foreground")}>
                     <span aria-hidden>{w.startsWith("Against") ? "−" : w.startsWith("For") ? "+" : "•"}</span><span className="text-foreground">{w.replace(/^(For|Against): /, "")}</span>
@@ -78,13 +79,13 @@ export default async function Page({ params, searchParams }: Props) {
             <form action="/api/session" method="post">
               <input type="hidden" name="persona" value="rachel" />
               <input type="hidden" name="next" value="/app/ai/approvals" />
-              <button type="submit" className="inline-flex h-10 items-center rounded-lg bg-primary px-4 font-medium text-primary-foreground hover:bg-primary/90">Open the broker&apos;s approvals</button>
+              <Button type="submit" className="h-10 px-4">Open the broker&apos;s approvals</Button>
             </form>
             {(a.proposal?.run_id ?? a.run?.id) && (
               <form action="/api/session" method="post">
                 <input type="hidden" name="persona" value="rachel" />
                 <input type="hidden" name="next" value={`/app/ai/runs/${a.proposal?.run_id ?? a.run?.id}`} />
-                <button type="submit" className="inline-flex h-10 items-center rounded-lg border bg-background px-4 font-medium hover:bg-muted">See the agent&apos;s steps</button>
+                <Button type="submit" variant="outline" className="h-10 px-4">See the agent&apos;s steps</Button>
               </form>
             )}
           </div>

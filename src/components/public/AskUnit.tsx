@@ -48,14 +48,14 @@ export function AskUnit({ listingId, unit }: { listingId: string; unit: string }
           </div>
         </div>
 
-        <div className="space-y-4 p-4 sm:p-5" aria-live="polite">
+        <div className="flex flex-col gap-4 p-4 sm:p-5" aria-live="polite">
           {turns.map((t, i) => (
-            <div key={i} className="space-y-2">
+            <div key={i} className="flex flex-col gap-2">
               <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[14px] text-primary-foreground">{t.q}</p>
               {!t.reply && !t.error && <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden />Checking this listing…</p>}
               {t.error && <p role="alert" className="rounded-xl bg-tone-danger/10 px-3.5 py-2 text-[13.5px] text-tone-danger">{t.error}</p>}
               {t.reply && (
-                <div className={cn("max-w-[92%] space-y-2 rounded-2xl rounded-bl-md border px-3.5 py-2.5", t.reply.source === "policy" && "border-tone-info/30 bg-tone-info/5")}>
+                <div className={cn("max-w-[92%] flex flex-col gap-2 rounded-2xl rounded-bl-md border px-3.5 py-2.5", t.reply.source === "policy" && "border-tone-info/30 bg-tone-info/5")}>
                   <p className="text-[14px] leading-relaxed">{t.reply.answer}</p>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
                     {t.reply.source === "policy" ? (

@@ -31,7 +31,7 @@ export function PublicFooter() {
   return (
     <footer className="mt-16 border-t bg-muted/40">
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 text-[13px] text-muted-foreground sm:px-6 md:grid-cols-[1fr_auto]">
-        <div className="max-w-2xl space-y-2">
+        <div className="max-w-2xl flex flex-col gap-2">
           <p className="flex items-center gap-2 font-medium text-foreground"><EqualHousing /> Equal Housing Opportunity</p>
           <p>We follow the Fair Housing Act and state and local fair housing laws. Every home is open to everyone on equal terms. Ask us for a reasonable accommodation at any time.</p>
           <p>Demo site with sample data: homes, prices and people are fictional. Tours and applications you submit stay in your private demo workspace and reset at midnight.</p>

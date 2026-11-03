@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CalendarCheck, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TOUR_KINDS, TourRequest } from "./schemas";
+import { Button } from "@/components/ui/button";
 
 type Slot = { date: string; times: string[] };
 type Errors = Partial<Record<keyof TourRequest | "form", string>>;
@@ -50,7 +51,7 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
     return (
       <div role="status" className="flex gap-3 rounded-xl bg-tone-success/10 p-4">
         <CalendarCheck className="size-5 shrink-0 text-tone-success" aria-hidden />
-        <div className="space-y-1 text-[14px]">
+        <div className="flex flex-col gap-1 text-[14px]">
           <p className="font-semibold">Tour booked: {day(d, { weekday: "long", month: "long", day: "numeric" })} at {clock(t.slice(0, 5))}</p>
           <p className="text-muted-foreground">{done.kind} tour{done.agent ? ` with ${done.agent}` : ""}. It&apos;s on the leasing team&apos;s calendar now, and they&apos;ll reach out to confirm.</p>
         </div>
@@ -59,7 +60,7 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-3">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-3">
       <fieldset className="min-w-0">
         <legend className="mb-1.5 text-[12.5px] font-medium text-muted-foreground">Tour type</legend>
         <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
@@ -104,9 +105,9 @@ export function TourForm({ listingId, slots }: { listingId: string; slots: Slot[
         <textarea name="note" rows={2} maxLength={500} className={cn(input, "h-auto py-2")} />
       </label>
       {errors.form && <p role="alert" className="rounded-lg bg-tone-danger/10 px-3 py-2 text-[13px] text-tone-danger">{errors.form}</p>}
-      <button type="submit" disabled={busy} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border-2 border-primary bg-background text-[15px] font-semibold text-primary hover:bg-primary/5 disabled:opacity-60">
-        {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}Book tour
-      </button>
+      <Button type="submit" variant="outline" disabled={busy} className="h-11 w-full text-[15px]">
+        {busy && <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden />}{busy ? "Booking…" : "Book tour"}
+      </Button>
     </form>
   );
 }

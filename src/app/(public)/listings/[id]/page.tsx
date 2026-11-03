@@ -11,6 +11,7 @@ import { FloorPlan } from "@/components/public/FloorPlan";
 import { Gallery, type Photo } from "@/components/public/Gallery";
 import { ListingCard } from "@/components/public/ListingCard";
 import { TourForm } from "@/components/public/TourForm";
+import { Button } from "@/components/ui/button";
 
 
 type Props = { params: Promise<{ id: string }> };
@@ -73,8 +74,8 @@ export default async function Page({ params }: Props) {
         <Gallery photos={photos} />
 
         <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="min-w-0 space-y-8">
-            <header className="space-y-2">
+          <div className="min-w-0 flex flex-col gap-8">
+            <header className="flex flex-col gap-2">
               <div className="flex flex-wrap gap-1.5">
                 <Pill tone={!l.available_on || l.available_on <= now ? "info" : "neutral"}>{availableText(l.available_on, now)}</Pill>
                 <Pill>{homeKind(l.type)}</Pill>
@@ -84,11 +85,11 @@ export default async function Page({ params }: Props) {
               <p className="text-[15px] text-muted-foreground">{l.property} · Unit {l.unit} · {l.street}, {l.city}, {l.state} {l.zip}</p>
             </header>
 
-            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <dl className="grid grid-cols-2 overflow-hidden rounded-xl border sm:grid-cols-4 [&>div]:border-b [&>div]:border-r [&>div:nth-child(2n)]:border-r-0 sm:[&>div:nth-child(2n)]:border-r sm:[&>div:nth-child(4n)]:border-r-0 [&>div:nth-last-child(-n+2)]:border-b-0 sm:[&>div:nth-last-child(-n+4)]:border-b-0">
               {facts.map((f) => (
-                <div key={f.label} className="rounded-xl border bg-card p-3">
-                  <dt className="flex items-center gap-1.5 text-[12px] text-muted-foreground"><f.icon className="size-3.5" aria-hidden />{f.label}</dt>
-                  <dd className="mt-0.5 text-[14px] font-semibold">{f.value}</dd>
+                <div key={f.label} className="relative min-w-0 py-3 pr-3 pl-9">
+                  <dt className="text-[12px] text-muted-foreground"><f.icon className="absolute top-3.5 left-3 size-4 text-muted-foreground" aria-hidden />{f.label}</dt>
+                  <dd className="text-[14px] font-semibold text-pretty">{f.value}</dd>
                 </div>
               ))}
             </dl>
@@ -96,7 +97,7 @@ export default async function Page({ params }: Props) {
             {l.specials.length > 0 && (
               <section aria-labelledby="specials" className="rounded-2xl border border-tone-success/30 bg-tone-success/[0.06] p-4 sm:p-5">
                 <h2 id="specials" className="flex items-center gap-2 text-[16px] font-semibold"><BadgePercent className="size-5 text-tone-success" aria-hidden />Specials and concessions</h2>
-                <ul className="mt-2 space-y-1.5">
+                <ul className="mt-2 flex flex-col gap-1.5">
                   {l.specials.map((s) => (
                     <li key={s.label} className="flex flex-wrap items-baseline justify-between gap-2 text-[14px]">
                       <span className="font-medium">{s.label}</span>
@@ -110,7 +111,7 @@ export default async function Page({ params }: Props) {
 
             <AskUnit listingId={l.id} unit={l.unit} />
 
-            <section aria-labelledby="about" className="space-y-2">
+            <section aria-labelledby="about" className="flex flex-col gap-2">
               <h2 id="about" className="text-[18px] font-semibold">About this home</h2>
               <p className="text-[15px] leading-relaxed">{l.description}</p>
               <p className="text-[15px] leading-relaxed text-muted-foreground">{l.property} is a {l.class ? `class ${l.class} ` : ""}{l.type.toLowerCase()} community{l.year_built ? ` built in ${l.year_built}` : ""}{l.stories ? `, ${l.stories} ${l.stories === 1 ? "story" : "stories"}` : ""}.</p>
@@ -121,7 +122,7 @@ export default async function Page({ params }: Props) {
                 <h2 id="plan" className="mb-3 text-[18px] font-semibold">Floor plan {l.plan}</h2>
                 <FloorPlan beds={l.beds} baths={l.baths} sqft={l.sqft} plan={l.plan} />
               </div>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 <h3 className="text-[15px] font-semibold">Lease terms</h3>
                 <p className="text-muted-foreground">{t.lease_months.join(", ")} months.</p>
                 <h3 className="text-[15px] font-semibold">Utilities</h3>
@@ -131,7 +132,7 @@ export default async function Page({ params }: Props) {
               </div>
             </section>
 
-            <section aria-labelledby="pricing" className="space-y-3">
+            <section aria-labelledby="pricing" className="flex flex-col gap-3">
               <h2 id="pricing" className="text-[18px] font-semibold">Pricing and fees</h2>
               <div className="overflow-hidden rounded-2xl border">
                 <table className="w-full text-[14px]">
@@ -152,7 +153,7 @@ export default async function Page({ params }: Props) {
               )}
             </section>
 
-            <section aria-labelledby="amenities" className="space-y-3">
+            <section aria-labelledby="amenities" className="flex flex-col gap-3">
               <h2 id="amenities" className="text-[18px] font-semibold">Amenities</h2>
               <ul className="grid gap-2 sm:grid-cols-2">
                 {l.amenities.map((a) => <li key={a} className="flex items-center gap-2"><Check className="size-4 text-primary" aria-hidden />{a}</li>)}
@@ -160,13 +161,13 @@ export default async function Page({ params }: Props) {
               </ul>
             </section>
 
-            <section aria-labelledby="hood" className="space-y-2">
+            <section aria-labelledby="hood" className="flex flex-col gap-2">
               <h2 id="hood" className="text-[18px] font-semibold">The neighborhood: {l.neighborhood}</h2>
               <p className="text-[15px] leading-relaxed">{neighborhoodBlurb(l.neighborhood, l.metro)}</p>
               {l.lat != null && l.lng != null && <p className="text-[13px] text-muted-foreground">{l.street}, {l.city}, {l.state} {l.zip} · {l.lat.toFixed(4)}, {l.lng.toFixed(4)}</p>}
             </section>
 
-            <section aria-labelledby="help" className="space-y-2">
+            <section aria-labelledby="help" className="flex flex-col gap-2">
               <h2 id="help" className="text-[18px] font-semibold">Renting with us</h2>
               <div className="divide-y rounded-2xl border">
                 {help.map((h) => (
@@ -180,7 +181,7 @@ export default async function Page({ params }: Props) {
           </div>
 
           <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start" aria-label="Price, apply and tour">
-            <div className="space-y-4 rounded-2xl border bg-card p-5 shadow-sm">
+            <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-sm">
               <div>
                 <p className="flex items-baseline gap-2">
                   <span className="text-[30px] font-semibold tracking-tight tabular-nums">{usd(l.rent_cents)}</span><span className="text-muted-foreground">/month</span>
@@ -189,7 +190,7 @@ export default async function Page({ params }: Props) {
                 <p className="text-[13px] text-muted-foreground">{bedLabel(l.beds)} · {bathLabel(l.baths)} · {l.sqft.toLocaleString("en-US")} sq ft · {usd(moveIn)} due before move-in</p>
                 {l.specials[0] && <p className="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-tone-success"><BadgePercent className="size-4" aria-hidden />{l.specials[0].label}</p>}
               </div>
-              <Link href={`/apply/${l.id}`} className="flex h-11 items-center justify-center rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50">Apply now</Link>
+              <Button asChild className="h-11 w-full text-[15px]"><Link href={`/apply/${l.id}`}>Apply now</Link></Button>
               <p className="-mt-2 text-center text-[12px] text-muted-foreground">About 10 minutes · {usd(t.application_fee_cents)} fee per adult</p>
               <div id="tour" className="scroll-mt-20 border-t pt-4">
                 <h2 className="mb-3 text-[15px] font-semibold">Schedule a tour</h2>
@@ -201,7 +202,7 @@ export default async function Page({ params }: Props) {
         </div>
 
         {l.siblings.length > 0 && (
-          <section aria-labelledby="more" className="mt-12 space-y-4">
+          <section aria-labelledby="more" className="mt-12 flex flex-col gap-4">
             <h2 id="more" className="text-[18px] font-semibold">More homes at {l.property}</h2>
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {l.siblings.map((s) => <li key={s.id} className="flex"><ListingCard l={s} today={now} /></li>)}
@@ -211,8 +212,8 @@ export default async function Page({ params }: Props) {
       </main>
       <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
         <p className="min-w-0 flex-1 leading-tight"><span className="text-[18px] font-semibold tabular-nums">{usd(l.rent_cents)}</span><span className="text-[12px] text-muted-foreground">/mo</span><span className="block truncate text-[12px] text-muted-foreground">{availableText(l.available_on, now)}</span></p>
-        <a href="#tour" className="inline-flex h-10 items-center rounded-lg border px-3 text-[14px] font-medium hover:bg-muted">Tour</a>
-        <Link href={`/apply/${l.id}`} className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-[14px] font-semibold text-primary-foreground hover:bg-primary/90">Apply now</Link>
+        <Button asChild variant="outline" className="h-10 px-3"><a href="#tour">Book tour</a></Button>
+        <Button asChild className="h-10 px-4"><Link href={`/apply/${l.id}`}>Apply now</Link></Button>
       </div>
       <div className="h-16 lg:hidden" aria-hidden />
       <PublicFooter />

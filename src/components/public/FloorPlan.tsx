@@ -37,7 +37,7 @@ export function FloorPlan({ beds, baths, sqft, plan }: { beds: number; baths: nu
   const H = Math.round(W / 1.5);
   const rooms = layout(beds, baths);
   return (
-    <figure className="space-y-2">
+    <figure className="flex flex-col gap-2">
       <svg viewBox={`-4 -4 ${W + 8} ${H + 8}`} className="h-auto w-full text-foreground" role="img" aria-label={`Floor plan ${plan}: ${rooms.map((r) => r.name).join(", ")}; ${sqft} square feet`}>
         <rect x={0} y={0} width={W} height={H} rx={2} className="fill-muted/50" stroke="currentColor" strokeWidth={3} />
         {rooms.map((r) => {

@@ -6,6 +6,7 @@ import { Check, FileText, Loader2, Lock, Paperclip, X } from "lucide-react";
 import type { z } from "zod";
 import { cn } from "@/lib/utils";
 import { ApplyRequest, Consent, CREDIT_BANDS, DOC_KINDS, Documents, EMPLOYMENT, Income, Personal, Residence } from "./schemas";
+import { Button } from "@/components/ui/button";
 
 type Doc = z.infer<typeof Documents>["files"][number];
 type Values = Record<string, string>;
@@ -127,7 +128,7 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
   );
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <ol className="grid grid-cols-5 gap-1.5" aria-label="Application steps">
         {STEPS.map((s, i) => (
           <li key={s.key} aria-current={i === step ? "step" : undefined}>
@@ -141,7 +142,7 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
         ))}
       </ol>
 
-      <form ref={form} onSubmit={(e) => (e.preventDefault(), next())} noValidate className="space-y-5 rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
+      <form ref={form} onSubmit={(e) => (e.preventDefault(), next())} noValidate className="flex flex-col gap-5 rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
         <div>
           <p className="text-[12.5px] text-muted-foreground">Step {step + 1} of {STEPS.length}</p>
           <h2 ref={heading} tabIndex={-1} className="text-[20px] font-semibold outline-none">{STEPS[step].title}</h2>
@@ -209,7 +210,7 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
         )}
 
         {step === 3 && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <p className="text-[14px] text-muted-foreground">Add a photo ID and at least one proof of income (recent pay stubs, an offer letter or bank statements). PDF or image, up to 10 MB each.</p>
             <div className="grid gap-3 sm:grid-cols-3">
               {DOC_KINDS.map((kind) => (
@@ -239,7 +240,7 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
         )}
 
         {step === 4 && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <dl className="grid gap-x-6 gap-y-2 rounded-xl bg-muted/50 p-4 text-[14px] sm:grid-cols-2">
               <div><dt className="text-[12px] text-muted-foreground">Applicant</dt><dd>{v.first_name} {v.last_name} · {v.email}</dd></div>
               <div><dt className="text-[12px] text-muted-foreground">Move-in</dt><dd>{v.move_in} · {v.lease_months} months · {v.adults} adult{v.adults === "1" ? "" : "s"}</dd></div>
@@ -264,10 +265,10 @@ export function ApplyWizard({ listingId, leaseMonths, earliest, fee }: { listing
         {errors.form && <p role="alert" className="rounded-lg bg-tone-danger/10 px-3 py-2 text-[13.5px] text-tone-danger">{errors.form}</p>}
 
         <div className="flex items-center justify-between gap-3 border-t pt-4">
-          {step > 0 ? <button type="button" onClick={() => go(step - 1)} className="h-11 rounded-lg px-4 text-[15px] font-medium hover:bg-muted">Back</button> : <span />}
-          <button type="submit" disabled={busy} className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-6 text-[15px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{step === STEPS.length - 1 ? "Submit application" : "Continue"}
-          </button>
+          {step > 0 ? <Button type="button" variant="ghost" onClick={() => go(step - 1)} className="h-11 px-4 text-[15px]">Back</Button> : <span />}
+          <Button type="submit" disabled={busy} className="h-11 px-6 text-[15px]">
+            {busy && <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden />}{step === STEPS.length - 1 ? (busy ? "Submitting…" : "Submit application") : `Continue to ${STEPS[step + 1].title.toLowerCase()}`}
+          </Button>
         </div>
       </form>
     </div>

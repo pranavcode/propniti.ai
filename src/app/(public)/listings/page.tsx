@@ -7,6 +7,7 @@ import { Filters } from "@/components/public/Filters";
 import { ListingCard } from "@/components/public/ListingCard";
 import { MetroChooser } from "@/components/public/MetroChooser";
 import { Pagination } from "@/components/public/Pagination";
+import { Button } from "@/components/ui/button";
 
 type Props = { searchParams: Promise<SearchParams> };
 
@@ -48,8 +49,8 @@ export default async function Page({ searchParams }: Props) {
   return (
     <>
       <PublicHeader />
-      <main id="main" className="mx-auto max-w-7xl space-y-6 px-4 pt-6 text-[14px] sm:px-6 sm:pt-8">
-        <div className="space-y-1.5">
+      <main id="main" className="mx-auto max-w-7xl flex flex-col gap-6 px-4 pt-6 text-[14px] sm:px-6 sm:pt-8">
+        <div className="flex flex-col gap-1.5">
           <h1 className="text-balance text-[26px] font-semibold tracking-tight sm:text-[32px]">{f.metro ? `Homes for rent in ${f.metro}` : "Find your next home"}</h1>
           <p className="max-w-2xl text-[15px] text-muted-foreground">Real prices with the full move-in cost, floor plans and current specials. Ask our AI anything about a home, no account needed.</p>
         </div>
@@ -67,7 +68,7 @@ export default async function Page({ searchParams }: Props) {
             <SearchX className="size-8 text-muted-foreground" aria-hidden />
             <h2 className="text-[17px] font-semibold">{filtered ? "No homes match these filters" : "No homes are listed right now"}</h2>
             <p className="max-w-md text-muted-foreground">{filtered ? "Try a wider price range, fewer amenities or another metro." : "New homes are listed every week. Check back soon."}</p>
-            {filtered && <Link href="/listings" className="mt-1 inline-flex h-10 items-center rounded-lg border px-4 font-medium hover:bg-muted">Clear filters</Link>}
+            {filtered && <Button asChild variant="outline" className="mt-1 h-10 px-4"><Link href="/listings">Clear filters</Link></Button>}
           </div>
         )}
 

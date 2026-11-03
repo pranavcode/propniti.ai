@@ -33,14 +33,14 @@ export default async function Page({ params }: Props) {
         <h1 className="text-balance mb-6 text-[26px] font-semibold tracking-tight">Apply for unit {l.unit}</h1>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           <ApplyWizard listingId={l.id} leaseMonths={l.terms.lease_months} earliest={earliest} fee={usd(l.terms.application_fee_cents)} />
-          <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start" aria-label="The home you're applying for">
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start" aria-label="The home you're applying for">
             <div className="overflow-hidden rounded-2xl border bg-card">
               <img src={thumb(l.photo)} alt={l.property} width={400} height={300} className="aspect-[4/3] w-full object-cover" />
-              <div className="space-y-1 p-4">
+              <div className="flex flex-col gap-1 p-4">
                 <p className="font-semibold">{l.property} · Unit {l.unit}</p>
                 <p className="text-muted-foreground">{bedLabel(l.beds)} · {bathLabel(l.baths)} · {l.sqft.toLocaleString("en-US")} sq ft</p>
                 <p className="text-muted-foreground">{availableText(l.available_on, now)}</p>
-                <dl className="mt-3 space-y-1.5 border-t pt-3">
+                <dl className="mt-3 flex flex-col gap-1.5 border-t pt-3">
                   <div className="flex justify-between"><dt className="text-muted-foreground">Rent</dt><dd className="font-medium tabular-nums">{usd(l.rent_cents)}/mo</dd></div>
                   <div className="flex justify-between"><dt className="text-muted-foreground">Due before move-in</dt><dd className="font-medium tabular-nums">{usd(moveInCents(l))}</dd></div>
                   <div className="flex justify-between"><dt className="text-muted-foreground">Application fee</dt><dd className="font-medium tabular-nums">{usd(l.terms.application_fee_cents)} per adult</dd></div>
