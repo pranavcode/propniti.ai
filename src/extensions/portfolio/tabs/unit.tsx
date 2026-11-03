@@ -9,6 +9,7 @@ import { Gallery } from "./Gallery";
 import { FloorPlan } from "./FloorPlan";
 import { ACTIVE, asOf, days, inScope, one, parseList, photosOf, rows, tabCtx } from "./data";
 import type { QueryCtx } from "@/server/query";
+import type { Tone } from "@/entities/types";
 
 type UnitRow = { id: string; number: string; property_id: string; property: string; status: string; floor: number | null; sqft: number; market_rent_cents: number; unit_type_id: string | null; plan: string | null; beds: number | null; baths: number | null; plan_sqft: number | null; photos: string | null };
 
@@ -24,6 +25,7 @@ const Card = ({ title, meta, children, className }: { title: React.ReactNode; me
     {children}
   </section>
 );
+const TURN_TONE: Record<string, Tone> = { "Not started": "neutral", "In progress": "info", Ready: "success", Leased: "success" };
 const pctDiff = (a: number, b: number) => (b ? a / b - 1 : null);
 const signed = (cents: number) => `${cents < 0 ? "−" : "+"}${formatMoney(Math.abs(cents) / 100, "whole")}`;
 
@@ -41,14 +43,21 @@ export async function UnitOverview({ id, actor }: TabProps) {
       `SELECT l.id, l.status, l.start_on, l.end_on, l.rent_cents, l.deposit_cents, l.household_id, l.term_months, h.name AS household FROM {leases} l LEFT JOIN {households} h ON h.id = l.household_id
        WHERE l.unit_id = ? AND l.status IN ${ACTIVE} ORDER BY l.start_on DESC LIMIT 1`, id),
     u.unit_type_id
-      ? one<{ n: number; avg: number | null; lo: number | null; hi: number | null }>(ctx,
-        `SELECT count(*) AS n, avg(l.rent_cents) AS avg, min(l.rent_cents) AS lo, max(l.rent_cents) AS hi FROM {leases} l JOIN {units} x ON x.id = l.unit_id
-         WHERE x.unit_type_id = ? AND l.status IN ${ACTIVE} AND l.rent_cents > 0`, u.unit_type_id)
+      // Rents outside half to double the plan's market rent are data errors (Data Health flags them), not comparables.
+      ? one<{ n: number; avg: number | null; lo: number | null; hi: number | null; outliers: number }>(ctx,
+        `SELECT sum(ok) AS n, avg(CASE WHEN ok THEN rent END) AS avg, min(CASE WHEN ok THEN rent END) AS lo, max(CASE WHEN ok THEN rent END) AS hi, sum(NOT ok) AS outliers
+         FROM (SELECT l.rent_cents AS rent, l.rent_cents BETWEEN ut.market_rent_cents / 2 AND ut.market_rent_cents * 2 AS ok FROM {leases} l JOIN {units} x ON x.id = l.unit_id JOIN {unit_types} ut ON ut.id = x.unit_type_id
+               WHERE x.unit_type_id = ? AND l.status IN ${ACTIVE} AND l.rent_cents > 0)`, u.unit_type_id)
       : Promise.resolve(null),
   ]);
   const photos = photosOf(parseList(u.photos), "Living room");
   const gap = lease ? lease.rent_cents - u.market_rent_cents : null;
   const range = plan?.lo != null && plan.hi != null && plan.hi > plan.lo ? plan : null;
+  const markers = range ? [
+    { c: u.market_rent_cents, label: "Market rent", cls: "bg-foreground" },
+    ...(lease ? [{ c: lease.rent_cents, label: "This unit", cls: "bg-primary" }] : []),
+    { c: range.avg!, label: "Plan average", cls: "bg-tone-info" },
+  ] : [];
   const pos = (c: number) => (range ? Math.max(0, Math.min(100, ((c - range.lo!) / (range.hi! - range.lo!)) * 100)) : 50);
 
   return (
@@ -72,20 +81,14 @@ export async function UnitOverview({ id, actor }: TabProps) {
             {range ? (
               <>
                 <p className="text-muted-foreground">Leases on the {u.plan} plan at {u.property}: <span className="font-medium text-foreground tabular-nums">{plan!.n}</span>, averaging <span className="font-medium text-foreground tabular-nums">{formatMoney(plan!.avg! / 100, "whole")}</span>.</p>
-                <div className="relative mt-5 mb-6 h-1.5 rounded-full bg-muted" role="img" aria-label={`Plan rents range from ${formatMoney(range.lo! / 100, "whole")} to ${formatMoney(range.hi! / 100, "whole")}`}>
-                  <span className="absolute inset-y-0 rounded-full bg-tone-info/30" style={{ left: 0, right: 0 }} />
-                  {[
-                    { c: u.market_rent_cents, label: "Market", cls: "bg-foreground" },
-                    ...(lease ? [{ c: lease.rent_cents, label: "This unit", cls: "bg-primary" }] : []),
-                    { c: plan!.avg!, label: "Average", cls: "bg-tone-info" },
-                  ].map((m, i) => (
-                    <span key={m.label} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${pos(m.c)}%` }}>
-                      <span className={cn("block size-3 rounded-full ring-2 ring-card", m.cls)} />
-                      <span className={cn("absolute left-1/2 -translate-x-1/2 text-[10.5px] whitespace-nowrap text-muted-foreground", i % 2 ? "top-4" : "-top-5")}>{m.label}</span>
-                    </span>
-                  ))}
+                <div className="relative mt-4 mb-2 h-1.5 rounded-full bg-tone-info/25" role="img" aria-label={`Plan rents range from ${formatMoney(range.lo! / 100, "whole")} to ${formatMoney(range.hi! / 100, "whole")}`}>
+                  {markers.map((m) => <span key={m.label} title={`${m.label}: ${formatMoney(m.c / 100, "whole")}`} className={cn("absolute top-1/2 block size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-card", m.cls)} style={{ left: `${pos(m.c)}%` }} />)}
                 </div>
                 <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums"><span>Low {formatMoney(range.lo! / 100, "whole")}</span><span>High {formatMoney(range.hi! / 100, "whole")}</span></div>
+                <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px]">
+                  {markers.map((m) => <li key={m.label} className="flex items-center gap-1.5"><span className={cn("size-2.5 rounded-full", m.cls)} /><span className="text-muted-foreground">{m.label}</span><span className="font-medium tabular-nums">{formatMoney(m.c / 100, "whole")}</span></li>)}
+                </ul>
+                {plan!.outliers > 0 && <p className="mt-2 text-[11.5px] text-muted-foreground">{plan!.outliers} lease{plan!.outliers === 1 ? "" : "s"} with an implausible rent left out of the comparison. <Link href="/app/data-health" className="text-primary hover:underline">Review in Data health</Link></p>}
               </>
             ) : <p className="text-muted-foreground">Not enough active leases on this floor plan to compare.</p>}
           </div>
@@ -181,7 +184,7 @@ export async function UnitTurnovers({ id, actor }: TabProps) {
   if (!inScope(actor, u.property_id)) return <OutOfScope />;
   const [list, today] = await Promise.all([
     rows<{ id: string; move_out_on: string; target_ready_on: string; ready_on: string | null; status: string; checklist: string; cost_cents: number; vendor: string | null; vendor_id: string | null; lease_id: string | null }>(ctx,
-      "SELECT t.*, v.name AS vendor FROM {turnovers} t LEFT JOIN {vendors} v ON v.id = t.vendor_id WHERE t.unit_id = ? ORDER BY t.move_out_on DESC LIMIT 50", id),
+      "SELECT t.*, v.company AS vendor FROM {turnovers} t LEFT JOIN {vendors} v ON v.id = t.vendor_id WHERE t.unit_id = ? ORDER BY t.move_out_on DESC LIMIT 50", id),
     asOf(ctx),
   ]);
   if (!list.length) return <EmptyState title="No turnovers on this unit" description="Each move-out starts a make-ready with a checklist, vendor and cost. They appear here." />;
@@ -209,7 +212,7 @@ export async function UnitTurnovers({ id, actor }: TabProps) {
             <section key={t.id} className="rounded-lg border bg-card">
               <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-2 text-[12.5px]">
                 <span className="font-semibold">Moved out {formatDate(t.move_out_on, "always")}</span>
-                <StatusBadge value={late ? "Overdue" : t.status} label={late ? "Past target" : undefined} />
+                <StatusBadge value={t.status} tone={late ? "danger" : TURN_TONE[t.status] ?? "neutral"} label={late ? "Past target" : undefined} />
                 <span className="text-muted-foreground tabular-nums">Target {formatDate(t.target_ready_on, "always")}</span>
                 <span className="text-muted-foreground tabular-nums">{t.ready_on ? <>Ready {formatDate(t.ready_on, "always")} · {took} days</> : late ? <span className="text-tone-danger">{days(t.target_ready_on, today)} days past target</span> : "In progress"}</span>
                 <span className="ml-auto flex items-center gap-3">

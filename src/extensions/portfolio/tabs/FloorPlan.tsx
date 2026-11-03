@@ -36,7 +36,9 @@ function DoorMark({ room, door }: { room: Room; door: Door }) {
 
 export function FloorPlan({ beds, baths, sqft, name, className }: { beds: number; baths: number; sqft: number; name: string; className?: string }) {
   const p = planLayout({ beds, baths, sqft });
-  const W = p.width * PX + PAD * 2, H = p.height * PX + PAD * 2 + 18;
+  const W = p.width * PX + PAD * 2;
+  const fs = W / 32; // text scales with the drawing so it stays legible when the SVG shrinks
+  const H = p.height * PX + PAD * 2 + fs * 1.6;
   const entryRoom = p.rooms[p.entry.room];
   const scaleFt = 10;
   return (
@@ -44,8 +46,8 @@ export function FloorPlan({ beds, baths, sqft, name, className }: { beds: number
       {p.rooms.map((r, i) => (
         <g key={i}>
           <rect x={PAD + r.x * PX} y={PAD + r.y * PX} width={r.w * PX} height={r.h * PX} fill={FILL[r.kind]} stroke="currentColor" strokeWidth={1.5} />
-          <text x={PAD + (r.x + r.w / 2) * PX} y={PAD + (r.y + r.h / 2) * PX - 2} textAnchor="middle" fontSize={r.w * PX < 90 ? 9.5 : 11} fontWeight={600} fill="currentColor">{r.label}</text>
-          <text x={PAD + (r.x + r.w / 2) * PX} y={PAD + (r.y + r.h / 2) * PX + 11} textAnchor="middle" fontSize={9} fill="var(--muted-foreground)">{feet(r.w)} × {feet(r.h)}</text>
+          <text x={PAD + (r.x + r.w / 2) * PX} y={PAD + (r.y + r.h / 2) * PX - fs * 0.2} textAnchor="middle" fontSize={r.w * PX < fs * 9 ? fs * 0.8 : fs} fontWeight={600} fill="currentColor">{r.label}</text>
+          <text x={PAD + (r.x + r.w / 2) * PX} y={PAD + (r.y + r.h / 2) * PX + fs * 1.05} textAnchor="middle" fontSize={fs * 0.8} fill="var(--muted-foreground)">{feet(r.w)} × {feet(r.h)}</text>
         </g>
       ))}
       {p.rooms.map((r, i) => r.door && <DoorMark key={`d${i}`} room={r} door={r.door} />)}
@@ -53,19 +55,19 @@ export function FloorPlan({ beds, baths, sqft, name, className }: { beds: number
       {/* Outer wall drawn last so it sits over room edges and door gaps on the shell. */}
       <rect x={PAD} y={PAD} width={p.width * PX} height={p.height * PX} fill="none" stroke="currentColor" strokeWidth={3.5} />
       <line x1={PAD + entryRoom.x * PX + p.entry.at * PX} y1={PAD} x2={PAD + entryRoom.x * PX + (p.entry.at + p.entry.width) * PX} y2={PAD} stroke="var(--card)" strokeWidth={5} style={{ display: p.entry.wall === "top" ? undefined : "none" }} />
-      <text x={PAD + entryRoom.x * PX + (p.entry.at + p.entry.width / 2) * PX} y={PAD - 6} textAnchor="middle" fontSize={8.5} fill="var(--muted-foreground)" style={{ display: p.entry.wall === "top" ? undefined : "none" }}>ENTRY</text>
+      <text x={PAD + entryRoom.x * PX + (p.entry.at + p.entry.width / 2) * PX} y={PAD - 6} textAnchor="middle" fontSize={fs * 0.7} fill="var(--muted-foreground)" style={{ display: p.entry.wall === "top" ? undefined : "none" }}>ENTRY</text>
       {/* North arrow */}
       <g transform={`translate(${W - PAD + 8}, ${PAD - 4})`} fill="currentColor">
         <path d="M0 -10 L5 4 L0 1 L-5 4 Z" />
         <text y={14} textAnchor="middle" fontSize={8.5} fontWeight={600}>N</text>
       </g>
       {/* Scale bar */}
-      <g transform={`translate(${PAD}, ${H - 14})`} fontSize={8.5} fill="var(--muted-foreground)">
+      <g transform={`translate(${PAD}, ${H - fs * 1.1})`} fontSize={fs * 0.72} fill="var(--muted-foreground)">
         <rect width={scaleFt * PX / 2} height={4} fill="currentColor" style={{ color: "var(--foreground)" }} />
         <rect x={scaleFt * PX / 2} width={scaleFt * PX / 2} height={4} fill="none" stroke="var(--foreground)" strokeWidth={1} />
-        <text x={0} y={-3}>0</text>
-        <text x={scaleFt * PX} y={-3} textAnchor="end">{scaleFt} ft</text>
-        <text x={W - PAD * 2} y={4} textAnchor="end">{sqft.toLocaleString("en-US")} sq ft · {beds === 0 ? (sqft > 1200 ? "Suite" : "Studio") : `${beds} bd`} · {baths} ba · not to scale for construction</text>
+        <text x={0} y={-4}>0</text>
+        <text x={scaleFt * PX} y={-4} textAnchor="end">{scaleFt} ft</text>
+        <text x={W - PAD * 2} y={fs * 0.35} textAnchor="end">{sqft.toLocaleString("en-US")} sq ft · {beds === 0 ? (sqft > 1200 ? "Suite" : "Studio") : `${beds} bd`} · {baths} ba · illustrative</text>
       </g>
     </svg>
   );

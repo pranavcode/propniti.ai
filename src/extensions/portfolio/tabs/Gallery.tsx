@@ -38,7 +38,7 @@ export function Gallery({ photos, title, variant = "mosaic", className }: { phot
       {variant === "mosaic" ? (
         <div className="relative grid h-[340px] grid-cols-4 grid-rows-2 gap-1.5 overflow-hidden rounded-lg">
           {tile(photos[0], 0, n === 1 ? "col-span-4 row-span-2" : "col-span-2 row-span-2", true)}
-          {photos.slice(1, 5).map((p, i) => tile(p, i + 1, n === 2 ? "col-span-2 row-span-2" : n === 3 ? "col-span-2" : "col-span-1"))}
+          {photos.slice(1, 5).map((p, i) => tile(p, i + 1, n === 2 ? "col-span-2 row-span-2" : n === 3 || (n === 4 && i === 2) ? "col-span-2" : "col-span-1"))}
           {n > 1 && (
             <button type="button" onClick={() => setOpen(0)} className="absolute right-2.5 bottom-2.5 inline-flex items-center gap-1.5 rounded-md border bg-background/95 px-2.5 py-1 text-[12px] font-medium shadow-sm hover:bg-background">
               <Images className="size-3.5" /> All {n} photos

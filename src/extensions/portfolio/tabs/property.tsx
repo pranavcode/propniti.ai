@@ -281,12 +281,12 @@ export async function PropertyFinancials({ id, actor }: TabProps) {
         {card(coll, <ChartCard title="Charged vs collected" kind="bar" data={pts(coll)} x="label" series={[{ key: "charged", label: "Charged", format: "money" }, { key: "collected", label: "Collected", format: "money" }]} drill={`/app/receivables/charges?f.property_id=${encodeURIComponent(id)}`} />)}
       </div>
 
-      <Card title="Trailing 12 months" meta="Closed months · from the monthly close">
+      <Card title="Trailing 12 months" meta="Closed months · GPR is gross potential rent">
         {months.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead className="text-[11.5px] text-muted-foreground">
-                <tr className="border-b">{["Month", "Gross potential rent", "Collected", "Vacancy loss", "Operating expenses", "NOI", "Budget NOI", "Variance", "Occupancy"].map((h, i) => <th key={h} className={cn("px-3 py-1.5 font-medium whitespace-nowrap", i ? "text-right" : "text-left")}>{h}</th>)}</tr>
+                <tr className="border-b">{["Month", "GPR", "Collected", "Vacancy loss", "Opex", "NOI", "Budget", "Variance", "Occupancy"].map((h, i) => <th key={h} className={cn("px-3 py-1.5 font-medium whitespace-nowrap", i ? "text-right" : "text-left")}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {months.map((m) => {
@@ -308,7 +308,7 @@ export async function PropertyFinancials({ id, actor }: TabProps) {
               </tbody>
               <tfoot className="bg-muted/40 font-semibold">
                 <tr>
-                  <td className="px-3 py-1.5">T12 total</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">T12 total</td>
                   <td className="px-3 py-1.5 text-right"><Money value={sum("gpr_cents")} cents style="whole" /></td>
                   <td className="px-3 py-1.5 text-right"><Money value={sum("collected_cents")} cents style="whole" /></td>
                   <td className="px-3 py-1.5 text-right"><Money value={sum("vacancy_loss_cents")} cents style="whole" tone="none" /></td>
@@ -337,7 +337,7 @@ function Expiry({ on, today }: { on: string; today: string }) {
   return <StatusBadge value={d < 0 ? "Expired" : `${d} days`} tone={tone} label={d < 0 ? `Expired ${-d} days ago` : `${d} days left`} />;
 }
 
-export async function PropertyCompliance({ id, actor }: TabProps) {
+export async function PropertyCompliance({ id, row, actor }: TabProps) {
   if (!inScope(actor, id)) return <OutOfScope />;
   const ctx = await tabCtx(actor);
   const [today, policies, items, inspections, capex] = await Promise.all([
@@ -361,9 +361,9 @@ export async function PropertyCompliance({ id, actor }: TabProps) {
               <tbody>
                 {policies.map((p) => (
                   <tr key={p.id} className="border-b last:border-0">
-                    <td className="px-3 py-1.5 font-medium">{p.kind}</td>
+                    <td className="px-3 py-1.5 font-medium whitespace-nowrap">{p.kind}</td>
                     <td className="px-3 py-1.5">{p.carrier}</td>
-                    <td className="px-3 py-1.5 font-mono text-[12px] text-muted-foreground">{p.policy_number}</td>
+                    <td className="px-3 py-1.5 font-mono text-[12px] whitespace-nowrap text-muted-foreground">{p.policy_number}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap tabular-nums">{formatDate(p.starts_on, "always")} – {formatDate(p.expires_on, "always")}</td>
                     <td className="px-3 py-1.5"><Expiry on={p.expires_on} today={today} /></td>
                     <td className="px-3 py-1.5 text-right"><Money value={p.coverage_cents} cents style="compact" /></td>
@@ -382,7 +382,7 @@ export async function PropertyCompliance({ id, actor }: TabProps) {
             <ul className="divide-y">
               {items.map((i) => (
                 <li key={i.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-                  <div className="min-w-0 flex-1"><p className="truncate font-medium">{i.title}</p><p className="text-[11.5px] text-muted-foreground">{i.kind} · due {formatDate(i.due_on, "always")}</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate font-medium">{i.title.replace(` — ${String(row._title ?? "")}`, "")}</p><p className="text-[11.5px] text-muted-foreground">{i.kind} · due {formatDate(i.due_on, "always")}</p></div>
                   <StatusBadge value={i.status} />
                 </li>
               ))}
