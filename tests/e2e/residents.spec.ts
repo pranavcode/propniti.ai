@@ -85,6 +85,7 @@ test("announcement: AI draft for a property, then send", async ({ page }) => {
   await expect(page.getByRole("link", { name: "View run" })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByLabel("Message")).not.toHaveValue("");
   await page.getByRole("button", { name: /^Send to \d+ residents/ }).click();
+  await page.getByRole("button", { name: /^Confirm: send to/ }).click();
   await expect(page).toHaveURL(/\/app\/communications\/announcements\/ann-/);
   await expect(page.getByText("Sent").first()).toBeVisible();
   expect(errors).toEqual([]);

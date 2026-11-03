@@ -30,6 +30,8 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
   const [when, setWhen] = useState<"now" | "later">(draft?.status === "Scheduled" ? "later" : "now");
   const [sendAt, setSendAt] = useState(draft?.sendAt?.slice(0, 16) ?? "");
   const [busy, setBusy] = useState<"draft" | "send" | null>(null);
+  // Sending reaches every resident at the property, so it takes a second click to confirm.
+  const [armed, setArmed] = useState(false);
   const prop = properties.find((p) => p.id === property);
   const locked = !!draft;
 
@@ -80,7 +82,7 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
             <label className="space-y-1">
               <span className="text-[12px] font-medium">Property</span>
-              <select value={property} disabled={locked} onChange={(e) => setProperty(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[13px] disabled:opacity-70">
+              <select value={property} disabled={locked} onChange={(e) => setProperty(e.target.value)} className="h-8 w-full rounded-md border bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-70">
                 {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
@@ -103,7 +105,7 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
             <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
               <span className="text-muted-foreground">Or start from a template:</span>
               {templates.map((t) => (
-                <button key={t.id} type="button" className="rounded-full border px-2 py-0.5 hover:border-primary/40 hover:text-primary" onClick={() => { const v = { property: prop?.name ?? "", due_date: "[date]" }; setTitle(fillTemplate(t.subject || t.name, v)); setBody(fillTemplate(t.body, v)); }}>{t.name}</button>
+                <button key={t.id} type="button" className="rounded-full border px-2 py-0.5 hover:border-primary/40 hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring/50" onClick={() => { const v = { property: prop?.name ?? "", due_date: "[date]" }; setTitle(fillTemplate(t.subject || t.name, v)); setBody(fillTemplate(t.body, v)); }}>{t.name}</button>
               ))}
             </div>
           )}
@@ -137,7 +139,7 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
             <div className="flex gap-1.5">
               {CHANNELS.map((c) => {
                 const on = channels.includes(c);
-                return <button key={c} type="button" aria-pressed={on} onClick={() => setChannels((x) => (on ? x.filter((y) => y !== c) : [...x, c]))} className={cn("rounded-md border px-2.5 py-1 text-[12.5px]", on ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground hover:text-foreground")}>{c}</button>;
+                return <button key={c} type="button" aria-pressed={on} onClick={() => setChannels((x) => (on ? x.filter((y) => y !== c) : [...x, c]))} className={cn("rounded-md border px-2.5 py-1 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50", on ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground hover:text-foreground")}>{c}</button>;
               })}
             </div>
             {channels.includes("SMS") && body.length > 320 && <p className="text-[11.5px] text-tone-warning">SMS sends the first 320 characters with a link to the full notice.</p>}
@@ -145,13 +147,14 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
           <fieldset className="space-y-1.5">
             <legend className="text-[12px] font-medium">When</legend>
             <div className="flex gap-1.5">
-              <button type="button" aria-pressed={when === "now"} onClick={() => setWhen("now")} className={cn("rounded-md border px-2.5 py-1 text-[12.5px]", when === "now" ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground")}>Send now</button>
-              <button type="button" aria-pressed={when === "later"} onClick={() => setWhen("later")} className={cn("inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[12.5px]", when === "later" ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground")}><CalendarClock className="size-3.5" />Schedule</button>
+              <button type="button" aria-pressed={when === "now"} onClick={() => setWhen("now")} className={cn("rounded-md border px-2.5 py-1 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50", when === "now" ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground")}>Send now</button>
+              <button type="button" aria-pressed={when === "later"} onClick={() => setWhen("later")} className={cn("inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50", when === "later" ? "border-primary bg-primary/[0.07] font-medium" : "text-muted-foreground")}><CalendarClock className="size-3.5" />Schedule</button>
             </div>
             {when === "later" && <Input type="datetime-local" aria-label="Send at" value={sendAt} onChange={(e) => setSendAt(e.target.value)} />}
           </fieldset>
-          <Button className="w-full" disabled={!ready || busy !== null || /\[(date|time)\]/i.test(`${title} ${body}`)} onClick={send}>
-            {busy === "send" ? <Loader2 className="animate-spin" /> : <Send />}{when === "later" ? "Schedule" : "Send"} to {prop?.recipients ?? 0} residents
+          <Button className="w-full" variant={armed ? "destructive" : "default"} disabled={!ready || busy !== null || /\[(date|time)\]/i.test(`${title} ${body}`)}
+            onClick={() => (armed ? void send() : (setArmed(true), setTimeout(() => setArmed(false), 5000)))}>
+            {busy === "send" ? <Loader2 className="animate-spin" /> : <Send />}{armed ? `Confirm: ${when === "later" ? "schedule" : "send"} to ${prop?.recipients ?? 0} residents` : `${when === "later" ? "Schedule" : "Send"} to ${prop?.recipients ?? 0} residents`}
           </Button>
           <p className="text-[11.5px] text-muted-foreground">Logged to the audit trail with who sent it. Nothing leaves the system in this demo.</p>
         </section>

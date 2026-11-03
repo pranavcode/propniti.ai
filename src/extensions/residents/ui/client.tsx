@@ -84,7 +84,7 @@ export function MergeDialog({ keep, dup, fields, suggestion, issueId }: {
     return (
       <td className="p-1">
         <button type="button" disabled={same} aria-pressed={on} onClick={() => setChoice((c) => ({ ...c, [f.key]: side }))}
-          className={cn("flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-[12.5px] transition-colors",
+          className={cn("flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-[12.5px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
             same ? "border-transparent text-muted-foreground" : on ? "border-primary bg-primary/[0.06] font-medium" : "border-dashed hover:border-primary/40")}>
           {!same && <span className={cn("grid size-3.5 shrink-0 place-items-center rounded-full border", on && "border-primary bg-primary text-primary-foreground")}>{on && <Check className="size-2.5" />}</span>}
           <span className="min-w-0 truncate">{v || <span className="italic text-muted-foreground">empty</span>}</span>

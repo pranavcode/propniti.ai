@@ -73,7 +73,7 @@ export async function InboxPage(p: Params) {
               {status && <input type="hidden" name="status" value={status} />}
               {p.kind && <input type="hidden" name="kind" value={p.kind} />}
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input name="q" defaultValue={p.q} placeholder="Search subject or name…" aria-label="Search conversations"
+              <input type="search" name="q" defaultValue={p.q} placeholder="Search subject or name…" aria-label="Search conversations" autoComplete="off" spellCheck={false}
                 className="h-8 w-full rounded-md border bg-background pr-2 pl-8 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50" />
             </form>
             <nav className="flex gap-1" aria-label="Status">
