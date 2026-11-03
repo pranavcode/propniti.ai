@@ -154,7 +154,9 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
     void ask(pending.query, pending.context ? { ...pending.context, path: pending.context.path ?? pathname } : undefined);
   }, [pending, take, busy, ask, pathname]);
 
-  useEffect(() => end.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [turns, busy]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [turns, busy]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col", page && "min-h-[calc(100vh-10rem)]")}>
