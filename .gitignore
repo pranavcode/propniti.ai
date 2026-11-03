@@ -55,3 +55,7 @@ next-env.d.ts
 
 # generated base dataset for D1 loads (large; regenerate with scripts/seed-d1.mjs)
 /.seed/
+
+# Playwright
+/playwright-report/
+/test-results/

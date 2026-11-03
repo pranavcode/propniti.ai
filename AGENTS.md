@@ -144,8 +144,7 @@ Rules for every lane:
 - **Static pages beat the generic page.** `src/app/(app)/app/[...path]/page.tsx` resolves any other `/app` path through `getEntityByRoute()`: `EntityDef.route` opens the list, and `route/<id>` opens the detail. Add a static folder only for custom pages (inbox, copilot, dashboards, settings sections). A static folder that shadows an entity route hides the generic page.
 - **Stubs exist for:** `/app` (dashboard), inbox, tasks, copilot, `ai/activity`, `ai/approvals`, automations, data-health, reports and settings.
 - **Scoped tokens.** All three layouts render `<div data-surface="app">` and `<SurfaceBody />`. App tokens in `globals.css` are scoped to `[data-surface="app"]`, so marketing (`/`, `/login`, `/docs`) keeps Instrument Serif, the beige palette and Tailwind's default `rounded-*` scale. Don't add app styles outside that scope.
-- **Legacy code.** The old persona pages (`/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`), the old `/api/*` routes and `DemoProvider` in the root layout still read 0001 tables. They break at runtime once 0002 is applied. Lane C removes `DemoProvider` from `src/app/layout.tsx` and turns the old routes into redirects.
-- **Legacy tests.** `src/server/server.test.ts` and `src/server/routes.test.ts` are excluded in `vitest.config.mts` until lane A ports them.
+- **Legacy code.** The v1 persona pages redirect to their v2 homes. The v1 `/api/*` routes, `DemoProvider` and the v1 money code are deleted.
 
 ### Theme (plan §6)
 
@@ -169,10 +168,4 @@ Rules for every lane:
 
 ### Scheduled agents (Cron Triggers)
 
-This is feasible but not wired yet:
-
-- `cf/config` supports `triggers: { crons: [...] }`, and the Worker `entrypoint` is configurable.
-- `vinext/server/fetch-handler` is importable; its default export carries `fetch`.
-- `src/worker-entry.ts` wraps it and adds `scheduled()`, using `ctx.waitUntil` for background work.
-
-To enable it, the lead or lane E sets `entrypoint: "./src/worker-entry.ts"` and the crons in `cloudflare.config.ts`, then proves both builds and a `curl "http://localhost:<port>/cdn-cgi/handler/scheduled"` in `dev:vinext`. Until then, agent runs start from events, from a person, or from chat.
+Wired. `cloudflare.config.ts` sets `entrypoint: "./src/worker-entry.ts"` and a `*/15 * * * *` scheduled trigger. `src/worker-entry.ts` wraps vinext's fetch handler and adds `scheduled()`, which calls the AI sweep (`/api/ai/sweep`, constant-time token check) inside `ctx.waitUntil`. The first AI request after 15 minutes without a sweep also starts one (15 s budget). Locally, trigger it with `curl "http://localhost:<port>/cdn-cgi/handler/scheduled"` under `dev:vinext`.

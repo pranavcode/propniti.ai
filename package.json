@@ -16,7 +16,8 @@
     "db:migrate:local": "cf d1 migrations apply 3d4ff9d5-eb1e-4970-b73e-004ba9124fd8 --local --persist-to .cloudflare/state",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "eval": "node evals/run.mjs"
+    "eval": "node evals/run.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
