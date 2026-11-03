@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { allEntities, can } from "@/entities";
+import { allEntities, can, getEntity, registerEntity } from "@/entities";
 import { getPersona } from "@/auth/personas";
 import type { Db } from "@/lib/platform/types";
 import { actorFor, permissionMatrix } from "./permissions";
@@ -247,7 +247,7 @@ describe("writes", () => {
     const row = await createRecord(await wctx("marcus"), "units", { number: "999", property_id: "p02", sqft: 700, market_rent: 1400, status: "Vacant" });
     expect(row).toMatchObject({ number: "999", market_rent: 1400, property_id: "p02" });
     expect((await list(await ctx("marcus", WS), "units", { filters: { property_id: "p02" } })).total).toBe(4);
-    await expect(createRecord(await wctx("marcus"), "units", { number: "998", property_id: "p05", sqft: 700 })).rejects.toMatchObject({ status: 403 });
+    await expect(createRecord(await wctx("marcus"), "units", { number: "998", property_id: "p05", sqft: 700 })).rejects.toMatchObject({ status: 400 });
     expect((await db.prepare("SELECT count(*) AS n FROM units WHERE number = '998'").first())!.n).toBe(0);
   });
 
@@ -262,6 +262,23 @@ describe("writes", () => {
     await expect(createRecord(await wctx("marcus"), "units", { number: "77", property_id: "p02", sqft: 700, status: "Vacant", unit_type_id: "nope" })).rejects.toMatchObject({ status: 400 });
     const ok = await createRecord(await wctx("marcus"), "work_orders", { title: "Leak", category: "Plumbing", priority: "Normal", status: "New", property_id: "p01", unit_id: "p01-u1", opened_at: "2026-10-28T10:00:00Z" });
     expect(ok.unit_id).toBe("p01-u1");
+  });
+
+  it("writes nothing when a create or edit lands outside scope", async () => {
+    // A field that moves scope without being a reference, so only the in-batch guard can catch it.
+    const units = getEntity("units")!;
+    registerEntity({ ...units, fields: { ...units.fields, property_id: { type: "text", label: "Property" } } });
+    try {
+      const snap = async () => [await db.prepare("SELECT * FROM units WHERE workspace_id <> 'base' ORDER BY id").all(), await db.prepare("SELECT count(*) AS n FROM audit").first(), await db.prepare("SELECT count(*) AS n FROM events").first()];
+      const before = await snap();
+      await expect(updateRecord(await wctx("marcus"), "units", "p01-u3", { property_id: "p05" })).rejects.toMatchObject({ status: 403 });
+      await expect(createRecord(await wctx("marcus"), "units", { number: "88", property_id: "p05", sqft: 700, status: "Vacant" })).rejects.toMatchObject({ status: 403 });
+      expect(await snap()).toEqual(before);
+      // An in-scope edit after a refused one still works.
+      expect((await updateRecord(await wctx("marcus"), "units", "p01-u3", { property_id: "p02" })).property_id).toBe("p02");
+    } finally {
+      registerEntity(units);
+    }
   });
 
   it("can't update or delete a record outside scope", async () => {

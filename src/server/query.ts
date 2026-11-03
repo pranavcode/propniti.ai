@@ -481,11 +481,24 @@ function trail(ctx: WriteCtx, def: EntityDef, id: string, verb: "created" | "upd
 
 const diffKeys = (a: Row, b: Row) => Object.keys(b).filter((k) => k !== "seq" && k !== "workspace_id" && a[k] !== b[k]);
 
+// The row's property for the audit trail, when it carries one directly.
+const pidOf = (def: EntityDef, row: Row) => (def.scopePath && "property_id" in row && row.property_id != null ? String(row.property_id) : null);
+
 async function propertyOf(ctx: QueryCtx, def: EntityDef, id: string) {
   if (!def.scopePath) return null;
   const r = await ctx.db.prepare(`SELECT (${expand(def.scopePath, ctx.ws)}) AS p FROM ${effective(def.table, ctx.ws)} AS ${def.table} WHERE ${def.table}.id = ?`).bind(id).first<{ p: unknown }>();
   return r?.p ?? null;
 }
+
+// A statement that fails the whole write batch unless the written row is readable under the
+// actor's scope (properties and portal "self"). D1 and SQLite batches are transactions, so an
+// out-of-scope create or edit writes nothing: the NOT NULL violation on meta.value aborts it.
+const SCOPE_GUARD = "__scope_guard__";
+function scopeGuard(ctx: QueryCtx, def: EntityDef, id: string): DbStatement {
+  const w = merge({ sql: [`${def.table}.id = ?`], params: [id] }, scopeWhere(def, ctx.actor, ctx.ws));
+  return ctx.db.prepare(`INSERT INTO meta (key, value) SELECT '${SCOPE_GUARD}', NULL WHERE NOT EXISTS (SELECT 1 FROM ${effective(def.table, ctx.ws)} AS ${def.table}${whereSql(w)})`).bind(...w.params);
+}
+const outOfScope = (e: unknown) => /meta\.value/.test(String((e as Error)?.message ?? e));
 
 // Every reference set by a write must point at a record the actor can see under its scope, so a
 // record in scope can't be linked to (and show the name of) one at another property.
@@ -520,19 +533,10 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
   await assertRefs(ctx, def, body);
   const id = newId(def);
   const row: Row = { workspace_id: ctx.ws, id, ...changesToColumns(def, body) };
-  const statements = [upsert(ctx.db, def.table, row)];
   try {
-    // Insert first so the scope check below can read the new row; roll back if out of scope.
-    await ctx.db.batch(statements);
-    const pid = await propertyOf(ctx, def, id);
-    // getRow applies the full scope (properties and portal "self"), so a row it can't read back
-    // was created outside the persona's scope.
-    if (!(await getRow(ctx, entity, id))) {
-      await ctx.db.prepare(`DELETE FROM ${def.table} WHERE workspace_id = ? AND id = ?`).bind(ctx.ws, id).run();
-      throw new QueryError(403, "That property is outside your scope");
-    }
-    await ctx.db.batch(trail(ctx, def, id, "created", pid, null, row, `Created ${def.label.one.toLowerCase()}`));
+    await ctx.db.batch([upsert(ctx.db, def.table, row), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "created", pidOf(def, row), null, row, `Created ${def.label.one.toLowerCase()}`)]);
   } catch (e) {
+    if (outOfScope(e)) throw new QueryError(403, "That record would be outside your scope");
     throw constraintError(e);
   }
   return (await getRow(ctx, entity, id))!;
@@ -550,13 +554,12 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   const changed = diffKeys(before, after).filter((k) => k in changes);
   const summary = `Updated ${changed.map((c) => Object.entries(def.fields).find(([k, f]) => (f.column ?? k) === c)?.[1].label ?? c).join(", ") || "nothing"}`;
   try {
-    await ctx.db.batch([upsert(ctx.db, def.table, after), ...trail(ctx, def, id, "updated", await propertyOf(ctx, def, id), pick(before, changed), pick(after, changed), summary)]);
+    await ctx.db.batch([upsert(ctx.db, def.table, after), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
   } catch (e) {
+    if (outOfScope(e)) throw new QueryError(403, "That change would move the record outside your scope");
     throw constraintError(e);
   }
-  const row = await getRow(ctx, entity, id);
-  if (!row) throw new QueryError(403, "That change would move the record outside your scope");
-  return row;
+  return (await getRow(ctx, entity, id))!;
 }
 
 const pick = (r: Row, keys: string[]) => Object.fromEntries(keys.map((k) => [k, r[k]]));
