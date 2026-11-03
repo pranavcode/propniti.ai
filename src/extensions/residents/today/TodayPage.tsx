@@ -51,7 +51,7 @@ export async function TodayPage() {
     settle(sql<{ n: number; high: number }>(ctx, `SELECT count(*) AS n, sum(risk = 'High') AS high FROM {ai_proposals} pr WHERE queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = pr.id) AND ${p("pr.property_id").sql}`, p("pr.property_id").binds), []),
     settle(sql(ctx, `SELECT l.id, l.end_on, l.rent_cents, u.number AS unit, h.name AS household, pr.name AS property
       FROM {leases} l LEFT JOIN {units} u ON u.id = l.unit_id LEFT JOIN {households} h ON h.id = l.household_id LEFT JOIN {properties} pr ON pr.id = l.property_id
-      WHERE l.status = 'Active' AND l.end_on BETWEEN ? AND date(?, '+60 days') AND NOT EXISTS (SELECT 1 FROM {renewal_offers} o WHERE o.lease_id = l.id) AND NOT EXISTS (SELECT 1 FROM {leases} n WHERE n.renewal_of = l.id) AND ${p("l.property_id").sql}
+      WHERE l.status = 'Active' AND l.end_on BETWEEN ? AND date(?, '+60 days') AND NOT EXISTS (SELECT 1 FROM {renewal_offers} o WHERE o.lease_id = l.id) AND l.id NOT IN (SELECT n.renewal_of FROM {leases} n WHERE n.renewal_of IS NOT NULL) AND ${p("l.property_id").sql}
       ORDER BY l.end_on LIMIT 200`, [today, today, ...p("l.property_id").binds]), []),
     settle(sql<{ open: number; urgent: number; late: number }>(ctx, `SELECT count(*) AS open, sum(priority IN ('Emergency', 'Urgent')) AS urgent, sum(sla_due_at IS NOT NULL AND substr(sla_due_at, 1, 10) < ?) AS late FROM {work_orders} WHERE status IN (SELECT value FROM json_each(?)) AND ${p("property_id").sql}`, [today, JSON.stringify(OPEN_WO), ...p("property_id").binds]), []),
     settle(sql(ctx, `SELECT t.id, t.subject, t.party_kind, t.last_message_at, t.unread,
