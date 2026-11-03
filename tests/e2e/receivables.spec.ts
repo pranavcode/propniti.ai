@@ -1,4 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect as baseExpect, test, type Page } from "@playwright/test";
+
+// The shared dev server compiles pages on first visit, which can take well over the 5 s default.
+const expect = baseExpect.configure({ timeout: 60_000 });
 
 // Receivables flows in a real browser. Each test gets a fresh context, so a fresh visitor overlay.
 // BASE_URL defaults to the shared dev server.
