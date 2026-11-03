@@ -5,7 +5,7 @@ import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
 import { registerAction } from "../actions";
 import { checkFairHousing } from "./fairHousing";
 import { APPROVERS, COLUMN_KEYS, columnOf, planMove } from "./pipeline";
-import { commit, newId, readRow, type Change } from "./store";
+import { AlreadyDone, commit, newId, readRow, type Change } from "./store";
 
 // Named actions for the leasing module. Each runs through POST /api/e/[entity]/[id]/actions/[key],
 // which checks the role, scope and `when`, and audits the result. AI steps load lazily so the
@@ -201,8 +201,13 @@ async function decideApplication(ctx: ActionContext, row: Row, decision: "Approv
   if (!OPEN_APP.includes(String(row.stage))) return fail(409, `This application is already ${String(row.stage).toLowerCase()}`);
   const followsAi = row.recommendation ? (row.recommendation === "Approve" ? "Approved" : row.recommendation === "Deny" ? "Denied" : "Conditional") === decision : null;
   const summary = `${decision} by ${ctx.actor.name}${row.recommendation ? ` (AI recommended ${String(row.recommendation).toLowerCase()}${followsAi === false ? "; overridden" : ""})` : ""}${note ? `: ${note}` : ""}`;
-  await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "decided", summary, data: { decision, ai_recommendation: row.recommendation ?? null, note: note ?? "" } },
-    [{ table: "applications", id: String(row.id), changes: { stage: decision, decided_by: ctx.actor.personaId, decided_at: now(ctx) } }]);
+  try {
+    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "decided", summary, data: { decision, ai_recommendation: row.recommendation ?? null, note: note ?? "" } },
+      [{ table: "applications", id: String(row.id), changes: { stage: decision, decided_by: ctx.actor.personaId, decided_at: now(ctx) } }], [], `decide-${row.id}`);
+  } catch (e) {
+    if (e instanceof AlreadyDone) return fail(409, "Someone already decided this application");
+    throw e;
+  }
   await closeProposals(ctx, "applications", String(row.id), followsAi === false ? "Rejected" : "Approved", `${decision} by ${ctx.actor.name}${note ? `: ${note}` : ""}`);
   return ok(`Application ${decision.toLowerCase()}`);
 }
@@ -400,12 +405,17 @@ registerAction({
     if (problems.length) return fail(409, `Check the message: ${problems[0]}`);
     const at = now(ctx);
     const threadId = newId("thr");
-    await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "sent", summary: `Offer of $${rent / 100} for ${row.term_months} months sent by ${input.channel}${input.ai_drafted ? " (AI-drafted, reviewed by a person)" : ""}` },
+    try {
+      await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "sent", summary: `Offer of $${rent / 100} for ${row.term_months} months sent by ${input.channel}${input.ai_drafted ? " (AI-drafted, reviewed by a person)" : ""}` },
       [{ table: "renewal_offers", id: String(row.id), changes: { status: "Sent", sent_at: at, expires_on: new Date(ctx.nowMs + 30 * 86_400_000).toISOString().slice(0, 10) } }],
       [
         { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "resident", party_id: lease.resident_id, subject, entity_type: "renewal_offers", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
         { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: input.channel, direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: input.ai_drafted ? "renewals" : null, sent_at: at } },
-      ]);
+      ], `send-${row.id}`);
+    } catch (e) {
+      if (e instanceof AlreadyDone) return fail(409, "This offer was already sent");
+      throw e;
+    }
     await closeProposals(ctx, "renewal_offers", String(row.id), "Approved", `Sent at $${rent / 100} by ${ctx.actor.name}`);
     await closeProposals(ctx, "leases", String(row.lease_id), "Edited", `Handled on the renewals page by ${ctx.actor.name}`);
     return ok("Renewal offer sent", `/app/leasing/renewal-offers/${row.id}`);

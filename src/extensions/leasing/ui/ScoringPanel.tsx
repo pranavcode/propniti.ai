@@ -71,10 +71,10 @@ function FactorList({ title, items, positive }: { title: string; items: Factor[]
             <li key={f.factor + f.detail} className="text-[12.5px]">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-medium">{f.factor}</span>
-                <span className="text-[11px] text-muted-foreground tabular-nums">{positive ? "+" : "−"}{f.weight} pts</span>
+                {f.weight > 0 && <span className="text-[11px] text-muted-foreground tabular-nums">{f.weight <= 1 ? `${Math.round(f.weight * 100)}% weight` : `${positive ? "+" : "−"}${f.weight} pts`}</span>}
               </div>
               <p className="text-muted-foreground">{f.detail}</p>
-              <div className="mt-1 h-1 rounded-full bg-muted"><div className={cn("h-1 rounded-full", positive ? "bg-tone-success/70" : "bg-tone-danger/70")} style={{ width: `${Math.min(100, (f.weight / 30) * 100)}%` }} /></div>
+              <div className="mt-1 h-1 rounded-full bg-muted"><div className={cn("h-1 rounded-full", positive ? "bg-tone-success/70" : "bg-tone-danger/70")} style={{ width: `${Math.min(100, f.weight <= 1 ? f.weight * 100 : (f.weight / 30) * 100)}%` }} /></div>
             </li>
           ))}
         </ul>

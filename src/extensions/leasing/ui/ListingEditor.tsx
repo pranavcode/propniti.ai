@@ -203,7 +203,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
           <h3 className="mb-2 text-[13px] font-semibold">Syndication</h3>
           <ul className="flex flex-col gap-1.5">
             {Object.entries(data.syndication).map(([site, st]) => (
-              <li key={site} className="flex items-center justify-between gap-2"><span>{site}</span><StatusBadge value={st} tone={SYN_TONE[st] ?? "neutral"} /></li>
+              <li key={site} className="flex items-center justify-between gap-2"><span className="capitalize">{site}</span><StatusBadge value={st} tone={SYN_TONE[st] ?? "neutral"} /></li>
             ))}
           </ul>
           {Object.values(data.syndication).includes("Error") && <p className="mt-2 text-tone-danger">A site rejected this listing. Re-publishing sends it again.</p>}

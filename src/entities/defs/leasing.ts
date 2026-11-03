@@ -22,7 +22,7 @@ registerEntity({
   nav: { section: "operations", group: "Leasing", order: 12 },
   route: "/app/leasing/listings",
   titleField: "headline",
-  subtitle: (r) => [r.property_id__label, r.unit_id__label && `#${r.unit_id__label}`].filter(Boolean).join(" · "),
+  subtitle: (r) => String(r.unit_id__label ?? r.property_id__label ?? ""),
   image: (r) => firstPhoto(r.photos),
   scopePath: "listings.property_id",
   fields: {
@@ -287,7 +287,7 @@ registerEntity({
   nav: { section: "operations", group: "Leasing", order: 15 },
   route: "/app/leasing/applications",
   titleField: "label",
-  subtitle: (r) => [r.property_id__label, r.unit_id__label && `#${r.unit_id__label}`].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.unit_id__label ?? r.property_id__label, r.income_to_rent != null && `${Number(r.income_to_rent).toFixed(1)}× rent`].filter(Boolean).join(" · "),
   scopePath: "applications.property_id",
   fields: {
     label: { type: "text", label: "Applicant", sortable: true, list: { default: true, width: 220 },
