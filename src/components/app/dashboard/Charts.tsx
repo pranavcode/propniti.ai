@@ -119,7 +119,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
         <AreaChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
           <defs>{series.map((s) => <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={`var(--color-${s.key})`} stopOpacity={0.22} /><stop offset="100%" stopColor={`var(--color-${s.key})`} stopOpacity={0.02} /></linearGradient>)}</defs>
           {grid}{xAxis}{yAxis}{tooltip}
-          {series.map((s) => <Area key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} fill={`url(#fill-${s.key})`} isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} />)}
+          {series.map((s) => <Area key={s.key} dataKey={s.key} type={s.curve ?? "monotone"} stroke={`var(--color-${s.key})`} strokeWidth={2} fill={`url(#fill-${s.key})`} isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} />)}
         </AreaChart>
       </ChartContainer>
     );
@@ -130,7 +130,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
       <LineChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
         {/* Lines encode change, not magnitude, so the scale fits the data instead of starting at zero. */}
         {grid}{xAxis}<YAxis tick={tick} tickLine={false} axisLine={false} width={52} domain={["auto", "auto"]} tickFormatter={(v: number) => formatTick(v, fmt)} />{tooltip}
-        {series.map((s) => <Line key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} strokeDasharray={s.dashed ? "4 4" : undefined} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} isAnimationActive={false} />)}
+        {series.map((s) => <Line key={s.key} dataKey={s.key} type={s.curve ?? "monotone"} stroke={`var(--color-${s.key})`} strokeWidth={2} strokeDasharray={s.dashed ? "4 4" : undefined} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} isAnimationActive={false} />)}
       </LineChart>
     </ChartContainer>
   );
