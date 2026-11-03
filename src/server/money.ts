@@ -369,13 +369,13 @@ export async function payBill(ctx: ActionContext, billId: string): Promise<Outco
     db
       .prepare(
         `INSERT INTO transfers (${TRANSFER_COLS})
-         SELECT ?1, ?2, 'vendor:' || b.id, 'Vendor payout', ${trust}, b.owner_entity_id, 'trust', ${trust}, 'Operating trust', 'vendor', b.vendor_id, ?4, b.amount_cents, b.property_id, b.id, 'Pending', ?5, ?6, NULL
+         SELECT ?1, ?2, 'vendor:' || b.id, 'Vendor payout', ${trust}, b.owner_entity_id, 'trust', ${trust}, 'Operating trust', 'vendor', b.vendor_id, ?4, ?7, b.property_id, b.id, 'Pending', ?5, ?6, NULL
          FROM ${effective("bills")} AS b
-         WHERE b.id = ?3 AND b.status IN ('Approved', 'Scheduled') AND b.amount_cents > 0 AND b.amount_cents <= ${AVAILABLE_SQL(trust)}
+         WHERE b.id = ?3 AND b.status IN ('Approved', 'Scheduled') AND b.amount_cents = ?7 AND b.amount_cents > 0 AND b.amount_cents <= ${AVAILABLE_SQL(trust)}
            AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("b.vendor_id")}
          ON CONFLICT DO NOTHING`,
       )
-      .bind(ws, id, billId, bill.company, at, nowMs + SETTLE_MS),
+      .bind(ws, id, billId, bill.company, at, nowMs + SETTLE_MS, bill.amount_cents),
     db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Scheduled'" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, billId, id),
     eventStmt(db, ws, at, "payment.scheduled", "bills", billId, bill.property_id, { transfer_id: id, amount_cents: bill.amount_cents, vendor_id: bill.vendor_id }, done(id)),
     auditStmt(db, ws, at, actor, { action: "Bill paid", entityType: "bills", entityId: billId, propertyId: bill.property_id, detail: `${billId}: ${dollars(bill.amount_cents)} to ${bill.company} by ACH` }, done(id)),
@@ -385,6 +385,8 @@ export async function payBill(ctx: ActionContext, billId: string): Promise<Outco
   if (!["Approved", "Scheduled"].includes(bill.status)) return { status: 409, error: `Only approved bills can be paid (this one is ${bill.status.toLowerCase()}).` };
   const hold = await db.prepare(`SELECT 1 FROM ${effective("data_issues")} AS di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ?2 AND di.status = 'open'`).bind(ws, bill.vendor_id).first();
   if (hold) return { status: 409, error: `${bill.company} changed bank details and isn't verified yet. Payments are on hold.` };
+  const current = await db.prepare(`SELECT b.amount_cents FROM ${effective("bills")} AS b WHERE b.id = ?2`).bind(ws, billId).first<{ amount_cents: number }>();
+  if (current && current.amount_cents !== bill.amount_cents) return { status: 409, error: `${billId} changed to ${dollars(current.amount_cents)} while you were paying it. Check it and try again.` };
   const avail = await db.prepare(`SELECT ${AVAILABLE_SQL("?2")} AS a`).bind(ws, `ba-${bill.owner_entity_id}-trust`).first<{ a: number }>();
   return { status: 409, error: `Trust account can't cover ${dollars(bill.amount_cents)} (available ${dollars(avail?.a ?? 0)})` };
 }
@@ -447,9 +449,11 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
          FROM ${effective("work_orders")} AS w
          WHERE w.id = ?3 AND w.status = 'Submitted' AND ?7 > 0 AND ?7 <= ${AVAILABLE_SQL("?4")}
            AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")} AND ${OWNER_OK}
+           AND coalesce((SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1), '') = ?12
+           AND (?12 <> '' OR w.cost_cents = ?7)
          ON CONFLICT DO NOTHING`,
       )
-      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS, ownerLimit, actor.role),
+      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS, ownerLimit, actor.role, wo.latest_submission ?? ""),
     db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Completed'", cost_cents: "?4", completed_at: "?5" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, woId, id, amount, at),
     db
       .prepare(`INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) SELECT ?1, ?2, ?3, ?4, ?5, 'staff', ?6, 'Approval', 'Completed', ?7 WHERE EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?8)`)
@@ -463,6 +467,8 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
   // A double click's losing request saw the job as Submitted; report what actually happened.
   if (await transferAt(db, ws, `vendor:${woId}`)) return { status: 409, error: `${woId} is already approved` };
   if (wo.status !== "Submitted") return { status: 409, error: notSubmitted };
+  const now = await db.prepare(`SELECT coalesce((SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = ?2 AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1), '') AS s`).bind(ws, woId).first<{ s: string }>();
+  if ((now?.s ?? "") !== (wo.latest_submission ?? "")) return { status: 409, error: `${wo.company} sent a new invoice for ${woId} while you were approving. Check it and try again.` };
   const avail = await db.prepare(`SELECT ${AVAILABLE_SQL("?2")} AS a`).bind(ws, trust).first<{ a: number }>();
   if ((avail?.a ?? 0) < amount) return { status: 409, error: `Trust account can't cover ${dollars(amount)} (available ${dollars(avail?.a ?? 0)})` };
   return { status: 409, error: `${wo.company} has a payment hold (unverified bank change).` };

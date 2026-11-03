@@ -361,6 +361,26 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await approveAndPayWorkOrder(c, "WO-T3")).toMatchObject({ status: 409, error: expect.stringContaining("without line items") });
   });
 
+  it("pays the amount that was checked: a bill edit or a new invoice in between is refused", async () => {
+    const c = await ctx(grace);
+    // A db whose next batch first runs `sneak` (another request landing between the read and the pay).
+    const racing = (sneak: string, ...p: unknown[]): Db => ({ prepare: (q) => db.prepare(q), batch: async (stmts) => (await db.prepare(sneak).bind(...p).run(), db.batch(stmts)) });
+    const bill = (await one<{ id: string; amount_cents: number }>(`SELECT b.id, b.amount_cents FROM ${effective("bills")} AS b WHERE b.status = 'Approved' AND b.owner_entity_id = 'oe02' ORDER BY b.amount_cents LIMIT 1`, c.ws))!;
+    const bumped = racing(`INSERT INTO bills (workspace_id, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents, status) SELECT ?1, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents * 3, status FROM bills WHERE workspace_id = 'base' AND id = ?2`, c.ws, bill.id);
+    expect(await payBill({ ...c, db: bumped }, bill.id)).toMatchObject({ status: 409, error: expect.stringContaining("changed to") });
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = ?2", c.ws, `vendor:${bill.id}`)).toBe(0);
+
+    await db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, estimate_cents, opened_at) VALUES (?1, 'WO-T9', 'p02', 'Leak', 'Plumbing', 'Normal', 'Submitted', 'v01', 20000, '2026-11-02T10:00:00Z')").bind(c.ws).run();
+    const sub = (id: string, at: string, total: number) => `INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) VALUES ('${c.ws}', '${id}', 'WO-T9', 'p02', '${at}', 'vendor', 'v01', 'Submission', 'Submitted', '${JSON.stringify({ total_cents: total, lines: [{ description: "Labor", amount_cents: total }] })}')`;
+    await db.prepare(sub("t9-a", "2026-11-03T10:00:00Z", 14_800)).run();
+    const resubmitted = racing(sub("t9-b", "2026-11-03T18:00:00Z", 21_700));
+    expect(await approveAndPayWorkOrder({ ...c, db: resubmitted }, "WO-T9")).toMatchObject({ status: 409, error: expect.stringContaining("new invoice") });
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = 'vendor:WO-T9'", c.ws)).toBe(0);
+    // With no race, the latest itemised invoice is what gets paid.
+    expect(await approveAndPayWorkOrder(c, "WO-T9")).toMatchObject({ status: 200 });
+    expect(await one("SELECT amount_cents FROM transfers WHERE workspace_id = ?1 AND key = 'vendor:WO-T9'", c.ws)).toEqual({ amount_cents: 21_700 });
+  });
+
   it("application fee: the applicant pays once into the property's trust; other applicants can't", async () => {
     const c = await ctx();
     const priyanka: Actor = { personaId: "applicant", name: "Priyanka Rao", role: "applicant", scope: { kind: "self", label: "Own application" }, propertyIds: [] };
