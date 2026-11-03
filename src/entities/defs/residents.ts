@@ -5,6 +5,18 @@ import { Car, FileSignature, Home, Megaphone, MessagesSquare, Receipt, ShieldChe
 import { AS_OF, FINANCE, issuesField, LEADERS, OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 
+// Stored balance (generator) plus the visitor's overlay ledger delta. Not sortable or filterable:
+// that would compute it for every row in scope (seconds on D1 for the whole portfolio). Every ledger read goes through
+// a lease_id index: overlay rows count, and base rows that an overlay copy shadows (a moved
+// payment) are taken back out. Base-only reads cost one index probe per lease.
+const LEDGER_DELTA = [["charges", "+", "-", ""], ["payments", "-", "+", " AND x.nsf = 0"], ["credits", "-", "+", ""]] as const;
+function balanceSql(stored: string, leases: string) {
+  return `(${stored} ${LEDGER_DELTA.map(([t, sign, back, extra]) =>
+    `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${t}} AS x WHERE x.workspace_id <> 'base' AND x.lease_id IN ${leases}${extra}), 0) ${back} coalesce((SELECT sum(x.amount_cents) FROM ${t} AS x WHERE x.workspace_id = 'base' AND x.lease_id IN ${leases}${extra} AND EXISTS (SELECT 1 FROM {${t}} AS o WHERE o.workspace_id <> 'base' AND o.id = x.id)), 0)`).join(" ")})`;
+}
+const leaseBalance = (alias: string) => balanceSql(`${alias}.balance_cents`, `(${alias}.id)`);
+const householdBalance = (alias: string) => balanceSql(`${alias}.balance_cents`, `(SELECT hl.id FROM {leases} AS hl WHERE hl.household_id = ${alias}.id)`);
+
 const CURRENT_LEASE = "l.household_id = residents.household_id AND l.status IN ('Active', 'Notice', 'Month-to-month', 'Eviction')";
 
 registerEntity({
@@ -29,6 +41,10 @@ registerEntity({
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
     unit: { type: "text", label: "Unit", list: { default: true },
       sql: `(SELECT '#' || u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE ${CURRENT_LEASE} ORDER BY l.start_on DESC LIMIT 1)` },
+    // Stored per household by the generator, plus the visitor's overlay ledger delta (no per-row ledger scan).
+    balance: { type: "money", label: "Balance", sortable: false, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [],
+      sql: `(SELECT ${householdBalance("h")} FROM {households} h WHERE h.id = residents.household_id)`,
+      help: { summary: "Charges less payments and credits for the household. Positive means the resident owes money.", article: "resident-ledger" } },
     lease_end: { type: "date", label: "Lease ends", sortable: true, list: { default: true }, sql: `(SELECT l.end_on FROM {leases} l WHERE ${CURRENT_LEASE} ORDER BY l.start_on DESC LIMIT 1)` },
     email: { type: "text", label: "Email", search: true, list: { default: false } },
     phone: { type: "text", label: "Phone", search: true, list: { default: true } },
@@ -61,7 +77,7 @@ registerEntity({
     ],
   },
   detail: {
-    facts: ["status", "property_id", "unit", "lease_end", "phone", "email", "risk_score"],
+    facts: ["status", "property_id", "unit", "balance", "lease_end", "phone", "email", "risk_score"],
     tabs: [
       { custom: "residents.overview" },
       { key: "profile", label: "Profile", fields: ["first_name", "last_name", "email", "phone", "preferred_channel", "language", "autopay", "is_primary", "status", "property_id", "household_id", "risk_score"] },
@@ -86,7 +102,7 @@ registerEntity({
     { key: "insurance", title: "Renters insurance on active leases", kind: "donut", metric: "residents.insurance_status", x: "status", series: [{ key: "count", label: "Policies", format: "count" }], drill: "/app/residents/insurance?f.status={status}" },
   ],
   ai: {
-    facts: (r, rel) => ({ resident: String(r.name), status: String(r.status), unit: (r.unit as string) ?? null, lease_end: (r.lease_end as string) ?? null, risk_score: r.risk_score == null ? null : Number(r.risk_score), autopay: !!r.autopay, nsf_payments: rel.payments?.filter((p) => p.nsf).length ?? 0 }),
+    facts: (r, rel) => ({ resident: String(r.name), status: String(r.status), unit: (r.unit as string) ?? null, balance: r.balance == null ? null : Number(r.balance), lease_end: (r.lease_end as string) ?? null, risk_score: r.risk_score == null ? null : Number(r.risk_score), autopay: !!r.autopay, nsf_payments: rel.payments?.filter((p) => p.nsf).length ?? 0 }),
     summaryPrompt: "Summarise this resident's standing for the property manager in 2-3 sentences: balance and payment pattern, lease timing, and any follow-up. Use only the facts; never promise a waiver.",
     agents: ["collections", "renewals"],
   },
@@ -126,6 +142,7 @@ registerEntity({
       help: { summary: "Monthly base rent. Changing it here does not re-bill past months; future charges follow the new amount.", article: "rent-changes" } },
     deposit: { type: "money", label: "Deposit", column: "deposit_cents", list: { default: false, align: "right" }, editable: [...OPS] },
     market_rent: { type: "money", label: "Market rent", list: { default: false, align: "right" }, sql: "(SELECT u.market_rent_cents FROM {units} u WHERE u.id = leases.unit_id)" },
+    balance: { type: "money", label: "Balance", sortable: false, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [], sql: leaseBalance("leases") },
     move_in_on: { type: "date", label: "Move-in" },
     move_out_on: { type: "date", label: "Move-out" },
     notice_on: { type: "date", label: "Notice given" },
@@ -162,7 +179,7 @@ registerEntity({
     footer: [{ field: "rent", fn: "sum", label: "Rent" }],
   },
   detail: {
-    facts: ["status", "unit_id", "start_on", "end_on", "rent", "deposit", "market_rent", "days_to_end"],
+    facts: ["status", "unit_id", "start_on", "end_on", "rent", "balance", "market_rent", "days_to_end"],
     tabs: [
       { key: "overview", label: "Overview", fields: ["status", "kind", "property_id", "unit_id", "household_id", "start_on", "end_on", "term_months", "move_in_on", "move_out_on", "notice_on", "rent", "deposit", "market_rent", "renewal_of", "signed_by", "signed_at"] },
       { key: "ledger", label: "Ledger", relation: "charges", roles: [...FINANCE, "resident"] },
@@ -186,7 +203,7 @@ registerEntity({
     { key: "lease_status", title: "Leases by status", kind: "donut", metric: "residents.lease_status", x: "status", series: [{ key: "count", label: "Leases", format: "count" }], drill: "/app/leases?f.status={status}" },
   ],
   ai: {
-    facts: (r, rel) => ({ lease: String(r.label), status: String(r.status), start: String(r.start_on), end: (r.end_on as string) ?? null, rent: Number(r.rent ?? 0), market_rent: r.market_rent == null ? null : Number(r.market_rent), residents: rel.residents?.length ?? 0, days_to_end: r.days_to_end == null ? null : Number(r.days_to_end) }),
+    facts: (r, rel) => ({ lease: String(r.label), status: String(r.status), start: String(r.start_on), end: (r.end_on as string) ?? null, rent: Number(r.rent ?? 0), market_rent: r.market_rent == null ? null : Number(r.market_rent), balance: r.balance == null ? null : Number(r.balance), residents: rel.residents?.length ?? 0, days_to_end: r.days_to_end == null ? null : Number(r.days_to_end) }),
     summaryPrompt: "Summarise this lease for the property manager in 2-3 sentences: term and timing, rent versus market, balance, and the renewal decision if it ends within 90 days. Use only the facts.",
     agents: ["renewals", "collections"],
   },
@@ -217,6 +234,7 @@ registerEntity({
       sql: "(SELECT '#' || u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
     members: { type: "number", label: "Members", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {residents} r WHERE r.household_id = households.id)" },
     lease_status: { type: "text", label: "Lease status", list: { default: true }, sql: "(SELECT l.status FROM {leases} l WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
+    balance: { type: "money", label: "Balance", sortable: false, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [], sql: householdBalance("households") },
   },
   relations: [
     { name: "property", entity: "properties", fk: "property_id", kind: "one" },
@@ -225,7 +243,7 @@ registerEntity({
   ],
   list: { defaultSort: ["name", "asc"] },
   detail: {
-    facts: ["property_id", "unit", "members", "lease_status"],
+    facts: ["property_id", "unit", "members", "lease_status", "balance"],
     tabs: [{ key: "residents", label: "Members", relation: "residents" }, { key: "leases", label: "Leases", relation: "leases" }],
     related: ["property"],
   },
@@ -453,8 +471,10 @@ registerEntity({
   list: { defaultSort: ["send_at", "desc"], statusTabs: "status" },
   detail: { facts: ["status", "property_id", "send_at", "recipients"], tabs: [{ key: "overview", label: "Announcement", fields: ["title", "body", "property_id", "channels", "status", "send_at", "recipients", "created_by"] }], related: [] },
   capabilities: { activity: true },
-  permissions: { read: [...STAFF], create: [...OPS], update: [...OPS], delete: [...OPS] },
+  // Created from a property (properties.new_announcement) in the composer, not the generic form.
+  permissions: { read: [...STAFF], create: [], update: [...OPS], delete: [...OPS] },
   writes: "generic",
+  actions: ["announcements.ai_draft", "announcements.send"],
   help: { summary: "One message to every resident of a property: water shutoffs, pest treatment, holiday hours. Write it yourself or start from an AI draft.", article: "announcements" },
 });
 

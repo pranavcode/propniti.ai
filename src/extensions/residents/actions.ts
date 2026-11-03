@@ -172,6 +172,21 @@ registerAction({
 // Announcements
 // ---------------------------------------------------------------------------------------------
 
+// Announcements go to one property, so a draft starts from the property.
+registerAction({
+  key: "properties.new_announcement",
+  label: "New announcement",
+  entity: "properties",
+  roles: [...OPS],
+  icon: Megaphone,
+  input: z.strictObject({ title: z.string().trim().min(3).max(160), body: z.string().trim().max(4000).optional(), channels: z.array(z.enum(["Email", "SMS", "Portal"])).min(1).max(3).optional() }),
+  handler: async (ctx, row, input) => {
+    const id = newId("ann");
+    await (await insertRow(ctx.db, ctx.ws, "announcements", { id, title: input.title, body: input.body ?? "", audience: { property_ids: [row.id], kinds: ["resident"] }, channels: input.channels ?? ["Email", "SMS"], status: "Draft", send_at: null, recipients: 0, created_by: ctx.actor.personaId })).run();
+    return ok("Draft created", `/app/communications/announcements/new?id=${encodeURIComponent(id)}`);
+  },
+});
+
 registerAction({
   key: "announcements.ai_draft",
   label: "Draft with AI",
