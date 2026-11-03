@@ -41,6 +41,8 @@ npm run dev          # http://localhost:3000
 | `npm test` | Unit tests (Vitest) |
 | `npm run test:coverage` | Unit tests with a coverage report (`coverage/index.html`) |
 | `npm run lint` | ESLint |
+| `npm run typecheck` | Generate route types, then TypeScript check |
+| `npm run check` | Lint, type check and unit tests: run before every PR |
 | `npm run build` | Next.js production build |
 | `npm run dev:vinext` | Dev server on the Cloudflare Workers runtime (run `npm run db:migrate:local` once first) |
 | `npm run db:migrate:local` | Apply `migrations/` to the local D1 database used by `dev:vinext` |
@@ -187,7 +189,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability and [docs/security-revi
 
 ## Contributing
 
-Issues and pull requests are welcome. Please run `npm run lint && npm test` before opening a PR.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md); run `npm run check` before opening a PR. Code conventions are in [AGENTS.md](AGENTS.md).
 
 ## License
 

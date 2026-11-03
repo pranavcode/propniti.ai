@@ -15,8 +15,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build # Next.js build (also generates route types)
-      - run: npx tsc --noEmit
-      - run: npm run lint
-      - run: npm test
+      - run: npm run check # lint, type check, tests
+      - run: npm run build # Next.js build
       - run: npm run build:vinext # Cloudflare Workers build
