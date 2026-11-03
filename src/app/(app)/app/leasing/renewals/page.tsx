@@ -9,6 +9,7 @@ import { leasingCtx, renewalHistory, renewals, sourceOf } from "@/extensions/lea
 import { RenewalPanel, type Selected } from "@/extensions/leasing/ui/RenewalsWorkbench";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const metadata = { title: "Renewals · Propniti" };
 
@@ -79,26 +80,26 @@ export default async function RenewalsPage({ searchParams }: Props) {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
             <div className="min-w-0 overflow-hidden rounded-lg border bg-card" data-tour="renewals-table">
               <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
-                  <thead className="sticky top-0 border-b bg-muted/40 text-left text-[12px] text-muted-foreground">
-                    <tr><th className="px-3 py-2 font-medium">Resident</th><th className="px-3 py-2 font-medium">Ends</th><th className="px-3 py-2 text-right font-medium">Rent</th><th className="px-3 py-2 text-right font-medium">Market</th><th className="px-3 py-2 text-right font-medium">Suggested</th><th className="px-3 py-2 font-medium">Offer</th></tr>
-                  </thead>
-                  <tbody>
+                <Table className="text-[13px]">
+                  <TableHeader className="bg-muted/40 text-left text-[12px] text-muted-foreground">
+                    <TableRow><TableHead className="px-3 py-2 font-medium">Resident</TableHead><TableHead className="px-3 py-2 font-medium">Ends</TableHead><TableHead className="px-3 py-2 text-right font-medium">Rent</TableHead><TableHead className="px-3 py-2 text-right font-medium">Market</TableHead><TableHead className="px-3 py-2 text-right font-medium">Suggested</TableHead><TableHead className="px-3 py-2 font-medium">Offer</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.rows.map((r) => (
-                      <tr key={r.leaseId} className={cn("border-b last:border-0", r.leaseId === sel?.leaseId ? "bg-primary/[0.06]" : "hover:bg-muted/30")}>
-                        <td className="max-w-64 px-3 py-2">
+                      <TableRow key={r.leaseId} className={cn(r.leaseId === sel?.leaseId && "bg-primary/[0.06] hover:bg-primary/[0.08]")}>
+                        <TableCell className="max-w-64 px-3 py-2">
                           <Link href={`${href({ lease: r.leaseId })}#renewal-panel`} className="block truncate font-medium hover:text-primary" aria-current={r.leaseId === sel?.leaseId ? "true" : undefined}>{r.resident}</Link>
                           <span className="block truncate text-[11.5px] text-muted-foreground">{r.property} · #{r.unit}</span>
-                        </td>
-                        <td className={cn("px-3 py-2 whitespace-nowrap tabular-nums", r.daysLeft <= 30 && "text-tone-warning")}>{r.endOn ? formatDate(r.endOn) : "Month-to-month"} <span className="text-[11.5px] text-muted-foreground">{r.endOn ? `${r.daysLeft}d` : ""}</span></td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney(r.rent, "whole")}</td>
-                        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">{r.market != null ? formatMoney(r.market, "whole") : "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{r.agent?.rentCents ? <span className="inline-flex items-center gap-1 text-tone-ai"><Sparkles className="size-3" />{formatMoney(r.agent.rentCents / 100, "whole")}</span> : <span className="text-muted-foreground">—</span>}</td>
-                        <td className="px-3 py-2"><StatusBadge value={r.status} tone={r.status === "No offer" ? "warning" : undefined} />{r.offer && r.offer.status !== "Draft" ? <span className="ml-1.5 text-[11.5px] text-muted-foreground tabular-nums">{formatMoney(r.offer.rent, "whole")}</span> : null}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell className={cn("px-3 py-2 whitespace-nowrap tabular-nums", r.daysLeft <= 30 && "text-tone-warning")}>{r.endOn ? formatDate(r.endOn) : "Month-to-month"} <span className="text-[11.5px] text-muted-foreground">{r.endOn ? `${r.daysLeft}d` : ""}</span></TableCell>
+                        <TableCell className="px-3 py-2 text-right tabular-nums">{formatMoney(r.rent, "whole")}</TableCell>
+                        <TableCell className="px-3 py-2 text-right text-muted-foreground tabular-nums">{r.market != null ? formatMoney(r.market, "whole") : "—"}</TableCell>
+                        <TableCell className="px-3 py-2 text-right tabular-nums">{r.agent?.rentCents ? <span className="inline-flex items-center gap-1 text-tone-ai"><Sparkles className="size-3" />{formatMoney(r.agent.rentCents / 100, "whole")}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                        <TableCell className="px-3 py-2"><StatusBadge value={r.status} tone={r.status === "No offer" ? "warning" : undefined} />{r.offer && r.offer.status !== "Draft" ? <span className="ml-1.5 text-[11.5px] text-muted-foreground tabular-nums">{formatMoney(r.offer.rent, "whole")}</span> : null}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
               <footer className="flex items-center justify-between border-t px-3 py-2 text-[12px] text-muted-foreground">
                 <span className="tabular-nums">{(page - 1) * SIZE + 1}–{Math.min(page * SIZE, total)} of {total}</span>

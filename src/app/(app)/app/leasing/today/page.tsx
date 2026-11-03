@@ -63,7 +63,6 @@ export default async function LeasingToday() {
       <PageBody>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className={`${card} relative overflow-hidden`} aria-labelledby="brief-h">
-            <span className="absolute inset-y-0 left-0 w-0.5 bg-tone-ai/70" aria-hidden />
             <div className="flex items-center gap-2 border-b px-4 py-2.5">
               <Sparkles className="size-3.5 text-tone-ai" />
               <h2 id="brief-h" className="text-[13px] font-semibold">Briefing</h2>

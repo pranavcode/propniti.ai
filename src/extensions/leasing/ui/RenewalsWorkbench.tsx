@@ -117,8 +117,7 @@ export function RenewalPanel({ s }: { s: Selected }) {
         </section>
       ) : (
         <>
-          <section className="relative overflow-hidden rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_70%)]" aria-labelledby="ren-ai">
-            <span className="absolute inset-y-0 left-0 w-0.5 bg-tone-ai/70" aria-hidden />
+          <section className="relative overflow-hidden rounded-lg border border-tone-ai/25 bg-tone-ai/[0.03]" aria-labelledby="ren-ai">
             <div className="flex flex-col gap-2.5 p-3 pl-3.5">
               <div className="flex flex-wrap items-center gap-2">
                 <Sparkles className="size-3.5 text-tone-ai" />

@@ -8,6 +8,7 @@ import { AGENT_NAME, fairHousingFlags, kpis, leasingCtx, leasingProposals, sourc
 import { AskPanel, ProposalQueue, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
 import { formatMoney, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const metadata = { title: "Broker desk · Propniti" };
 
@@ -48,7 +49,6 @@ export default async function BrokerDesk() {
       <PageBody>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className="relative overflow-hidden rounded-lg border bg-card" aria-labelledby="brief-h">
-            <span className="absolute inset-y-0 left-0 w-0.5 bg-tone-ai/70" aria-hidden />
             <div className="flex items-center gap-2 border-b px-4 py-2.5">
               <Sparkles className="size-3.5 text-tone-ai" />
               <h2 id="brief-h" className="text-[13px] font-semibold">Briefing</h2>
@@ -70,19 +70,19 @@ export default async function BrokerDesk() {
         <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
           <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-approvals">
             {apps.rows.length ? (
-              <table className="w-full text-[13px]">
-                <thead className="border-b bg-muted/40 text-left text-[12px] text-muted-foreground">
-                  <tr><th className="px-3 py-2 font-medium">Applicant</th><th className="px-3 py-2 font-medium">Home</th><th className="px-3 py-2 text-right font-medium">Rent</th><th className="px-3 py-2 text-right font-medium">Income ÷ rent</th><th className="px-3 py-2 font-medium">Screening</th><th className="px-3 py-2 font-medium">AI recommends</th><th className="px-3 py-2 text-right font-medium">Waiting</th><th className="px-3 py-2"><span className="sr-only">Actions</span></th></tr>
-                </thead>
-                <tbody>
+              <Table className="text-[13px]">
+                <TableHeader className="bg-muted/40 text-left text-[12px] text-muted-foreground">
+                  <TableRow><TableHead className="px-3 py-2 font-medium">Applicant</TableHead><TableHead className="px-3 py-2 font-medium">Home</TableHead><TableHead className="px-3 py-2 text-right font-medium">Rent</TableHead><TableHead className="px-3 py-2 text-right font-medium">Income ÷ rent</TableHead><TableHead className="px-3 py-2 font-medium">Screening</TableHead><TableHead className="px-3 py-2 font-medium">AI recommends</TableHead><TableHead className="px-3 py-2 text-right font-medium">Waiting</TableHead><TableHead className="px-3 py-2"><span className="sr-only">Actions</span></TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {apps.rows.map((a) => (
-                    <tr key={String(a.id)} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-3 py-2"><Link href={`/app/leasing/applications/${a.id}`} className="font-medium hover:text-primary hover:underline">{String(a.applicant)}</Link></td>
-                      <td className="max-w-56 truncate px-3 py-2 text-muted-foreground">{String(a.property)}{a.unit ? ` #${a.unit}` : ""}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Number(a.rent_cents) / 100, "whole")}</td>
-                      <td className={cn("px-3 py-2 text-right tabular-nums", Number(a.income_to_rent) < 3 && "text-tone-warning")}>{a.income_to_rent == null ? "—" : `${Number(a.income_to_rent).toFixed(1)}×`}</td>
-                      <td className="px-3 py-2">{String(a.screening ?? "Running")}</td>
-                      <td className="px-3 py-2">
+                    <TableRow key={String(a.id)}>
+                      <TableCell className="px-3 py-2"><Link href={`/app/leasing/applications/${a.id}`} className="font-medium hover:text-primary hover:underline">{String(a.applicant)}</Link></TableCell>
+                      <TableCell className="max-w-56 truncate px-3 py-2 text-muted-foreground">{String(a.property)}{a.unit ? ` #${a.unit}` : ""}</TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{formatMoney(Number(a.rent_cents) / 100, "whole")}</TableCell>
+                      <TableCell className={cn("px-3 py-2 text-right tabular-nums", Number(a.income_to_rent) < 3 && "text-tone-warning")}>{a.income_to_rent == null ? "—" : `${Number(a.income_to_rent).toFixed(1)}×`}</TableCell>
+                      <TableCell className="px-3 py-2">{String(a.screening ?? "Running")}</TableCell>
+                      <TableCell className="px-3 py-2">
                         {a.score != null ? (
                           <span className="inline-flex items-center gap-1.5">
                             <Sparkles className="size-3 text-tone-ai" /><span className={cn("font-medium", REC[String(a.recommendation)])}>{String(a.recommendation)}</span>
@@ -90,13 +90,13 @@ export default async function BrokerDesk() {
                             {a.runId && <Link href={`/app/ai/runs/${a.runId}`} className="text-[11.5px] text-primary hover:underline" aria-label={`View the scoring run for ${String(a.applicant)}`}>run<ArrowUpRight className="inline size-3" /></Link>}
                           </span>
                         ) : <span className="text-muted-foreground">Not scored</span>}
-                      </td>
-                      <td className={cn("px-3 py-2 text-right tabular-nums", Number(a.waiting) > 3 && "text-tone-warning")}>{Number(a.waiting)}d</td>
-                      <td className="px-3 py-2 text-right"><Button asChild size="sm" variant="outline"><Link href={`/app/leasing/applications/${a.id}`}>Review</Link></Button></td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className={cn("px-3 py-2 text-right tabular-nums", Number(a.waiting) > 3 && "text-tone-warning")}>{Number(a.waiting)}d</TableCell>
+                      <TableCell className="px-3 py-2 text-right"><Button asChild size="sm" variant="outline"><Link href={`/app/leasing/applications/${a.id}`}>Review</Link></Button></TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             ) : <EmptyState compact kind="inbox" title="No applications waiting" description="Applications land here once screening is back." />}
           </div>
         </Section>
@@ -122,23 +122,23 @@ export default async function BrokerDesk() {
 
           <Section title="Leasing agent performance" description="Leads created in the last 30 days, by assigned agent.">
             <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-agents">
-              {agents.length === 0 ? <EmptyState compact kind="table" title="No leads in the last 30 days" description="Agent numbers appear once leads are assigned." /> : <table className="w-full text-[13px]">
-                <thead className="border-b bg-muted/40 text-left text-[12px] text-muted-foreground">
-                  <tr><th className="px-3 py-2 font-medium">Agent</th><th className="px-3 py-2 text-right font-medium">Leads</th><th className="px-3 py-2 text-right font-medium">Toured</th><th className="px-3 py-2 text-right font-medium">Applied</th><th className="px-3 py-2 text-right font-medium">Leased</th><th className="px-3 py-2 text-right font-medium">Going stale</th></tr>
-                </thead>
-                <tbody>
+              {agents.length === 0 ? <EmptyState compact kind="table" title="No leads in the last 30 days" description="Agent numbers appear once leads are assigned." /> : <Table className="text-[13px]">
+                <TableHeader className="bg-muted/40 text-left text-[12px] text-muted-foreground">
+                  <TableRow><TableHead className="px-3 py-2 font-medium">Agent</TableHead><TableHead className="px-3 py-2 text-right font-medium">Leads</TableHead><TableHead className="px-3 py-2 text-right font-medium">Toured</TableHead><TableHead className="px-3 py-2 text-right font-medium">Applied</TableHead><TableHead className="px-3 py-2 text-right font-medium">Leased</TableHead><TableHead className="px-3 py-2 text-right font-medium">Going stale</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {agents.map((a) => (
-                    <tr key={a.agent_id ?? "none"} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-3 py-2"><Link href={`/app/leasing/prospects?f.assigned_to=${a.agent_id}`} className="font-medium hover:text-primary hover:underline">{a.agent ?? "Unassigned"}</Link></td>
-                      <td className="px-3 py-2 text-right tabular-nums">{a.leads}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{a.tours} <span className="text-[11.5px] text-muted-foreground">{formatPct(a.leads ? a.tours / a.leads : 0, 0)}</span></td>
-                      <td className="px-3 py-2 text-right tabular-nums">{a.applied}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{a.leased}</td>
-                      <td className={cn("px-3 py-2 text-right tabular-nums", a.stale > 5 && "text-tone-warning")}><Link href={`/app/leasing/prospects?f.follow_up_due=true&f.assigned_to=${a.agent_id}`} className="hover:underline">{a.stale}</Link></td>
-                    </tr>
+                    <TableRow key={a.agent_id ?? "none"}>
+                      <TableCell className="px-3 py-2"><Link href={`/app/leasing/prospects?f.assigned_to=${a.agent_id}`} className="font-medium hover:text-primary hover:underline">{a.agent ?? "Unassigned"}</Link></TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{a.leads}</TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{a.tours} <span className="text-[11.5px] text-muted-foreground">{formatPct(a.leads ? a.tours / a.leads : 0, 0)}</span></TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{a.applied}</TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">{a.leased}</TableCell>
+                      <TableCell className={cn("px-3 py-2 text-right tabular-nums", a.stale > 5 && "text-tone-warning")}><Link href={`/app/leasing/prospects?f.follow_up_due=true&f.assigned_to=${a.agent_id}`} className="hover:underline">{a.stale}</Link></TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>}
+                </TableBody>
+              </Table>}
             </div>
           </Section>
         </div>

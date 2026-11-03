@@ -10,6 +10,7 @@ import { checkFairHousing, NEVER_SCORED } from "./fairHousing";
 import { APPROVERS } from "./pipeline";
 import { ListingEditor, type EditorData } from "./ui/ListingEditor";
 import { ScoringPanel, type Factor, type ScoringData } from "./ui/ScoringPanel";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // Custom record tabs: the application's AI scoring and decision, the listing editor and the
 // listing's price history. Each reads the visitor's overlay over the base (their workspace).
@@ -108,25 +109,25 @@ registerTab({
     const rows = res.results;
     if (!rows.length) return <EmptyState compact title="No price changes yet" description="Every change to the asking rent is kept here with the reason." />;
     return (
-      <div className="overflow-x-auto rounded-lg border"><table className="w-full text-[13px]">
-        <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
-          <tr><th className="px-3 py-2 font-medium">Date</th><th className="px-3 py-2 text-right font-medium">Asking rent</th><th className="px-3 py-2 text-right font-medium">Change</th><th className="px-3 py-2 font-medium">Reason</th></tr>
-        </thead>
-        <tbody>
+      <div className="rounded-lg border"><Table className="text-[13px]">
+        <TableHeader className="bg-muted/40 text-[12px]">
+          <TableRow><TableHead className="px-3 py-2 font-medium">Date</TableHead><TableHead className="px-3 py-2 text-right font-medium">Asking rent</TableHead><TableHead className="px-3 py-2 text-right font-medium">Change</TableHead><TableHead className="px-3 py-2 font-medium">Reason</TableHead></TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((r, i) => {
             const prev = rows[i + 1];
             const delta = prev ? Number(r.rent_cents) - Number(prev.rent_cents) : null;
             return (
-              <tr key={String(r.id)} className="border-t">
-                <td className="px-3 py-2 whitespace-nowrap tabular-nums">{formatDate(String(r.changed_on), "always")}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(Number(r.rent_cents) / 100, "whole")}</td>
-                <td className={delta == null ? "px-3 py-2 text-right text-muted-foreground" : delta < 0 ? "px-3 py-2 text-right text-tone-danger tabular-nums" : "px-3 py-2 text-right text-tone-success tabular-nums"}>{delta == null ? "First listed" : `${delta < 0 ? "−" : "+"}${formatMoney(Math.abs(delta) / 100, "whole")}`}</td>
-                <td className="px-3 py-2 text-muted-foreground">{String(r.reason || "—")}</td>
-              </tr>
+              <TableRow key={String(r.id)}>
+                <TableCell className="px-3 py-2 whitespace-nowrap tabular-nums">{formatDate(String(r.changed_on), "always")}</TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums">{formatMoney(Number(r.rent_cents) / 100, "whole")}</TableCell>
+                <TableCell className={delta == null ? "px-3 py-2 text-right text-muted-foreground" : delta < 0 ? "px-3 py-2 text-right text-tone-danger tabular-nums" : "px-3 py-2 text-right text-tone-success tabular-nums"}>{delta == null ? "First listed" : `${delta < 0 ? "−" : "+"}${formatMoney(Math.abs(delta) / 100, "whole")}`}</TableCell>
+                <TableCell className="px-3 py-2 text-muted-foreground">{String(r.reason || "—")}</TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table></div>
+        </TableBody>
+      </Table></div>
     );
   },
 });

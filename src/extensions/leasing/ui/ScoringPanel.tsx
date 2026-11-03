@@ -135,8 +135,7 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
   return (
     <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-4">
-        <section className="relative overflow-hidden rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_60%)]" aria-labelledby="ai-score">
-          <span className="absolute inset-y-0 left-0 w-0.5 bg-tone-ai/70" aria-hidden />
+        <section className="relative overflow-hidden rounded-lg border border-tone-ai/25 bg-tone-ai/[0.03]" aria-labelledby="ai-score">
           <header className="flex flex-wrap items-center gap-2 border-b border-tone-ai/15 px-4 py-2.5">
             <Sparkles className="size-3.5 text-tone-ai" />
             <h3 id="ai-score" className="text-[13px] font-semibold">Leasing agent score</h3>

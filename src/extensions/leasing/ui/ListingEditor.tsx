@@ -152,7 +152,6 @@ export function ListingEditor({ data }: { data: EditorData }) {
             {busy === "draft" && <p role="status" className="flex items-center gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.04] px-3 py-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Leasing agent is reading the unit, building and amenities…</p>}
             {draft && (
               <div role="status" className="relative overflow-hidden rounded-md border border-tone-ai/30 bg-tone-ai/[0.04] p-3">
-                <span className="absolute inset-y-0 left-0 w-0.5 bg-tone-ai/70" aria-hidden />
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">
                   <Sparkles className="size-3.5 text-tone-ai" /><span className="text-[12.5px] font-semibold">AI draft</span>
                   <AIBadge source={draft.source} model={draft.source === "live" ? draft.model : undefined} size="xs" />

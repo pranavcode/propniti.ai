@@ -39,7 +39,7 @@ function windowed(key: `leasing.${string}`, label: string, q: (ctx: MetricCtx, p
         q(ctx, p, daysAgo(days * 2), daysAgo(days)),
         ...Array.from({ length: sparkWeeks }, (_, i) => q(ctx, p, daysAgo((sparkWeeks - i) * 7), daysAgo((sparkWeeks - i - 1) * 7))),
       ]);
-      return { value, previous, spark: spark.map((v) => v ?? 0), points: [], asOf: AS_OF.slice(0, 7), source: "Leasing records, live" };
+      return { value, previous, spark: spark.map((v) => v ?? 0), points: [], source: "Leasing records, live" };
     },
   });
 }
@@ -63,7 +63,7 @@ windowed("leasing.approval_rate", "Approval rate", async (ctx, p, from, to) => {
 
 // Point-in-time counts (no "previous").
 function current(key: `leasing.${string}`, label: string, q: (ctx: MetricCtx, p: MetricParams) => Promise<number | null>) {
-  registerMetric({ key, label, run: async (ctx, p) => ({ value: await q(ctx, p), previous: null, spark: [], points: [], asOf: AS_OF.slice(0, 7), source: "Leasing records, live" }) });
+  registerMetric({ key, label, run: async (ctx, p) => ({ value: await q(ctx, p), previous: null, spark: [], points: [], source: "Leasing records, live" }) });
 }
 
 current("leasing.active_listings", "Active listings", async (ctx, p) => {
@@ -123,7 +123,7 @@ registerMetric({
       { stage: "Approved", key: "approved", count: Number(r.approved ?? 0) },
       { stage: "Leased", key: "leased", count: Number(r.leased ?? 0) },
     ];
-    return { value: points[4].count, points, asOf: AS_OF.slice(0, 7), source: "Prospects created in the last 90 days" };
+    return { value: points[4].count, points, source: "Prospects created in the last 90 days" };
   },
 });
 
@@ -133,7 +133,7 @@ registerMetric({
   run: async (ctx, p) => {
     const s = scope(ctx, p, "l.property_id");
     const res = await ctx.db.prepare(`SELECT l.property_id, pp.name, count(*) AS listings, round(avg(julianday(?) - julianday(l.listed_on))) AS avg_dom FROM ${T(ctx, "listings")} l JOIN ${T(ctx, "properties")} pp ON pp.id = l.property_id WHERE l.status = 'Active'${s.sql} GROUP BY l.property_id ORDER BY avg_dom DESC`).bind(AS_OF, ...s.binds).all<Record<string, unknown>>();
-    return { points: res.results.map((x) => ({ ...x, avg_dom: Number(x.avg_dom) })), asOf: AS_OF.slice(0, 7), source: "Active listings, live" };
+    return { points: res.results.map((x) => ({ ...x, avg_dom: Number(x.avg_dom) })), source: "Active listings, live" };
   },
 });
 
@@ -143,7 +143,7 @@ registerMetric({
   run: async (ctx, p) => {
     const s = scope(ctx, p);
     const res = await ctx.db.prepare(`SELECT source, count(*) AS leads, sum(stage = 'Leased') AS leased FROM ${T(ctx, "prospects")} WHERE substr(created_at, 1, 10) >= ?${s.sql} GROUP BY source ORDER BY leads DESC`).bind(daysAgo(90), ...s.binds).all<Record<string, unknown>>();
-    return { points: res.results.map((x) => ({ source: x.source, leads: Number(x.leads), leased: Number(x.leased ?? 0) })), asOf: AS_OF.slice(0, 7), source: "Prospects created in the last 90 days" };
+    return { points: res.results.map((x) => ({ source: x.source, leads: Number(x.leads), leased: Number(x.leased ?? 0) })), source: "Prospects created in the last 90 days" };
   },
 });
 
@@ -165,7 +165,7 @@ registerMetric({
       const start = new Date(Date.parse(from) + i * 7 * DAY);
       return { week: start.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }), leads: at(leads, i), tours: at(tours, i), applications: at(apps, i) };
     });
-    return { points, asOf: AS_OF.slice(0, 7), source: "Leasing records, weeks starting" };
+    return { points, source: "Leasing records, weeks starting" };
   },
 });
 
@@ -176,7 +176,7 @@ registerMetric({
     const s = scope(ctx, p);
     const order = ["Submitted", "Screening", "Review", "Approved", "Conditional", "Denied", "Withdrawn", "Leased"];
     const res = await ctx.db.prepare(`SELECT stage, count(*) AS n FROM ${T(ctx, "applications")} WHERE coalesce(substr(submitted_at, 1, 10), ?) >= ?${s.sql} GROUP BY stage`).bind(AS_OF, daysAgo(90), ...s.binds).all<{ stage: string; n: number }>();
-    return { points: order.map((stage) => ({ stage, count: Number(res.results.find((r) => r.stage === stage)?.n ?? 0) })).filter((x) => x.count), asOf: AS_OF.slice(0, 7), source: "Applications submitted in the last 90 days" };
+    return { points: order.map((stage) => ({ stage, count: Number(res.results.find((r) => r.stage === stage)?.n ?? 0) })).filter((x) => x.count), source: "Applications submitted in the last 90 days" };
   },
 });
 
@@ -186,7 +186,7 @@ registerMetric({
   run: async (ctx, p) => {
     const s = scope(ctx, p);
     const res = await ctx.db.prepare(`SELECT status, count(*) AS count FROM ${T(ctx, "renewal_offers")} WHERE coalesce(substr(sent_at, 1, 10), ?) >= ?${s.sql} GROUP BY status ORDER BY count DESC`).bind(AS_OF, daysAgo(183), ...s.binds).all<{ status: string; count: number }>();
-    return { points: res.results.map((r) => ({ status: r.status, count: Number(r.count) })), asOf: AS_OF.slice(0, 7), source: "Offers sent in the last 6 months" };
+    return { points: res.results.map((r) => ({ status: r.status, count: Number(r.count) })), source: "Offers sent in the last 6 months" };
   },
 });
 
@@ -202,6 +202,6 @@ registerMetric({
         sum(pr.stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) >= 3) AS stale,
         round(avg(CASE WHEN pr.last_contact_at IS NOT NULL THEN (julianday(pr.last_contact_at) - julianday(pr.created_at)) * 24 END), 1) AS first_reply_h
       FROM ${T(ctx, "prospects")} pr LEFT JOIN ${T(ctx, "staff")} st ON st.id = pr.assigned_to WHERE substr(pr.created_at, 1, 10) >= ?${s.sql} GROUP BY pr.assigned_to ORDER BY leads DESC`).bind(AS_OF, daysAgo(30), ...s.binds).all<Record<string, unknown>>();
-    return { points: res.results.map((r) => ({ ...r, leads: Number(r.leads), tours: Number(r.tours ?? 0), applied: Number(r.applied ?? 0), leased: Number(r.leased ?? 0), stale: Number(r.stale ?? 0), conversion: Number(r.leads) ? Number(r.leased ?? 0) / Number(r.leads) : 0 })), asOf: AS_OF.slice(0, 7), source: "Prospects created in the last 30 days" };
+    return { points: res.results.map((r) => ({ ...r, leads: Number(r.leads), tours: Number(r.tours ?? 0), applied: Number(r.applied ?? 0), leased: Number(r.leased ?? 0), stale: Number(r.stale ?? 0), conversion: Number(r.leads) ? Number(r.leased ?? 0) / Number(r.leads) : 0 })), source: "Prospects created in the last 30 days" };
   },
 });
