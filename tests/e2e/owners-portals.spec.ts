@@ -74,7 +74,7 @@ test("owner sees the briefing, a statement and approves a repair", async ({ page
   }
 
   await go(page, `${BASE}/portal/owner`);
-  await page.getByRole("button", { name: "Ask Propniti" }).click();
+  await page.getByRole("button", { name: "Ask AI" }).click();
   await page.getByRole("button", { name: "Why was my distribution lower this month?" }).click();
   await expect(page.getByText(/distribution was \$[\d,.]+/).last()).toBeVisible();
   expect(errors).toEqual([]);
