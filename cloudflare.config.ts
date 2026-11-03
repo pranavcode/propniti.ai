@@ -1,9 +1,11 @@
-import { bindings, defineConfig, defineWorker } from "cf/config";
+import { bindings, defineConfig, defineWorker, triggers } from "cf/config";
 
 export default defineConfig({
   worker: defineWorker({
     name: "property-mgmt-ai-prototype",
-    entrypoint: "vinext/server/fetch-handler",
+    // vinext fetch plus the Cron Trigger below (AI agent sweep); see src/worker-entry.ts.
+    entrypoint: "./src/worker-entry.ts",
+    triggers: [triggers.scheduled({ schedule: "*/15 * * * *" })],
     domains: ["propniti.ai", "www.propniti.ai"],
     workersDev: true,
     compatibilityDate: "2026-10-28",
