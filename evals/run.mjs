@@ -137,7 +137,7 @@ async function main() {
       const failed = checks.filter((x) => !x.ok).map((x) => (x.detail !== undefined ? `${x.name} (got ${x.detail})` : x.name));
       const notes = [];
       if (area === "validate" && res && overriddenByRules(res)) notes.push("model said approve; rules changed it to review");
-      const reason = error ?? (outcome === "fallback" ? res.note : [...failed, ...notes].join("; "));
+      const reason = error ?? (outcome === "fallback" ? res.note ?? "rules fallback (no model answer)" : [...failed, ...notes].join("; "));
       results.push({ area: label, id: c.id, outcome, accuracy, source: res?.source ?? "-", latencyMs, reason, checks, response: res });
     }
     console.table(

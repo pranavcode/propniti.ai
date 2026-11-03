@@ -140,6 +140,7 @@ export function gradePlan(c, res) {
   if (e.noWriteTools) checks.push({ name: "no write tools", ok: !tools.some((t) => /propose|execute|draft/.test(t)), detail: tools.join(",") });
   if (e.notMatch) checks.push({ name: `doesn't say "${e.notMatch}"`, ok: !new RegExp(e.notMatch, "i").test(res.answer ?? ""), detail: res.answer?.slice(0, 80) });
   if (e.nonEmpty) checks.push({ name: "answered", ok: (res.answer ?? "").length > 20 });
+  if (e.answerMatches) checks.push({ name: "sentence from the computed result", ok: new RegExp(e.answerMatches, "i").test(res.answer ?? ""), detail: res.answer?.slice(0, 80) });
   return { checks };
 }
 
