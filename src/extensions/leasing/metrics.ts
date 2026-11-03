@@ -77,7 +77,7 @@ current("leasing.avg_dom", "Average days on market", async (ctx, p) => {
 });
 current("leasing.follow_ups", "Follow-ups due", async (ctx, p) => {
   const s = scope(ctx, p);
-  return Number((await one(ctx, `SELECT count(*) AS n FROM ${T(ctx, "prospects")} WHERE stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(last_contact_at, created_at)) >= 3${s.sql}`, [AS_OF, ...s.binds])).n ?? 0);
+  return Number((await one(ctx, `SELECT count(*) AS n FROM ${T(ctx, "prospects")} WHERE stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(last_contact_at, created_at)) BETWEEN 3 AND 30${s.sql}`, [AS_OF, ...s.binds])).n ?? 0);
 });
 current("leasing.tours_today", "Tours today", async (ctx, p) => {
   const s = scope(ctx, p);

@@ -1,8 +1,10 @@
 import "server-only";
-import type { Actor, Row } from "@/entities/types";
+import { getEntity } from "@/entities";
+import type { Actor, Role, Row } from "@/entities/types";
+import { PERMISSIONS } from "@/auth/personas";
 import { currentSession } from "@/auth/session";
 import { sql } from "@/ai/data";
-import { proposalOut } from "@/ai/views";
+import { proposalOut, type ProposalOut } from "@/ai/views";
 import { getPlatform } from "@/lib/platform";
 import { effective, metrics } from "@/server/query";
 import { AS_OF } from "@/seed/constants";
@@ -26,6 +28,9 @@ function scope(c: LeasingCtx, col: string) {
 async function all<T = Row>(c: LeasingCtx, q: string, binds: unknown[]) {
   return (await c.db.prepare(q).bind(...binds).all<T>()).results;
 }
+// Server copies of the AI page labels (the originals live in a client module).
+export const AGENT_NAME: Record<string, string> = { leasing: "Leasing agent", renewals: "Renewals agent" };
+export const sourceOf = (model: unknown) => (!model || model === "rules" ? "rules" : "precomputed") as "rules" | "precomputed";
 const aiData = (c: LeasingCtx) => ({ db: c.db, ws: c.ws ?? "base", actor: c.actor });
 
 export async function kpis(c: LeasingCtx, keys: string[]) {
@@ -49,9 +54,9 @@ export async function todaysTours(c: LeasingCtx, agentId?: string) {
 
 export async function followUps(c: LeasingCtx, limit = 8) {
   const s = scope(c, "pr.property_id");
-  const where = `pr.stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) >= 3${s.sql}`;
+  const where = `pr.stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) BETWEEN 3 AND 30${s.sql}`;
   const [rows, total] = await Promise.all([
-    all(c, `SELECT pr.id, pr.name, pr.stage, pr.source, pr.desired_beds, pr.budget_cents, p.name AS property, CAST(julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) AS INTEGER) AS days FROM ${E(c, "prospects")} pr JOIN ${E(c, "properties")} p ON p.id = pr.property_id WHERE ${where} ORDER BY CASE pr.stage WHEN 'Toured' THEN 0 ELSE 1 END, days DESC LIMIT ?`, [AS_OF, AS_OF, ...s.binds, limit]),
+    all(c, `SELECT pr.id, pr.name, pr.stage, pr.source, pr.desired_beds, pr.budget_cents, p.name AS property, CAST(julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) AS INTEGER) AS days FROM ${E(c, "prospects")} pr JOIN ${E(c, "properties")} p ON p.id = pr.property_id WHERE ${where} ORDER BY CASE pr.stage WHEN 'Toured' THEN 0 ELSE 1 END, days LIMIT ?`, [AS_OF, AS_OF, ...s.binds, limit]),
     all<{ n: number }>(c, `SELECT count(*) AS n FROM ${E(c, "prospects")} pr WHERE ${where}`, [AS_OF, ...s.binds]),
   ]);
   return { rows, total: Number(total[0]?.n ?? 0) };
@@ -64,7 +69,14 @@ export async function leasingProposals(c: LeasingCtx, opts: { actions?: string[]
     `SELECT p.* FROM {ai_proposals} p WHERE p.agent IN ('leasing', 'renewals') AND p.queue_state = 'needs_you'
      AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id)${acts.length ? " AND p.action IN (SELECT value FROM json_each(?))" : ""}
      ORDER BY CASE p.risk WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, p.created_at DESC LIMIT ?`, [...(acts.length ? [JSON.stringify(acts)] : []), opts.limit ?? 8]);
-  return rows.map(proposalOut);
+  return rows.map((r): ProposalOut & { canApprove: boolean } => Object.assign(proposalOut(r), { canApprove: mayDecide(c.actor.role, r) }));
+}
+
+// Mirrors canDecide in src/ai/http.ts (the API enforces it): low-risk items need write access to
+// the record's module, anything else needs approve access.
+function mayDecide(role: Role, p: Row) {
+  const access = PERMISSIONS[role][getEntity(String(p.entity_type))?.module ?? "intelligence"] ?? "none";
+  return p.risk !== "Low" || p.amount_cents != null ? access === "approve" : access === "write" || access === "approve";
 }
 
 // Applications waiting on the broker, with the latest Leasing agent score if there is one.
@@ -82,9 +94,9 @@ export async function waitingApplications(c: LeasingCtx, limit = 10) {
   ]);
   return {
     total: Number(total[0]?.n ?? 0),
-    rows: rows.map((r) => {
+    rows: rows.map((r): Row & { score: unknown; recommendation: unknown; runId: string | null; model: string | null; confidence: number | null } => {
       const ai = r.ai ? (JSON.parse(String(r.ai)) as { score: number | null; rec: string | null; run: string | null; model: string | null; confidence: number | null }) : null;
-      return { ...r, score: r.score ?? ai?.score ?? null, recommendation: r.recommendation ?? ai?.rec ?? null, runId: ai?.run ?? null, model: ai?.model ?? null, confidence: ai?.confidence ?? null };
+      return Object.assign(r, { score: r.score ?? ai?.score ?? null, recommendation: r.recommendation ?? ai?.rec ?? null, runId: ai?.run ?? null, model: ai?.model ?? null, confidence: ai?.confidence ?? null });
     }),
   };
 }

@@ -44,7 +44,8 @@ registerTab({
     const stored = json<Factor[]>(app.scoring_factors, []);
     // Proposals from the scheduled agent run carry their reasons as "For: …" / "Against: …".
     const fromWhy = json<string[]>(proposal?.why, []).filter((w) => /^(For|Against): /.test(w)).map((w): Factor => ({ factor: w.startsWith("For") ? "Reason for" : "Reason against", direction: w.startsWith("For") ? "+" : "-", weight: 0, detail: w.replace(/^(For|Against): /, "") }));
-    const score = app.score != null ? Number(app.score) : payload.facts?.score ?? null;
+    const titled = /score (\d+)/.exec(String(proposal?.title ?? ""));
+    const score = app.score != null ? Number(app.score) : payload.facts?.score ?? (titled ? Number(titled[1]) : null);
     const income = Number(app.monthly_income_cents ?? 0) + Number(app.co_income ?? 0);
     const open = ["Started", "Submitted", "Screening", "Review"].includes(String(app.stage));
     const data: ScoringData = {

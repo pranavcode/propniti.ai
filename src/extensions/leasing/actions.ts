@@ -18,6 +18,9 @@ const now = (ctx: ActionContext) => new Date(ctx.nowMs).toISOString();
 const ai = () => import("./ai");
 // AI steps run from their own panels (they return a draft or score), not as header buttons.
 const NO_INPUT = z.object({}).strict();
+// Rows reach handlers presented (dollars, from the action route) or raw (cents, when an approved
+// proposal runs the action); read money either way.
+const cents = (row: Row, key: string) => (row[`${key}_cents`] != null ? Number(row[`${key}_cents`]) : Math.round(Number(row[key] ?? 0) * 100));
 const runHref = (id: string) => `/app/ai/runs/${id}`;
 // Action results carry text back to the page; AI steps return JSON with the run to link.
 const aiResult = (data: unknown, runId: string): ActionResult => ok(JSON.stringify(data), runHref(runId));
@@ -79,6 +82,32 @@ registerAction({
   async handler(ctx, row, input) {
     await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "lost", summary: `Marked lost${input.reason ? `: ${input.reason}` : ""}` }, [{ table: "prospects", id: String(row.id), changes: { stage: "Lost" } }]);
     return ok(`${row.name} marked lost`);
+  },
+});
+
+// Approving a Leasing agent follow-up sends the drafted note (or the standard one) and logs the contact.
+registerAction({
+  key: "prospects.send_follow_up",
+  label: "Send follow-up",
+  entity: "prospects",
+  roles: LEASING,
+  icon: Send,
+  when: (r) => ["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(r.stage)),
+  input: z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough(),
+  async handler(ctx, row, input) {
+    const first = String(row.name ?? "there").split(" ")[0];
+    const body = input.body ?? `Hi ${first}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${ctx.actor.name}`;
+    const flags = checkFairHousing(body);
+    if (flags.length) return fail(409, `Check the message: "${flags[0].phrase}" (${flags[0].category})`);
+    const at = now(ctx);
+    const threadId = newId("thr");
+    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "contacted", summary: `Follow-up sent by ${ctx.actor.name}` },
+      [{ table: "prospects", id: String(row.id), changes: { last_contact_at: at, ...(row.stage === "Inquiry" ? { stage: "Contacted" } : {}) } }],
+      [
+        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "prospect", party_id: row.id, subject: input.subject ?? "Still looking for a new home?", entity_type: "prospects", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
+        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "leasing", sent_at: at } },
+      ]);
+    return ok(`Follow-up sent to ${row.name}`);
   },
 });
 
@@ -164,14 +193,35 @@ registerAction({
     const decision = input.decision ?? (rec === "Approve" ? "Approved" : rec === "Deny" ? "Denied" : rec ? "Conditional" : undefined);
     if (!decision) return fail(400, "Choose approve, conditional or deny");
     if (decision !== "Approved" && !input.note && !rec) return fail(400, "Give a reason for a conditional approval or a denial. It goes in the adverse-action record.");
-    const followsAi = row.recommendation ? (row.recommendation === "Approve" ? "Approved" : row.recommendation === "Deny" ? "Denied" : "Conditional") === decision : null;
-    const summary = `${decision} by ${ctx.actor.name}${row.recommendation ? ` (AI recommended ${String(row.recommendation).toLowerCase()}${followsAi === false ? "; overridden" : ""})` : ""}${input.note ? `: ${input.note}` : ""}`;
-    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "decided", summary, data: { decision, ai_recommendation: row.recommendation ?? null, note: input.note ?? "" } },
-      [{ table: "applications", id: String(row.id), changes: { stage: decision, decided_by: ctx.actor.personaId, decided_at: now(ctx) } }]);
-    await closeProposals(ctx, "applications", String(row.id), followsAi === false ? "Rejected" : "Approved", `${decision} by ${ctx.actor.name}${input.note ? `: ${input.note}` : ""}`);
-    return ok(`Application ${decision.toLowerCase()}`);
+    return decideApplication(ctx, row, decision, input.note);
   },
 });
+
+async function decideApplication(ctx: ActionContext, row: Row, decision: "Approved" | "Conditional" | "Denied", note?: string): Promise<ActionResult> {
+  if (!OPEN_APP.includes(String(row.stage))) return fail(409, `This application is already ${String(row.stage).toLowerCase()}`);
+  const followsAi = row.recommendation ? (row.recommendation === "Approve" ? "Approved" : row.recommendation === "Deny" ? "Denied" : "Conditional") === decision : null;
+  const summary = `${decision} by ${ctx.actor.name}${row.recommendation ? ` (AI recommended ${String(row.recommendation).toLowerCase()}${followsAi === false ? "; overridden" : ""})` : ""}${note ? `: ${note}` : ""}`;
+  await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "decided", summary, data: { decision, ai_recommendation: row.recommendation ?? null, note: note ?? "" } },
+    [{ table: "applications", id: String(row.id), changes: { stage: decision, decided_by: ctx.actor.personaId, decided_at: now(ctx) } }]);
+  await closeProposals(ctx, "applications", String(row.id), followsAi === false ? "Rejected" : "Approved", `${decision} by ${ctx.actor.name}${note ? `: ${note}` : ""}`);
+  return ok(`Application ${decision.toLowerCase()}`);
+}
+
+// The same decision under the keys the seeded Leasing agent proposals use: approving one of those
+// in the inbox accepts the agent's recommendation as the broker's decision.
+for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as const) {
+  registerAction({
+    key: `applications.${verb}`,
+    label: verb === "approve" ? "Approve application" : "Deny application",
+    entity: "applications",
+    roles: APPROVERS,
+    icon: verb === "approve" ? Check : X,
+    when: (r) => OPEN_APP.includes(String(r.stage)),
+    input: z.object({ note: z.string().trim().max(500).optional() }).passthrough(),
+    confirm: { title: verb === "approve" ? "Approve this application?" : "Deny this application?", body: "Your decision is logged with the AI recommendation. Use the AI scoring tab to add conditions or a reason." },
+    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing agent's recommendation" : undefined)),
+  });
+}
 
 // ---------------------------------------------------------------------------------------------
 // Listings
@@ -240,13 +290,13 @@ registerAction({
   input: z.object({ rent: z.number().min(100).max(50_000), reason: z.string().trim().min(3).max(200) }),
   help: { summary: "Changes the asking rent and keeps the old price and your reason in the price history.", article: "list-unit-syndication" },
   async handler(ctx, row, input) {
-    const cents = Math.round(input.rent * 100);
-    const before = Math.round(Number(row.rent) * 100);
-    if (cents === before) return fail(409, "That is already the asking rent");
-    await commit(ctx, { entity: "listings", id: String(row.id), propertyId: row.property_id, verb: "repriced", summary: `Asking rent ${before > cents ? "lowered" : "raised"} from $${before / 100} to $${cents / 100}: ${input.reason}` },
-      [{ table: "listings", id: String(row.id), changes: { rent_cents: cents } }],
-      [{ table: "listing_price_history", row: { id: newId("lph"), listing_id: row.id, property_id: row.property_id, rent_cents: cents, changed_on: now(ctx).slice(0, 10), reason: input.reason } }]);
-    return ok(`Asking rent is now $${(cents / 100).toLocaleString("en-US")}`);
+    const next = Math.round(input.rent * 100);
+    const before = cents(row, "rent");
+    if (next === before) return fail(409, "That is already the asking rent");
+    await commit(ctx, { entity: "listings", id: String(row.id), propertyId: row.property_id, verb: "repriced", summary: `Asking rent ${before > next ? "lowered" : "raised"} from $${before / 100} to $${next / 100}: ${input.reason}` },
+      [{ table: "listings", id: String(row.id), changes: { rent_cents: next } }],
+      [{ table: "listing_price_history", row: { id: newId("lph"), listing_id: row.id, property_id: row.property_id, rent_cents: next, changed_on: now(ctx).slice(0, 10), reason: input.reason } }]);
+    return ok(`Asking rent is now $${(next / 100).toLocaleString("en-US")}`);
   },
 });
 
@@ -315,14 +365,14 @@ registerAction({
   input: NO_INPUT,
   async handler(ctx, row) {
     const { draftOfferMessage } = await ai();
-    const r = await draftOfferMessage(ctx, { ...row, rent_cents: Math.round(Number(row.rent) * 100) });
+    const r = await draftOfferMessage(ctx, { ...row, rent_cents: cents(row, "rent") });
     return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
 });
 
 const SendInput = z.object({
-  subject: z.string().trim().min(3).max(200),
-  body: z.string().trim().min(20).max(4000),
+  subject: z.string().trim().min(3).max(200).optional(),
+  body: z.string().trim().min(20).max(4000).optional(),
   channel: z.enum(["Email", "SMS", "Portal"]).default("Email"),
   ai_drafted: z.boolean().default(false),
 });
@@ -334,23 +384,27 @@ registerAction({
   roles: LEASING,
   icon: Send,
   when: (r) => r.status === "Draft",
-  input: SendInput,
+  input: SendInput.passthrough(),
   help: { summary: "Sends the offer to the primary resident and records the message, the offer and who sent it.", article: "renewal-workflow" },
   async handler(ctx, row, input) {
     const { checkDraft } = await import("@/ai/tools/write");
-    const rent = Math.round(Number(row.rent) * 100);
-    const problems = [...checkDraft(input.body, { offer_rent_cents: rent, current_rent_cents: Math.round(Number(row.current_rent) * 100) }), ...checkFairHousing(input.body).map((f) => `"${f.phrase}" (${f.category})`)];
-    if (problems.length) return fail(409, `Check the message: ${problems[0]}`);
+    if (row.status !== "Draft") return fail(409, `This offer was already ${String(row.status).toLowerCase()}`);
+    const rent = cents(row, "rent");
     const { effective } = await import("@/server/query");
-    const resident = await ctx.db.prepare(`SELECT r.id FROM ${effective("leases", ctx.ws)} l JOIN ${effective("residents", ctx.ws)} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ?`).bind(row.lease_id).first<{ id: string }>();
-    if (!resident) return fail(409, "No primary resident on this lease to send the offer to");
+    const lease = await ctx.db.prepare(`SELECT l.end_on, p.name AS property, u.number AS unit, r.id AS resident_id, r.first_name FROM ${effective("leases", ctx.ws)} l JOIN ${effective("properties", ctx.ws)} p ON p.id = l.property_id JOIN ${effective("units", ctx.ws)} u ON u.id = l.unit_id LEFT JOIN ${effective("residents", ctx.ws)} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ?`).bind(row.lease_id).first<Row>();
+    if (!lease?.resident_id) return fail(409, "No primary resident on this lease to send the offer to");
+    // Approved from the inbox without an edited message: the standard wording, with the offer's own figures.
+    const subject = input.subject ?? `Your renewal offer at ${lease.property}`;
+    const body = input.body ?? `Hi ${lease.first_name},\n\nYour lease at ${lease.property} #${lease.unit} ends on ${lease.end_on}. We can renew for ${row.term_months} months at $${(rent / 100).toLocaleString("en-US")} a month.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${ctx.actor.name}`;
+    const problems = [...checkDraft(body, { offer_rent_cents: rent, current_rent_cents: cents(row, "current_rent") }), ...checkFairHousing(body).map((f) => `"${f.phrase}" (${f.category})`)];
+    if (problems.length) return fail(409, `Check the message: ${problems[0]}`);
     const at = now(ctx);
     const threadId = newId("thr");
     await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "sent", summary: `Offer of $${rent / 100} for ${row.term_months} months sent by ${input.channel}${input.ai_drafted ? " (AI-drafted, reviewed by a person)" : ""}` },
       [{ table: "renewal_offers", id: String(row.id), changes: { status: "Sent", sent_at: at, expires_on: new Date(ctx.nowMs + 30 * 86_400_000).toISOString().slice(0, 10) } }],
       [
-        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "resident", party_id: resident.id, subject: input.subject, entity_type: "renewal_offers", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
-        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: input.channel, direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body: input.body, drafted_by_agent: input.ai_drafted ? "renewals" : null, sent_at: at } },
+        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "resident", party_id: lease.resident_id, subject, entity_type: "renewal_offers", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
+        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: input.channel, direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: input.ai_drafted ? "renewals" : null, sent_at: at } },
       ]);
     await closeProposals(ctx, "renewal_offers", String(row.id), "Approved", `Sent at $${rent / 100} by ${ctx.actor.name}`);
     await closeProposals(ctx, "leases", String(row.lease_id), "Edited", `Handled on the renewals page by ${ctx.actor.name}`);
