@@ -75,6 +75,7 @@ test("deposit disposition: itemise, send once, settled", async ({ page }) => {
   await page.getByLabel("Damage description").fill("Carpet cleaning, bedroom 2");
   await page.getByLabel("Damage amount").fill("125");
   await page.getByRole("button", { name: /Send disposition and refund/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /Send and refund/ }).click();
   await expect(page.getByText(/Disposition sent/).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: /Disposition sent/ })).toBeVisible();
   expect(errors).toEqual([]);
