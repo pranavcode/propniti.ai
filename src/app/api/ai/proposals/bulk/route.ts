@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       const p = await proposal(data, id);
       if (!p) { results.push({ id, ok: false, message: "Not found" }); continue; }
       if (p.risk !== "Low" || p.amount_cents != null) { results.push({ id, ok: false, message: "Needs an individual review (money, legal or higher risk)" }); continue; }
-      const allowed = canDecide(s, p);
+      const allowed = await canDecide(s, p);
       if (!allowed.ok) { results.push({ id, ok: false, message: allowed.error }); continue; }
       const r = await executeProposal(data, p, by, undefined, "Bulk approved (safe items)");
       results.push({ id, ok: r.ok, message: r.message });

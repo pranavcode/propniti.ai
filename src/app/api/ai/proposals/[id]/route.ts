@@ -20,7 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const data = dataOf(s);
     const p = await proposal(data, id);
     if (!p) return json({ error: "Proposal not found" }, { status: 404 });
-    const allowed = canDecide(s, p);
+    const allowed = await canDecide(s, p);
     if (!allowed.ok) return json({ error: allowed.error }, { status: 403 });
     const by = { id: s.persona.id, name: s.persona.name, role: s.actor.role };
     const r = body.decision === "approve" ? await executeProposal(data, p, by, body.payload, body.note) : await rejectProposal(data, p, by, body.note, body.decision === "snooze" ? "Snoozed" : "Rejected");

@@ -3,7 +3,7 @@ import { getAction } from "@/extensions/actions";
 import { isAiAction } from "./action-keys";
 import { can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
-import type { ActionKey, AgentKey, Row } from "@/entities/types";
+import { INTERNAL_ROLES, type ActionKey, type AgentKey, type Row } from "@/entities/types";
 import { eff, get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
 
 // What approving a proposal does. A registered named action (src/extensions, money through
@@ -178,6 +178,11 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
   const { db, ws } = data;
   const now = new Date().toISOString();
   const decisionId = newId("dec");
+  // People deciding must be staff (an owner only for an approval that waits on them); the route
+  // checks ownership. Agents applying within policy act as the run's actor.
+  if (!by.agent && !(INTERNAL_ROLES as readonly string[]).includes(data.actor.role) && !(data.actor.role === "owner" && proposal.queue_state === "waiting" && proposal.assignee_role === "owner")) {
+    return { ok: false, status: 403, message: "Only staff can act on agent proposals" };
+  }
   const stale = await stillValid(data, proposal, parseJson<Record<string, unknown>>(proposal.payload, {}));
   if (stale) return stale;
   const d = eff("ai_decisions", ws);
@@ -233,6 +238,7 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
 
 export async function rejectProposal(data: DataCtx, proposal: Row, by: By, note: string, decision: "Rejected" | "Snoozed" = "Rejected"): Promise<ExecResult> {
   const { db, ws } = data;
+  if (!(INTERNAL_ROLES as readonly string[]).includes(data.actor.role) && !(data.actor.role === "owner" && proposal.queue_state === "waiting")) return { ok: false, status: 403, message: "Only staff can act on agent proposals" };
   const now = new Date().toISOString();
   const d = eff("ai_decisions", ws);
   const r = await db

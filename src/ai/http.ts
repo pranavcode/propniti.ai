@@ -2,10 +2,10 @@ import { after } from "next/server";
 import type { z } from "zod";
 import { getEntity } from "@/entities";
 import { PERMISSIONS } from "@/auth/personas";
-import type { Row } from "@/entities/types";
+import { INTERNAL_ROLES, type Row } from "@/entities/types";
 import { rateLimit } from "@/lib/guard";
 import { parseBody } from "@/lib/requests";
-import type { DataCtx } from "./data";
+import { sql, type DataCtx } from "./data";
 import { aiSession, json, sameOrigin, type AiSession } from "./session";
 
 // HTTP glue for /api/ai/*: session, origin and rate-limit checks, background work via after()
@@ -44,14 +44,30 @@ export async function guarded(fn: () => Promise<Response>) {
   }
 }
 
-// Low-risk proposals need write access to the record's module; anything with money, legal or
-// safety risk needs approve access. An item waiting on the owner is the owner's call.
-export function canDecide(s: AiSession, p: Row): { ok: true } | { ok: false; error: string } {
+// Who may decide an agent's proposal. Agents act on other people's records (reminders to other
+// households, data fixes), so portal users never decide them; the one exception is an owner
+// approving a spend that waits on them, for a property they own. Staff need write access to the
+// record's module for low-risk items and approve access for anything with money, legal or safety risk.
+export async function canDecide(s: Pick<AiSession, "db" | "ws" | "actor" | "persona">, p: Row): Promise<{ ok: true } | { ok: false; error: string }> {
   const role = s.actor.role;
-  if (p.queue_state === "waiting") return p.assignee_role === role || role === "principal" ? { ok: true } : { ok: false, error: "This one waits for the owner's approval in their portal." };
+  if (s.persona.portal) {
+    if (role === "owner" && p.queue_state === "waiting" && p.assignee_role === "owner" && (await ownsProposal(s, p))) return { ok: true };
+    return { ok: false, error: "Only staff can act on agent proposals." };
+  }
+  if (!(INTERNAL_ROLES as readonly string[]).includes(role)) return { ok: false, error: "Only staff can act on agent proposals." };
+  if (p.queue_state === "waiting") return role === "principal" ? { ok: true } : { ok: false, error: "This one waits for the owner's approval in their portal." };
   const mod = getEntity(String(p.entity_type))?.module ?? "intelligence";
   const access = PERMISSIONS[role][mod] ?? "none";
   const needsApprove = p.risk !== "Low" || p.amount_cents != null;
   if (needsApprove ? access === "approve" : access === "write" || access === "approve") return { ok: true };
   return { ok: false, error: `${s.persona.title} can't ${needsApprove ? "approve" : "act on"} ${mod} items${p.assignee_role ? `; this one goes to the ${String(p.assignee_role).replace(/_/g, " ")}` : ""}.` };
+}
+
+// The owner persona's record is an owners row; the proposal's property must belong to one of its entities.
+async function ownsProposal(s: Pick<AiSession, "db" | "ws" | "persona">, p: Row) {
+  const owner = s.persona.record?.entity === "owners" ? s.persona.record.id : null;
+  if (!owner || !p.property_id) return false;
+  const data = { db: s.db, ws: s.ws, actor: { personaId: s.persona.id, name: s.persona.name, role: s.persona.role, scope: s.persona.scope, propertyIds: "all" as const } };
+  const r = await sql<{ n: number }>(data, "SELECT count(*) AS n FROM {properties} pr JOIN {owner_entities} e ON e.id = pr.owner_entity_id WHERE pr.id = ? AND e.owner_id = ?", [String(p.property_id), owner]);
+  return (r[0]?.n ?? 0) > 0;
 }
