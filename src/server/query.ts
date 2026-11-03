@@ -342,7 +342,7 @@ export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOpt
   let aggCache = aggCaches.get(db);
   if (!aggCache) aggCaches.set(db, (aggCache = new Map()));
   const hit = key ? aggCache.get(key) : undefined;
-  const cached = hit && Date.now() - hit.at < AGG_TTL_MS ? hit.v : undefined;
+  const cached = hit && performance.now() - hit.at < AGG_TTL_MS ? hit.v : undefined;
   const skipAggs = q.rowsOnly || !!cached;
   const statements: DbStatement[] = [
     db.prepare(rowsSql).bind(...pageWhere.params, size + 1, offset),
@@ -382,7 +382,7 @@ export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOpt
   if (cached) Object.assign(out, cached);
   else if (key) {
     if (aggCache.size >= AGG_MAX) aggCache.delete(aggCache.keys().next().value!);
-    aggCache.set(key, { at: Date.now(), v: { total: out.total, counts: out.counts, footer: out.footer } });
+    aggCache.set(key, { at: performance.now(), v: { total: out.total, counts: out.counts, footer: out.footer } });
   }
   return out;
 }
