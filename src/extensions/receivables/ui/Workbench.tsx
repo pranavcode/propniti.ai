@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Play, Scale, Send, Sparkles } from "lucide-react";
@@ -9,10 +9,12 @@ import { AIBadge, Confidence } from "@/components/app/ai/AIBadge";
 import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type { Draft, WorkbenchRow } from "../collections";
+import { AGING_RAMP } from "./aging";
 
 const usd = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: cents % 100 ? 2 : 0 });
 const STEP: Record<WorkbenchRow["step"], { label: string; icon: typeof Send }> = {
@@ -32,16 +34,21 @@ async function post(url: string, body: unknown) {
   }
 }
 
+// The tooltip carries the amounts; the bar only shows the mix.
+
 function AgingBar({ a }: { a: WorkbenchRow["aging"] }) {
   const total = a.d0_30 + a.d31_60 + a.d61_90 + a.d90p || 1;
-  const seg = [
-    { v: a.d0_30, c: "bg-tone-warning/45", l: "0–30" }, { v: a.d31_60, c: "bg-tone-warning", l: "31–60" },
-    { v: a.d61_90, c: "bg-tone-danger/70", l: "61–90" }, { v: a.d90p, c: "bg-tone-danger", l: "90+" },
-  ];
+  const seg = [{ v: a.d0_30, l: "0–30 days" }, { v: a.d31_60, l: "31–60 days" }, { v: a.d61_90, l: "61–90 days" }, { v: a.d90p, l: "90+ days" }];
+  const label = seg.filter((x) => x.v).map((x) => `${x.l}: ${usd(x.v)}`).join(", ");
   return (
-    <div className="flex h-1.5 w-24 overflow-hidden rounded-full bg-muted" role="img" aria-label={seg.filter((s) => s.v).map((s) => `${s.l} days ${usd(s.v)}`).join(", ")}>
-      {seg.map((s) => s.v > 0 && <span key={s.l} className={s.c} style={{ width: `${(s.v / total) * 100}%` }} />)}
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div tabIndex={0} className="flex h-2 w-24 gap-px overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/60" role="img" aria-label={label}>
+          {seg.map((x, i) => x.v > 0 && <span key={x.l} style={{ width: `${(x.v / total) * 100}%`, background: AGING_RAMP[i] }} />)}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent><ul className="tabular-nums">{seg.map((x) => <li key={x.l}>{x.l}: {usd(x.v)}</li>)}</ul></TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -52,7 +59,11 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
   const [lang, setLang] = useState<Record<string, "en" | "es">>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(refreshTimer.current), []);
   const bulkable = rows.filter((r) => r.proposal && r.proposal.risk === "Low" && r.proposal.canDecide && r.safe);
+  // Rows leave the list after a decision and refresh; count only selections still on screen.
+  const selected = bulkable.filter((r) => picked.has(r.lease_id));
 
   const toggle = (id: string, on: boolean) => setPicked((p) => { const n = new Set(p); if (on) n.add(id); else n.delete(id); return n; });
   const decide = async (r: WorkbenchRow, decision: "approve" | "reject") => {
@@ -62,18 +73,20 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
     const out = await post(`/api/ai/proposals/${encodeURIComponent(r.proposal.id)}`, body);
     setBusy(null);
     if (!out.ok) return toast.error(out.error ?? "That didn't go through");
+    setEdits((x) => { const n = { ...x }; delete n[r.lease_id]; return n; });
+    toggle(r.lease_id, false);
     toast.success(decision === "approve" ? out.message ?? "Approved and sent" : "Rejected. The agent won't propose this again today.");
     router.refresh();
   };
   const bulk = async () => {
-    const ids = bulkable.filter((r) => picked.has(r.lease_id)).map((r) => r.proposal!.id);
+    const ids = selected.map((r) => r.proposal!.id);
     if (!ids.length) return;
     setBusy("bulk");
     const out = await post("/api/ai/proposals/bulk", { ids });
     setBusy(null);
     if (!out.ok && !out.approved) return toast.error(out.error ?? "Nothing was approved");
     const skipped = (out.results ?? []).filter((x) => !x.ok);
-    toast.success(`Approved ${out.approved ?? 0} reminder${out.approved === 1 ? "" : "s"}${skipped.length ? `; ${skipped.length} need an individual review` : ""}`);
+    toast.success(`Approved ${out.approved ?? 0} reminder${out.approved === 1 ? "" : "s"}${skipped.length ? `; ${skipped.length} need review one at a time` : ""}`);
     setPicked(new Set());
     router.refresh();
   };
@@ -83,22 +96,22 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
     setBusy(null);
     if (!out.ok || !out.runId) return toast.error(out.error ?? "The agent didn't start");
     toast.success("Collections agent started", { action: { label: "Watch the run", onClick: () => router.push(out.href ?? `/app/ai/runs/${out.runId}`) } });
-    setTimeout(() => router.refresh(), 4000);
+    refreshTimer.current = setTimeout(() => router.refresh(), 4000);
   };
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2">
         <Checkbox
-          aria-label="Select all safe reminders on this page"
+          aria-label="Select all low-risk reminders on this page"
           checked={bulkable.length > 0 && bulkable.every((r) => picked.has(r.lease_id))}
           disabled={!bulkable.length}
           onCheckedChange={(v) => setPicked(v ? new Set(bulkable.map((r) => r.lease_id)) : new Set())}
         />
-        <span className="text-[12.5px] text-muted-foreground">{picked.size ? `${picked.size} selected` : `${bulkable.length} reminder${bulkable.length === 1 ? "" : "s"} on this page can be approved together`}</span>
-        <Button size="sm" disabled={!picked.size || busy === "bulk"} onClick={bulk}>{busy === "bulk" ? <Loader2 className="animate-spin" /> : <Send />}Approve {picked.size || ""} safe reminder{picked.size === 1 ? "" : "s"}</Button>
-        <span className="hidden text-[11.5px] text-muted-foreground lg:inline">Payment plans and legal referrals always need an individual decision.</span>
-        <div className="ml-auto">{canRun && <Button size="sm" variant="outline" disabled={busy === "run"} onClick={run}>{busy === "run" ? <Loader2 className="animate-spin" /> : <Play />}Run Collections agent</Button>}</div>
+        <span className="text-[12.5px] text-muted-foreground">{selected.length ? `${selected.length} selected` : `${bulkable.length} reminder${bulkable.length === 1 ? "" : "s"} on this page can be approved together`}</span>
+        <Button size="sm" disabled={!selected.length || busy !== null} onClick={bulk}>{busy === "bulk" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Send data-icon="inline-start" />}Approve {selected.length || ""} low-risk reminder{selected.length === 1 ? "" : "s"}</Button>
+        <span className="hidden text-[11.5px] text-muted-foreground lg:inline">Payment plans and legal referrals are decided one at a time.</span>
+        <div className="ml-auto">{canRun && <Button size="sm" variant="outline" disabled={busy !== null} onClick={run}>{busy === "run" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Play data-icon="inline-start" />}Run Collections agent</Button>}</div>
       </div>
 
       {rows.length === 0 ? <EmptyState kind="table" title="No delinquent residents here" description="Everyone in this view is paid up. Change the filters to see more." /> : (
@@ -129,7 +142,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                       <td className="px-3 py-2 align-top"><Checkbox aria-label={`Select ${r.resident}`} disabled={!canPick} checked={picked.has(r.lease_id)} onCheckedChange={(v) => toggle(r.lease_id, !!v)} /></td>
                       <td className="max-w-0 px-2 py-2">
                         {r.dataError && <span className="float-right ml-1 mt-0.5 rounded bg-tone-warning/12 px-1.5 text-[10.5px] font-medium text-tone-warning" title="Lease rent looks 10× too high">Rent typo</span>}
-                        <button type="button" onClick={() => setOpen(isOpen ? null : r.lease_id)} className="block max-w-full truncate text-left font-medium hover:text-primary">{r.resident}</button>
+                        <button type="button" aria-expanded={isOpen} aria-controls={`wb-${r.lease_id}`} onClick={() => setOpen(isOpen ? null : r.lease_id)} className="block max-w-full truncate text-left font-medium hover:text-primary">{r.resident}</button>
                         <span className="block truncate text-[11.5px] text-muted-foreground">{r.property} #{r.unit} · {r.lease_id}{r.language === "es" ? " · prefers Spanish" : ""}</span>
                       </td>
                       <td className="px-2 py-2"><span className={cn("inline-flex h-5 items-center gap-1 rounded-full px-2 text-[11.5px] font-medium tabular-nums ring-1 ring-inset", BAND[r.band])}>{r.score} · {r.band}</span></td>
@@ -139,10 +152,10 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                         <span className="inline-flex items-center gap-1.5 font-medium"><step.icon className="size-3.5 text-muted-foreground" />{step.label}</span>
                         <span className="block text-[11.5px] text-muted-foreground">{r.proposal ? `Proposed by the agent · ${r.proposal.risk} risk` : "Not proposed yet"}</span>
                       </td>
-                      <td className="px-2 py-2"><button type="button" aria-expanded={isOpen} aria-label={isOpen ? "Hide details" : "Show details"} onClick={() => setOpen(isOpen ? null : r.lease_id)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">{isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</button></td>
+                      <td className="px-2 py-2"><button type="button" aria-expanded={isOpen} aria-controls={`wb-${r.lease_id}`} aria-label={isOpen ? `Hide details for ${r.resident}` : `Show details for ${r.resident}`} onClick={() => setOpen(isOpen ? null : r.lease_id)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">{isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}</button></td>
                     </tr>
                     {isOpen && (
-                      <tr className="bg-muted/30">
+                      <tr id={`wb-${r.lease_id}`} className="bg-muted/30">
                         <td />
                         <td colSpan={6} className="px-2 pb-4 pt-1">
                           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
@@ -174,7 +187,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                                     <h4 className="flex items-center gap-1.5 whitespace-nowrap text-[12px] font-semibold"><Sparkles className="size-3.5 text-tone-ai" />Drafted message</h4>
                                     {r.proposal?.message
                                       ? <AIBadge source={r.proposal.model && r.proposal.model !== "rules" ? "precomputed" : "rules"} model={r.proposal.model ?? undefined} size="xs" />
-                                      : <span className="rounded bg-muted px-1.5 py-px text-[10.5px] text-muted-foreground">Template · figures from the ledger</span>}
+                                      : <span className="rounded bg-muted px-1.5 py-px text-[10.5px] text-muted-foreground">Template</span>}
                                     {r.proposal && <Confidence value={r.proposal.confidence} />}
                                     {!r.proposal?.message && (
                                       <ToggleGroup type="single" size="sm" variant="outline" value={l} onValueChange={(v) => v && setLang((x) => ({ ...x, [r.lease_id]: v as "en" | "es" }))} className="ml-auto" aria-label="Message language">
@@ -189,14 +202,14 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                                       <Textarea aria-label="Message body" className="min-h-24 resize-y border-0 text-[12.5px] shadow-none focus-visible:ring-0" value={edits[r.lease_id] ?? draft.body} onChange={(e) => setEdits((x) => ({ ...x, [r.lease_id]: e.target.value }))} maxLength={4000} />
                                     ) : <p className="whitespace-pre-wrap px-3 py-2 text-[12.5px]">{draft.body}</p>}
                                   </div>
-                                  <p className="text-[11.5px] text-muted-foreground">Figures come from the ledger, not the model. The message never promises a waiver.</p>
+                                  <p className="text-[11.5px] text-muted-foreground">Amounts come from the ledger. The draft doesn’t offer to waive fees; keep it that way if you edit it.</p>
                                 </>
                               )}
                               {r.proposal ? (
                                 r.proposal.canDecide ? (
                                   <div className="flex gap-2">
-                                    <Button size="sm" disabled={busy === r.lease_id} onClick={() => decide(r, "approve")}>{busy === r.lease_id && <Loader2 className="animate-spin" />}{r.step === "legal" ? "Approve legal review" : edits[r.lease_id] != null ? "Approve edited message" : "Approve and send"}</Button>
-                                    <Button size="sm" variant="outline" disabled={busy === r.lease_id} onClick={() => decide(r, "reject")}>Reject</Button>
+                                    <Button size="sm" disabled={busy !== null} onClick={() => decide(r, "approve")}>{busy === r.lease_id && <Loader2 data-icon="inline-start" className="animate-spin" />}{r.step === "legal" ? "Approve legal review" : edits[r.lease_id] != null ? "Approve edited message" : "Approve and send"}</Button>
+                                    <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => decide(r, "reject")}>Reject</Button>
                                   </div>
                                 ) : <p className="text-[12px] text-muted-foreground">{r.proposal.risk === "Low" ? "Your role can view this proposal but not act on it." : `${r.proposal.risk}-risk proposals need a regional manager or principal.`}</p>
                               ) : <p className="text-[12px] text-muted-foreground">The agent hasn’t proposed this yet. Run it to queue the message for approval.</p>}

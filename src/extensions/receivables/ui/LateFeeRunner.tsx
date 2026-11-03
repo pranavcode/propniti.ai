@@ -47,15 +47,16 @@ export function LateFeeRunner({ policies, period }: { policies: PolicyRow[]; per
           </li>
         ))}
       </ul>
-      <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+      {policies.length > 4 && <Link href="/app/receivables/late-fees" className="block border-t px-4 py-2 text-[12px] text-muted-foreground hover:text-foreground hover:underline">{policies.length - 4} more policies →</Link>}
+      <Dialog open={!!confirm} onOpenChange={(o) => !o && !busy && setConfirm(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Post {period} late fees?</DialogTitle>
             <DialogDescription>{confirm?.label}: {confirm?.summary}. Fees go only on rent still unpaid after the grace period, at most one per lease this month, and never above the state cap.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirm(null)}>Cancel</Button>
-            <Button disabled={busy} onClick={run}>{busy && <Loader2 className="animate-spin" />}{busy ? "Posting…" : "Post late fees"}</Button>
+            <Button variant="outline" disabled={busy} onClick={() => setConfirm(null)}>Cancel</Button>
+            <Button disabled={busy} onClick={run}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}{busy ? "Posting…" : "Post late fees"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
