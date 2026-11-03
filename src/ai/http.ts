@@ -49,9 +49,9 @@ export async function guarded(fn: () => Promise<Response>) {
 export function canDecide(s: AiSession, p: Row): { ok: true } | { ok: false; error: string } {
   const role = s.actor.role;
   if (p.queue_state === "waiting") return p.assignee_role === role || role === "principal" ? { ok: true } : { ok: false, error: "This one waits for the owner's approval in their portal." };
-  const module = getEntity(String(p.entity_type))?.module ?? "intelligence";
-  const access = PERMISSIONS[role][module] ?? "none";
+  const mod = getEntity(String(p.entity_type))?.module ?? "intelligence";
+  const access = PERMISSIONS[role][mod] ?? "none";
   const needsApprove = p.risk !== "Low" || p.amount_cents != null;
   if (needsApprove ? access === "approve" : access === "write" || access === "approve") return { ok: true };
-  return { ok: false, error: `${s.persona.title} can't ${needsApprove ? "approve" : "act on"} ${module} items${p.assignee_role ? `; this one goes to the ${String(p.assignee_role).replace(/_/g, " ")}` : ""}.` };
+  return { ok: false, error: `${s.persona.title} can't ${needsApprove ? "approve" : "act on"} ${mod} items${p.assignee_role ? `; this one goes to the ${String(p.assignee_role).replace(/_/g, " ")}` : ""}.` };
 }

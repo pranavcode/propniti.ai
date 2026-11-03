@@ -4,7 +4,7 @@ import type { ActionKey, Row } from "@/entities/types";
 import type { Persona } from "@/auth/personas";
 import { addDays, money } from "./agents/framework";
 import { columns, insert, list, newId, parseJson, sql, type DataCtx, type Table } from "./data";
-import { delinquency, explainNoi, matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
+import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
 import { openRun, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
 import { amountsIn } from "./tools/write";

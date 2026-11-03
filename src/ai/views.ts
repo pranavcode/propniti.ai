@@ -139,12 +139,12 @@ export async function dataHealth(data: DataCtx) {
   });
   const modules = new Map<string, { module: string; open: number; weighted: number; entities: Set<string> }>();
   for (const r of byEntity) {
-    const module = getEntity(r.entity_type)?.module ?? r.entity_type;
-    const m = modules.get(module) ?? { module, open: 0, weighted: 0, entities: new Set<string>() };
+    const mod = getEntity(r.entity_type)?.module ?? r.entity_type;
+    const m = modules.get(mod) ?? { module: mod, open: 0, weighted: 0, entities: new Set<string>() };
     m.open += r.n;
     m.weighted += (WEIGHT[r.severity] ?? 1) * r.n;
     m.entities.add(r.entity_type);
-    modules.set(module, m);
+    modules.set(mod, m);
   }
   const totalWeighted = byEntity.reduce((s, r) => s + (WEIGHT[r.severity] ?? 1) * r.n, 0);
   const totalUnits = records.reduce((s, p) => s + Number(p.units), 0);
