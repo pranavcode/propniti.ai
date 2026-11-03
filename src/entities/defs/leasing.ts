@@ -450,6 +450,8 @@ registerEntity({
   kpis: [{ key: "proposed", label: "Concessions to approve", metric: "leasing.concessions_proposed", format: "count", goodWhen: "down", drill: "/app/leasing/concessions?view=proposed" }],
   permissions: { read: [...STAFF], create: [...LEASING], update: [...LEASING], delete: [...LEADERS] },
   writes: "generic",
+  // Past approval or once sent, only named actions change it (generic edits and deletes refused).
+  lockedWhen: { field: "status", in: ["Active", "Expired", "Rejected"] },
   actions: ["concessions.approve", "concessions.reject"],
   help: { summary: "Move-in specials and lease credits. Specials are proposed by leasing and approved by the regional manager.", article: "approve-concessions" },
 });
@@ -508,6 +510,8 @@ registerEntity({
   ],
   permissions: { read: [...STAFF], create: [...LEASING], update: [...LEASING], delete: [...LEADERS] },
   writes: "generic",
+  // Past approval or once sent, only named actions change it (generic edits and deletes refused).
+  lockedWhen: { field: "status", in: ["Sent", "Countered", "Accepted", "Declined", "Expired"] },
   actions: ["renewal_offers.propose", "renewal_offers.draft_message", "renewal_offers.send"],
   help: { summary: "Renewal offers sent to residents, with every counter-offer kept as a version.", article: "renewal-workflow" },
 });
