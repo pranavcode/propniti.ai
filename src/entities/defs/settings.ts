@@ -166,7 +166,7 @@ registerEntity({
     failed_30d: { type: "number", label: "Failed (30 days)", sortable: true, list: { default: true, align: "right" },
       sql: `(SELECT count(*) FROM {automation_runs} r WHERE r.rule_id = automation_rules.id AND r.status = 'Failed' AND r.started_at >= date(${AS_OF}, '-30 days'))` },
     last_run_at: { type: "datetime", label: "Last run", sortable: true, list: { default: true }, sql: "(SELECT max(r.started_at) FROM {automation_runs} r WHERE r.rule_id = automation_rules.id)" },
-    created_by: { type: "ref", ref: "staff", label: "Created by", editable: [] },
+    created_by: { system: true, type: "ref", ref: "staff", label: "Created by", editable: [] },
   },
   relations: [{ name: "runs", label: "Run log", entity: "automation_runs", fk: "rule_id", kind: "many" }],
   list: { defaultSort: ["name", "asc"], savedViews: [{ key: "failing", label: "Failing", filters: { "failed_30d.min": "1" }, sort: ["failed_30d", "desc"] }, { key: "off", label: "Turned off", filters: { enabled: "false" } }] },
