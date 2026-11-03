@@ -21,7 +21,7 @@ type Actions = {
   connectBank: (bank: string) => void;
   invite: (emails: string[]) => void;
   finishOnboarding: () => void;
-  reset: () => void;
+  reset: () => Promise<boolean>;
 };
 
 // busy is true while a change is being saved; action buttons stay disabled until it lands.
@@ -66,6 +66,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       try {
         const next = await request(path, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
         if (next) setState(next);
+        return Boolean(next);
       } finally {
         pendingWrites.current--;
         setInFlight((n) => n - 1);
