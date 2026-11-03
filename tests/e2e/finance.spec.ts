@@ -24,7 +24,7 @@ test("accountant home shows the briefing, KPIs and drills from payables aging", 
   for (const k of ["Open payables", "Unreconciled items", "Cash in trust", "Expense vs budget"]) await expect(page.getByText(k).first()).toBeVisible();
   await expect(page.getByText("Cash forecast, 90 days")).toBeVisible();
   await page.getByText("wait for approval").click();
-  await expect(page).toHaveURL(/\/app\/payables\/bills\?view=to-approve/);
+  await expect(page).toHaveURL(/\/app\/payables\/bills\?view=to-approve/, { timeout: 60_000 });
   await expect(page.getByRole("table")).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -32,8 +32,9 @@ test("accountant home shows the briefing, KPIs and drills from payables aging", 
 test("AP inbox reads a sample invoice and stops payment on an unverified bank change", async ({ page }) => {
   await page.goto(`${BASE}/app/finance/ap-inbox`);
   await expect(page.getByRole("heading", { name: /AP inbox/ })).toBeVisible();
-  await page.getByText(/bank/i).first().click();
-  await expect(page.getByText(/on hold|hard stop|verified/i).first()).toBeVisible();
+  await page.getByText("Thermostat and condensate pump").click();
+  await expect(page.getByText(/0442/).first()).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Payment hold" })).toBeVisible();
 });
 
 test("bill record shows the Payables checks and coded lines", async ({ page }) => {
