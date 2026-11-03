@@ -108,7 +108,7 @@ export async function InboxPage(p: Params) {
                 return (
                   <li key={String(r.id)}>
                     <Link href={href({ selected: String(r.id) })} aria-current={on ? "true" : undefined} scroll={false}
-                      className={cn("block border-l-2 px-3 py-2.5 transition-colors", on ? "border-l-primary bg-primary/[0.05]" : "border-l-transparent hover:bg-muted/50")}>
+                      className={cn("block px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50", on ? "bg-primary/[0.08]" : "hover:bg-muted/50")}>
                       <div className="flex items-center gap-1.5 text-[13px]">
                         {r.unread ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" /> : null}
                         <span className={cn("min-w-0 flex-1 truncate", r.unread ? "font-semibold" : "font-medium")}>{String(r.party ?? r.party_id)}</span>
