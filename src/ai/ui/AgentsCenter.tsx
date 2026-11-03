@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AgentCard as Card } from "@/ai/views";
 import type { ApprovalPolicy, Autonomy } from "@/ai/types";
 import { ProposalCard } from "./RunView";
@@ -20,11 +21,14 @@ const ICONS: Record<string, React.ReactNode> = {
   collections: <Banknote />, leasing: <KeyRound />, renewals: <RefreshCw />, maintenance_triage: <Wrench />, ap: <FileSpreadsheet />,
   data_health: <HeartPulse />, owner_reporting: <LineChart />, compliance: <ShieldCheck />,
 };
+// Two levels. "Suggest" and "act with approval" behaved the same (a proposal a person approves), so
+// they are one level here; a saved "suggest" shows as "Approve first".
 const AUTONOMY = [
-  { value: "suggest", label: "Suggest only" },
-  { value: "act_with_approval", label: "Act with approval" },
+  { value: "act_with_approval", label: "Approve first" },
   { value: "auto_within_policy", label: "Auto within policy" },
 ] as const;
+const AUTONOMY_HELP = "Approve first: every action waits for a person in the approvals inbox. Auto within policy: low-risk actions under your approval-policy limits apply on their own and are logged; anything with money over the limit, legal or safety risk still waits for a person.";
+const level = (a: string) => (a === "suggest" ? "act_with_approval" : a) as Autonomy;
 
 type Status = { provider: string; model: string; label: string; live: boolean; lastSweepAt: string | null; policies: (ApprovalPolicy & { id?: string })[] };
 
@@ -93,7 +97,7 @@ export function AgentsCenter({ agents, status, canManage, canRun }: { agents: Ca
               proposed={a.proposed}
               approved={a.approved}
               autoApplied={a.auto}
-              autonomy={a.autonomy as Autonomy}
+              autonomy={level(a.autonomy)}
               enabled={a.enabled}
               href={`/app/ai/activity?agent=${a.key}`}
               model={a.lastRun?.model ? `Last run: ${a.lastRun.model}` : undefined}
@@ -101,8 +105,11 @@ export function AgentsCenter({ agents, status, canManage, canRun }: { agents: Ca
               onRunNow={canRun ? () => runNow(a.key) : undefined}
             />
             <div className="flex items-center gap-2 text-[12px]">
-              <span className="text-muted-foreground">Autonomy</span>
-              <Select value={a.autonomy} disabled={!canManage} onValueChange={(v) => void patch(a.key, { autonomy: v })}>
+              <Tooltip>
+                <TooltipTrigger asChild><span className="cursor-help text-muted-foreground underline decoration-dotted underline-offset-2">Autonomy</span></TooltipTrigger>
+                <TooltipContent className="max-w-xs">{AUTONOMY_HELP}</TooltipContent>
+              </Tooltip>
+              <Select value={level(a.autonomy)} disabled={!canManage} onValueChange={(v) => void patch(a.key, { autonomy: v })}>
                 <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
                 <SelectContent>{AUTONOMY.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
               </Select>
