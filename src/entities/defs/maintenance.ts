@@ -124,6 +124,9 @@ registerEntity({
   },
   permissions: { read: [...STAFF, "vendor", "resident", "owner"], create: WO_STAFF, update: SUP, delete: [...LEADERS, "maintenance_supervisor"] },
   writes: "generic",
+  // Agents (Maintenance Triage) listen for wo.created; ids follow the seed, WO-12345.
+  events: { created: "wo.created" },
+  idFormat: { prefix: "WO", digits: 5 },
   actions: ["work_orders.vendor_accept", "work_orders.vendor_decline", "work_orders.run_triage", "work_orders.dispatch", "work_orders.set_status", "work_orders.log_time", "work_orders.add_photo", "work_orders.check_photos", "work_orders.submit_invoice", "work_orders.approve_and_pay", "work_orders.request_owner_approval"],
   help: { summary: "Repairs and requests from residents, inspections, preventive schedules and turnovers, tracked against SLA through vendor invoice and payment.", article: "maintenance-triage-agent" },
 });
