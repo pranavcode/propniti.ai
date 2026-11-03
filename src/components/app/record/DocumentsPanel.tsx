@@ -12,7 +12,7 @@ import { useCollab } from "./useCollab";
 
 // Documents filed to a record (documents table), with auto-filing provenance and inline preview.
 
-export type DocumentRow = { id: string; name: string; url: string; mime: string; doc_type?: string | null; classify_confidence?: number | null; filed_to?: string | null; classified_by?: string | null; uploaded_by?: string | null; uploaded_at: string };
+export type DocumentRow = { id: string; name: string; url: string | null; mime: string; doc_type?: string | null; classify_confidence?: number | null; filed_to?: string | null; classified_by?: string | null; uploaded_by?: string | null; uploaded_at: string };
 
 function DocIcon({ mime }: { mime: string }) {
   const Icon = mime.startsWith("image/") ? FileImage : /sheet|csv|excel/.test(mime) ? FileSpreadsheet : FileText;
@@ -35,7 +35,9 @@ export function DocumentsPanel({ entity, id, initial }: { entity: string; id: st
           <li key={d.id} className="group/doc flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40">
             <DocIcon mime={d.mime} />
             <div className="min-w-0 flex-1">
-              <button onClick={() => setPreview(d)} className="block max-w-full truncate text-left font-medium hover:text-primary hover:underline">{d.name}</button>
+              {d.url
+                ? <button onClick={() => setPreview(d)} className="block max-w-full truncate text-left font-medium hover:text-primary hover:underline">{d.name}</button>
+                : <span className="block max-w-full truncate font-medium" title="No file attached">{d.name}</span>}
               <div className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
                 {d.doc_type && <span>{d.doc_type}</span>}
                 <span>· <RelativeDate value={d.uploaded_at} /></span>
@@ -44,10 +46,12 @@ export function DocumentsPanel({ entity, id, initial }: { entity: string; id: st
                 )}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 opacity-60 group-hover/doc:opacity-100">
-              <Button variant="ghost" size="icon-sm" onClick={() => setPreview(d)} aria-label={`Preview ${d.name}`}><Eye /></Button>
-              <Button asChild variant="ghost" size="icon-sm"><a href={d.url} download aria-label={`Download ${d.name}`}><Download /></a></Button>
-            </div>
+            {d.url && (
+              <div className="flex shrink-0 items-center gap-0.5 opacity-60 group-hover/doc:opacity-100">
+                <Button variant="ghost" size="icon-sm" onClick={() => setPreview(d)} aria-label={`Preview ${d.name}`}><Eye /></Button>
+                <Button asChild variant="ghost" size="icon-sm"><a href={d.url} download aria-label={`Download ${d.name}`}><Download /></a></Button>
+              </div>
+            )}
           </li>
         ))}
       </ul>
