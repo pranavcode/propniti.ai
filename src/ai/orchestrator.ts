@@ -136,7 +136,7 @@ export type SweepReport = { at: string; scheduled: { agent: AgentKey; runId: str
 
 // The 15-minute sweep: due scheduled agents run over the shared base (everyone sees their
 // proposals), and each recently active workspace's events outbox is drained.
-export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unknown>) => void, opts: { force?: boolean } = {}): Promise<SweepReport | null> {
+export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unknown>) => void, opts: { force?: boolean; deadlineMs?: number } = {}): Promise<SweepReport | null> {
   if (!opts.force && !(await claimSweep(db, nowMs))) return null;
   const report: SweepReport = { at: new Date(nowMs).toISOString(), scheduled: [], events: [] };
   const configs = await agentConfigs(db, "base");
@@ -154,13 +154,13 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
       continue;
     }
     if (!due) continue;
-    const { runId, done } = await startRun({ db, ws: "base", actor: SYSTEM_ACTOR, agent: cfg.key, trigger: { kind: "schedule" }, deadlineMs: 120_000, nowMs });
+    const { runId, done } = await startRun({ db, ws: "base", actor: SYSTEM_ACTOR, agent: cfg.key, trigger: { kind: "schedule" }, deadlineMs: opts.deadlineMs ?? 120_000, nowMs });
     report.scheduled.push({ agent: cfg.key, runId });
     runs.push(done);
   }
   const { results: active } = await db.prepare("SELECT id FROM workspaces WHERE id <> 'base' AND last_seen_at > ? ORDER BY last_seen_at DESC LIMIT 50").bind(nowMs - 30 * 60_000).all<{ id: string }>();
   for (const ws of ["base", ...active.map((a) => a.id)]) {
-    const r = await drainEvents(db, ws, nowMs);
+    const r = await drainEvents(db, ws, nowMs, 25, opts.deadlineMs);
     if (r.processed) report.events.push({ ws, ...r, runs: r.runs.map((x) => x.runId) });
     runs.push(...r.runs.map((x) => x.done));
   }
@@ -174,7 +174,7 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
 
 // Consumes the events outbox: each unprocessed event is claimed with a guarded update, then every
 // enabled agent that listens for its type runs once for the batch.
-export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25) {
+export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25, deadlineMs = 60_000) {
   const { results } = await db.prepare("SELECT id, type, entity_type, entity_id, payload FROM events WHERE workspace_id = ? AND processed_at IS NULL AND deleted = 0 ORDER BY seq LIMIT ?").bind(ws, limit).all<{ id: string; type: string; entity_type: string | null; entity_id: string | null; payload: string }>();
   if (!results.length) return { processed: 0, runs: [] as { runId: string; done: Promise<RunResult> }[] };
   const configs = await agentConfigs(db, ws);
@@ -190,7 +190,7 @@ export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25)
   for (const [agent, evs] of byAgent) {
     const one = evs.length === 1 ? evs[0] : null;
     const input = one ? { ...parseJson<Record<string, unknown>>(one.payload, {}), [`${(one.entity_type ?? "").replace(/s$/, "")}_id`]: one.entity_id, events: [one.id] } : { events: evs.map((e) => e.id) };
-    const r = await startRun({ db, ws, actor: SYSTEM_ACTOR, agent, trigger: { kind: "event", eventId: evs[0].id, input }, deadlineMs: 60_000, nowMs });
+    const r = await startRun({ db, ws, actor: SYSTEM_ACTOR, agent, trigger: { kind: "event", eventId: evs[0].id, input }, deadlineMs, nowMs });
     await db.prepare("UPDATE events SET run_id = ? WHERE workspace_id = ? AND id IN (SELECT value FROM json_each(?))").bind(r.runId, ws, JSON.stringify(evs.map((e) => e.id))).run();
     runs.push(r);
   }

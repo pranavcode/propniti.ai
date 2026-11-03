@@ -1,7 +1,7 @@
 import { PERMISSIONS } from "@/auth/personas";
 import { guarded, json, readSession, waitUntil, writeSession } from "@/ai/http";
 import { lastSweep, sweep } from "@/ai/orchestrator";
-import { CRON_HEADER, cronToken } from "@/ai/sweep";
+import { CRON_HEADER, cronTokenOk } from "@/ai/sweep";
 import { getPlatform } from "@/lib/platform";
 
 // The 15-minute sweep. Called by the Cron Trigger through src/worker-entry.ts (internal request
@@ -10,14 +10,14 @@ export async function POST(request: Request) {
   return guarded(async () => {
     const token = request.headers.get(CRON_HEADER);
     if (token) {
-      if (token !== cronToken()) return json({ error: "Bad cron token" }, { status: 403 });
+      if (!(await cronTokenOk(token))) return json({ error: "Bad cron token" }, { status: 403 });
       const report = await sweep(getPlatform().db, Date.now(), waitUntil);
       return json({ ok: true, report });
     }
     const w = await writeSession(request, null);
     if (w instanceof Response) return w;
     if (PERMISSIONS[w.s.actor.role].intelligence !== "approve") return json({ error: `${w.s.persona.title} can't start a sweep` }, { status: 403 });
-    const report = await sweep(w.s.db, Date.now(), waitUntil, { force: true });
+    const report = await sweep(w.s.db, Date.now(), waitUntil, { force: true, deadlineMs: 25_000 });
     return json({ ok: true, report }, { setCookie: w.s.setCookie });
   });
 }
