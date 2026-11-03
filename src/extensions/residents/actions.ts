@@ -59,6 +59,7 @@ registerAction({
 
 registerAction({
   key: "message_threads.suggest_reply",
+  ai: true,
   label: "Suggest a reply",
   entity: "message_threads",
   roles: [...STAFF_MSG],
@@ -156,6 +157,7 @@ registerAction({
 
 registerAction({
   key: "leases.abstract",
+  ai: true,
   label: "Abstract lease document",
   entity: "leases",
   roles: [...OPS, "broker", "accountant"],
@@ -191,6 +193,7 @@ registerAction({
 
 registerAction({
   key: "announcements.ai_draft",
+  ai: true,
   label: "Draft with AI",
   entity: "announcements",
   roles: [...OPS],
