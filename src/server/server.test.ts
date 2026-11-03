@@ -136,6 +136,18 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await payRent(c, jordan!.id)).toMatchObject({ status: 409, error: expect.stringContaining("already paid") });
   });
 
+  it("settles a backlog of pending transfers ten per request", async () => {
+    const c = await ctx();
+    const due = (await db.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 12`).bind(c.ws).all<{ id: string }>()).results;
+    for (const x of due) await payRent(c, x.id);
+    const pending = () => n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND status = 'Pending'", c.ws);
+    expect(await pending()).toBe(12);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect(await pending()).toBe(2);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect(await pending()).toBe(0);
+  });
+
   it("record payment: partial amounts apply, a retry with the same key is a no-op, overpaying is refused", async () => {
     const c = await ctx();
     const ch = await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws);

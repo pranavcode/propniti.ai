@@ -69,8 +69,11 @@ const transferAt = (db: Db, ws: string, key: string) => db.prepare("SELECT id, s
 // Settle: overlay transfers whose ACH window has passed clear on the next request.
 // ---------------------------------------------------------------------------------------------
 
+// At most SETTLE_BATCH transfers per call (up to 5 statements each), to stay well inside D1's
+// per-request query limit; anything left settles on the next request.
+const SETTLE_BATCH = 10;
 export async function settle(db: Db, ws: string, nowMs: number) {
-  const due = (await db.prepare("SELECT * FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 ORDER BY seq").bind(ws, nowMs).all<Record<string, string | number>>()).results;
+  const due = (await db.prepare(`SELECT * FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 ORDER BY seq LIMIT ${SETTLE_BATCH}`).bind(ws, nowMs).all<Record<string, string | number>>()).results;
   if (!due.length) return;
   const at = nowIso(nowMs);
   const steps: DbStatement[] = [];
