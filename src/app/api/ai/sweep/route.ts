@@ -11,13 +11,15 @@ export async function POST(request: Request) {
     const token = request.headers.get(CRON_HEADER);
     if (token) {
       if (!(await cronTokenOk(token))) return json({ error: "Bad cron token" }, { status: 403 });
-      const report = await sweep(getPlatform().db, Date.now(), waitUntil);
+      // The scheduled handler waits for this response, so the runs finish inside the cron
+      // invocation's own time limit instead of a request's 30-second waitUntil.
+      const report = await sweep(getPlatform().db, Date.now(), undefined, { deadlineMs: 120_000 });
       return json({ ok: true, report });
     }
     const w = await writeSession(request, null);
     if (w instanceof Response) return w;
     if (PERMISSIONS[w.s.actor.role].intelligence !== "approve") return json({ error: `${w.s.persona.title} can't start a sweep` }, { status: 403 });
-    const report = await sweep(w.s.db, Date.now(), waitUntil, { force: true, deadlineMs: 25_000 });
+    const report = await sweep(w.s.db, Date.now(), waitUntil, { force: true, deadlineMs: 25_000, workspaces: [w.s.ws] });
     return json({ ok: true, report }, { setCookie: w.s.setCookie });
   });
 }

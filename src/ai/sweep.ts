@@ -1,5 +1,5 @@
 import type { Db } from "@/lib/platform/types";
-import { lastSweep, sweep, SWEEP_EVERY_MS } from "./orchestrator";
+import { lastSweep, reapStaleRuns, sweep, SWEEP_EVERY_MS } from "./orchestrator";
 
 // "Run on visit": if the Cron Trigger hasn't swept in 15 minutes (local dev, or cron not wired),
 // the first AI page or API request after that starts a sweep in the background. The sweep claims
@@ -10,6 +10,7 @@ export function maybeSweep(db: Db, waitUntil: (p: Promise<unknown>) => void, now
   checkedAt = nowMs;
   waitUntil(
     (async () => {
+      await reapStaleRuns(db, nowMs);
       const last = await lastSweep(db);
       if (last && nowMs - last < SWEEP_EVERY_MS) return;
       // Visits only get ctx.waitUntil's 30 seconds after the response; the cron gets minutes.

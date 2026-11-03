@@ -163,22 +163,25 @@ describe("sweep and events", () => {
     expect(await claimSweep(db, now + 15 * 60_000)).toBe(true);
   });
 
-  it("runs due scheduled agents over base and drains a workspace's events", async () => {
+  it("runs due scheduled agents in active workspaces (never base), drains their outbox and reaps stuck runs", async () => {
     setModelForTests(null);
     const { raw, db } = openFixture();
-    raw.exec(`INSERT INTO events (workspace_id, id, type, entity_type, entity_id, payload, created_at) VALUES ('${WS}', 'e1', 'wo.created', 'work_orders', 'WO-10001', '{}', '2026-11-04')`);
     const at = Date.parse("2026-11-04T14:00:30Z");
     raw.prepare("UPDATE workspaces SET last_seen_at = ? WHERE id = ?").run(at - 60_000, WS);
+    // A seeded pending event in base, and a run left "running" by a stopped isolate.
+    raw.exec(`INSERT INTO events (workspace_id, id, type, entity_type, entity_id, payload, created_at) VALUES ('base', 'e1', 'wo.created', 'work_orders', 'WO-10001', '{}', '2026-11-04')`);
+    raw.exec(`INSERT INTO agent_runs (workspace_id, id, agent_key, trigger_kind, status, started_at) VALUES ('${WS}', 'old', 'collections', 'schedule', 'running', '2026-11-04T13:00:00Z')`);
     const report = await sweep(db, at);
+    expect(report!.reaped).toBe(1);
     // 14:00 UTC: collections (0 14 * * *), payables (0 */2 * * *) and maintenance triage (*/15) are due.
     expect(report!.scheduled.map((s) => s.agent).sort()).toEqual(["ap", "collections", "maintenance_triage"]);
+    expect(report!.scheduled.every((s) => s.ws === WS)).toBe(true);
     expect(report!.events).toEqual([{ ws: WS, processed: 1, runs: [expect.any(String)] }]);
-    const runs = raw.prepare("SELECT workspace_id, agent_key, trigger_kind, status FROM agent_runs ORDER BY seq").all();
-    expect(runs).toContainEqual({ workspace_id: "base", agent_key: "collections", trigger_kind: "schedule", status: "waiting_approval" });
-    expect(runs).toContainEqual({ workspace_id: WS, agent_key: "maintenance_triage", trigger_kind: "event", status: "done" });
-    expect(raw.prepare("SELECT processed_at IS NOT NULL AS done, run_id IS NOT NULL AS linked FROM events WHERE id = 'e1'").get()).toEqual({ done: 1, linked: 1 });
-    // Scheduled runs never change base records: the triage proposal waits for a person there.
-    expect(raw.prepare("SELECT queue_state FROM ai_proposals WHERE workspace_id = 'base' AND agent = 'maintenance_triage'").get()).toEqual({ queue_state: "needs_you" });
+    expect(raw.prepare("SELECT count(*) AS n FROM agent_runs WHERE workspace_id = 'base'").get()!.n).toBe(0);
+    expect(raw.prepare("SELECT status FROM agent_runs WHERE id = 'old'").get()).toEqual({ status: "failed" });
+    // The base event stays unprocessed in base; the workspace's overlay copy records the claim.
+    expect(raw.prepare("SELECT processed_at IS NULL AS open FROM events WHERE workspace_id = 'base' AND id = 'e1'").get()).toEqual({ open: 1 });
+    expect(raw.prepare("SELECT processed_at IS NOT NULL AS done, run_id IS NOT NULL AS linked FROM events WHERE workspace_id = ? AND id = 'e1'").get(WS)).toEqual({ done: 1, linked: 1 });
     expect((await drainEvents(db, WS, Date.now())).processed).toBe(0);
   });
 });
