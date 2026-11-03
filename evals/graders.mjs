@@ -133,7 +133,8 @@ export function gradePlan(c, res) {
     const bad = dollarsIn(res.answer).filter((a) => shown.size && !shown.has(a) && !/total/i.test(res.answer));
     checks.push({ name: "no figure without a source", ok: !/didn't support/i.test(res.note ?? "") && bad.length <= 1, detail: bad.join(",") });
   }
-  if (e.scopeOnly) checks.push({ name: "stays in scope", ok: (res.table?.rows ?? []).every((r) => !r.href || true) && !(res.answer ?? "").match(/Atlanta|Inman/), detail: res.answer?.slice(0, 80) });
+  // The persona has no properties there: nothing may be listed.
+  if (e.scopeOnly) checks.push({ name: "stays in scope", ok: !(res.table?.rows ?? []).length, detail: (res.table?.rows ?? []).length });
   if (e.citesHelp) checks.push({ name: "cites a help article", ok: (res.citations ?? []).some((x) => x.help), detail: (res.citations ?? []).length });
   if (e.proposals) checks.push({ name: "proposed actions", ok: (res.proposals ?? []).length > 0, detail: (res.proposals ?? []).length });
   if (e.noneExecuted) checks.push({ name: "nothing ran before confirmation", ok: (res.proposals ?? []).every((p) => p.queue_state !== "auto_handled"), detail: (res.proposals ?? []).map((p) => p.queue_state).join(",") });

@@ -37,9 +37,14 @@ const Step = z.union([
 // time, either a tool call or the final answer. The runtime treats it exactly like native tool use.
 export function workersModel(ai: WorkersAI): ChatModel {
   const model = WORKERS_AI_MODEL;
-  const run = async (messages: { role: string; content: string }[], json?: Record<string, unknown>) => {
+  // The binding has no timeout option, so the call races a timer.
+  const run = async (messages: { role: string; content: string }[], json?: Record<string, unknown>, timeoutMs = 30_000) => {
     const t0 = Date.now();
-    const out = (await ai.run(model, { messages, max_tokens: 2048, ...(json ? { response_format: { type: "json_schema", json_schema: json } } : {}) })) as Out;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const out = (await Promise.race([
+      ai.run(model, { messages, max_tokens: 2048, ...(json ? { response_format: { type: "json_schema", json_schema: json } } : {}) }),
+      new Promise((_, rej) => (timer = setTimeout(() => rej(new Error(`Workers AI timed out after ${timeoutMs} ms`)), timeoutMs))),
+    ]).finally(() => clearTimeout(timer))) as Out;
     return { out, usage: usageOf(model, out.usage?.prompt_tokens ?? 0, out.usage?.completion_tokens ?? 0, Date.now() - t0) };
   };
   const transcript = (turns: Turn[]) =>
@@ -51,13 +56,13 @@ export function workersModel(ai: WorkersAI): ChatModel {
 
   return {
     info: { provider: "workers-ai", model, label: "Workers AI Llama 4 Scout", native: false },
-    async chat(system, turns, tools) {
+    async chat(system, turns, tools, opts) {
       const toolList = tools.map((t) => `- ${t.name}: ${t.description}\n  input JSON schema: ${JSON.stringify(t.schema)}`).join("\n");
       const sys =
         `${system}\n\nTools:\n${toolList}\n\n` +
         'Reply with exactly one JSON object and nothing else: {"tool": "<tool name>", "input": {...}} to call a tool, ' +
         'or {"final": "<your answer>"} when you are done. Call one tool at a time.';
-      const { out, usage } = await run([{ role: "system", content: sys }, ...transcript(turns)]);
+      const { out, usage } = await run([{ role: "system", content: sys }, ...transcript(turns)], undefined, opts?.timeoutMs);
       let step: z.infer<typeof Step>;
       try {
         step = Step.parse(firstJson(out.response));
@@ -68,7 +73,7 @@ export function workersModel(ai: WorkersAI): ChatModel {
       const call: ToolCall = { id: `c${turns.length}`, name: step.tool, input: step.input };
       return { text: "", calls: [call], usage };
     },
-    async structured(schema, system, user) {
+    async structured(schema, system, user, opts) {
       const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>;
       const { out, usage } = await run(
         [
@@ -76,6 +81,7 @@ export function workersModel(ai: WorkersAI): ChatModel {
           { role: "user", content: user },
         ],
         jsonSchema,
+        opts?.timeoutMs,
       );
       return { value: schema.parse(firstJson(out.response)), usage };
     },

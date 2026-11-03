@@ -92,7 +92,8 @@ async function main() {
       form.append("file", new Blob([read(c.file)], { type: "image/png" }), c.file.split("/").pop());
       return call("/api/ai/extract", { method: "POST", body: form });
     }, gradeExtract],
-    ["Assistant plans", "copilot-plan", (c) => postJson("/api/ai/assistant", { question: c.question }, c.persona).then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradePlan],
+    // Action plans are built by rules on purpose (nothing runs before a person confirms), so they aren't fallbacks.
+    ["Assistant plans", "copilot-plan", (c) => postJson("/api/ai/assistant", { question: c.question }, c.persona).then((r) => ({ ...r, source: r.live ? r.model : r.mode === "actions" ? "rules (by design)" : "mock" })), gradePlan],
     ["AI filter", "nl-filter", (c) => postJson("/api/ai/nl-filter", { entity: c.entity, text: c.text }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeNlFilter],
     ["Record summaries", "summary", (c) => postJson("/api/ai/summary", { entity: c.entity, id: c.recordId }, "daniel").then((r) => ({ ...r, source: r.summary?.model === "rules" ? "mock" : r.summary?.model })), gradeSummary],
     ["Agent runs", "agents", agentRun, gradeAgentRun],
