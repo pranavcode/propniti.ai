@@ -1056,7 +1056,6 @@ class Extras {
       doRun("maintenance_triage", d0 + 2, 9 * 60, "event", [], take(wos, n(40)).map((x) => ({ entity: "work_orders", id: x.id as string, pid: x.property_id as string, action: "work_orders.assign_vendor", title: `Triage ${x.id}: ${x.category}, ${String(x.priority).toLowerCase()}`, why: [`Classified as ${x.category}`], conf: 0.86, queue: queue(), role: "maintenance_supervisor" })), "Triaged new requests.", "wo.created");
       doRun("ap", d0 + 3, 12 * 60, "event", [], take(bills, n(30)).map((x) => ({ entity: "bills", id: x.id as string, pid: x.property_id as string, action: "bills.approve", title: `Code and approve ${x.id} from ${c.vendorName[x.vendor_id as string]}`, why: ["Matches contract or work order", "Coded to the vendor's usual GL account"], conf: 0.94, amount: x.amount_cents as number, queue: queue(), role: "accountant" })), "Read, coded and matched invoices.", "invoice.received");
       if (w >= 6) doRun("renewals", d0 + 1, 15 * 60, "schedule", [], take(leases, n(10)).map((l) => ({ entity: "leases", id: l.id, pid: l.u.p.id, action: "renewal_offers.send", title: `Send ${l.hh.name} a renewal offer`, why: ["Lease ends within 120 days"], conf: 0.74, queue: "needs_you", role: "property_manager" })), "Priced renewals.");
-      if (w >= 10) doRun("data_health", d0 + 4, 2 * 60, "schedule", [], take(c.units, n(6)).map((u) => ({ entity: "units", id: u.id, pid: u.p.id, action: "data_issues.apply_fix", title: `Normalize contact and record details at ${u.p.name}`, why: ["Rule check found a fixable issue"], conf: 0.9, queue: "auto_handled", role: "admin" })), "Ran data rules.");
       if (w >= 14 && w % 4 === 0) doRun("owner_reporting", d0 + 2, 13 * 60, "schedule", [], ["oe01", "oe02", "oe03", "oe04", "oe05", "oe06", "oe07", "oe08"].map((oe) => ({ entity: "owner_entities", id: oe, pid: c.props.find((p) => p.entity === oe)!.id, action: "messages.send", title: `Send ${oe.toUpperCase()} its monthly statement notes`, why: ["Statement closed"], conf: 0.82, queue: "needs_you", role: "accountant" })), "Drafted owner statement notes.");
     }
 
@@ -1113,6 +1112,84 @@ class Extras {
     doRun("owner_reporting", ASOF - 2, 13 * 60, "schedule", ["owner_statements.get", "metrics.variance"], [{ entity: "owner_entities", id: "oe01", pid: null, action: "messages.send", title: "Send Helen Carter the October variance explanation", why: ["Distribution down 9% vs September", "Roof progress payment $48,500 at Barton Creek", "Higher HVAC spend after August heat"], conf: 0.82, risk: "Low", queue: "needs_you", role: "accountant" }], "Drafted October statement notes for 8 owner entities.");
     doRun("leasing", ASOF, 9 * 60, "schedule", ["prospects.list", "messages.draft"], (this.t.prospects ?? []).filter((p) => p.stage === "Contacted" && p.last_contact_at && (p.last_contact_at as string) < iso(ASOF - 3)).slice(0, 12).map((p) => ({ entity: "prospects", id: p.id as string, pid: p.property_id as string, action: "prospects.send_follow_up", title: `Follow up with ${p.name}: no contact in ${Math.max(3, ASOF - day(p.last_contact_at as string))} days`, why: ["Interested lead gone quiet", `Desired move-in ${p.desired_move_in}`], conf: 0.88, risk: "Low", queue: "needs_you", role: "leasing_agent" })), "Found prospects waiting on a reply.");
     for (const app of (this.t.applications ?? []).filter((a) => a.stage === "Review")) doRun("leasing", ASOF - 1, 16 * 60 + rng(String(app.id)).int(0, 300), "event", ["applications.score"], [{ entity: "applications", id: app.id as string, pid: app.property_id as string, action: app.recommendation === "Deny" ? "applications.deny" : "applications.approve", title: `${app.recommendation} application ${app.id} (score ${app.score})`, payload: { application_id: app.id, score: app.score, recommendation: app.recommendation, income_to_rent: app.income_to_rent }, why: JSON.parse(app.scoring_factors as string).map((f: { detail: string; direction: string }) => `${f.direction === "+" ? "For" : "Against"}: ${f.detail}`), conf: 0.8, risk: "Medium", queue: "needs_you", role: "broker" }], "Scored the application from income, credit band and rental history.", "application.submitted");
+
+    // Give every proposal the action key and payload the live agents produce, so approving any seeded
+    // proposal runs: AI-only actions carry explicit effects, registered actions a valid input.
+    const hhById = new Map(c.households.map((h) => [h.id, h]));
+    const vendorById = new Map(c.t.vendors.map((v) => [v.id as string, v]));
+    const usd = (cents: number | null) => (cents == null ? "your balance" : `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    for (const p of proposals) {
+      const payload = JSON.parse(p.payload as string) as Record<string, unknown>;
+      const why = JSON.parse(p.why as string) as string[];
+      const id = p.entity_id as string;
+      const pid = (p.property_id as string) ?? null;
+      const msg = (party_kind: string, party_id: string, subject: string, body: string, channel = "Email") => ({ kind: "message", party_kind, party_id, property_id: pid, channel, subject, body, entity_type: p.entity_type, entity_id: p.entity_id });
+      const task = (title: string, detail: string, assignee_role: string, priority = "Normal") => ({ kind: "task", title, detail, assignee_role, priority, property_id: pid, entity_type: p.entity_type, entity_id: p.entity_id });
+      let effects: object[] | null = null;
+      switch (p.action) {
+        case "households.send_reminder":
+        case "households.offer_payment_plan": {
+          const h = hhById.get(id)!;
+          const lease = h.leases.findLast((l) => CURRENT.has(l.status)) ?? h.leases.at(-1)!;
+          const r = h.residents[0];
+          const plan = p.action === "households.offer_payment_plan";
+          const es = r?.language === "es";
+          const first = String(r?.first_name ?? "there");
+          const owed = usd(p.amount_cents as number | null);
+          const subject = plan ? (es ? "Un plan de pagos para su saldo" : "A payment plan for your balance") : es ? "Recordatorio de renta" : "Rent reminder";
+          const body = plan
+            ? es ? `Hola ${first}, su saldo es de ${owed}. Podemos dividirlo en tres pagos mensuales. Responda para acordarlo o pague en el portal de residentes.` : `Hi ${first}, your balance is ${owed}. We can split it into three monthly payments. Reply to set it up, or pay any time in the resident portal.`
+            : es ? `Hola ${first}, su cuenta muestra ${owed} vencido. Puede pagar en el portal de residentes. Si ya pagó, ignore este mensaje.` : `Hi ${first}, your account shows ${owed} past due. You can pay in the resident portal. If you've already paid, please ignore this message.`;
+          Object.assign(p, { entity_type: "leases", entity_id: lease.id, action: plan ? "leases.offer_payment_plan" : "leases.send_reminder" });
+          const message = r ? msg("resident", r.id as string, subject, body, String(payload.channel ?? r.preferred_channel) === "SMS" ? "SMS" : "Email") : null;
+          payload.message = message;
+          effects = [...(message ? [message] : []), ...(plan ? [task(`Payment plan follow-up: ${name(h)}`, `Offered three payments on ${owed}.`, "property_manager")] : [])];
+          if (!effects.length) effects = [task(`Contact ${name(h)} about ${owed} past due`, why.join(" "), "property_manager")];
+          break;
+        }
+        case "renewal_offers.send": {
+          const l = c.leaseById[id];
+          const rent = Number(payload.rent_cents ?? p.amount_cents ?? l.rent);
+          const r = l.hh.residents[0];
+          p.action = "leases.send_renewal_offer";
+          effects = [{ kind: "insert", table: "renewal_offers", row: { lease_id: l.id, property_id: l.u.p.id, version: 1, term_months: Number(payload.term_months ?? 12), rent_cents: rent, current_rent_cents: l.rent, market_rent_cents: l.u.market, status: "Sent", expires_on: iso(ASOF + 30) } }];
+          if (r) effects.push(msg("resident", r.id as string, `Your renewal offer at ${l.u.p.name}`, `Hi ${r.first_name}, your lease at ${l.u.p.name} #${l.u.number} ends on ${l.row.end_on}. We can renew for ${payload.term_months ?? 12} months at ${usd(rent)} a month. Reply to accept or to talk about a different term.`));
+          break;
+        }
+        case "messages.send":
+          p.action = "owner_entities.send_explanation";
+          effects = [msg("owner", String(c.t.owner_entities.find((e) => e.id === id)?.owner_id ?? id), String(p.title).replace(/^Send /, "").slice(0, 200), why.join("\n"))];
+          break;
+        case "compliance_items.assign_training":
+        case "compliance_items.schedule":
+          p.action = "compliance_items.schedule";
+          effects = [task(String(p.title).replace(/^(Overdue|Due soon): /, "Schedule: "), why.join(" "), "maintenance_supervisor", p.risk === "High" ? "High" : "Normal")];
+          break;
+        case "vendors.request_coi":
+          effects = [msg("vendor", id, "Please send a current certificate of insurance", `Hi ${vendorById.get(id)?.contact_name ?? "there"}, our records show your certificate of insurance ${why[0]?.toLowerCase() ?? "needs renewal"}. Please upload a current COI naming the property owner as additional insured. Thank you.`)];
+          break;
+        case "work_orders.assign_vendor": {
+          const w = c.workOrders.find((x) => x.id === id);
+          effects = [{ kind: "update", table: "work_orders", id, changes: { status: "Assigned", ...(w?.vendor_id ? { vendor_id: w.vendor_id } : {}) } }];
+          break;
+        }
+        case "bills.hold":
+          effects = [task(`Review bill ${id} before paying`, why.join(" "), "accountant", "High")];
+          break;
+        case "applications.approve":
+        case "applications.deny":
+          effects = [{ kind: "update", table: "applications", id, changes: { stage: p.action === "applications.approve" ? "Approved" : "Denied", decided_by: "$by" } }];
+          break;
+        case "prospects.send_follow_up": {
+          const pr = (this.t.prospects ?? []).find((x) => x.id === id);
+          payload.subject = "Still looking for a new home?";
+          payload.body = `Hi ${String(pr?.name ?? "there").split(" ")[0]}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.`;
+          break;
+        }
+      }
+      if (effects) payload.effects = effects;
+      p.payload = JSON.stringify(payload);
+    }
 
     // Decisions on older proposals (history), and their audit rows.
     for (const p of proposals) {
@@ -1289,7 +1366,7 @@ class Extras {
     const apps = count(this.t.applications, (r) => (r.submitted_at ? `${r.property_id}|${(r.submitted_at as string).slice(0, 7)}` : null));
     // Minutes a person would have spent on each kind of action; rejected proposals save nothing.
     const MINUTES: Record<string, number> = {
-      "households.send_reminder": 4, "households.offer_payment_plan": 15, "work_orders.assign_vendor": 8, "bills.approve": 6, "bills.hold": 12,
+      "leases.send_reminder": 4, "leases.offer_payment_plan": 15, "leases.send_renewal_offer": 12, "owner_entities.send_explanation": 25, "work_orders.assign_vendor": 8, "bills.approve": 6, "bills.hold": 12,
       "renewal_offers.send": 12, "data_issues.apply_fix": 5, "vendors.request_coi": 6, "prospects.send_follow_up": 4, "applications.approve": 20,
       "applications.deny": 20, "messages.send": 25, "compliance_items.schedule": 10, "compliance_items.assign_training": 5,
     };
