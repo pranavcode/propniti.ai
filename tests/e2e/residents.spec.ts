@@ -28,7 +28,7 @@ test("Today: briefing, KPIs that drill, charts and the approvals queue", async (
   await expect(page.getByRole("heading", { name: /^Good (morning|afternoon|evening), Marcus/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your briefing" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
-  await expect(page.getByText("Needs you").first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Approvals" }).getByRole("tab", { name: /^Needs you/, selected: true })).toBeVisible();
   await expect(page.getByText("Lease expirations by month")).toBeVisible();
   await page.getByRole("link", { name: /Leases ending in 60 days/ }).click();
   await expect(page).toHaveURL(/\/app\/leases\?view=expiring-60/);
@@ -39,7 +39,7 @@ test("inbox: suggest a reply, edit it and send it on the conversation", async ({
   const errors = await as(page, "marcus");
   await go(page, "/app/communications/inbox?kind=resident");
   const pane = page.getByRole("region", { name: "Conversation" });
-  await pane.getByRole("button", { name: /Suggest a reply|Regenerate/ }).first().click();
+  await pane.getByRole("button", { name: /^(Suggest a reply|Regenerate)$/ }).click();
   await expect(pane.getByText("Suggested reply")).toBeVisible({ timeout: 60_000 });
   await pane.getByRole("button", { name: "Use reply" }).click();
   const box = pane.getByRole("textbox", { name: "Reply" });
@@ -48,7 +48,7 @@ test("inbox: suggest a reply, edit it and send it on the conversation", async ({
   await pane.getByRole("button", { name: "Send", exact: true }).click();
   await expect(page.getByText(/sent \(simulated\)/)).toBeVisible();
   await expect(pane.getByText("(checked by Marcus)")).toBeVisible();
-  await expect(pane.getByText("AI-drafted").last()).toBeVisible();
+  await expect(pane.getByRole("listitem").filter({ hasText: "(checked by Marcus)" }).getByText("AI-drafted")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -57,9 +57,10 @@ test("lease abstraction cites pages, flags swapped dates and fixes the record", 
   await go(page, "/app/leases/L-10601?tab=abstraction");
   await page.getByRole("button", { name: /Abstract lease on file|Re-run/ }).click();
   await expect(page.getByText(/terms? in the document differ from the lease record/)).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByRole("link", { name: "Page 1" }).first()).toBeVisible();
-  await expect(page.getByText("AI: fix expiration date from the signed lease")).toBeVisible();
-  await page.getByRole("button", { name: "Apply fix" }).first().click();
+  const terms = page.getByRole("region", { name: "Abstracted terms" });
+  await expect(terms.getByRole("row", { name: /Expiration date .* Page 1 .* Differs/ })).toBeVisible();
+  const fix = page.getByRole("region", { name: "AI: fix expiration date from the signed lease" });
+  await fix.getByRole("button", { name: "Apply fix" }).click();
   await expect(page.getByText(/Updated leases L-10601/)).toBeVisible({ timeout: 60_000 });
   expect(errors).toEqual([]);
 });
@@ -86,15 +87,15 @@ test("announcement: AI draft for a property, then send", async ({ page }) => {
   await expect(page.getByLabel("Message")).not.toHaveValue("");
   await page.getByRole("button", { name: /^Send to \d+ residents/ }).click();
   await page.getByRole("button", { name: /^Confirm: send to/ }).click();
+  await expect(page.getByText(/^Sent to \d+ residents \(simulated\)/)).toBeVisible();
   await expect(page).toHaveURL(/\/app\/communications\/announcements\/ann-/);
-  await expect(page.getByText("Sent").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 
 test("resident 360 links to the ledger and the lease", async ({ page }) => {
   const errors = await as(page, "marcus");
   await go(page, "/app/residents");
-  await page.getByRole("cell", { name: /^Chloe Adams/ }).first().click();
+  await page.getByRole("cell", { name: /^Chloe Adams #116/ }).click();
   await expect(page.getByRole("heading", { name: "Delinquency risk" })).toBeVisible();
   await page.getByRole("link", { name: "Open lease" }).click();
   await expect(page).toHaveURL(/\/app\/leases\/L-/);

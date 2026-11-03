@@ -62,8 +62,12 @@ export function IssueFix({ issueId, title, rule, changes, why, confidence, sourc
       throw e;
     }
   };
-  return <FixPreview title={title} rule={rule} changes={changes} why={why} confidence={confidence} source={source} needsPerson={needsPerson}
-    onApply={() => call("apply")} onDismiss={issueId ? () => call("dismiss") : undefined} />;
+  return (
+    <section aria-label={title}>
+      <FixPreview title={title} rule={rule} changes={changes} why={why} confidence={confidence} source={source} needsPerson={needsPerson}
+        onApply={() => call("apply")} onDismiss={issueId ? () => call("dismiss") : undefined} />
+    </section>
+  );
 }
 
 export type MergeSide = { id: string; label: string; values: Record<string, string> };
