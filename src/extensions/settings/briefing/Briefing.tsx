@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/app/states";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
-import type { QueryCtx } from "@/server/query";
+import { metrics, type QueryCtx } from "@/server/query";
 import { asOf, count, rows } from "../data";
 import { BriefingAsk, RecentlyViewed } from "./client";
 
@@ -38,22 +38,19 @@ function scoped(ctx: QueryCtx, col = "property_id") {
 
 async function risks(ctx: QueryCtx, role: Role): Promise<Risk[]> {
   const s = scoped(ctx);
-  const sw = scoped(ctx, "w.property_id");
-  const checks: { key: string; entity: EntityKey; label: string; detail: string; href: string; tone: Risk["tone"]; sql: string; params: unknown[] }[] = [
+  const checks: { key: string; entity: EntityKey; label: string; detail: string; href: string; tone: Risk["tone"]; sql?: string; params?: unknown[]; metric?: string }[] = [
     { key: "issues", entity: "data_issues", label: "Critical data issues", detail: "Bad data under money decisions, such as an unverified vendor bank change", href: "/app/data-health?severity=critical", tone: "danger",
       sql: `SELECT count(*) AS n FROM {data_issues} WHERE status = 'open' AND severity = 'critical' AND ${s.sql}`, params: s.params },
     { key: "sla", entity: "work_orders", label: "Work orders past SLA", detail: "Open past their SLA due time", href: "/app/maintenance/work-orders?view=past-sla", tone: "danger",
       sql: `SELECT count(*) AS n FROM {work_orders} WHERE status NOT IN ('Completed', 'Paid', 'Cancelled') AND sla_due_at IS NOT NULL AND substr(sla_due_at, 1, 10) < $AS_OF AND ${s.sql}`, params: s.params },
-    { key: "compliance", entity: "compliance_items", label: "Overdue compliance items", detail: "Inspections, permits and certificates past due", href: "/app/compliance", tone: "danger",
-      sql: `SELECT count(*) AS n FROM {compliance_items} WHERE completed_on IS NULL AND status <> 'Done' AND due_on < $AS_OF AND (property_id IS NULL OR ${s.sql})`, params: s.params },
-    { key: "coi", entity: "vendor_cois", label: "Vendors with lapsed insurance on open jobs", detail: "Expired or missing COI while a work order is open", href: "/app/compliance", tone: "warning",
-      sql: `SELECT count(DISTINCT w.vendor_id) AS n FROM {work_orders} w WHERE w.status NOT IN ('Completed', 'Paid', 'Cancelled') AND ${sw.sql} AND w.vendor_id IS NOT NULL AND coalesce((SELECT max(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = w.vendor_id AND c.status <> 'Missing'), '0000') < $AS_OF`, params: sw.params },
-    { key: "policies", entity: "insurance_policies", label: "Property policies expiring in 60 days", detail: "Renew before coverage lapses", href: "/app/compliance", tone: "warning",
+    { key: "compliance", entity: "compliance_items", label: "Overdue compliance items", detail: "Inspections, permits and certificates past due", href: "/app/compliance/items?f.status=Overdue", tone: "danger", metric: "risk.overdue_items" },
+    { key: "coi", entity: "vendor_cois", label: "Vendors working without valid insurance", detail: "Expired or missing COI while a work order is open", href: "/app/compliance/cois?view=exposed", tone: "warning", metric: "risk.exposed_vendors" },
+    { key: "policies", entity: "insurance_policies", label: "Property policies expiring in 60 days", detail: "Renew before coverage lapses", href: "/app/compliance/insurance?f.status=Expiring", tone: "warning",
       sql: `SELECT count(*) AS n FROM {insurance_policies} WHERE expires_on BETWEEN $AS_OF AND date($AS_OF, '+60 days') AND ${s.sql}`, params: s.params },
-    { key: "legal", entity: "legal_cases", label: "Court dates in the next 7 days", detail: "Evictions and claims with a hearing or deadline", href: "/app/compliance", tone: "warning",
+    { key: "legal", entity: "legal_cases", label: "Court dates in the next 7 days", detail: "Evictions and claims with a hearing or deadline", href: "/app/compliance/legal?view=open", tone: "warning",
       sql: `SELECT count(*) AS n FROM {legal_cases} WHERE closed_on IS NULL AND next_date BETWEEN $AS_OF AND date($AS_OF, '+7 days') AND ${s.sql}`, params: s.params },
   ];
-  const out = await Promise.all(checks.filter((c) => (getEntity(c.entity) ? can(role, "read", c.entity) : true)).map(async (c) => ({ ...c, n: await count(ctx, c.sql, c.params).catch(() => 0) })));
+  const out = await Promise.all(checks.filter((c) => (getEntity(c.entity) ? can(role, "read", c.entity) : true)).map(async (c) => ({ ...c, n: c.metric ? Number((await metrics(ctx, c.metric).catch(() => null))?.value ?? 0) : await count(ctx, c.sql!, c.params).catch(() => 0) })));
   return out.filter((r) => r.n > 0).map(({ key, label, detail, n, href, tone }) => ({ key, label, detail, n, href, tone }));
 }
 
@@ -179,7 +176,7 @@ export async function Briefing({ session, data }: { session: Session; data: Data
                     <li key={agent} className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <Sparkles className="size-3.5 text-tone-ai" />
-                        <span className="font-medium">{AGENT_LABEL[agent] ?? agent.replace(/_/g, " ")}</span>
+                        <span className="font-medium">{AGENT_LABEL[agent] ?? agent.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}</span>
                         <span className="text-[12px] text-muted-foreground tabular-nums">{list.length} {list.length === 1 ? "run" : "runs"}</span>
                         <Link href={`/app/ai/runs/${encodeURIComponent(last.id)}`} className="ml-auto text-[12px] text-primary hover:underline"><RelativeDate value={last.started_at} /></Link>
                       </div>
