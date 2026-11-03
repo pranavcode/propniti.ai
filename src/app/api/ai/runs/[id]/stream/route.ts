@@ -1,4 +1,4 @@
-import { dataOf, readSession } from "@/ai/http";
+import { dataOf, staffSession } from "@/ai/http";
 import { runDetail } from "@/ai/views";
 
 // Live run trace as server-sent events: "step" for each new agent_steps row, "run" when the run's
@@ -6,7 +6,7 @@ import { runDetail } from "@/ai/views";
 // stream works whichever isolate runs the agent. Clients fall back to polling /api/ai/runs/<id>.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const s = await readSession(request);
+  const s = await staffSession(request);
   if (s instanceof Response) return s;
   const data = dataOf(s);
   const first = await runDetail(data, id);

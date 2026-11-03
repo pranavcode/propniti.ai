@@ -1,3 +1,4 @@
+import { demoIsoIn, demoNow } from "@/lib/clock";
 import { getEntity } from "@/entities";
 import type { AgentKey, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
@@ -20,7 +21,7 @@ export type AgentCard = {
 export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<AgentCard[]> {
   await loadAgents();
   const configs = await agentConfigs(data.db, data.ws);
-  const since = new Date(nowMs - 30 * 86_400_000).toISOString();
+  const since = demoIsoIn(-30 * 86_400_000, nowMs);
   const [runs, props, last] = await Promise.all([
     sql<{ agent_key: string; n: number; ok: number }>(data, "SELECT agent_key, count(*) AS n, sum(status IN ('done', 'waiting_approval')) AS ok FROM {agent_runs} WHERE started_at >= ? GROUP BY agent_key", [since], { unscoped: true }),
     sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
@@ -34,7 +35,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
     const r = runs.find((x) => x.agent_key === key);
     const p = props.find((x) => x.agent === key);
     const l = last.filter((x) => x.agent_key === key).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
-    const next = cfg.enabled && cfg.schedule ? nextRun(cfg.schedule, nowMs) : null;
+    const next = cfg.enabled && cfg.schedule ? nextRun(cfg.schedule, demoNow(nowMs).getTime()) : null;
     return {
       key, name: def.name, goal: def.goal, ownerRole: def.ownerRole, enabled: cfg.enabled, autonomy: cfg.autonomy, schedule: cfg.schedule ?? null, events: cfg.events,
       lastRun: l ? { id: String(l.id), status: String(l.status), started_at: String(l.started_at), summary: (l.summary as string) ?? null, model: (l.model as string) ?? null, trigger_kind: String(l.trigger_kind) } : null,
@@ -56,12 +57,17 @@ export async function runsPage(data: DataCtx, f: { agent?: string; status?: stri
   if (f.agent) { where.push("agent_key = ?"); params.push(f.agent); }
   if (f.status) { where.push("status = ?"); params.push(f.status); }
   if (f.trigger) { where.push("trigger_kind = ?"); params.push(f.trigger); }
+  // Property-scoped roles see runs they started and runs that proposed something in their scope.
+  if (data.actor.propertyIds !== "all") {
+    where.push("(started_by = ? OR EXISTS (SELECT 1 FROM {ai_proposals} sp WHERE sp.run_id = r.id AND sp.property_id IN (SELECT value FROM json_each(?))))");
+    params.push(data.actor.personaId, JSON.stringify(data.actor.propertyIds));
+  }
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const w = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const [rows, total] = await Promise.all([
     sql<Row>(data, `SELECT r.*, (SELECT count(*) FROM {agent_steps} s WHERE s.run_id = r.id) AS steps, (SELECT count(*) FROM {ai_proposals} p WHERE p.run_id = r.id) AS proposals FROM {agent_runs} r ${w} ORDER BY r.started_at DESC LIMIT ${size} OFFSET ${(page - 1) * size}`, params, { unscoped: true }),
-    sql<{ n: number }>(data, `SELECT count(*) AS n FROM {agent_runs} ${w}`, params, { unscoped: true }),
+    sql<{ n: number }>(data, `SELECT count(*) AS n FROM {agent_runs} r ${w}`, params, { unscoped: true }),
   ]);
   return { rows, total: total[0]?.n ?? 0, page, size };
 }
@@ -69,9 +75,17 @@ export async function runsPage(data: DataCtx, f: { agent?: string; status?: stri
 export type StepRow = { id: string; idx: number; kind: string; tool_key: string | null; input: unknown; output: unknown; latency_ms: number | null; ok: boolean; at: string };
 export const stepOut = (s: Row): StepRow => ({ id: String(s.id), idx: Number(s.idx), kind: String(s.kind), tool_key: (s.tool_key as string) ?? null, input: parseJson(s.input, null), output: parseJson(s.output, s.output ?? null), latency_ms: (s.latency_ms as number) ?? null, ok: Number(s.ok) === 1, at: String(s.at) });
 
+// A property-scoped role sees the full trace of runs it started. For other runs it sees only its own
+// proposals: the trace may hold rows from properties outside its scope.
 export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
   const run = await get(data, "agent_runs", id);
   if (!run) return null;
+  const org = data.actor.propertyIds === "all";
+  if (!org && run.started_by !== data.actor.personaId) {
+    const mine = await sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]);
+    if (!mine.length) return null;
+    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map(proposalOut), traceHidden: true };
+  }
   const [steps, proposals] = await Promise.all([
     sql<Row>(data, "SELECT * FROM {agent_steps} WHERE run_id = ? AND idx > ? ORDER BY idx LIMIT 400", [id, afterIdx], { unscoped: true }),
     sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]),

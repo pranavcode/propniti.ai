@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import type { Row } from "@/entities/types";
 import { daysBetween, sql, upsertOverlay } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
@@ -46,7 +47,7 @@ export default defineAgent({
         confidence: s.review ? 0.5 : 0.7 + Math.abs(s.score - 65) / 150, risk: s.recommendation === "Deny" || s.review ? "High" : "Medium", alwaysHuman: true, assignee: "broker",
         facts: { applicant: name, rent_cents: rent, monthly_income_cents: (d.monthly_income_cents as number) ?? null, income_to_rent: Number(s.ratio.toFixed(2)), credit_band: (d.credit_band as string) ?? null, score: s.score, recommendation: s.recommendation },
         evidence: [{ entity_type: "applicants", entity_id: String(d.applicant_id), label: name }, { entity_type: "applications", entity_id: String(d.id), label: `Application ${d.id}` }],
-        effects: [{ kind: "update", table: "applications", id: String(d.id), changes: { stage, recommendation: s.recommendation, score: s.score, scoring_factors: JSON.stringify(s.factors), decided_at: new Date().toISOString() } }],
+        effects: [{ kind: "update", table: "applications", id: String(d.id), changes: { stage, recommendation: s.recommendation, score: s.score, scoring_factors: JSON.stringify(s.factors), decided_at: demoNowIso() } }],
         priority: (d.id === fresh ? 10_000 : 500) + daysBetween(String(d.submitted_at ?? ctx.today).slice(0, 10), ctx.today),
       };
     });

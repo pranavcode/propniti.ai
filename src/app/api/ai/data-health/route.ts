@@ -1,10 +1,10 @@
-import { dataOf, guarded, json, readSession } from "@/ai/http";
+import { dataOf, guarded, json, staffSession } from "@/ai/http";
 import { dataHealth, issuesPage } from "@/ai/views";
 
 // Data Health center: scores per property and module, rule list, and a page of issues with fixes.
 export async function GET(request: Request) {
   return guarded(async () => {
-    const s = await readSession(request);
+    const s = await staffSession(request);
     if (s instanceof Response) return s;
     const sp = new URL(request.url).searchParams;
     const data = dataOf(s);

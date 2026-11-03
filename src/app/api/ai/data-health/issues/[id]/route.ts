@@ -8,7 +8,7 @@ const Body = z.object({ action: z.enum(["apply", "dismiss"]), note: z.string().m
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return guarded(async () => {
     const { id } = await params;
-    const w = await writeSession(request, Body);
+    const w = await writeSession(request, Body, "write", { staff: true });
     if (w instanceof Response) return w;
     const { s, body } = w;
     const data = dataOf(s);

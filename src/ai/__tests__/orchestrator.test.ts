@@ -177,7 +177,8 @@ describe("sweep and events", () => {
   it("runs due scheduled agents in active workspaces (never base), drains their outbox and reaps stuck runs", async () => {
     setModelForTests(null);
     const { raw, db } = openFixture();
-    const at = Date.parse("2026-11-04T14:00:30Z");
+    // 2:00:30 PM Pacific, so the demo clock reads 2026-11-04T14:00:30Z.
+    const at = Date.parse("2026-11-04T22:00:30Z");
     raw.prepare("UPDATE workspaces SET last_seen_at = ? WHERE id = ?").run(at - 60_000, WS);
     // A seeded pending event in base, and a run left "running" by a stopped isolate.
     raw.exec(`INSERT INTO events (workspace_id, id, type, entity_type, entity_id, payload, created_at) VALUES ('base', 'e1', 'wo.created', 'work_orders', 'WO-10001', '{}', '2026-11-04')`);

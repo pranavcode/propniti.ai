@@ -8,7 +8,7 @@ const Bulk = z.object({ ids: z.array(z.string().max(80)).min(1).max(50) });
 // "Approve all safe": only low-risk proposals with no amount; anything else is skipped and listed.
 export async function POST(request: Request) {
   return guarded(async () => {
-    const w = await writeSession(request, Bulk);
+    const w = await writeSession(request, Bulk, "write", { staff: true });
     if (w instanceof Response) return w;
     const { s, body } = w;
     const data = dataOf(s);

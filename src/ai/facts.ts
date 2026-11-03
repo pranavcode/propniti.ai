@@ -1,3 +1,4 @@
+import { AS_OF } from "@/seed/constants";
 import type { Row } from "@/entities/types";
 import { daysBetween, sql, type DataCtx } from "./data";
 
@@ -128,7 +129,7 @@ export async function explainNoi(ctx: DataCtx, f: { metro?: string; propertyIds?
   const rows = await monthly(ctx, { ...f, months: 25 });
   const months = [...new Set(rows.map((r) => String(r.month)))].sort();
   // The current month is still open; explain the last closed month unless one is named.
-  const closed = months.filter((m) => m < (f.today ?? new Date().toISOString()).slice(0, 7));
+  const closed = months.filter((m) => m < (f.today ?? AS_OF).slice(0, 7));
   const month = f.month && months.includes(f.month) ? f.month : closed.at(-1) ?? months.at(-1);
   if (!month) return null;
   const prior = months[months.indexOf(month) - 1];

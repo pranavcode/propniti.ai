@@ -43,7 +43,7 @@ export function ProposalCard({ p, variant = "card", canApprove = true }: { p: Pr
   );
 }
 
-export function RunView({ runId, initial }: { runId: string; initial: { run: RunJson; steps: StepJson[]; proposals: ProposalJson[] } }) {
+export function RunView({ runId, initial }: { runId: string; initial: { run: RunJson; steps: StepJson[]; proposals: ProposalJson[]; traceHidden?: boolean } }) {
   const { run, steps, proposals, live, mode } = useRunStream(runId, initial);
   if (!run) return null;
   return (
@@ -51,7 +51,7 @@ export function RunView({ runId, initial }: { runId: string; initial: { run: Run
       <div className="min-w-0 space-y-3">
         {run.summary && !live && <div className="rounded-lg border bg-card p-3.5 text-[13px] whitespace-pre-line"><div className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Summary</div>{run.summary}</div>}
         {run.error && <div className="rounded-lg border border-tone-danger/30 bg-tone-danger/5 p-3 text-tone-danger">{run.error}</div>}
-        <RunTrace steps={steps.map(toTrace)} agent={AGENT_LABEL[run.agent_key] ?? run.agent_key} status={run.status} model={run.model ?? (live ? "…" : "rules")} tokensIn={run.tokens_in} tokensOut={run.tokens_out} costCents={run.cost_cents} live={live} />
+        {initial.traceHidden ? <p className="rounded-lg border border-dashed p-4 text-muted-foreground">This run covered properties outside your scope, so its step trace is hidden. The proposals for your properties are on the right.</p> : <RunTrace steps={steps.map(toTrace)} agent={AGENT_LABEL[run.agent_key] ?? run.agent_key} status={run.status} model={run.model ?? (live ? "…" : "rules")} tokensIn={run.tokens_in} tokensOut={run.tokens_out} costCents={run.cost_cents} live={live} />}
         <p className="text-[12px] text-muted-foreground">
           {live ? (mode === "poll" ? "Live: checking for new steps every second." : "Live: steps stream in as the agent works.") : <>Started <RelativeDate value={run.started_at} /> by {run.trigger_kind === "manual" ? `a person (${run.started_by})` : run.trigger_kind === "schedule" ? "the 15-minute schedule" : run.trigger_kind === "event" ? "an event" : "the assistant"}{run.ended_at && <>; finished <RelativeDate value={run.ended_at} /></>}.</>}
         </p>

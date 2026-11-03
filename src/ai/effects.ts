@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { getAction } from "@/extensions/actions";
 import { isAiAction } from "./action-keys";
@@ -54,7 +55,7 @@ export type By = { id: string; name: string; agent?: AgentKey; role?: string };
 export type ExecResult = { ok: boolean; message: string; href?: string; status?: number };
 
 async function runEffect(data: DataCtx, e: Effect, by: By, proposal: Row): Promise<string> {
-  const now = new Date().toISOString();
+  const now = demoNowIso();
   const { db, ws } = data;
   if (e.kind === "message") {
     const threadId = newId("thr");
@@ -127,15 +128,15 @@ async function deriveEffects(data: DataCtx, p: Row, payload: Record<string, unkn
     return [{ kind: "message", party_kind: "resident", party_id: String(r.id), property_id: pid, channel: payload.channel === "SMS" ? "SMS" : "Email", subject: verb.includes("plan") ? "A payment plan for your balance" : "Rent reminder", body, entity_type: "households", entity_id: id }];
   }
   if (action === "work_orders.assign_vendor") return [{ kind: "update", table: "work_orders", id, changes: { status: "Assigned" } }];
-  if (action === "bills.approve") return [{ kind: "update", table: "bills", id, changes: { status: "Approved", approved_by: "$by", approved_at: new Date().toISOString() } }];
+  if (action === "bills.approve") return [{ kind: "update", table: "bills", id, changes: { status: "Approved", approved_by: "$by", approved_at: demoNowIso() } }];
   if (action === "bills.hold") return [{ kind: "task", title: `Review bill ${id}`, detail: parseJson<string[]>(p.why, []).join(" "), assignee_role: "accountant", priority: "High" }];
   if (action === "renewal_offers.send" && p.entity_type === "leases") {
     const lease = await get(data, "leases", id);
     if (!lease) throw new Error("Lease not found");
-    return [{ kind: "insert", table: "renewal_offers", row: { lease_id: id, property_id: lease.property_id, version: 1, term_months: Number(payload.term_months ?? 12), rent_cents: Number(payload.rent_cents ?? p.amount_cents ?? lease.rent_cents), current_rent_cents: lease.rent_cents, status: "Sent", sent_at: new Date().toISOString() } }];
+    return [{ kind: "insert", table: "renewal_offers", row: { lease_id: id, property_id: lease.property_id, version: 1, term_months: Number(payload.term_months ?? 12), rent_cents: Number(payload.rent_cents ?? p.amount_cents ?? lease.rent_cents), current_rent_cents: lease.rent_cents, status: "Sent", sent_at: demoNowIso() } }];
   }
   if (action === "applications.approve" || action === "applications.deny") {
-    return [{ kind: "update", table: "applications", id, changes: { stage: action.endsWith("approve") ? "Approved" : "Denied", decided_by: "$by", decided_at: new Date().toISOString() } }];
+    return [{ kind: "update", table: "applications", id, changes: { stage: action.endsWith("approve") ? "Approved" : "Denied", decided_by: "$by", decided_at: demoNowIso() } }];
   }
   const party = p.entity_type === "vendors" ? "vendor" : p.entity_type === "prospects" ? "prospect" : p.entity_type === "owner_entities" ? "owner" : null;
   if (party && /request|follow_up|send/.test(verb)) {
@@ -176,7 +177,7 @@ async function stillValid(data: DataCtx, proposal: Row, payload: Record<string, 
 // double click or two approvers can't run it twice; a failed run removes the decision again.
 export async function executeProposal(data: DataCtx, proposal: Row, by: By, edited?: unknown, note = ""): Promise<ExecResult> {
   const { db, ws } = data;
-  const now = new Date().toISOString();
+  const now = demoNowIso();
   const decisionId = newId("dec");
   // People deciding must be staff (an owner only for an approval that waits on them); the route
   // checks ownership. Agents applying within policy act as the run's actor.
@@ -239,7 +240,7 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
 export async function rejectProposal(data: DataCtx, proposal: Row, by: By, note: string, decision: "Rejected" | "Snoozed" = "Rejected"): Promise<ExecResult> {
   const { db, ws } = data;
   if (!(INTERNAL_ROLES as readonly string[]).includes(data.actor.role) && !(data.actor.role === "owner" && proposal.queue_state === "waiting")) return { ok: false, status: 403, message: "Only staff can act on agent proposals" };
-  const now = new Date().toISOString();
+  const now = demoNowIso();
   const d = eff("ai_decisions", ws);
   const r = await db
     .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, decided_at) SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)`)

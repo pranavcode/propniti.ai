@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { PERMISSIONS } from "@/auth/personas";
 import { getAgent } from "@/ai/agents";
@@ -17,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ke
     const { key } = await params;
     const def = getAgent(key);
     if (!def) return json({ error: "Unknown agent" }, { status: 404 });
-    const w = await writeSession(request, Patch);
+    const w = await writeSession(request, Patch, "write", { staff: true });
     if (w instanceof Response) return w;
     const { s, body } = w;
     if (PERMISSIONS[s.actor.role].intelligence !== "approve") return json({ error: `${s.persona.title} can't change agent settings` }, { status: 403 });
@@ -42,7 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ke
       s.db.prepare("DELETE FROM agent_definitions WHERE workspace_id = ? AND id = ?").bind(s.ws, key),
       await insert(s.db, s.ws, "agent_definitions", next),
       await insert(s.db, s.ws, "audit", {
-        id: newId("aud"), at: new Date().toISOString(), actor: s.persona.name, actor_id: s.persona.id, role: s.actor.role, agent: key, action: "agent.settings_changed",
+        id: newId("aud"), at: demoNowIso(), actor: s.persona.name, actor_id: s.persona.id, role: s.actor.role, agent: key, action: "agent.settings_changed",
         entity_type: "agent_definitions", entity_id: key, detail: Object.entries(body).map(([k, v]) => `${k}: ${v}`).join(", "),
         before_json: JSON.stringify({ autonomy: cur?.autonomy ?? def.autonomy, enabled: cur ? Number(cur.enabled) : 1, schedule: cur ? JSON.parse(String(cur.triggers)).schedule : def.triggers.schedule }), after_json: JSON.stringify({ autonomy: next.autonomy, enabled: next.enabled, schedule: triggers.schedule }),
       }),

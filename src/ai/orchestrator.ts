@@ -1,3 +1,4 @@
+import { demoIsoIn, demoNow, demoNowIso } from "@/lib/clock";
 import type { ActionKey, Actor, AgentKey } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { allAgents, getAgent } from "./agents/registry";
@@ -62,7 +63,7 @@ export async function startRun(o: StartOpts): Promise<{ runId: string; done: Pro
   const nowMs = o.nowMs ?? Date.now();
   await (await insert(o.db, o.ws, "agent_runs", {
     id: runId, agent_key: o.agent, trigger_kind: o.trigger.kind, event_id: o.trigger.eventId ?? null, started_by: o.trigger.kind === "manual" || o.trigger.kind === "chat" ? o.actor.personaId : null,
-    status: "running", started_at: new Date(nowMs).toISOString(), model: null,
+    status: "running", started_at: demoNowIso(nowMs), model: null,
   })).run();
   const done = executeRun(def, runId, o, nowMs);
   if (o.waitUntil) o.waitUntil(done);
@@ -112,7 +113,7 @@ export async function runWithContext<T>(
 export async function openRun(o: StartOpts, nowMs = Date.now()) {
   const runId = newId("run");
   await (await insert(o.db, o.ws, "agent_runs", {
-    id: runId, agent_key: o.agent, trigger_kind: o.trigger.kind, event_id: o.trigger.eventId ?? null, started_by: o.actor.personaId, status: "running", started_at: new Date(nowMs).toISOString(),
+    id: runId, agent_key: o.agent, trigger_kind: o.trigger.kind, event_id: o.trigger.eventId ?? null, started_by: o.actor.personaId, status: "running", started_at: demoNowIso(nowMs),
   })).run();
   return runId;
 }
@@ -121,7 +122,7 @@ async function finish(db: Db, ws: string, runId: string, r: { status: string; su
   const u = r.ctx?.usage;
   await db
     .prepare("UPDATE agent_runs SET status = ?, ended_at = ?, model = ?, tokens_in = ?, tokens_out = ?, cost_cents = ?, summary = ?, error = ? WHERE workspace_id = ? AND id = ?")
-    .bind(r.status, new Date().toISOString(), r.ctx?.modelUsed.model ?? "rules", u?.tokensIn ?? 0, u?.tokensOut ?? 0, Math.round(u?.costCents ?? 0), r.summary ?? null, r.error ?? null, ws, runId)
+    .bind(r.status, demoNowIso(), r.ctx?.modelUsed.model ?? "rules", u?.tokensIn ?? 0, u?.tokensOut ?? 0, Math.round(u?.costCents ?? 0), r.summary ?? null, r.error ?? null, ws, runId)
     .run();
 }
 
@@ -147,7 +148,7 @@ const ACTIVE_WS = 10;
 export async function reapStaleRuns(db: Db, nowMs: number) {
   const r = await db
     .prepare("UPDATE agent_runs SET status = 'failed', ended_at = ?, error = 'Stopped before it finished (the worker hit its time limit); nothing after the last step ran.' WHERE status = 'running' AND started_at < ?")
-    .bind(new Date(nowMs).toISOString(), new Date(nowMs - STALE_RUN_MS).toISOString())
+    .bind(demoNowIso(nowMs), demoIsoIn(-STALE_RUN_MS, nowMs))
     .run();
   // Earlier builds ran schedules into the shared base; remove those runs (generated ids start
   // "run_"; the seed's history uses "run-").
@@ -164,9 +165,11 @@ export async function reapStaleRuns(db: Db, nowMs: number) {
 // outbox (its own events and the seeded pending ones) is drained.
 export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unknown>) => void, opts: { force?: boolean; deadlineMs?: number; workspaces?: string[] } = {}): Promise<SweepReport | null> {
   if (!opts.force && !(await claimSweep(db, nowMs))) return null;
-  const report: SweepReport = { at: new Date(nowMs).toISOString(), reaped: await reapStaleRuns(db, nowMs), scheduled: [], events: [] };
+  const report: SweepReport = { at: demoNowIso(nowMs), reaped: await reapStaleRuns(db, nowMs), scheduled: [], events: [] };
   const active = opts.workspaces ?? (await db.prepare("SELECT id FROM workspaces WHERE id <> 'base' AND last_seen_at > ? ORDER BY last_seen_at DESC LIMIT ?").bind(nowMs - 30 * 60_000, ACTIVE_WS).all<{ id: string }>()).results.map((a) => a.id);
   const runs: Promise<unknown>[] = [];
+  // Run times are stamped on the demo clock, so schedules are checked against it too.
+  const demoMs = demoNow(nowMs).getTime();
   for (const ws of active) {
     const configs = await agentConfigs(db, ws);
     const { results: last } = await db
@@ -178,7 +181,7 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
       if (!cfg.enabled || !cfg.schedule) continue;
       let due = false;
       try {
-        due = dueBetween(cfg.schedule, lastAt.get(cfg.key) ?? nowMs - SWEEP_EVERY_MS, nowMs);
+        due = dueBetween(cfg.schedule, lastAt.get(cfg.key) ?? demoMs - SWEEP_EVERY_MS, demoMs);
       } catch {
         continue;
       }
@@ -206,7 +209,7 @@ export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25,
   if (!results.length) return { processed: 0, runs: [] as { runId: string; done: Promise<RunResult> }[] };
   const configs = await agentConfigs(db, ws);
   const byAgent = new Map<AgentKey, Record<string, unknown>[]>();
-  const at = new Date(nowMs).toISOString();
+  const at = demoNowIso(nowMs);
   let processed = 0;
   for (const ev of results) {
     const claimed = await db
@@ -231,5 +234,5 @@ export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25,
 // Writes an event to the outbox (module actions call this after money, imports, work orders and
 // data checks); the next sweep, or the visit that follows, hands it to the listening agents.
 export async function emitEvent(data: DataCtx, e: { type: EventType; entityType?: string; entityId?: string; propertyId?: string; payload?: unknown }) {
-  await (await insert(data.db, data.ws, "events", { id: newId("evt"), type: e.type, entity_type: e.entityType ?? null, entity_id: e.entityId ?? null, property_id: e.propertyId ?? null, payload: JSON.stringify(e.payload ?? {}), created_at: new Date().toISOString() })).run();
+  await (await insert(data.db, data.ws, "events", { id: newId("evt"), type: e.type, entity_type: e.entityType ?? null, entity_id: e.entityId ?? null, property_id: e.propertyId ?? null, payload: JSON.stringify(e.payload ?? {}), created_at: demoNowIso() })).run();
 }

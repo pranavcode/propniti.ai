@@ -1,3 +1,4 @@
+import { demoIsoIn, demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { Facts, Row } from "@/entities/types";
@@ -87,7 +88,7 @@ export async function generateSummary(data: DataCtx, entity: string, id: string,
     }
   }
   const summary = text ?? rulesSummary(f.title, f.facts);
-  const generated_at = new Date().toISOString();
+  const generated_at = demoNowIso();
   const ws = opts.writeTo ?? data.ws;
   if (ws !== "base" || opts.writeTo === "base") {
     await data.db.batch([
@@ -114,7 +115,7 @@ export async function generateBriefing(data: DataCtx, personaId: string, opts: {
     delinquency(data, today, { minDays: 1, limit: 1 }),
     sql<{ n: number }>(data, "SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id)"),
     sql<{ n: number; critical: number }>(data, "SELECT count(*) AS n, sum(severity = 'critical') AS critical FROM {data_issues} WHERE status = 'open'"),
-    sql<{ n: number; auto: number }>(data, "SELECT count(*) AS n, (SELECT count(*) FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= ?) AS auto FROM {agent_runs} WHERE started_at >= ?", [new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() - 86_400_000).toISOString()], { unscoped: true }),
+    sql<{ n: number; auto: number }>(data, "SELECT count(*) AS n, (SELECT count(*) FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= ?) AS auto FROM {agent_runs} WHERE started_at >= ?", [demoIsoIn(-86_400_000), demoIsoIn(-86_400_000)], { unscoped: true }),
   ]);
   const facts: Facts = {
     residents_late: late.total, late_balance: Math.round(late.total_balance_cents / 100), approvals_waiting: needs[0]?.n ?? 0,
@@ -135,7 +136,7 @@ export async function generateBriefing(data: DataCtx, personaId: string, opts: {
     }
   }
   const summary = text ?? `In the last day the agents ran ${facts.agent_runs_24h} times and handled ${facts.auto_applied_24h} items on their own. ${facts.approvals_waiting} proposals wait for you. ${facts.residents_late} residents owe $${Number(facts.late_balance).toLocaleString()} in rent, and ${facts.data_issues_open} data issues are open (${facts.data_issues_critical} critical).`;
-  const generated_at = new Date().toISOString();
+  const generated_at = demoNowIso();
   const ws = opts.writeTo ?? data.ws;
   if (ws !== "none" && (ws !== "base" || opts.writeTo === "base")) {
     await data.db.batch([

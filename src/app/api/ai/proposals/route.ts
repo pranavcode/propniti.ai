@@ -1,4 +1,4 @@
-import { dataOf, guarded, json, readSession } from "@/ai/http";
+import { dataOf, guarded, json, staffSession } from "@/ai/http";
 import { proposalsPage, type Queue } from "@/ai/views";
 
 const QUEUES = new Set(["needs_you", "auto_handled", "waiting", "decided"]);
@@ -6,7 +6,7 @@ const QUEUES = new Set(["needs_you", "auto_handled", "waiting", "decided"]);
 // Approvals inbox: needs_you | auto_handled | waiting | decided, with counts for the tabs.
 export async function GET(request: Request) {
   return guarded(async () => {
-    const s = await readSession(request);
+    const s = await staffSession(request);
     if (s instanceof Response) return s;
     const sp = new URL(request.url).searchParams;
     const q = sp.get("queue") ?? "needs_you";

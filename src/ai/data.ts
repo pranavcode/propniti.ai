@@ -1,3 +1,4 @@
+import { AS_OF } from "@/seed/constants";
 import type { Actor, ListResult, Row } from "@/entities/types";
 import { MAX_PAGE_SIZE } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
@@ -190,7 +191,7 @@ export const parseJson = <T>(v: unknown, fallback: T): T => {
 // The demo's "today" (meta.as_of, written by the seed). Falls back to the real date.
 export async function asOf(db: Db): Promise<string> {
   const r = await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>().catch(() => null);
-  return r?.value ?? new Date().toISOString().slice(0, 10);
+  return r?.value ?? AS_OF;
 }
 
 export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);

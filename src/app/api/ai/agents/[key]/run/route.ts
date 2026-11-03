@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     const { key } = await params;
     const def = getAgent(key);
     if (!def) return json({ error: "Unknown agent" }, { status: 404 });
-    const w = await writeSession(request, null, "ai");
+    const w = await writeSession(request, null, "ai", { staff: true });
     if (w instanceof Response) return w;
     const { s } = w;
     if ((PERMISSIONS[s.actor.role].intelligence ?? "none") === "none") return json({ error: `${s.persona.title} can't run agents` }, { status: 403 });

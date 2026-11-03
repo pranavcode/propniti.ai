@@ -19,8 +19,16 @@ export async function readSession(request: Request) {
   return aiSession(request);
 }
 
+// Staff-only AI routes (agents, runs, approvals, data health): portal personas get 403.
+export const portalRefused = (s: AiSession) => (s.persona.portal ? json({ error: "This is a staff page." }, { status: 403 }) : null);
+
+export async function staffSession(request: Request) {
+  const s = await aiSession(request);
+  return s instanceof Response ? s : portalRefused(s) ?? s;
+}
+
 // Writes: same origin, rate limit (AI calls use the AI limiter), capped zod body, own workspace.
-export async function writeSession<S extends z.ZodType>(request: Request, schema: S | null, kind: "ai" | "write" = "write"): Promise<{ s: AiSession; body: z.infer<S> } | Response> {
+export async function writeSession<S extends z.ZodType>(request: Request, schema: S | null, kind: "ai" | "write" = "write", opts: { staff?: boolean } = {}): Promise<{ s: AiSession; body: z.infer<S> } | Response> {
   if (!sameOrigin(request)) return json({ error: "Cross-site request refused" }, { status: 403 });
   const limited = await rateLimit(request, kind);
   if (limited) return limited;
@@ -29,6 +37,10 @@ export async function writeSession<S extends z.ZodType>(request: Request, schema
     const b = await parseBody(request, schema, 16 * 1024);
     if (b instanceof Response) return b;
     body = b;
+  }
+  if (opts.staff) {
+    const r = await aiSession(request);
+    if (!(r instanceof Response) && r.persona.portal) return json({ error: "This is a staff page." }, { status: 403 });
   }
   const s = await aiSession(request, { write: true });
   if (s instanceof Response) return s;

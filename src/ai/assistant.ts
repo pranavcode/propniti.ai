@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { ActionKey, Row } from "@/entities/types";
@@ -99,7 +100,7 @@ async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promis
   }
   if (/\b(work orders?|repairs?|maintenance|sla)\b/i.test(q)) {
     const open = ["New", "Triaged", "Assigned", "Scheduled", "In progress", "On hold"];
-    const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "work_orders", filters: [{ field: "status", op: "in", value: open }, ...(/sla|breach|overdue|late/i.test(q) ? [{ field: "sla_due_at", op: "lt", value: new Date(ctx.nowMs).toISOString() }] : [])], sort: ["opened_at", "asc"], size: 25 });
+    const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "work_orders", filters: [{ field: "status", op: "in", value: open }, ...(/sla|breach|overdue|late/i.test(q) ? [{ field: "sla_due_at", op: "lt", value: demoNowIso(ctx.nowMs) }] : [])], sort: ["opened_at", "asc"], size: 25 });
     return {
       answer: r.total ? `${r.total} open work order${r.total === 1 ? "" : "s"}${/sla|breach/i.test(q) ? " past their SLA" : ""}. Oldest: ${r.rows.slice(0, 5).map((w) => `${w.id} ${w.title} (${w.priority}, ${w.status})`).join("; ")}.` : "No open work orders match.",
       table: { columns: [{ key: "id", label: "WO" }, { key: "title", label: "Title" }, { key: "priority", label: "Priority" }, { key: "status", label: "Status" }], rows: r.rows.map((w) => ({ id: w.id, title: w.title, priority: w.priority, status: w.status, href: hrefFor("work_orders", String(w.id)) })) },
@@ -180,7 +181,7 @@ async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
 export async function ask(o: { data: DataCtx; persona: Persona; question: string; mode?: Mode; threadId?: string; context?: AskContext; waitUntil?: (p: Promise<unknown>) => void }): Promise<AssistantReply> {
   const { data, persona, question, context } = o;
   const mode = o.mode ?? detectMode(question);
-  const nowIso = new Date().toISOString();
+  const nowIso = demoNowIso();
   const { db, ws } = data;
 
   let threadId = o.threadId;
@@ -301,9 +302,9 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
   const model = res.live && ctx ? ctx.modelUsed : RULES;
   const messageId = newId("msg");
   await db.batch([
-    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace }), citations: JSON.stringify(res.out.citations), model: model.model, at: new Date().toISOString() }),
-    ...(await Promise.all(proposals.map(async (p) => insert(db, ws, "assistant_actions", { id: newId("act"), message_id: messageId, action: p.action, params: JSON.stringify({ proposal_id: p.id }), status: "Proposed", at: new Date().toISOString() })))),
-    db.prepare("UPDATE assistant_threads SET updated_at = ? WHERE workspace_id = ? AND id = ?").bind(new Date().toISOString(), ws, threadId),
+    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
+    ...(await Promise.all(proposals.map(async (p) => insert(db, ws, "assistant_actions", { id: newId("act"), message_id: messageId, action: p.action, params: JSON.stringify({ proposal_id: p.id }), status: "Proposed", at: demoNowIso() })))),
+    db.prepare("UPDATE assistant_threads SET updated_at = ? WHERE workspace_id = ? AND id = ?").bind(demoNowIso(), ws, threadId),
   ]);
   return {
     threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals,

@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import type { Row } from "@/entities/types";
 import { daysBetween, parseJson, sql } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
@@ -64,7 +65,7 @@ export default defineAgent({
           entity: "bills", entityId: String(b.id), propertyId: String(b.property_id), action: "bills.approve", title: `Approve ${b.company} ${b.invoice_number} — ${money(Number(b.amount_cents))}`,
           why: ["Amount in line with this vendor's history", "GL coding matches the vendor's trade", "No duplicate invoice; bank details unchanged"], confidence: 0.9, risk: "Low",
           category: "Bill payment", amountCents: Number(b.amount_cents), facts, evidence: ev,
-          effects: [{ kind: "update", table: "bills", id: String(b.id), changes: { status: "Approved", approved_by: "$by", approved_at: new Date().toISOString() } }],
+          effects: [{ kind: "update", table: "bills", id: String(b.id), changes: { status: "Approved", approved_by: "$by", approved_at: demoNowIso() } }],
           priority: 1000,
         });
       }

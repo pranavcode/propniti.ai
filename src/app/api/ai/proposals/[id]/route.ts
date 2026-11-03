@@ -14,7 +14,7 @@ const Decide = z.object({
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return guarded(async () => {
     const { id } = await params;
-    const w = await writeSession(request, Decide);
+    const w = await writeSession(request, Decide, "write", { staff: true });
     if (w instanceof Response) return w;
     const { s, body } = w;
     const data = dataOf(s);

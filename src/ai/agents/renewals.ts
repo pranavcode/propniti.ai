@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import type { Row } from "@/entities/types";
 import { daysBetween, sql } from "../data";
 import { addDays, defineAgent, money, type Candidate } from "./framework";
@@ -44,7 +45,7 @@ export default defineAgent({
         facts: { resident: name, property: String(r.property), unit: String(r.unit), end_on: String(r.end_on), current_rent_cents: current, market_rent_cents: market, offer_rent_cents: rent, days_to_end: days },
         evidence: [{ entity_type: "leases", entity_id: String(r.id), label: `${name} · ${r.property} #${r.unit}` }],
         message: { party_kind: "resident", party_id: String(r.resident_id), subject: `Your renewal offer at ${r.property}`, body: `Hi ${r.first_name}, your lease at ${r.property} #${r.unit} ends on ${r.end_on}. We'd love for you to stay: we can renew for 12 months at ${money(rent)} a month. Reply to accept or to talk about other terms.` },
-        effects: [{ kind: "insert", table: "renewal_offers", row: { lease_id: String(r.id), property_id: String(r.property_id), version: 1, term_months: 12, rent_cents: rent, current_rent_cents: current, market_rent_cents: market, status: "Sent", sent_at: new Date().toISOString(), expires_on: addDays(ctx.today, 30) } }],
+        effects: [{ kind: "insert", table: "renewal_offers", row: { lease_id: String(r.id), property_id: String(r.property_id), version: 1, term_months: 12, rent_cents: rent, current_rent_cents: current, market_rent_cents: market, status: "Sent", sent_at: demoNowIso(), expires_on: addDays(ctx.today, 30) } }],
         priority: 1000 - days,
       };
     });

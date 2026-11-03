@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { asOf, eff, get, insert, isTable, newId, type DataCtx } from "./data";
@@ -85,7 +86,7 @@ export async function createRunContext(opts: {
       await (await insert(db, ws, "agent_steps", {
         id, run_id: runId, idx: i, kind: s.kind, tool_key: s.toolKey ?? null,
         input: s.input === undefined ? null : truncate(s.input, 4000), output: s.output === undefined ? null : truncate(s.output),
-        latency_ms: s.latencyMs ?? null, ok: s.ok ? 1 : 0, at: new Date().toISOString(),
+        latency_ms: s.latencyMs ?? null, ok: s.ok ? 1 : 0, at: demoNowIso(),
       })).run();
       return id;
     },
@@ -157,7 +158,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
     id, agent: ctx.agent, entity_type: p.entity, entity_id: p.entityId, property_id: p.propertyId ?? null, action: p.action, title: p.title,
     payload: JSON.stringify(payload ?? {}), why: JSON.stringify(p.why), evidence: JSON.stringify(p.evidence ?? []),
     confidence: Math.round(Math.min(1, Math.max(0, p.confidence)) * 100) / 100, risk, amount_cents: p.amountCents ?? null,
-    queue_state: queueState, assignee_role: assignee, model: ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: new Date().toISOString(),
+    queue_state: queueState, assignee_role: assignee, model: ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
   };
   await (await insert(db, ws, "ai_proposals", row)).run();
   if (!auto) return { id, queueState, duplicate: false };
