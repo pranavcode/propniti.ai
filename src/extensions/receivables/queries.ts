@@ -3,6 +3,7 @@ import { cache } from "react";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
+import { CHARGE_IS_OPEN, chargeOpenStoredSql } from "@/server/data";
 import { settle } from "@/server/money";
 import { effective, type QueryCtx } from "@/server/query";
 
@@ -30,14 +31,14 @@ export const isSelfScope = (actor: Actor) => actor.scope.kind === "self";
 
 const scopeSql = (actor: Actor, col: string) => (actor.propertyIds === "all" ? { sql: "1 = 1", params: [] as unknown[] } : { sql: `${col} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(actor.propertyIds)] });
 
-// Open, past-due charges with their open amount and age (one row per charge).
+// Open, past-due charges with their open amount and age (one row per charge), from the stored
+// settlement columns. CHARGE_IS_OPEN stays verbatim so the charges_open_due partial index applies:
+// about 1.4k open rows are read instead of every charge.
 function openChargesSql(ws: string | null, where: string) {
-  return `WITH pa AS (SELECT charge_id, sum(amount_cents) AS s FROM ${effective("payments", ws)} AS p WHERE p.nsf = 0 AND p.charge_id IS NOT NULL GROUP BY charge_id),
-       cr AS (SELECT charge_id, sum(amount_cents) AS s FROM ${effective("credits", ws)} AS x WHERE x.charge_id IS NOT NULL GROUP BY charge_id),
-       oc AS (SELECT c.id, c.lease_id, c.household_id, c.property_id, c.gl_account_id, c.description, c.due_on, c.amount_cents,
-                c.amount_cents - coalesce(pa.s, 0) - coalesce(cr.s, 0) AS open_cents, CAST(julianday('${AS_OF}') - julianday(c.due_on) AS INTEGER) AS age
-              FROM ${effective("charges", ws)} AS c LEFT JOIN pa ON pa.charge_id = c.id LEFT JOIN cr ON cr.charge_id = c.id
-              WHERE c.due_on < '${AS_OF}' AND ${where})`;
+  return `WITH oc AS (SELECT c.id, c.lease_id, c.household_id, c.property_id, c.gl_account_id, c.description, c.due_on, c.amount_cents,
+                ${chargeOpenStoredSql("c")} AS open_cents, CAST(julianday('${AS_OF}') - julianday(c.due_on) AS INTEGER) AS age
+              FROM ${effective("charges", ws)} AS c
+              WHERE ${CHARGE_IS_OPEN("c")} AND c.due_on < '${AS_OF}' AND ${where})`;
 }
 const bucketCase = `CASE WHEN age <= 30 THEN '0-30' WHEN age <= 60 THEN '31-60' WHEN age <= 90 THEN '61-90' ELSE '90+' END`;
 

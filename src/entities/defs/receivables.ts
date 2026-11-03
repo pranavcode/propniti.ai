@@ -4,16 +4,16 @@
 // change only through named actions that go through the guarded money functions.
 import { Banknote, Gavel, HandCoins, Landmark, Receipt } from "lucide-react";
 import { AS_OF, FINANCE, LEADERS } from "../common";
+import { chargeOpenStoredSql, chargeStatusStoredSql } from "@/server/data";
 import { registerEntity } from "../registry";
 import type { Role } from "../types";
 
 const ACCOUNTING: Role[] = ["principal", "regional_manager", "accountant"];
 
-// Status is derived, never stored (plan §1): Paid when payments and credits cover the charge,
-// Processing while a live rent:<id> transfer is pending, else Overdue past the due date or Due.
-const PAID = "(SELECT coalesce(sum(p.amount_cents), 0) FROM {payments} p WHERE p.charge_id = charges.id AND p.nsf = 0) + (SELECT coalesce(sum(cr.amount_cents), 0) FROM {credits} cr WHERE cr.charge_id = charges.id)";
-const BALANCE = `max(charges.amount_cents - (${PAID}), 0)`;
-const STATUS = `CASE WHEN (${PAID}) >= charges.amount_cents THEN 'Paid' WHEN EXISTS (SELECT 1 FROM {transfers} t WHERE t.key = 'rent:' || charges.id AND t.status = 'Pending') THEN 'Processing' WHEN charges.due_on < ${AS_OF} THEN 'Overdue' ELSE 'Due' END`;
+// Status is derived from the stored settlement columns (charges.paid_cents, pending_cents), which
+// every money action keeps current, so lists, tabs and footers never sum payments per row.
+const BALANCE = `max(${chargeOpenStoredSql("charges")}, 0)`;
+const STATUS = chargeStatusStoredSql("charges");
 const DAYS_LATE = `CAST(julianday(${AS_OF}) - julianday(charges.due_on) AS INTEGER)`;
 
 registerEntity({
@@ -30,14 +30,15 @@ registerEntity({
   fields: {
     description: { type: "text", label: "Charge", search: true, sortable: true, list: { default: true, width: 220 } },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, sql: STATUS, enum: [
-      { value: "Paid", tone: "success" }, { value: "Processing", tone: "info" }, { value: "Due", tone: "warning" }, { value: "Overdue", tone: "danger" },
-    ], help: { summary: "Worked out from payments, credits and pending transfers. It is never typed in.", article: "record-a-payment" } },
+      { value: "Paid", tone: "success" }, { value: "Processing", tone: "info" }, { value: "Due", tone: "warning" }, { value: "Partial", tone: "warning" }, { value: "Overdue", tone: "danger" },
+    ], help: { summary: "Worked out from payments, credits and pending transfers; overdue 3 days after the due date. It is never typed in.", article: "record-a-payment" } },
     lease_id: { type: "ref", ref: "leases", label: "Lease", list: { default: true } },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, sortable: true, list: { default: true } },
     unit_id: { type: "ref", ref: "units", label: "Unit" },
     household_id: { type: "ref", ref: "households", label: "Household" },
     gl_account_id: { type: "ref", ref: "gl_accounts", label: "GL account", facet: true, list: { default: false } },
-    period: { type: "text", label: "Period", facet: true, sortable: true, list: { default: true } },
+    // No facet chip: a period chip is a full scan of every charge; ?f.period= still filters (chart drills use it).
+    period: { type: "text", label: "Period", sortable: true, list: { default: true } },
     due_on: { type: "date", label: "Due", sortable: true, list: { default: true } },
     amount: { type: "money", label: "Amount", column: "amount_cents", sortable: true, list: { default: true, align: "right" } },
     balance: { type: "money", label: "Balance", sortable: true, list: { default: true, align: "right" }, sql: BALANCE },
@@ -113,7 +114,8 @@ registerEntity({
     method: { type: "enum", label: "Method", facet: true, sortable: true, list: { default: true }, enum: [
       { value: "ACH", tone: "neutral" }, { value: "Card", tone: "neutral" }, { value: "Check", tone: "neutral" }, { value: "Money order", tone: "neutral" }, { value: "Cash", tone: "neutral" },
     ] },
-    status: { type: "enum", label: "Status", facet: true, list: { default: true }, sql: "CASE WHEN payments.nsf = 1 THEN 'Returned' WHEN EXISTS (SELECT 1 FROM {transfers} t WHERE t.id = payments.transfer_id AND t.status = 'Pending') THEN 'Processing' ELSE 'Cleared' END", enum: [
+    // Base transfers are all Cleared or Returned, so only the visitor's own payments can be Processing.
+    status: { type: "enum", label: "Status", facet: true, list: { default: true }, sql: "CASE WHEN payments.nsf = 1 THEN 'Returned' WHEN payments.workspace_id <> 'base' AND EXISTS (SELECT 1 FROM {transfers} t WHERE t.id = payments.transfer_id AND t.status = 'Pending') THEN 'Processing' ELSE 'Cleared' END", enum: [
       { value: "Cleared", tone: "success" }, { value: "Processing", tone: "info" }, { value: "Returned", tone: "danger" },
     ] },
     lease_id: { type: "ref", ref: "leases", label: "Lease", list: { default: true } },
