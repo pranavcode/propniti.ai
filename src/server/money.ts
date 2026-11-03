@@ -16,9 +16,6 @@ import { nowIso } from "./workspace";
 
 export type Outcome = { status: 200; message?: string } | { status: 400 | 403 | 404 | 409; error: string };
 
-// Legacy routes (src/app/api/*) still import these until Lane C turns them into redirects.
-export { approveWorkOrder, disburseOwner, payInvoice } from "./legacy-money";
-
 const FEE_PCT = Math.round(MANAGEMENT_FEE_RATE * 100);
 const TRANSFER_COLS = "workspace_id, id, key, kind, bank_account_id, owner_entity_id, from_kind, from_id, from_name, to_kind, to_id, to_name, amount_cents, property_id, ref, status, created, settles_at, cleared";
 const BILL_COLS = ["id", "deleted", "property_id", "owner_entity_id", "vendor_id", "work_order_id", "po_id", "recurring_bill_id", "document_id", "invoice_number", "bill_date", "due_on", "amount_cents", "status", "approved_by", "approved_at"];

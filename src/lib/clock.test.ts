@@ -37,7 +37,6 @@ const REAL_CLOCK_OK = new Set([
   "src/app/api/ai/runs/[id]/stream/route.ts", // stream deadline
   "src/app/api/e/_lib/http.ts", // request clock, converted with nowIso where stamped
   "src/app/api/e/[entity]/export.csv/route.ts", // download file name
-  "src/server/route.ts", // request clock
   "src/server/permissions.ts", // ACH settle timer
   "src/extensions/receivables/queries.ts", // ACH settle timer, cache TTL
   "src/extensions/platform/console.ts", // platform health check time
