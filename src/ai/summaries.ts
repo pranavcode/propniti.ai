@@ -110,3 +110,60 @@ export async function generateSummary(data: DataCtx, entity: string, id: string,
   }
   return { entity_type: entity, entity_id: id, summary, facts: f.facts, model: info.model, generated_at, source: text ? "live" : "rules" };
 }
+
+// The home briefing ("Good morning, here's your portfolio") for a persona: computed counts in,
+// two or three sentences out. Stored as ai_summaries (entity_type "briefing", entity_id = persona).
+export async function generateBriefing(data: DataCtx, personaId: string, opts: { writeTo?: string } = {}): Promise<Summary> {
+  const { delinquency } = await import("./facts");
+  const { asOf, sql } = await import("./data");
+  const today = await asOf(data.db);
+  const [late, needs, issues, runs] = await Promise.all([
+    delinquency(data, today, { minDays: 1, limit: 1 }),
+    sql<{ n: number }>(data, "SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id)"),
+    sql<{ n: number; critical: number }>(data, "SELECT count(*) AS n, sum(severity = 'critical') AS critical FROM {data_issues} WHERE status = 'open'"),
+    sql<{ n: number; auto: number }>(data, "SELECT count(*) AS n, (SELECT count(*) FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= ?) AS auto FROM {agent_runs} WHERE started_at >= ?", [new Date(Date.now() - 86_400_000).toISOString(), new Date(Date.now() - 86_400_000).toISOString()], { unscoped: true }),
+  ]);
+  const facts: Facts = {
+    residents_late: late.total, late_balance: Math.round(late.total_balance_cents / 100), approvals_waiting: needs[0]?.n ?? 0,
+    data_issues_open: issues[0]?.n ?? 0, data_issues_critical: Number(issues[0]?.critical ?? 0), agent_runs_24h: runs[0]?.n ?? 0, auto_applied_24h: runs[0]?.auto ?? 0,
+  };
+  const model = currentModel();
+  let text: string | null = null;
+  let info = RULES;
+  if (model) {
+    try {
+      const { value } = await model.structured(Out, "Write a 2-3 sentence morning briefing for a property management professional from these computed facts: what the AI agents did, what needs them, and the main risk. Only use the facts; every number must be one of them.", JSON.stringify(facts), { timeoutMs: 20_000 });
+      if (!unknownNumbers(value.summary, facts).length) {
+        text = value.summary.trim();
+        info = model.info;
+      }
+    } catch (err) {
+      console.error("[ai] briefing model failed, using rules:", err instanceof Error ? err.message : err);
+    }
+  }
+  const summary = text ?? `In the last day the agents ran ${facts.agent_runs_24h} times and handled ${facts.auto_applied_24h} items on their own. ${facts.approvals_waiting} proposals wait for you. ${facts.residents_late} residents owe $${Number(facts.late_balance).toLocaleString()} in rent, and ${facts.data_issues_open} data issues are open (${facts.data_issues_critical} critical).`;
+  const generated_at = new Date().toISOString();
+  const ws = opts.writeTo ?? data.ws;
+  if (ws !== "base" || opts.writeTo === "base") {
+    await data.db.batch([
+      data.db.prepare("DELETE FROM ai_summaries WHERE workspace_id = ? AND id = ?").bind(ws, summaryId("briefing", personaId)),
+      await insert(data.db, ws, "ai_summaries", { id: summaryId("briefing", personaId), entity_type: "briefing", entity_id: personaId, summary, facts: JSON.stringify(facts), model: info.model, generated_at }),
+    ]);
+  }
+  return { entity_type: "briefing", entity_id: personaId, summary, facts, model: info.model, generated_at, source: text ? "live" : "rules" };
+}
+
+// The records people open first: every property, then the most delinquent leases' residents, open
+// work orders, pending applications and active vendors, up to `limit`.
+export async function precomputeTargets(data: DataCtx, limit = 300): Promise<{ entity: string; id: string }[]> {
+  const { sql } = await import("./data");
+  const pick = async (entity: string, q: string, n: number) => (getEntity(entity) ? (await sql<{ id: string }>(data, `${q} LIMIT ${n}`)).map((r) => ({ entity, id: r.id })) : []);
+  const out = [
+    ...(await pick("properties", "SELECT id FROM {properties} ORDER BY id", 40)),
+    ...(await pick("residents", "SELECT id FROM {residents} WHERE is_primary = 1 ORDER BY risk_score DESC", 100)),
+    ...(await pick("work_orders", "SELECT id FROM {work_orders} WHERE status NOT IN ('Completed', 'Paid', 'Cancelled') ORDER BY opened_at", 70)),
+    ...(await pick("leases", "SELECT id FROM {leases} WHERE status = 'Active' ORDER BY end_on", 50)),
+    ...(await pick("vendors", "SELECT id FROM {vendors} WHERE status = 'Active' ORDER BY rating DESC", 40)),
+  ];
+  return out.slice(0, limit);
+}

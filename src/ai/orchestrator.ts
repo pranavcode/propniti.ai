@@ -33,11 +33,11 @@ export async function agentConfigs(db: Db, ws: string): Promise<Map<AgentKey, Ag
   return out;
 }
 
-export async function loadPolicies(db: Db, ws: string): Promise<ApprovalPolicy[]> {
+export async function loadPolicies(db: Db, ws: string): Promise<(ApprovalPolicy & { id: string })[]> {
   const e = eff("approval_policies", ws);
   const { results } = await db.prepare(`SELECT * FROM ${e.sql} t WHERE t.owner_entity_id IS NULL`).bind(...e.params).all<Record<string, unknown>>().catch(() => ({ results: [] as Record<string, unknown>[] }));
   return results.map((r) => ({
-    category: String(r.category), limitCents: r.limit_cents == null ? null : Number(r.limit_cents), approverRole: r.approver_role as ApprovalPolicy["approverRole"],
+    id: String(r.id), category: String(r.category), limitCents: r.limit_cents == null ? null : Number(r.limit_cents), approverRole: r.approver_role as ApprovalPolicy["approverRole"],
     ownerApprovalOverCents: r.owner_approval_over_cents == null ? null : Number(r.owner_approval_over_cents), alwaysHuman: Number(r.always_human) === 1,
   }));
 }
