@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, Bell, Building2, Gauge, Globe, History, KeyRound, Landmark, Percent, Plug, ShieldCheck, Sparkles, Upload, Users, Workflow, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBreadcrumbTitle } from "@/components/app/shell/context";
 import type { SettingsGroup } from "../nav";
 
 const ICONS: Record<string, LucideIcon> = { building: Building2, users: Users, key: KeyRound, plug: Plug, upload: Upload, shield: ShieldCheck, landmark: Landmark, percent: Percent, workflow: Workflow, sparkles: Sparkles, history: History, bell: Bell, globe: Globe, gauge: Gauge, activity: Activity };
@@ -13,6 +14,9 @@ export function SettingsNav({ groups }: { groups: SettingsGroup[] }) {
   const path = usePathname();
   const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
   const active = hrefs.filter((h) => path === h || path.startsWith(h + "/")).sort((a, b) => b.length - a.length)[0];
+  // Section pages name themselves in the breadcrumb ("AI settings", not the path's "Ai"); record
+  // pages below a section set their own title.
+  useBreadcrumbTitle(path === active ? groups.flatMap((g) => g.items).find((i) => i.href === active)?.label : null);
   return (
     <nav aria-label="Settings" className="flex gap-1 overflow-x-auto px-4 pt-4 md:sticky md:top-0 md:max-h-[calc(100dvh-3rem)] md:w-56 md:shrink-0 md:flex-col md:gap-4 md:overflow-y-auto md:border-r md:px-3 md:py-5">
       <Link href="/app/settings" className={cn("hidden px-2 text-[15px] font-semibold tracking-tight md:block", path === "/app/settings" && "text-primary")}>Settings</Link>

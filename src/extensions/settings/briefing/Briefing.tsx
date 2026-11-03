@@ -77,10 +77,12 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
   // Embedded in a home that already renders the role's widgets: don't render them (or itself) again.
   const widgets = embedded ? [] : widgetsFor(role).filter((w) => w.key !== "settings.briefing");
 
+  // Danger before warning, then the largest count.
+  const top = riskList.reduce<Risk | null>((a, r) => (!a || (r.tone === "danger" && a.tone !== "danger") || (r.tone === a.tone && r.n > a.n) ? r : a), null);
   const sentence = [
     runs.length ? `Since yesterday ${byAgent.size} ${byAgent.size === 1 ? "agent" : "agents"} ran ${runs.length} ${runs.length === 1 ? "time" : "times"} and handled ${autoNight} ${autoNight === 1 ? "item" : "items"} within policy.` : "No agent runs since yesterday.",
     needs ? `${needs} ${needs === 1 ? "decision needs" : "decisions need"} you${high ? `, ${high} high risk` : ""}.` : "Nothing is waiting on your approval.",
-    riskList.length ? `${riskList.reduce((a, r) => a + r.n, 0)} risks to look at.` : "",
+    top ? `Biggest risk: ${top.n.toLocaleString("en-US")} ${top.label.charAt(0).toLowerCase()}${top.label.slice(1)}.` : "",
   ].filter(Boolean).join(" ");
 
   const tiles = [

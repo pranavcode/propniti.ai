@@ -5,7 +5,7 @@ import { History } from "lucide-react";
 import { AskBox } from "@/components/app/ai";
 import { RelativeDate } from "@/components/app/display";
 import { useRecent } from "@/components/app/recent";
-import { useAssistant } from "@/components/app/shell/context";
+import { useAssistant, useBreadcrumbTitle } from "@/components/app/shell/context";
 import { useMounted } from "@/hooks/use-mounted";
 
 // Client parts of the home briefing: the big ask box (hands the question to the assistant dock)
@@ -13,6 +13,7 @@ import { useMounted } from "@/hooks/use-mounted";
 
 export function BriefingAsk({ prompts }: { prompts: string[] }) {
   const { ask } = useAssistant();
+  useBreadcrumbTitle("Briefing");
   return <AskBox onAsk={(q) => ask(q, { path: "/app" })} suggestions={prompts} placeholder="Ask or tell Propniti… e.g. “Draft reminders for residents 30+ days late in Austin”" footer={<span>Answers use your data and show every record they looked up. Actions wait for your approval.</span>} />;
 }
 
