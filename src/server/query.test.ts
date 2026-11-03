@@ -222,6 +222,18 @@ describe("writes", () => {
     expect((await db.prepare("SELECT count(*) AS n FROM activity_events WHERE entity_id = 'p01-u3'").first())!.n).toBe(2);
   });
 
+  it("keeps fields hidden from a role out of the audit shown in a record's activity", async () => {
+    await db.prepare("INSERT INTO vendors (workspace_id, id, company, trade, bank_last4, tin_last4) VALUES ('base', 'v9', 'Lone Star Plumbing', 'Plumbing', '1111', '2222')").run();
+    await db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, entity_type, entity_id, detail, before_json, after_json) VALUES ('${WS}', 'a1', '2026-10-28T10:00:00Z', 'Grace Kim', 'vendors.updated', 'vendors', 'v9', 'Updated bank', '{"bank_last4":"1111","phone":"1"}', '{"bank_last4":"9999","phone":"2"}')`).run();
+    const { collab } = await import("./query");
+    const rows = (await collab(await ctx("tom", WS), "activity", "vendors", "v9")).rows;
+    const audit = rows.find((r) => r.verb === "vendors.updated")!;
+    expect(String(audit.data)).not.toContain("9999");
+    expect(String(audit.data)).not.toContain("1111");
+    expect(String((await collab(await ctx("grace", WS), "activity", "vendors", "v9")).rows.find((r) => r.verb === "vendors.updated")!.data)).toContain("9999");
+    expect(String(audit.data)).toContain('"phone":"2"');
+  });
+
   it("hides a deleted base row with an overlay tombstone, for this visitor only", async () => {
     await deleteRecord(await wctx("daniel"), "properties", "p06");
     expect(await getRow(await ctx("daniel", WS), "properties", "p06")).toBeNull();

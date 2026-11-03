@@ -582,7 +582,19 @@ export async function collab(ctx: QueryCtx, kind: Collab, entity: string, id: st
   if (kind === "activity" && p === 1) {
     const audit = await ctx.db.prepare(`SELECT id, at, actor, role, agent, model, action, detail, before_json, after_json FROM ${effective("audit", ctx.ws)} WHERE entity_type = ? AND entity_id = ? ORDER BY at DESC LIMIT 50`).bind(def.key, id).all();
     const seen = new Set(out.map((r) => `${r.at}|${r.summary}`));
-    out = [...out, ...audit.results.filter((a) => !seen.has(`${a.at}|${a.detail}`)).map((a) => ({ id: a.id, at: a.at, actor_kind: a.agent ? "agent" : "staff", actor_id: a.actor, verb: a.action, summary: a.detail, data: JSON.stringify({ actor: a.actor, role: a.role, agent: a.agent, model: a.model, before: a.before_json, after: a.after_json }) }))]
+    // Audit rows hold raw columns: drop the ones this role can't see (e.g. vendor bank details).
+    const hidden = new Set(Object.entries(def.fields).filter(([, f]) => f.hiddenFor?.includes(ctx.actor.role)).map(([k, f]) => f.column ?? k));
+    const visible = (j: unknown) => {
+      if (j == null) return null;
+      try {
+        const o = JSON.parse(String(j)) as Row;
+        for (const k of hidden) delete o[k];
+        return o;
+      } catch {
+        return null;
+      }
+    };
+    out = [...out, ...audit.results.filter((a) => !seen.has(`${a.at}|${a.detail}`)).map((a) => ({ id: a.id, at: a.at, actor_kind: a.agent ? "agent" : "staff", actor_id: a.actor, verb: a.action, summary: a.detail, data: JSON.stringify({ actor: a.actor, role: a.role, agent: a.agent, model: a.model, before: visible(a.before_json), after: visible(a.after_json) }) }))]
       .sort((a, b) => String(b.at).localeCompare(String(a.at)));
   }
   return { rows: out, total: Number(count?.n ?? 0), page: p, size: s };
