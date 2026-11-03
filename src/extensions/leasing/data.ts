@@ -10,6 +10,7 @@ import { effective, metrics } from "@/server/query";
 import { AS_OF } from "@/seed/constants";
 import { checkFairHousing } from "./fairHousing";
 import { columnOf, type Column } from "./pipeline";
+import { proposalSource, type AiSource } from "@/ai/rules";
 
 // Reads for the leasing pages (home briefings, the board, renewals), scoped to the persona's
 // properties and bounded: every list here has a LIMIT.
@@ -187,7 +188,7 @@ export async function scopedProperties(c: LeasingCtx) {
 // Renewals workbench
 // ---------------------------------------------------------------------------------------------
 
-export type RenewalRow = { leaseId: string; resident: string; residentId: string | null; property: string; propertyId: string; unit: string; unitType: string; endOn: string; daysLeft: number; rent: number; market: number | null; status: string; offer: { id: string; status: string; rent: number; version: number; sentAt: string | null } | null; agent: { id: string; title: string; runId: string | null; why: string[]; confidence: number; model: string | null; rentCents: number | null } | null };
+export type RenewalRow = { leaseId: string; resident: string; residentId: string | null; property: string; propertyId: string; unit: string; unitType: string; endOn: string; daysLeft: number; rent: number; market: number | null; status: string; offer: { id: string; status: string; rent: number; version: number; sentAt: string | null } | null; agent: { id: string; title: string; runId: string | null; why: string[]; confidence: number; model: string | null; source: AiSource; rentCents: number | null } | null };
 
 export async function renewals(c: LeasingCtx, opts: { window: number; status?: string; page: number; size: number }) {
   const s = scope(c, "l.property_id");
@@ -213,7 +214,7 @@ export async function renewals(c: LeasingCtx, opts: { window: number; status?: s
       endOn: String(r.end_on ?? ""), daysLeft: r.end_on ? Math.round((Date.parse(String(r.end_on)) - Date.parse(AS_OF)) / 86_400_000) : 0, rent: Number(r.rent_cents) / 100,
       market: r.market_rent_cents == null ? null : Number(r.market_rent_cents) / 100, status: o ? o[1] : r.lease_status === "Month-to-month" ? "Month-to-month" : "No offer",
       offer: o ? { id: o[0], status: o[1], rent: Number(o[2]) / 100, version: Number(o[3]), sentAt: o[4] || null } : null,
-      agent: a ? { id: a.id, title: a.title, runId: a.run, why: a.why ?? [], confidence: Number(a.confidence), model: a.model, rentCents: suggestedCents(a.payload) ?? (/\$([\d,]+)/.exec(a.title) ? Number(/\$([\d,]+)/.exec(a.title)![1].replace(/,/g, "")) * 100 : null) } : null,
+      agent: a ? { id: a.id, title: a.title, runId: a.run, why: a.why ?? [], confidence: Number(a.confidence), model: a.model, source: proposalSource(a), rentCents: suggestedCents(a.payload) ?? (/\$([\d,]+)/.exec(a.title) ? Number(/\$([\d,]+)/.exec(a.title)![1].replace(/,/g, "")) * 100 : null) } : null,
     };
   });
   const byStatus = Object.fromEntries(counts.map((x) => [x.st, Number(x.n)]));

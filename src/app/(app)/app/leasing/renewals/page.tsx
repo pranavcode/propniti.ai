@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { StatusBadge } from "@/components/app/display";
-import { leasingCtx, renewalHistory, renewals, sourceOf } from "@/extensions/leasing/data";
+import { leasingCtx, renewalHistory, renewals } from "@/extensions/leasing/data";
 import { RenewalPanel, type Selected } from "@/extensions/leasing/ui/RenewalsWorkbench";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
     leaseId: sel.leaseId, resident: sel.resident, property: sel.property, propertyId: sel.propertyId, unit: sel.unit, unitType: sel.unitType, endOn: sel.endOn, daysLeft: sel.daysLeft, rent: sel.rent, market: sel.market,
     offer: sel.offer ? { id: sel.offer.id, status: sel.offer.status, rent: sel.offer.rent, term: Number(history[0]?.term_months ?? 12), version: sel.offer.version, sentAt: sel.offer.sentAt } : null,
     history: history.map((h) => ({ id: String(h.id), version: Number(h.version), status: String(h.status), rent: Number(h.rent_cents) / 100, sentAt: (h.sent_at as string) ?? null, respondedAt: (h.responded_at as string) ?? null })),
-    suggestion: sel.agent?.rentCents ? { rent: sel.agent.rentCents / 100, reasons: sel.agent.why.map((w) => ({ direction: /under|on time|toward market/i.test(w) ? "+" as const : /capped|late|balance|returned/i.test(w) ? "-" as const : "=" as const, text: w })), confidence: sel.agent.confidence, runId: sel.agent.runId, source: sourceOf(sel.agent.model), model: sel.agent.model ?? undefined, title: sel.agent.title } : null,
+    suggestion: sel.agent?.rentCents ? { rent: sel.agent.rentCents / 100, reasons: sel.agent.why.map((w) => ({ direction: /under|on time|toward market/i.test(w) ? "+" as const : /capped|late|balance|returned/i.test(w) ? "-" as const : "=" as const, text: w })), confidence: sel.agent.confidence, runId: sel.agent.runId, source: sel.agent.source, model: sel.agent.model ?? undefined, title: sel.agent.title } : null,
     canEdit: WRITERS.includes(c.actor.role),
   } : null;
 
