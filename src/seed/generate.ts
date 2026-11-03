@@ -167,12 +167,49 @@ function storeBalances(c: Ctx) {
     bump(lease, x.lease_id as string, -(x.amount_cents as number));
     bump(hh, householdOf.get(x.lease_id as string)!, -(x.amount_cents as number));
   }
-  // Stored paid amount per charge (payments not NSF, plus credits on the charge's own lease).
-  const paid = new Map<string, number>();
-  for (const x of c.t.payments) if (!x.nsf && x.charge_id) paid.set(x.charge_id as string, (paid.get(x.charge_id as string) ?? 0) + (x.amount_cents as number));
-  const chargeLease = new Map(c.t.charges.map((x) => [x.id as string, x.lease_id as string]));
-  for (const x of c.t.credits) if (x.charge_id && chargeLease.get(x.charge_id as string) === x.lease_id) paid.set(x.charge_id as string, (paid.get(x.charge_id as string) ?? 0) + (x.amount_cents as number));
-  for (const x of c.t.charges) Object.assign(x, { paid_cents: paid.get(x.id as string) ?? 0, pending_cents: 0 });
+  // The lease ledger is the source of truth: each lease's payments (not NSF) and credits pay its
+  // charges oldest first (due date, then id). Stored paid_cents is that allocation; anything beyond
+  // the charges stays a credit balance on the lease (balance_cents goes negative). Aging in
+  // metrics_monthly uses the same allocation at each month end. src/server/money.ts keeps the same
+  // rule for overlay rows (leaseAllocationStmt).
+  const chargesBy = new Map<string, R[]>();
+  for (const x of c.t.charges) (chargesBy.get(x.lease_id as string) ?? chargesBy.set(x.lease_id as string, []).get(x.lease_id as string)!).push(x);
+  for (const list of chargesBy.values()) list.sort((a, b) => (a.due_on === b.due_on ? (a.id! < b.id! ? -1 : 1) : a.due_on! < b.due_on! ? -1 : 1));
+  const receipts = new Map<string, { d: string; a: number }[]>();
+  const addReceipt = (leaseId: string, d: string, a: number) => (receipts.get(leaseId) ?? receipts.set(leaseId, []).get(leaseId)!).push({ d, a });
+  for (const x of c.t.payments) if (!x.nsf) addReceipt(x.lease_id as string, x.received_on as string, x.amount_cents as number);
+  for (const x of c.t.credits) addReceipt(x.lease_id as string, x.on_date as string, x.amount_cents as number);
+  for (const [leaseId, list] of chargesBy) {
+    let left = (receipts.get(leaseId) ?? []).reduce((s, r) => s + r.a, 0);
+    for (const ch of list) {
+      const p = Math.max(0, Math.min(ch.amount_cents as number, left));
+      left -= p;
+      Object.assign(ch, { paid_cents: p, pending_cents: 0 });
+    }
+  }
+  const propOf = new Map(c.t.leases.map((l) => [l.id as string, l.property_id as string]));
+  const aging = new Map<string, [number, number, number, number]>();
+  for (const period of PERIODS) {
+    const cut = period === CURRENT_PERIOD ? ASOF : monthEnd(period);
+    const cutIso = iso(cut);
+    for (const [leaseId, list] of chargesBy) {
+      let left = (receipts.get(leaseId) ?? []).reduce((s, r) => s + (r.d <= cutIso ? r.a : 0), 0);
+      for (const ch of list) {
+        if ((ch.due_on as string) > cutIso) break;
+        const rem = (ch.amount_cents as number) - Math.max(0, Math.min(ch.amount_cents as number, left));
+        left = Math.max(0, left - (ch.amount_cents as number));
+        if (rem <= 0) continue;
+        const age = cut - day(ch.due_on as string);
+        const k = `${propOf.get(leaseId)}|${period}`;
+        const a = aging.get(k) ?? aging.set(k, [0, 0, 0, 0]).get(k)!;
+        a[age <= 30 ? 0 : age <= 60 ? 1 : age <= 90 ? 2 : 3] += rem;
+      }
+    }
+  }
+  for (const m of c.t.metrics_monthly) {
+    const a = aging.get(`${m.property_id}|${m.month}`) ?? [0, 0, 0, 0];
+    Object.assign(m, { aging_0_30_cents: a[0], aging_31_60_cents: a[1], aging_61_90_cents: a[2], aging_90p_cents: a[3] });
+  }
   for (const l of c.t.leases) Object.assign(l, { balance_cents: lease.get(l.id as string) ?? 0, last_payment_at: lastL.get(l.id as string) ?? null });
   for (const h of c.t.households) Object.assign(h, { balance_cents: hh.get(h.id as string) ?? 0, last_payment_at: lastH.get(h.id as string) ?? null });
 }
@@ -1303,27 +1340,6 @@ function budgetsAndMetrics(c: Ctx, jeMap: Map<string, [number, number]>) {
   const charged = sumBy(charges, (r) => `${r.property_id}|${r.period}`, (r) => r.amount_cents as number);
   const collected = sumBy(payments, (r) => (r.nsf ? null : `${r.property_id}|${(r.received_on as string).slice(0, 7)}`), (r) => r.amount_cents as number);
   const conc = sumBy(credits, (r) => (r.kind === "Concession" ? `${r.property_id}|${(r.on_date as string).slice(0, 7)}` : null), (r) => r.amount_cents as number);
-  // Aging at each period end: open balance per charge by days past due.
-  const paidBy = new Map<string, { d: string; a: number }[]>();
-  for (const p of payments) if (!p.nsf && p.charge_id) (paidBy.get(p.charge_id as string) ?? paidBy.set(p.charge_id as string, []).get(p.charge_id as string)!).push({ d: p.received_on as string, a: p.amount_cents as number });
-  const credBy = new Map<string, { d: string; a: number }[]>();
-  for (const x of credits) if (x.charge_id) (credBy.get(x.charge_id as string) ?? credBy.set(x.charge_id as string, []).get(x.charge_id as string)!).push({ d: x.on_date as string, a: x.amount_cents as number });
-  const aging = new Map<string, [number, number, number, number]>();
-  for (const period of PERIODS) {
-    const cut = period === CURRENT_PERIOD ? ASOF : monthEnd(period);
-    const cutIso = iso(cut);
-    for (const ch of charges) {
-      if ((ch.due_on as string) > cutIso) continue;
-      let rem = ch.amount_cents as number;
-      for (const x of paidBy.get(ch.id as string) ?? []) if (x.d <= cutIso) rem -= x.a;
-      for (const x of credBy.get(ch.id as string) ?? []) if (x.d <= cutIso) rem -= x.a;
-      if (rem <= 0) continue;
-      const age = cut - day(ch.due_on as string);
-      const k = `${ch.property_id}|${period}`;
-      const a = aging.get(k) ?? aging.set(k, [0, 0, 0, 0]).get(k)!;
-      a[age <= 30 ? 0 : age <= 60 ? 1 : age <= 90 ? 2 : 3] += rem;
-    }
-  }
   const woOpened = sumBy(c.workOrders, (r) => `${r.property_id}|${(r.opened_at as string).slice(0, 7)}`, () => 1);
   const slaBreach = sumBy(c.workOrders, (r) => ((r.completed_at ?? `${AS_OF}T23:59:00Z`) > (r.sla_due_at as string) && r.status !== "Cancelled" ? `${r.property_id}|${(r.opened_at as string).slice(0, 7)}` : null), () => 1);
 
@@ -1349,13 +1365,12 @@ function budgetsAndMetrics(c: Ctx, jeMap: Map<string, [number, number]>) {
         if (glType[g] === "Income") income += a;
         else opex += a;
       }
-      const ag = aging.get(k) ?? [0, 0, 0, 0];
       const woOpen = c.workOrders.filter((w) => w.property_id === p.id && (w.opened_at as string) <= ts(cut, 1439) && (!w.completed_at || (w.completed_at as string) > ts(cut, 1439)) && w.status !== "Cancelled").length;
       add("metrics_monthly", {
         property_id: p.id, month: period, units: p.units.length, occupied, gpr_cents: gpr, charged_cents: charged.get(k) ?? 0, collected_cents: collected.get(k) ?? 0,
         vacancy_loss_cents: vacancyLoss, concessions_cents: conc.get(k) ?? 0, occupancy_phys: Math.round((occupied / p.units.length) * 10000) / 10000,
         occupancy_econ: Math.round(Math.max(0, Math.min(1, (actual(p.id, "4000", period) + actual(p.id, "4010", period) + actual(p.id, "4900", period)) / gpr)) * 10000) / 10000,
-        aging_0_30_cents: ag[0], aging_31_60_cents: ag[1], aging_61_90_cents: ag[2], aging_90p_cents: ag[3], opex_cents: opex, noi_cents: income - opex,
+        aging_0_30_cents: 0, aging_31_60_cents: 0, aging_61_90_cents: 0, aging_90p_cents: 0, opex_cents: opex, noi_cents: income - opex,
         budget_noi_cents: budgetNoi.get(k) ?? null, wo_opened: woOpened.get(k) ?? 0, wo_open: woOpen, wo_sla_breach: slaBreach.get(k) ?? 0, move_ins: moveIns, move_outs: moveOuts,
         leads: 0, tours: 0, applications: 0, ai_actions: 0, ai_minutes_saved: 0,
       });

@@ -58,30 +58,34 @@ describe("migrations and base", () => {
   });
 });
 
-describe("stored charge paid amounts", { timeout: 240_000 }, () => {
-  const mismatches = (ws: string) =>
-    n(`SELECT count(*) AS n FROM ${effective("charges")} AS c WHERE c.paid_cents <> (
-        coalesce((SELECT sum(p.amount_cents) FROM ${effective("payments")} AS p WHERE p.charge_id = c.id AND p.nsf = 0), 0)
-        + coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits")} AS x WHERE x.charge_id = c.id AND x.lease_id = c.lease_id), 0))
-      OR c.pending_cents <> coalesce((SELECT sum(t.amount_cents) FROM transfers AS t WHERE t.workspace_id = ?1 AND t.key = 'rent:' || c.id AND t.status = 'Pending'), 0)`, ws);
+describe("stored charge allocation (oldest first, per lease)", { timeout: 300_000 }, () => {
+  // Leases whose stored owed amount differs from the lease ledger, or whose pending amount differs
+  // from the rent on its way (capped at what is owed). Both must be 0 after any money action.
+  const broken = (ws: string) =>
+    n(`WITH owed AS (SELECT c.lease_id, sum(c.amount_cents - c.paid_cents) AS owed, sum(c.amount_cents) AS charged, sum(c.pending_cents) AS pend FROM ${effective("charges")} AS c GROUP BY c.lease_id),
+          paid AS (SELECT lease_id, sum(amount_cents) AS a FROM ${effective("payments")} AS p WHERE p.nsf = 0 GROUP BY lease_id),
+          cred AS (SELECT lease_id, sum(amount_cents) AS a FROM ${effective("credits")} AS x GROUP BY lease_id),
+          ach AS (SELECT c.lease_id, sum(t.amount_cents) AS a FROM transfers AS t JOIN ${effective("charges")} AS c ON c.id = t.ref WHERE t.workspace_id = ?1 AND t.status = 'Pending' AND t.kind = 'Rent' AND t.key = 'rent:' || t.ref GROUP BY c.lease_id)
+        SELECT count(*) AS n FROM owed LEFT JOIN paid ON paid.lease_id = owed.lease_id LEFT JOIN cred ON cred.lease_id = owed.lease_id LEFT JOIN ach ON ach.lease_id = owed.lease_id
+        WHERE owed.owed <> max(0, owed.charged - coalesce(paid.a, 0) - coalesce(cred.a, 0)) OR owed.pend <> min(coalesce(ach.a, 0), owed.owed)`, ws);
 
-  it("match a full recompute on the whole seed, and after pay, record, settle, move and disposition", async () => {
+  it("matches the lease ledger on the whole seed, and after pay, record, settle, move, disposition and late fees", async () => {
     const c = await ctx(grace);
-    expect(await mismatches(c.ws)).toBe(0);
+    expect(await broken(c.ws)).toBe(0);
     const [a, b] = (await db.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 2`).bind(c.ws).all<{ id: string }>()).results;
     await payRent(c, a.id);
     expect(await one(`SELECT ${chargeStatusStoredSql("c")} AS s FROM ${effective("charges")} AS c WHERE c.id = ?2`, c.ws, a.id)).toEqual({ s: "Processing" });
     await recordPayment(c, { chargeId: b.id, amountCents: 10_000, method: "Check", reference: "Check #77", idempotencyKey: "paid-1" });
-    expect(await mismatches(c.ws)).toBe(0);
+    expect(await broken(c.ws)).toBe(0);
     await settle(db, c.ws, T0 + SETTLE_MS);
     expect(await one(`SELECT ${chargeStatusStoredSql("c")} AS s FROM ${effective("charges")} AS c WHERE c.id = ?2`, c.ws, a.id)).toEqual({ s: "Paid" });
     const wrong = (await one<{ entity_id: string }>("SELECT entity_id FROM data_issues WHERE workspace_id = 'base' AND rule_id = 'payments.wrong_lease' AND status = 'open' LIMIT 1"))!;
-
     const target = (await one<{ id: string }>(`SELECT c2.id FROM ${effective("charges")} AS c2 JOIN ${effective("payments")} AS p ON p.id = ?2 WHERE c2.property_id = p.property_id AND c2.lease_id <> p.lease_id AND ${chargeOpenSql("c2")} >= p.amount_cents LIMIT 1`, c.ws, wrong.entity_id))!;
-    await movePayment(c, wrong.entity_id, target.id);
-    const dep = (await one<{ id: string; lease_id: string }>("SELECT id, lease_id FROM deposits WHERE workspace_id = 'base' AND status = 'Disposition due' LIMIT 1"))!;
+    expect(await movePayment(c, wrong.entity_id, target.id)).toMatchObject({ status: 200 });
+    const dep = (await one<{ id: string }>("SELECT id FROM deposits WHERE workspace_id = 'base' AND status = 'Disposition due' LIMIT 1"))!;
     await disposeDeposit(c, dep.id, [{ label: "Cleaning", amount_cents: 5_000 }]);
-    expect(await mismatches(c.ws)).toBe(0);
+    await postLateFees({ ...c, actor: { ...grace, role: "principal" } }, ["p02"]);
+    expect(await broken(c.ws)).toBe(0);
   });
 });
 
@@ -209,7 +213,9 @@ describe("money", { timeout: 60_000 }, () => {
 
   it("settles a payment of a few cents (no zero fee row), and one failing transfer blocks nothing", async () => {
     const c = await ctx(grace);
-    const ch = (await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws))!;
+    // A lease whose only open charge is this month's rent (payments go to the oldest charge first).
+    const ch = (await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue'
+      AND NOT EXISTS (SELECT 1 FROM ${effective("charges")} AS o WHERE o.lease_id = c.lease_id AND o.paid_cents < o.amount_cents AND (o.due_on < c.due_on OR (o.due_on = c.due_on AND o.id < c.id))) LIMIT 1`, c.ws))!;
     // Leave 5 cents open, then pay those 5 cents by ACH: the 8% fee rounds to 0 and is skipped.
     expect(await recordPayment(c, { chargeId: ch.id, amountCents: ch.amount_cents - 5, method: "Check", reference: "Check #5", idempotencyKey: "five-cents" })).toMatchObject({ status: 200 });
     expect(await payRent(c, ch.id)).toMatchObject({ status: 200 });

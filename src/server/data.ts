@@ -72,35 +72,24 @@ export async function get<T = Row>(ctx: DataCtx, table: string, id: string): Pro
 // Derived money state (status is computed, never stored on base rows)
 // ---------------------------------------------------------------------------------------------
 
-// Amount still owed on a charge: amount − payments − credits (only credits on the charge's own lease
-// count, so a stray credit can't pay someone else's charge) − rent already on its way (a pending
-// rent:<charge> ACH). Counting the pending ACH keeps every pay-down path from paying it twice.
-export const chargeOpenSql = (c = "c", ws = "?1") =>
-  `(${c}.amount_cents
-    - coalesce((SELECT sum(p.amount_cents) FROM ${effective("payments", ws)} AS p WHERE p.charge_id = ${c}.id AND p.nsf = 0), 0)
-    - coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits", ws)} AS x WHERE x.charge_id = ${c}.id AND x.lease_id = ${c}.lease_id), 0)
-    - coalesce((SELECT sum(tr.amount_cents) FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending'), 0))`;
-
-// List-speed equivalents from the stored columns (charges.paid_cents, pending_cents), which every money
-// action keeps current in the visitor's overlay. Use these in lists, filters and counts; the money
-// guards keep using the exact recompute above.
-export const chargeOpenStoredSql = (c = "c") => `(${c}.amount_cents - ${c}.paid_cents - ${c}.pending_cents)`;
+// Charge state comes from the stored allocation (charges.paid_cents, pending_cents): each lease's
+// payments and credits pay its charges oldest first, and every money action re-allocates the lease
+// in the same batch (money.ts chargeRefreshStmt). So lists, guards, aging and the lease ledger
+// always agree.
+// Owed on the ledger (what aging and balances count): amount − allocated payments and credits.
+export const chargeOwedSql = (c = "c") => `(${c}.amount_cents - ${c}.paid_cents)`;
+// Still payable: owed less rent already on its way by ACH (what pay and record guards allow).
+export const chargeOpenSql = (c = "c", ws = "?1") => (void ws, `(${c}.amount_cents - ${c}.paid_cents - ${c}.pending_cents)`);
+export const chargeOpenStoredSql = (c = "c") => chargeOpenSql(c);
 export const chargeStatusStoredSql = (c = "c") => `(CASE
     WHEN ${c}.pending_cents > 0 AND ${c}.paid_cents + ${c}.pending_cents >= ${c}.amount_cents THEN 'Processing'
     WHEN ${c}.paid_cents >= ${c}.amount_cents THEN 'Paid'
     WHEN ${c}.due_on <= date('${AS_OF}', '-3 days') THEN 'Overdue'
     WHEN ${c}.paid_cents > 0 THEN 'Partial'
     ELSE 'Due' END)`;
+export const chargeStatusSql = (c = "c", ws = "?1") => (void ws, chargeStatusStoredSql(c));
 // The open-charges predicate the partial indexes are built on; keep the exact text in WHERE clauses.
 export const CHARGE_IS_OPEN = (c = "c") => `${c}.paid_cents + ${c}.pending_cents < ${c}.amount_cents`;
-
-// Processing (a live rent:<id> transfer is pending) | Paid | Partial | Overdue | Due.
-export const chargeStatusSql = (c = "c", ws = "?1") => `(CASE
-    WHEN EXISTS (SELECT 1 FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending') THEN 'Processing'
-    WHEN ${chargeOpenSql(c, ws)} <= 0 THEN 'Paid'
-    WHEN julianday('${AS_OF}') - julianday(${c}.due_on) >= 3 THEN 'Overdue'
-    WHEN ${chargeOpenSql(c, ws)} < ${c}.amount_cents THEN 'Partial'
-    ELSE 'Due' END)`;
 
 // ---------------------------------------------------------------------------------------------
 // Stored balances (leases.balance_cents, households.balance_cents) plus the visitor's overlay delta
@@ -220,12 +209,8 @@ export async function metrics(ctx: DataCtx, key: MetricKey, params: MetricParams
              sum(CASE WHEN age BETWEEN 61 AND 90 THEN open ELSE 0 END) AS aging_61_90_cents,
              sum(CASE WHEN age > 90 THEN open ELSE 0 END) AS aging_90p_cents,
              sum(open) AS open_cents, count(DISTINCT t.household_id) AS households
-           FROM (SELECT c.property_id, c.household_id, c.amount_cents - coalesce(p.s, 0) - coalesce(x.s, 0) AS open,
-                   CAST(julianday('${AS_OF}') - julianday(c.due_on) AS INTEGER) AS age
-                 FROM ${effective("charges")} AS c
-                 LEFT JOIN (SELECT charge_id, sum(amount_cents) AS s FROM ${effective("payments")} AS p WHERE p.nsf = 0 AND p.charge_id IS NOT NULL AND ${inScope("p")} GROUP BY charge_id) AS p ON p.charge_id = c.id
-                 LEFT JOIN (SELECT charge_id, sum(amount_cents) AS s FROM ${effective("credits")} AS x WHERE x.charge_id IS NOT NULL AND ${inScope("x")} GROUP BY charge_id) AS x ON x.charge_id = c.id
-                 WHERE ${inScope("c")}) AS t
+           FROM (SELECT c.property_id, c.household_id, ${chargeOwedSql("c")} AS open, CAST(julianday('${AS_OF}') - julianday(c.due_on) AS INTEGER) AS age
+                 FROM ${effective("charges")} AS c WHERE ${inScope("c")} AND c.paid_cents < c.amount_cents) AS t
            WHERE t.open > 0 GROUP BY t.property_id ORDER BY t.property_id`,
         )
         .bind(ws, props)

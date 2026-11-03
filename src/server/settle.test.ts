@@ -27,7 +27,8 @@ describe("settle on read", { timeout: 120_000 }, () => {
     const ws = randomId();
     await resolveWorkspace(d, new Request("http://x", { headers: { cookie: `pn_ws=${ws}` } }), T0, true, false);
     const req = () => new Request("http://x/api/e/charges", { headers: { cookie: `pn_ws=${ws}; pn_as=grace` } });
-    const ch = (await d.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`).bind(ws).first<{ id: string }>())!;
+    const ch = (await d.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND ${chargeStatusSql("c")} = 'Overdue'
+      AND NOT EXISTS (SELECT 1 FROM ${effective("charges")} AS o WHERE o.lease_id = c.lease_id AND o.paid_cents < o.amount_cents AND (o.due_on < c.due_on OR (o.due_on = c.due_on AND o.id < c.id))) LIMIT 1`).bind(ws).first<{ id: string }>())!;
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(T0);
     const s0 = await sessionFromRequest(req());

@@ -57,6 +57,43 @@ describe("seed generator", () => {
     }
   });
 
+  it("allocates each lease's ledger oldest first: stored owed amounts equal the lease ledger for every lease", () => {
+    const ledger = new Map<string, number>(), owed = new Map<string, number>();
+    const bump = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+    for (const x of T.charges) {
+      bump(ledger, x.lease_id as string, cents(x));
+      bump(owed, x.lease_id as string, cents(x) - (x.paid_cents as number));
+      expect(x.paid_cents as number).toBeGreaterThanOrEqual(0);
+      expect(x.paid_cents as number).toBeLessThanOrEqual(cents(x));
+    }
+    for (const x of T.payments) if (!x.nsf) bump(ledger, x.lease_id as string, -cents(x));
+    for (const x of T.credits) bump(ledger, x.lease_id as string, -cents(x));
+    for (const [lease, bal] of ledger) expect(owed.get(lease) ?? 0, lease).toBe(Math.max(0, bal));
+    // Aging: an independent oldest-first allocation as of today, by property.
+    const aging = new Map<string, number[]>();
+    const byLease = new Map<string, R[]>();
+    for (const x of T.charges) (byLease.get(x.lease_id as string) ?? byLease.set(x.lease_id as string, []).get(x.lease_id as string)!).push(x);
+    const paidBy = new Map<string, number>();
+    for (const x of T.payments) if (!x.nsf) paidBy.set(x.lease_id as string, (paidBy.get(x.lease_id as string) ?? 0) + cents(x));
+    for (const x of T.credits) paidBy.set(x.lease_id as string, (paidBy.get(x.lease_id as string) ?? 0) + cents(x));
+    const today = Date.parse(`${AS_OF}T00:00:00Z`);
+    for (const [lease, list] of byLease) {
+      let left = paidBy.get(lease) ?? 0;
+      for (const ch of [...list].sort((a, b) => ((a.due_on as string) + a.id < (b.due_on as string) + b.id ? -1 : 1))) {
+        const take = Math.min(cents(ch), Math.max(0, left));
+        left -= take;
+        const rem = cents(ch) - take;
+        if (!rem) continue;
+        const age = (today - Date.parse(`${ch.due_on}T00:00:00Z`)) / 86_400_000;
+        const a = aging.get(ch.property_id as string) ?? aging.set(ch.property_id as string, [0, 0, 0, 0]).get(ch.property_id as string)!;
+        a[age <= 30 ? 0 : age <= 60 ? 1 : age <= 90 ? 2 : 3] += rem;
+      }
+    }
+    for (const m of T.metrics_monthly.filter((x) => x.month === "2026-11")) {
+      expect([m.aging_0_30_cents, m.aging_31_60_cents, m.aging_61_90_cents, m.aging_90p_cents], m.property_id as string).toEqual(aging.get(m.property_id as string) ?? [0, 0, 0, 0]);
+    }
+  });
+
   it("stores lease and household balances that match the ledger rows", () => {
     const bal = new Map<string, number>();
     for (const x of T.charges) bal.set(x.lease_id as string, (bal.get(x.lease_id as string) ?? 0) + cents(x));
