@@ -271,6 +271,7 @@ export type ActionDef<I = unknown> = {
   input?: ZodType<I>;                    // dialog form schema; omit for one-click actions
   bulk?: boolean;
   money?: boolean;                       // handler must go through src/server/money.ts
+  ai?: boolean;                          // handler calls a model: the action route also applies the AI rate limit
   handler: (ctx: ActionContext, row: Row, input: I) => Promise<ActionResult>;
   help?: HelpMeta;
 };

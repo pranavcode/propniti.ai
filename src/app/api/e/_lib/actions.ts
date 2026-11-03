@@ -2,6 +2,7 @@ import { z } from "zod";
 import { can } from "@/entities";
 import type { ActionDef, ActionResult } from "@/entities/types";
 import { getAction } from "@/extensions/actions";
+import { rateLimit } from "@/lib/guard";
 import { getDef, getRow, QueryError, type WriteCtx } from "@/server/query";
 
 // Runs a named action on one record: the action must belong to the entity, the role must be
@@ -15,6 +16,10 @@ export function resolveAction(entity: string, actionKey: string): ActionDef {
   if (!a || a.entity !== def.key) throw new QueryError(404, `Unknown action "${actionKey}" on ${def.label.many.toLowerCase()}`);
   return a;
 }
+
+// Actions that call a model also count against the AI limit (20/min per client), on top of the
+// write limit every action gets.
+export const aiLimit = (request: Request, a: ActionDef) => (a.ai ? rateLimit(request, "ai") : Promise.resolve(null));
 
 export const inputSchema = (a: ActionDef) => (a.input as z.ZodType | undefined) ?? z.object({}).passthrough();
 

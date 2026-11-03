@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { QueryError } from "@/server/query";
 import { handle, json, writeCtx } from "../../../_lib/http";
-import { inputSchema, resolveAction, runAction } from "../../../_lib/actions";
+import { aiLimit, inputSchema, resolveAction, runAction } from "../../../_lib/actions";
 
 type Ctx = { params: Promise<{ entity: string; action: string }> };
 
@@ -16,6 +16,8 @@ export async function POST(request: Request, { params }: Ctx) {
     const { entity, action } = await params;
     const a = resolveAction(entity, action);
     if (!a.bulk) throw new QueryError(400, `${a.label} runs on one record at a time`);
+    const limited = await aiLimit(request, a);
+    if (limited) return limited;
     const w = await writeCtx(request, z.strictObject({ ids: z.array(z.string().min(1).max(80)).min(1).max(MAX_BULK), input: inputSchema(a).optional() }));
     if (w instanceof Response) return w;
     const results: { id: string; status: number; error?: string; message?: string }[] = [];

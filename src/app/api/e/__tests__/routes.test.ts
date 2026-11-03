@@ -7,6 +7,7 @@ import { seed, WS } from "@/server/query.fixture";
 import { runAction, resolveAction } from "../_lib/actions";
 import * as listRoute from "../[entity]/route";
 import * as recordRoute from "../[entity]/[id]/route";
+import * as actionRoute from "../[entity]/[id]/actions/[action]/route";
 import * as exportRoute from "../[entity]/export.csv/route";
 import * as notesRoute from "../[entity]/[id]/notes/route";
 import * as metricRoute from "../../metrics/[key]/route";
@@ -128,6 +129,25 @@ describe("actions", () => {
     expect((await db.prepare("SELECT count(*) AS n FROM audit WHERE action = 'units.mark_down'").first())!.n).toBe(1);
     expect(() => resolveAction("units", "nope")).toThrow();
     expect(() => resolveAction("properties", "units.mark_down")).toThrow();
+  });
+});
+
+describe("AI actions", () => {
+  registerAction({ key: "units.ai_describe", label: "Describe unit", entity: "units", roles: ["property_manager"], ai: true, handler: async () => ({ status: 200 }) });
+  registerAction({ key: "units.plain_note", label: "Note", entity: "units", roles: ["property_manager"], handler: async () => ({ status: 200 }) });
+
+  it("count against the AI limit (20 a minute per client); other actions don't", async () => {
+    process.env.TRUSTED_IP_HEADER = "x-forwarded-for";
+    try {
+      const call = (action: string, ip: string) => actionRoute.POST(req(`/api/e/units/p01-u1/actions/${action}`, { method: "POST", body: "{}", persona: "marcus", headers: { "x-forwarded-for": ip } }), p({ entity: "units", id: "p01-u1", action }));
+      const statuses: number[] = [];
+      for (let i = 0; i < 21; i++) statuses.push((await call("ai_describe", "203.0.113.7")).status);
+      expect(statuses.slice(0, 20).every((s) => s === 200)).toBe(true);
+      expect(statuses[20]).toBe(429);
+      for (let i = 0; i < 21; i++) expect((await call("plain_note", "203.0.113.8")).status).toBe(200);
+    } finally {
+      delete process.env.TRUSTED_IP_HEADER;
+    }
   });
 });
 
