@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { getPlatform } from "@/lib/platform";
 import type { Db } from "@/lib/platform/types";
@@ -136,7 +137,8 @@ export type ListingDetail = ListingCard & {
   siblings: ListingCard[]; terms: Terms;
 };
 
-export async function getListing(ws: string, id: string): Promise<ListingDetail | null> {
+// cache(): generateMetadata and the page read the same listing in one request; D1 sees it once.
+export const getListing = cache(async (ws: string, id: string): Promise<ListingDetail | null> => {
   const r = await db()
     .prepare(`SELECT ${CARD_COLS}, l.description, u.id AS unit_id, ut.id AS unit_type_id, ut.photos AS ut_photos, p.class, p.street, p.zip, p.year_built, p.stories, p.amenities, p.lat, p.lng
       FROM ${FROM} WHERE ${PUBLIC} AND l.id = ?2`)
@@ -161,7 +163,7 @@ export async function getListing(ws: string, id: string): Promise<ListingDetail 
     lat: r.lat == null ? null : Number(r.lat), lng: r.lng == null ? null : Number(r.lng), siblings: siblings.results.map(card),
   };
   return { ...detail, terms: listingTerms(detail) };
-}
+});
 
 // Leasing terms the schema has no columns for yet (lane-requests.md, "listing terms"). Derived in
 // one place from the property so the page, the Q&A and the application all quote the same figures.
