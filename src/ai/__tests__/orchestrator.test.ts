@@ -194,13 +194,36 @@ describe("sweep and events", () => {
     // 14:00 UTC: collections (0 14 * * *), payables (0 */2 * * *) and maintenance triage (*/15) are due.
     expect(report!.scheduled.map((s) => s.agent).sort()).toEqual(["ap", "collections", "maintenance_triage"]);
     expect(report!.scheduled.every((s) => s.ws === WS)).toBe(true);
-    expect(report!.events).toEqual([{ ws: WS, processed: 1, runs: [expect.any(String)] }]);
+    // The seeded wo.created event plus the two leases whose rent went overdue this week.
+    expect(report!.events).toEqual([{ ws: WS, processed: 3, runs: [expect.any(String), expect.any(String)] }]);
     expect(raw.prepare("SELECT count(*) AS n FROM agent_runs WHERE workspace_id = 'base'").get()!.n).toBe(0);
     expect(raw.prepare("SELECT status FROM agent_runs WHERE id = 'old'").get()).toEqual({ status: "failed" });
     // The base event stays unprocessed in base; the workspace's overlay copy records the claim.
     expect(raw.prepare("SELECT processed_at IS NULL AS open FROM events WHERE workspace_id = 'base' AND id = 'e1'").get()).toEqual({ open: 1 });
     expect(raw.prepare("SELECT processed_at IS NOT NULL AS done, run_id IS NOT NULL AS linked FROM events WHERE workspace_id = ? AND id = 'e1'").get(WS)).toEqual({ done: 1, linked: 1 });
     expect((await drainEvents(db, WS, Date.now())).processed).toBe(0);
+  });
+});
+
+describe("events reach their agents", () => {
+  it("charge.overdue and lease.expiring from the sweep (once), payment.failed and import.completed from the outbox", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const { emitDueEvents, emitEvent } = await import("../orchestrator");
+    raw.exec("UPDATE leases SET end_on = '2027-01-30' WHERE id = 'l2'");
+    await emitDueEvents(db, WS);
+    await emitDueEvents(db, WS);
+    const types = raw.prepare("SELECT type, entity_id FROM events WHERE workspace_id = ? ORDER BY type, entity_id").all(WS).map((e) => `${e.type}:${e.entity_id}`);
+    // l3's charges went overdue months ago, outside the one-week window.
+    expect(types).toEqual(["charge.overdue:l1", "charge.overdue:l2", "lease.expiring:l2"]);
+    const data = { db, ws: WS, actor: DANIEL };
+    await emitEvent(data, { type: "payment.failed", entityType: "leases", entityId: "l1", payload: { payment_id: "pay1" } });
+    await emitEvent(data, { type: "import.completed", payload: { properties: 1, units: 12 } });
+    const drained = await drainEvents(db, WS, Date.now());
+    expect(drained.processed).toBe(5);
+    await Promise.all(drained.runs.map((r) => r.done));
+    const runs = raw.prepare("SELECT agent_key, trigger_kind FROM agent_runs WHERE workspace_id = ? ORDER BY agent_key").all(WS).map((r) => `${r.agent_key}:${r.trigger_kind}`);
+    expect(runs).toEqual(["collections:event", "data_health:event", "renewals:event"]);
   });
 });
 

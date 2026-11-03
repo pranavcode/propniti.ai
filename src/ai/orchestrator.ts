@@ -3,7 +3,8 @@ import type { ActionKey, Actor, AgentKey } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { allAgents, getAgent } from "./agents/registry";
 import { dueBetween } from "./cron";
-import { eff, insert, newId, parseJson, type DataCtx } from "./data";
+import { CHARGE_IS_OPEN } from "@/server/data";
+import { asOf, eff, insert, newId, parseJson, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
 import { createRunContext, errText, type AgentCtx } from "./runtime";
 import type { ApprovalPolicy, AgentDef, Autonomy, EventType, RunContext, TriggerKind } from "./types";
@@ -196,6 +197,7 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
       report.scheduled.push({ ws, agent: cfg.key, runId });
       runs.push(done);
     }
+    await emitDueEvents(db, ws);
     const r = await drainEvents(db, ws, nowMs, 25, opts.deadlineMs);
     if (r.processed) report.events.push({ ws, processed: r.processed, runs: r.runs.map((x) => x.runId) });
     runs.push(...r.runs.map((x) => x.done));
@@ -204,6 +206,29 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
   if (waitUntil) waitUntil(all);
   else await all;
   return report;
+}
+
+// Date-driven events the sweep raises in a workspace, on the demo calendar (meta.as_of):
+//   charge.overdue  per lease, when an open charge passed its 3-day grace in the last week
+//   lease.expiring  per lease, when an active lease's end date came within 90 days in the last week
+// Ids are deterministic (lease + day, lease + end date), so a re-run sweep never raises one twice.
+export async function emitDueEvents(db: Db, ws: string) {
+  const today = await asOf(db);
+  const at = demoNowIso();
+  const ch = eff("charges", ws);
+  const le = eff("leases", ws);
+  await db.batch([
+    db.prepare(
+      `INSERT OR IGNORE INTO events (workspace_id, id, type, entity_type, entity_id, property_id, payload, created_at)
+       SELECT ?, 'ev-overdue-' || c.lease_id || '-' || ?, 'charge.overdue', 'leases', c.lease_id, min(c.property_id), json_object('lease_id', c.lease_id, 'oldest_due_on', min(c.due_on)), ?
+       FROM ${ch.sql} c WHERE ${CHARGE_IS_OPEN("c")} AND c.due_on BETWEEN date(?, '-10 days') AND date(?, '-3 days') GROUP BY c.lease_id LIMIT 200`,
+    ).bind(ws, today, at, ...ch.params, today, today),
+    db.prepare(
+      `INSERT OR IGNORE INTO events (workspace_id, id, type, entity_type, entity_id, property_id, payload, created_at)
+       SELECT ?, 'ev-expiring-' || l.id || '-' || l.end_on, 'lease.expiring', 'leases', l.id, l.property_id, json_object('lease_id', l.id, 'end_on', l.end_on), ?
+       FROM ${le.sql} l WHERE l.status = 'Active' AND l.end_on BETWEEN date(?, '+83 days') AND date(?, '+90 days') LIMIT 200`,
+    ).bind(ws, at, ...le.params, today, today),
+  ]);
 }
 
 // Consumes the workspace's events outbox (overlay over base). Each event is claimed with one

@@ -236,7 +236,7 @@ export function ImportWizard({ options }: { options: ImportOptions }) {
     }
     p.done = total;
     tick();
-    if (p.created.properties + p.created.units + p.created.updated > 0) setDone("import", true);
+    if (p.created.properties + p.created.units + p.created.updated > 0) { setDone("import", true); void apiJson("POST", "/api/ai/events", { type: "import.completed", payload: { properties: p.created.properties, units: p.created.units } }).catch(() => {}); }
   }
 
   return (

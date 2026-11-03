@@ -12,7 +12,7 @@ export default defineAgent({
   ownerRole: "property_manager",
   goal: "Follow up on every resident who owes rent: remind the recently late, offer payment plans at 31–90 days, and refer 90+ day balances to a manager for legal review. Never promise a waiver.",
   tools: ["ledger.delinquency", "ledger.lookup", "records.get", "records.related", "policy.lookup", "messages.draft", "actions.propose"],
-  triggers: { schedule: "0 14 * * *", events: ["payment.failed", "payment.nsf"] },
+  triggers: { schedule: "0 14 * * *", events: ["payment.failed", "charge.overdue"] },
   autonomy: "act_with_approval",
   entities: ["leases", "charges", "payments"],
   actions: ["leases.send_reminder", "leases.offer_payment_plan", "leases.refer_to_legal"],
