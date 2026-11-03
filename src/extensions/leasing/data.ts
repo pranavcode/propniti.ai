@@ -119,7 +119,9 @@ export async function overnight(c: LeasingCtx) {
     all<{ n: number }>(c, `SELECT count(*) AS n FROM ${E(c, "prospects")} WHERE substr(created_at, 1, 10) >= ?${sp.sql}`, [since, ...sp.binds]),
     all<{ n: number }>(c, `SELECT count(*) AS n FROM ${E(c, "applications")} WHERE substr(submitted_at, 1, 10) >= ?${sp.sql}`, [since, ...sp.binds]),
     all<{ n: number }>(c, `SELECT count(*) AS n FROM ${E(c, "showings")} WHERE status = 'Completed' AND substr(scheduled_at, 1, 10) >= ?${sp.sql}`, [since, ...sp.binds]),
-    all<Row>(c, `SELECT id, agent_key, summary, started_at, status FROM ${E(c, "agent_runs")} WHERE agent_key IN ('leasing', 'renewals') ORDER BY started_at DESC LIMIT 3`, []),
+    // Runs carry no property; show only runs that proposed something on the persona's properties.
+    all<Row>(c, `SELECT r.id, r.agent_key, r.summary, r.started_at, r.status FROM ${E(c, "agent_runs")} r WHERE r.agent_key IN ('leasing', 'renewals')
+      AND EXISTS (SELECT 1 FROM ${E(c, "ai_proposals")} p WHERE p.run_id = r.id${scope(c, "p.property_id").sql}) ORDER BY r.started_at DESC LIMIT 3`, scope(c, "p.property_id").binds),
   ]);
   return { leads: Number(leads[0]?.n ?? 0), applications: Number(apps[0]?.n ?? 0), tours: Number(tours[0]?.n ?? 0), runs };
 }
