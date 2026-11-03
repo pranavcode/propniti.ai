@@ -4,7 +4,7 @@
 //   EVAL_ONLY=extract npm run eval                 # only cases whose id contains "extract"
 // Exits 1 when the pass rate is below MIN_PASS (default 0.8). Fallbacks to mock count as not passed.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { gradeAgentRun, gradeExtract, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
+import { gradeAgentRun, gradeExtract, gradeReport, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
 
 const BASE_URL = (process.env.BASE_URL || "https://propniti.ai").replace(/\/$/, "");
 const MIN_PASS = Number(process.env.MIN_PASS ?? 0.8);
@@ -98,6 +98,7 @@ async function main() {
     ["AI filter", "nl-filter", (c) => postJson("/api/ai/nl-filter", { entity: c.entity, text: c.text }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeNlFilter],
     ["Record summaries", "summary", (c) => postJson("/api/ai/summary", { entity: c.entity, id: c.recordId }, "daniel").then((r) => ({ ...r, source: r.summary?.model === "rules" ? "mock" : r.summary?.model })), gradeSummary],
     ["Agent runs", "agents", agentRun, gradeAgentRun],
+    ["Report builder", "report-builder", (c) => postJson("/api/ai/report-spec", { text: c.text }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeReport],
     ["Invoice vs PO", "validate", (c) => {
       const wo = state.workOrders.find((w) => w.id === c.workOrder);
       return postJson("/api/ai/validate", { workOrder: { id: wo.id, title: wo.title, po: wo.po, submission: c.submission } });

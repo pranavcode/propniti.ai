@@ -189,3 +189,19 @@ export function gradeAgentRun(c, res) {
   if (e.proposals) checks.push({ name: "made or kept proposals", ok: props.length > 0 || /already waiting/.test(res.run?.summary ?? ""), detail: res.run?.summary?.slice(0, 80) });
   return { checks };
 }
+
+// /api/ai/report-spec: the report builder's spec (same checks as src/extensions/accounting/reports/eval.test.ts).
+const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7)) + 1;
+export function gradeReport(c, res) {
+  const e = c.expect;
+  const s = res.spec ?? {};
+  const checks = [];
+  for (const k of ["measure", "groupBy", "compareTo", "from", "to", "metros"]) if (e[k] !== undefined) checks.push({ name: `${k} = ${JSON.stringify(e[k])}`, ok: JSON.stringify(s[k]) === JSON.stringify(e[k]), detail: JSON.stringify(s[k]) });
+  if (e.measureIn) checks.push({ name: `measure in ${e.measureIn.join("|")}`, ok: e.measureIn.includes(s.measure), detail: s.measure });
+  if (e.groupByIn) checks.push({ name: `groupBy in ${e.groupByIn.join("|")}`, ok: e.groupByIn.includes(s.groupBy), detail: s.groupBy });
+  if (e.toAtMost) checks.push({ name: `to ≤ ${e.toAtMost}`, ok: s.to <= e.toAtMost, detail: s.to });
+  if (e.months) checks.push({ name: `${e.months} months`, ok: s.from && s.to && monthsBetween(s.from, s.to) === e.months, detail: s.from && s.to ? monthsBetween(s.from, s.to) : "-" });
+  if (e.droppedAny) checks.push({ name: "validator reported a dropped part", ok: (res.dropped ?? []).length > 0 });
+  if (e.registryOnly) checks.push({ name: "a registry measure", ok: typeof s.measure === "string" && s.measure.length > 0, detail: s.measure });
+  return { checks };
+}
