@@ -80,7 +80,7 @@ export default async function BoardPage({ searchParams }: Props) {
         actions={<>{toggle}{can(actor.role, "create", "work_orders") && <Button asChild size="sm"><Link href="/app/maintenance/intake"><ClipboardPlus />New request</Link></Button>}</>}>
         {!calendar && (
           <form className="flex flex-wrap items-center gap-2" action="/app/maintenance/board">
-            <input name="q" defaultValue={sp.q ?? ""} placeholder="Search title or WO number…" aria-label="Search work orders" className={cn(FIELD, "w-60")} />
+            <input autoComplete="off" name="q" defaultValue={sp.q ?? ""} placeholder="Search title or WO number…" aria-label="Search work orders" className={cn(FIELD, "w-60")} />
             <select name="property" defaultValue={sp.property ?? ""} aria-label="Property" className={cn(FIELD, "w-56")}>
               <option value="">All properties</option>{props.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>

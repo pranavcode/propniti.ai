@@ -92,7 +92,7 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
 
       <div className="grid gap-2 sm:grid-cols-[180px_1fr]">
         <label className="grid gap-1 text-[12px] text-muted-foreground">Invoice number
-          <input className={FIELD} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="INV-20931" maxLength={40} />
+          <input autoComplete="off" className={FIELD} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="INV-20931…" maxLength={40} />
         </label>
       </div>
       <table className="w-full text-[13px]">
@@ -100,8 +100,8 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
         <tbody>
           {lines.map((l, i) => (
             <tr key={l.key}>
-              <td className="py-0.5 pr-2"><input aria-label={`Line ${i + 1} description`} className={FIELD} value={l.description} maxLength={200} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} /></td>
-              <td className="py-0.5"><input aria-label={`Line ${i + 1} amount`} inputMode="decimal" className={cn(FIELD, "text-right tabular-nums")} value={l.amount} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, amount: e.target.value.replace(/[^\d.]/g, "") } : x)))} /></td>
+              <td className="py-0.5 pr-2"><input autoComplete="off" aria-label={`Line ${i + 1} description`} className={FIELD} value={l.description} maxLength={200} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} /></td>
+              <td className="py-0.5"><input autoComplete="off" aria-label={`Line ${i + 1} amount`} inputMode="decimal" className={cn(FIELD, "text-right tabular-nums")} value={l.amount} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, amount: e.target.value.replace(/[^\d.]/g, "") } : x)))} /></td>
               <td className="py-0.5 pl-1"><Button size="icon-sm" variant="ghost" aria-label={`Remove line ${i + 1}`} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, j) => j !== i))}><Trash2 className="size-3.5" /></Button></td>
             </tr>
           ))}
@@ -146,7 +146,7 @@ export function ApprovePay({ woId, amount, vendor, validation, policy, blocked }
             <div className="flex flex-col gap-2">
               <ul className="list-disc.5 pl-5 text-[12.5px] text-tone-danger">{validation.issues.map((i) => <li key={i}>{i}</li>)}</ul>
               <label className="grid gap-1 text-[12.5px]">Why pay despite these issues? (recorded in the audit log)
-                <textarea className={cn(FIELD, "h-20 py-1.5")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Vendor called: trip charge agreed by phone with Marcus on Nov 2." />
+                <textarea autoComplete="off" className={cn(FIELD, "h-20 py-1.5")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Trip charge agreed by phone with the property manager…" />
               </label>
             </div>
           )}

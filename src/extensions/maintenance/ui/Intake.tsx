@@ -92,8 +92,8 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
           </label>
         </div>
         <label className="grid gap-1 text-[12.5px] font-medium">What&apos;s wrong?
-          <textarea className={cn(FIELD, "h-36 resize-y py-2 text-[14px] leading-relaxed")} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} required minLength={8} maxLength={2000}
-            placeholder="Water is dripping from the kitchen ceiling under unit 312. It started this morning and there's a brown stain spreading near the light fixture." />
+          <textarea autoComplete="off" className={cn(FIELD, "h-36 resize-y py-2 text-[14px] leading-relaxed")} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} required minLength={8} maxLength={2000}
+            placeholder="Water is dripping from the kitchen ceiling under unit 312. It started this morning and there's a brown stain spreading near the light fixture…" />
         </label>
         <div className="flex flex-wrap gap-1.5">
           <span className="text-[12px] text-muted-foreground">Try:</span>
@@ -118,7 +118,7 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
       <aside className="flex flex-col gap-3">
         <div className="rounded-lg border border-tone-ai/25 bg-tone-ai/[0.04] p-4">
           <h2 className="flex items-center gap-1.5 text-[13px] font-semibold"><Sparkles className="size-4 text-tone-ai" />What happens next</h2>
-          <ol className="mt-2 flex flex-col gap-2">
+          <ol className="mt-2 flex flex-col gap-2" aria-live="polite">
             {STEPS.map((s, i) => {
               const at = STEPS.findIndex((x) => x.key === step);
               const done = busy && i < at;

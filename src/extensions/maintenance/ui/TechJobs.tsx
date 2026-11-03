@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, ChevronDown, Clock, DoorOpen, Loader2, MapPin, Pause, Play, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/app/display";
-import { formatRelative } from "@/lib/format";
+import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { cn } from "@/lib/utils";
 import { FIELD, useAction } from "./client";
 import { AddPhoto } from "./controls";
@@ -44,7 +43,7 @@ export function TechJobCard({ job, photos }: { job: TechJob; photos: { url: stri
         <div className="flex flex-col gap-3 border-t px-3.5 pt-3 pb-3.5">
           {job.description && <p className="text-[13px] leading-relaxed">{job.description}</p>}
           <dl className="grid grid-cols-2 gap-2 text-[12px]">
-            <div><dt className="text-muted-foreground">Due</dt><dd className={cn("font-medium", job.past_sla && "text-tone-danger")}>{job.sla_due_at ? formatRelative(job.sla_due_at) : "No SLA"}</dd></div>
+            <div><dt className="text-muted-foreground">Due</dt><dd className={cn("font-medium", job.past_sla && "text-tone-danger")}>{job.sla_due_at ? <RelativeDate value={job.sla_due_at} mode="due" /> : "No SLA"}</dd></div>
             <div><dt className="text-muted-foreground">Entry</dt><dd className="flex items-center gap-1 font-medium"><DoorOpen className="size-3.5" />{job.permission_to_enter ? "OK to enter" : "Call first"}</dd></div>
             <div><dt className="text-muted-foreground">Time logged</dt><dd className="font-medium tabular-nums">{job.minutes ? hm(job.minutes) : "None yet"}</dd></div>
             <div><dt className="text-muted-foreground">Photos</dt><dd className="font-medium">{job.photos.length}{flagged ? <span className="text-tone-warning"> · {flagged} flagged</span> : ""}</dd></div>
@@ -58,7 +57,7 @@ export function TechJobCard({ job, photos }: { job: TechJob; photos: { url: stri
             </div>
           )}
           <label className="grid gap-1 text-[12px] text-muted-foreground">Note with the update (optional)
-            <input className={cn(FIELD, "h-10 text-[14px]")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="What you did, or what is blocking the job" />
+            <input autoComplete="off" className={cn(FIELD, "h-10 text-[14px]")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Replaced the fill valve, tested 3 flushes…" />
           </label>
           <div className="grid grid-cols-2 gap-2">
             {job.status !== "In progress"

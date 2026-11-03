@@ -105,10 +105,10 @@ export function AddCost({ turnoverId }: { turnoverId: string }) {
       if (await run("turnovers", turnoverId, "turnovers.add_cost", { item: item.trim(), amount: value })) { setItem(""); setAmount(""); }
     }}>
       <label className="grid min-w-48 flex-1 gap-1 text-[12px] text-muted-foreground">What it was for
-        <input className={FIELD} value={item} onChange={(e) => setItem(e.target.value)} placeholder="Blinds replaced in bedroom…" maxLength={120} required minLength={2} />
+        <input autoComplete="off" className={FIELD} value={item} onChange={(e) => setItem(e.target.value)} placeholder="Blinds replaced in bedroom…" maxLength={120} required minLength={2} />
       </label>
       <label className="grid w-32 gap-1 text-[12px] text-muted-foreground">Amount ($)
-        <input className={cn(FIELD, "tabular-nums")} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0.00" required />
+        <input autoComplete="off" className={cn(FIELD, "tabular-nums")} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0.00" required />
       </label>
       <Button type="submit" size="sm" disabled={!!busy || !(value > 0) || item.trim().length < 2}>{busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}Add cost</Button>
     </form>
@@ -133,7 +133,7 @@ export function KeyCheckout({ keyId, people }: { keyId: string; people: { kind: 
         </select>
       </label>
       <label className="grid w-40 gap-1 text-[12px] text-muted-foreground">For work order (optional)
-        <input className={FIELD} value={wo} onChange={(e) => setWo(e.target.value)} placeholder="WO-10482" maxLength={40} />
+        <input autoComplete="off" className={FIELD} value={wo} onChange={(e) => setWo(e.target.value)} placeholder="WO-10482…" maxLength={40} />
       </label>
       <Button type="submit" size="sm" disabled={!p || !!busy}>{busy && <Loader2 className="size-3.5 animate-spin" />}Check out</Button>
     </form>

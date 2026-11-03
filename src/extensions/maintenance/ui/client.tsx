@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 // Client glue for the maintenance module: runs a named action through the generic action route
 // and reports the result. One request at a time per control, so a double click sends once.
 
-export const FIELD = "h-8 w-full rounded-md border bg-background px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60";
+export const FIELD = "h-8 w-full rounded-md border bg-background text-foreground px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60";
 
 export type ActionOut = { ok?: boolean; message?: string; href?: string; error?: string };
 

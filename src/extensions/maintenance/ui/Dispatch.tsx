@@ -8,8 +8,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AISuggestion } from "@/components/app/ai";
-import { StatusBadge } from "@/components/app/display";
-import { formatDate, formatMoney, formatPct } from "@/lib/format";
+import { RelativeDate, StatusBadge } from "@/components/app/display";
+import { formatMoney, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { policyCheck, type Policy } from "../rules";
 import { FIELD, useAction } from "./client";
@@ -96,7 +96,7 @@ export function DispatchPanel({ wo, trade, suggestion, vendors, techs, policy }:
             </select>
           </label>
           <label className="grid gap-1 text-[12px] text-muted-foreground">Estimate ($)
-            <input className={cn(FIELD, "tabular-nums")} inputMode="decimal" value={estimate} onChange={(e) => setEstimate(e.target.value.replace(/[^\d.]/g, ""))} disabled={!!busy} />
+            <input autoComplete="off" className={cn(FIELD, "tabular-nums")} inputMode="decimal" value={estimate} onChange={(e) => setEstimate(e.target.value.replace(/[^\d.]/g, ""))} disabled={!!busy} />
           </label>
         </div>
 
@@ -128,8 +128,8 @@ export function DispatchPanel({ wo, trade, suggestion, vendors, techs, policy }:
                       <td className="px-2 py-2 text-right tabular-nums">{v.median_cents != null ? formatMoney(v.median_cents / 100, "whole") : "—"}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{v.open_jobs}</td>
                       <td className="px-3 py-2">{v.coi_ok
-                        ? <span className="inline-flex items-center gap-1 text-[12px] text-tone-success"><ShieldCheck className="size-3.5" />To {formatDate(v.coi_expires!)}</span>
-                        : <span className="inline-flex items-center gap-1 text-[12px] text-tone-danger"><ShieldAlert className="size-3.5" />{v.status !== "Active" ? v.status : v.coi_expires ? `Expired ${formatDate(v.coi_expires)}` : "No COI"}</span>}</td>
+                        ? <span className="inline-flex items-center gap-1 text-[12px] text-tone-success"><ShieldCheck className="size-3.5" />To <RelativeDate value={v.coi_expires} mode="date" /></span>
+                        : <span className="inline-flex items-center gap-1 text-[12px] text-tone-danger"><ShieldAlert className="size-3.5" />{v.status !== "Active" ? v.status : v.coi_expires ? <>Expired <RelativeDate value={v.coi_expires} mode="date" /></> : "No COI"}</span>}</td>
                     </tr>
                   ))}
                 </tbody>
