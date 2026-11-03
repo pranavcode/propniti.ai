@@ -68,7 +68,7 @@ Coverage of the business logic and API routes (`npm run test:coverage`):
 | Store actions on the server (`server/actions.ts`) | 72% | 52% |
 | AI provider calls (`llm.ts`) | 72% | 61% |
 | AI routes (`app/api/ai/*`) | 59% | 39% |
-| **All logic and API code** | **81%** | **75%** |
+| **All logic and API code** | **83%** | **75%** |
 
 Not covered by unit tests:
 - The React screens and the browser store (`store.tsx`). These were checked end to end in a browser with Playwright before each deploy; those scripts are not in this repo yet.
