@@ -1,6 +1,7 @@
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
-import { asOf, eff, insert, newId, type DataCtx } from "./data";
+import { asOf, eff, get, insert, isTable, newId, type DataCtx } from "./data";
+import { snapshotOf } from "./effects";
 import { addUsage, currentModel, fromWire, RULES, toWire, ZERO, type ChatModel, type ModelInfo, type Turn, type Usage } from "./providers";
 import { getTool } from "./tools/registry";
 import { getAction } from "@/extensions/actions";
@@ -145,6 +146,9 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   const assignee = ownerNeeded ? "owner" : policy?.approverRole ?? p.assignee ?? null;
 
   const id = newId("prop");
+  // What the agent saw, so approval can refuse a proposal whose record has since changed.
+  const target = isTable(p.entity) ? await get(ctx.data, p.entity, p.entityId) : null;
+  const payload = target ? { ...(p.payload as Record<string, unknown>), _snapshot: snapshotOf(target) } : p.payload;
   const stepId = await ctx.step({
     kind: "proposal",
     output: { proposal_id: id, title: p.title, action: p.action, confidence: p.confidence, risk, queue_state: queueState, why: p.why },
@@ -152,7 +156,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   });
   const row = {
     id, agent: ctx.agent, entity_type: p.entity, entity_id: p.entityId, property_id: p.propertyId ?? null, action: p.action, title: p.title,
-    payload: JSON.stringify(p.payload ?? {}), why: JSON.stringify(p.why), evidence: JSON.stringify(p.evidence ?? []),
+    payload: JSON.stringify(payload ?? {}), why: JSON.stringify(p.why), evidence: JSON.stringify(p.evidence ?? []),
     confidence: Math.round(Math.min(1, Math.max(0, p.confidence)) * 100) / 100, risk, amount_cents: p.amountCents ?? null,
     queue_state: queueState, assignee_role: assignee, model: ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: new Date().toISOString(),
   };

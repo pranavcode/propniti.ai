@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { getAction } from "@/extensions/actions";
 import { isAiAction } from "./action-keys";
-import { can } from "@/entities";
+import { can, getEntity } from "@/entities";
+import { getRow } from "@/server/query";
 import type { ActionKey, AgentKey, Row } from "@/entities/types";
 import { eff, get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
 
@@ -145,12 +146,40 @@ async function deriveEffects(data: DataCtx, p: Row, payload: Record<string, unkn
   return [];
 }
 
+// The fields whose change makes a proposal stale: status, money, dates, assignment and the contact
+// details fixes touch. Recorded with the proposal, compared on approval.
+const KEY_FIELDS = ["status", "stage", "amount_cents", "rent_cents", "estimate_cents", "vendor_id", "priority", "category", "start_on", "end_on", "expires_on", "due_on", "decided_at", "bank_last4", "bank_changed_at", "street", "state", "zip", "email", "phone", "lease_id", "gl_account_id"];
+
+export function snapshotOf(row: Row): string {
+  return JSON.stringify(KEY_FIELDS.filter((k) => k in row).map((k) => [k, row[k] ?? null]));
+}
+
+// The record as the approver sees it now: it must still exist in their scope, the action's own
+// precondition must still hold, and its key fields must match what the agent saw.
+async function stillValid(data: DataCtx, proposal: Row, payload: Record<string, unknown>): Promise<ExecResult | null> {
+  const table = String(proposal.entity_type);
+  if (!isTable(table)) return null;
+  const row = await get(data, table, String(proposal.entity_id));
+  if (!row) return { ok: false, status: 409, message: "This record no longer exists or is outside your scope" };
+  if (typeof payload._snapshot === "string" && payload._snapshot !== snapshotOf(row)) return { ok: false, status: 409, message: "Record changed since this was proposed; re-run the agent" };
+  const action = String(proposal.action);
+  const registered = isAiAction(action) ? undefined : getAction(action);
+  if (registered?.when) {
+    const def = getEntity(table);
+    const current = def ? await getRow({ db: data.db, ws: data.ws === "base" ? null : data.ws, actor: data.actor }, table, String(proposal.entity_id)).catch(() => null) : row;
+    if (!current || !registered.when(current)) return { ok: false, status: 409, message: `${registered.label} isn't available for this record any more; re-run the agent` };
+  }
+  return null;
+}
+
 // Runs an approved proposal once. The decision row is inserted first with a guarded insert, so a
 // double click or two approvers can't run it twice; a failed run removes the decision again.
 export async function executeProposal(data: DataCtx, proposal: Row, by: By, edited?: unknown, note = ""): Promise<ExecResult> {
   const { db, ws } = data;
   const now = new Date().toISOString();
   const decisionId = newId("dec");
+  const stale = await stillValid(data, proposal, parseJson<Record<string, unknown>>(proposal.payload, {}));
+  if (stale) return stale;
   const d = eff("ai_decisions", ws);
   const claimed = await db
     .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)`)
@@ -165,7 +194,10 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
     const registered = isAiAction(action) ? undefined : getAction(action);
     if (registered) {
       if (!can(data.actor.role, action, registered.entity)) throw new Error(`${data.actor.role.replace(/_/g, " ")} can't ${registered.label.toLowerCase()}`);
-      const row = isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
+      // Registered handlers get the record as the entity API presents it (labels, derived status).
+      const row = getEntity(String(proposal.entity_type))
+        ? await getRow({ db, ws: ws === "base" ? null : ws, actor: data.actor }, String(proposal.entity_type), String(proposal.entity_id))
+        : isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
       const input = registered.input ? registered.input.parse((payload as { input?: unknown }).input ?? payload) : undefined;
       const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);
       result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: r.error };

@@ -197,6 +197,36 @@ describe("sweep and events", () => {
   });
 });
 
+describe("approval re-checks the record", () => {
+  it("refuses a proposal for an application that was decided meanwhile", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: DANIEL, agent: "leasing", trigger: { kind: "event", input: { application_id: "app-new" } } })).done;
+    const p = proposals(raw, r.runId).find((x) => x.entity_id === "app-new")!;
+    raw.prepare("UPDATE applications SET stage = 'Approved', decided_at = '2026-11-04T12:00:00Z' WHERE workspace_id = ? AND id = 'app-new'").run(WS);
+    const res = await executeProposal({ db, ws: WS, actor: DANIEL }, p, { id: "rachel", name: "Rachel Moore" });
+    expect(res).toMatchObject({ ok: false, status: 409 });
+    expect(raw.prepare("SELECT count(*) AS n FROM ai_decisions WHERE proposal_id = ?").get(p.id)!.n).toBe(0);
+  });
+
+  it("refuses a bill approval whose amount changed since it was proposed", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: DANIEL, agent: "ap", trigger: { kind: "manual" } })).done;
+    const p = proposals(raw, r.runId).find((x) => x.action === "bills.approve")!;
+    raw.exec(`INSERT INTO bills (workspace_id, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents, status) VALUES ('${WS}', 'b2', 'p01', 'oe01', 'v01', 'LSP-1201', '2026-10-30', '2026-11-20', 99000, 'Pending approval')`);
+    expect(await executeProposal({ db, ws: WS, actor: DANIEL }, p, { id: "grace", name: "Grace Kim" })).toEqual({ ok: false, status: 409, message: "Record changed since this was proposed; re-run the agent" });
+  });
+
+  it("refuses a record outside the approver's scope", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "manual" } })).done;
+    const p = proposals(raw, r.runId).find((x) => x.entity_id === "l3")!;
+    expect(await executeProposal({ db, ws: WS, actor: MARCUS }, p, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: false, status: 409 });
+  });
+});
+
 describe("every agent", () => {
   it("proposes only registered actions", async () => {
     setModelForTests(null);
