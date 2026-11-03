@@ -361,12 +361,14 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
   const wo = await db
     .prepare(
       `SELECT w.*, p.owner_entity_id, v.company,
-         coalesce((SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC LIMIT 1), w.cost_cents) AS amount_cents
+         (SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS latest_submission,
+         (SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS itemised_submission,
+         (SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS invoice_cents
        FROM ${effective("work_orders")} AS w JOIN ${effective("properties")} AS p ON p.id = w.property_id LEFT JOIN ${effective("vendors")} AS v ON v.id = w.vendor_id
        WHERE w.id = ?2`,
     )
     .bind(ws, woId)
-    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; amount_cents: number | null; property_id: string; owner_entity_id: string; title: string }>();
+    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; cost_cents: number | null; latest_submission: string | null; itemised_submission: string | null; invoice_cents: number | null; property_id: string; owner_entity_id: string; title: string }>();
   if (!wo) return { status: 404, error: "Work order not found" };
   // Maintenance approvers sign off the work, payables approvers pay it, owners approve over-limit
   // repairs from their portal.
@@ -380,16 +382,26 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
     await auditStmt(db, ws, at, actor, { action: "Job completed", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId} completed in-house` }).run();
     return { status: 200, message: `${woId} completed.` };
   }
-  // Pay only an invoiced amount (the vendor's submission, or a cost staff recorded), never the
-  // estimate, which the vendor can edit.
-  if (wo.amount_cents == null) return { status: 409, error: `${woId} has no invoice yet. Ask ${wo.company} to submit one.` };
-  const amount = wo.amount_cents;
+  // Pay one canonical invoice: the latest itemised submission (or, with none submitted, a cost staff
+  // recorded). Never the estimate, which the vendor can edit. A newer submission without line items
+  // makes it ambiguous which invoice is meant, so that is refused.
+  if (wo.latest_submission && wo.latest_submission !== wo.itemised_submission)
+    return { status: 409, error: `${woId} has a newer invoice without line items. Ask ${wo.company} to resubmit it itemised.` };
+  const amount = wo.itemised_submission ? wo.invoice_cents : wo.cost_cents;
+  if (amount == null) return { status: 409, error: `${woId} has no invoice yet. Ask ${wo.company} to submit one.` };
   const policy = await db
     .prepare(`SELECT owner_approval_over_cents FROM ${effective("approval_policies")} AS a WHERE a.category = 'Maintenance spend' AND (a.owner_entity_id = ?2 OR a.owner_entity_id IS NULL) ORDER BY a.owner_entity_id IS NULL LIMIT 1`)
     .bind(ws, wo.owner_entity_id)
     .first<{ owner_approval_over_cents: number | null }>();
-  if (policy?.owner_approval_over_cents != null && amount > policy.owner_approval_over_cents && actor.role !== "owner")
-    return { status: 409, error: `${dollars(amount)} is over the owner's approval limit of ${dollars(policy.owner_approval_over_cents)}. Send it to the owner to approve.` };
+  // Over the owner's limit, staff may pay only after the owner approved at least this amount in
+  // their portal (a wo_events Approval by the owner). The insert below re-checks it in SQL.
+  const ownerLimit = policy?.owner_approval_over_cents ?? null;
+  const OWNER_OK = `(?10 IS NULL OR ?7 <= ?10 OR ?11 = 'owner' OR EXISTS (SELECT 1 FROM ${effective("wo_events")} AS oa WHERE oa.work_order_id = ?3 AND oa.kind = 'Approval' AND oa.actor_kind = 'owner'
+    AND json_extract(oa.detail, '$.decision') = 'Approved' AND json_extract(oa.detail, '$.amount_cents') >= ?7))`;
+  if (ownerLimit != null && amount > ownerLimit && actor.role !== "owner") {
+    const approved = await db.prepare(`SELECT 1 FROM ${effective("wo_events")} AS oa WHERE oa.work_order_id = ?2 AND oa.kind = 'Approval' AND oa.actor_kind = 'owner' AND json_extract(oa.detail, '$.decision') = 'Approved' AND json_extract(oa.detail, '$.amount_cents') >= ?3`).bind(ws, woId, amount).first();
+    if (!approved) return { status: 409, error: `${dollars(amount)} is over the owner's approval limit of ${dollars(ownerLimit)}. Send it to the owner to approve.` };
+  }
   const id = uid("tr");
   const trust = `ba-${wo.owner_entity_id}-trust`;
   const [insert] = await db.batch([
@@ -399,10 +411,10 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
          SELECT ?1, ?2, 'vendor:' || w.id, 'Vendor payout', ?4, ?5, 'trust', ?4, 'Operating trust', 'vendor', w.vendor_id, ?6, ?7, w.property_id, w.id, 'Pending', ?8, ?9, NULL
          FROM ${effective("work_orders")} AS w
          WHERE w.id = ?3 AND w.status = 'Submitted' AND ?7 > 0 AND ?7 <= ${AVAILABLE_SQL("?4")}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")}
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")} AND ${OWNER_OK}
          ON CONFLICT DO NOTHING`,
       )
-      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS),
+      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS, ownerLimit, actor.role),
     db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Completed'", cost_cents: "?4", completed_at: "?5" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, woId, id, amount, at),
     db
       .prepare(`INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) SELECT ?1, ?2, ?3, ?4, ?5, 'staff', ?6, 'Approval', 'Completed', ?7 WHERE EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?8)`)

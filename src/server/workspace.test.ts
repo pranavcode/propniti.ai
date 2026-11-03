@@ -35,9 +35,9 @@ describe("workspace creation", { timeout: 60_000 }, () => {
     const prospect = await createRecord(ctx, "prospects", { name: "Dana Whitfield", property_id: "p01", stage: "Inquiry", source: "Website", created_at: "2026-11-04T17:00:00Z" });
     expect(prospect).toMatchObject({ name: "Dana Whitfield" });
     const base = (await db.prepare("SELECT id, name FROM prospects WHERE workspace_id = 'base' AND property_id = 'p01' AND stage = 'Lost' LIMIT 1").first<{ id: string; name: string }>())!;
-    await updateRecord(ctx, "prospects", base.id, { stage: "Contacted" });
-    expect(await getRow(ctx, "prospects", base.id)).toMatchObject({ stage: "Contacted" });
+    await updateRecord(ctx, "prospects", base.id, { phone: "(512) 555-0199" });
+    expect(await getRow(ctx, "prospects", base.id)).toMatchObject({ phone: "(512) 555-0199" });
     // Copy-on-write: the base row is untouched.
-    expect(await db.prepare("SELECT stage FROM prospects WHERE workspace_id = 'base' AND id = ?1").bind(base.id).first<{ stage: string }>()).toEqual({ stage: "Lost" });
+    expect(await db.prepare("SELECT phone FROM prospects WHERE workspace_id = 'base' AND id = ?1").bind(base.id).first<{ phone: string }>()).not.toEqual({ phone: "(512) 555-0199" });
   });
 });

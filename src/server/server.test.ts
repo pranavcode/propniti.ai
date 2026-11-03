@@ -296,6 +296,26 @@ describe("money", { timeout: 60_000 }, () => {
     expect((await ownerStatement(c, oe)).net_cents).toBe(0);
   });
 
+  it("work orders over the owner's limit pay only after the owner approved; ambiguous invoices are refused", async () => {
+    const c = await ctx(grace);
+    const wo = (id: string) => db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, estimate_cents, opened_at) VALUES (?1, ?2, 'p02', 'Water heater', 'Plumbing', 'Urgent', 'Submitted', 'v01', 300000, '2026-11-02T10:00:00Z')").bind(c.ws, id).run();
+    const sub = (wid: string, n: string, at: string, total: number, lines: boolean) => db.prepare("INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) VALUES (?1, ?2, ?3, 'p02', ?4, 'vendor', 'v01', 'Submission', 'Submitted', ?5)").bind(c.ws, n, wid, at, JSON.stringify({ total_cents: total, ...(lines ? { lines: [{ description: "Labor", amount_cents: total - 1000 }, { description: "Parts", amount_cents: 1000 }] } : {}) })).run();
+    await wo("WO-T2");
+    await sub("WO-T2", "s1", "2026-11-03T10:00:00Z", 300_000, true);
+    // Bluebonnet (oe01): the owner approves maintenance spend over $2,500.
+    expect(await approveAndPayWorkOrder(c, "WO-T2")).toMatchObject({ status: 409, error: expect.stringContaining("owner's approval limit") });
+    await db.prepare("INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) VALUES (?1, 'oa1', 'WO-T2', 'p02', '2026-11-03T12:00:00Z', 'owner', 'ow01', 'Approval', NULL, ?2)").bind(c.ws, JSON.stringify({ decision: "Approved", amount_cents: 250_000 })).run();
+    expect(await approveAndPayWorkOrder(c, "WO-T2")).toMatchObject({ status: 409 }); // approved less than the invoice
+    await db.prepare("INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) VALUES (?1, 'oa2', 'WO-T2', 'p02', '2026-11-03T13:00:00Z', 'owner', 'ow01', 'Approval', NULL, ?2)").bind(c.ws, JSON.stringify({ decision: "Approved", amount_cents: 300_000 })).run();
+    expect(await approveAndPayWorkOrder(c, "WO-T2")).toMatchObject({ status: 200 });
+    expect(await one("SELECT amount_cents FROM transfers WHERE workspace_id = ?1 AND key = 'vendor:WO-T2'", c.ws)).toEqual({ amount_cents: 300_000 });
+    // A newer submission without line items makes the invoice ambiguous.
+    await wo("WO-T3");
+    await sub("WO-T3", "s2", "2026-11-03T10:00:00Z", 14_800, true);
+    await sub("WO-T3", "s3", "2026-11-03T15:00:00Z", 21_700, false);
+    expect(await approveAndPayWorkOrder(c, "WO-T3")).toMatchObject({ status: 409, error: expect.stringContaining("without line items") });
+  });
+
   it("application fee: the applicant pays once into the property's trust; other applicants can't", async () => {
     const c = await ctx();
     const priyanka: Actor = { personaId: "applicant", name: "Priyanka Rao", role: "applicant", scope: { kind: "self", label: "Own application" }, propertyIds: [] };
