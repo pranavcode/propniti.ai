@@ -194,6 +194,10 @@ describe("writes", () => {
     expect(units.safeParse({ number: "101", property_id: "p01", market_rent: "abc" }).success).toBe(false);
     expect(units.safeParse({ number: "101", property_id: "p01", market_rent: 1725.5 }).success).toBe(true);
     expect(units.safeParse({ property_id: "p01" }).success).toBe(false); // number is required
+    const vendors = allEntities().find((d) => d.key === "vendors")!;
+    expect(writeSchema(vendors, "property_manager", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(false); // accountant only
+    expect(writeSchema(vendors, "accountant", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(true);
+    expect(writeSchema(allEntities().find((d) => d.key === "units")!, "property_manager", "update").safeParse({ property_id: "p02" }).success).toBe(false); // set once
   });
 
   it("copies a base row into the overlay on update and never touches base", async () => {

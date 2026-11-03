@@ -1,7 +1,7 @@
 import "server-only";
 import { getEntity, type EntityDef, type FieldDef, type Role } from "@/entities";
 import type { ColumnKind, DataColumn, Facet, StatusTabs } from "@/components/app/data-table/types";
-import type { FacetOptions } from "@/server/query";
+import { editable, type FacetOptions } from "@/server/query";
 
 // EntityDef → the plain data the client components need (DataTable columns and facets, form
 // fields, fact labels). Defs hold functions and icons, so they never cross to the client.
@@ -87,8 +87,7 @@ export type FormField = {
 export function formFields(def: EntityDef, role: Role, mode: "create" | "update"): FormField[] {
   const out: FormField[] = [];
   for (const [key, f] of visible(def, role)) {
-    if (f.sql || f.type === "image" || f.type === "json") continue;
-    if (mode === "update" && f.editable && !f.editable.includes(role)) continue;
+    if (f.type === "json" || !editable(role, key, f, mode)) continue;
     const ref = f.ref ? getEntity(f.ref) : undefined;
     out.push({
       key,

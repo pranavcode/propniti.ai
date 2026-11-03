@@ -394,11 +394,12 @@ export async function exportCsv(ctx: QueryCtx, entity: string, q: ListQuery): Pr
 
 export type WriteCtx = QueryCtx & { ws: string; nowMs: number };
 
-// FieldDef.editable narrows who may change a field later (PATCH); on create every stored field
-// the role can see may be set.
-function editable(role: Role, key: string, f: FieldDef, mode: "create" | "update") {
+// FieldDef.editable lists the roles that may set a field (create and PATCH). An empty list means
+// set once at create (e.g. a unit's property) and never changed through the generic API.
+export function editable(role: Role, key: string, f: FieldDef, mode: "create" | "update") {
   if (key === "id" || f.sql || f.type === "image" || f.hiddenFor?.includes(role)) return false;
-  return mode === "create" || !f.editable || f.editable.includes(role);
+  if (!f.editable) return true;
+  return f.editable.length ? f.editable.includes(role) : mode === "create";
 }
 
 function fieldZod(f: FieldDef): ZodType {
