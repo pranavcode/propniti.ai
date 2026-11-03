@@ -131,7 +131,7 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
               );
             })}
           </ol>
-          <p className="mt-3 text-[12px] text-muted-foreground">You review the suggestion and choose the vendor before anything is dispatched. Spend over the owner&apos;s limit waits for the owner.</p>
+          <p className="mt-3 text-[12px] text-muted-foreground">Under your auto-approve limit the agent assigns the vendor and you can change it on the next screen. Above the limit, nothing is dispatched until you choose. Spend over the owner&apos;s limit waits for the owner.</p>
         </div>
         <Button type="submit" size="lg" disabled={busy || text.trim().length < 8 || !property}>{busy ? <><Loader2 className="size-4 animate-spin" />Working…</> : <><Sparkles className="size-4" />Save and triage</>}</Button>
       </aside>

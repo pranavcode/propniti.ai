@@ -389,7 +389,7 @@ registerEntity({
   permissions: { read: MAINT_READ, create: SUP, update: SUP, delete: [...LEADERS] },
   writes: "generic",
   actions: ["turnovers.toggle_step", "turnovers.add_cost", "turnovers.mark_ready"],
-  help: { summary: "Make-ready after a move-out: the step checklist, the turn vendor, cost against budget and days the unit sits off the market.", article: "make-ready-turnovers" },
+  help: { summary: "Make-ready after a move-out: the step checklist, the turn vendor, cost against the property's average turn and days the unit sits off the market.", article: "make-ready-turnovers" },
 });
 
 registerEntity({

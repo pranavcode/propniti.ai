@@ -451,7 +451,7 @@ registerAction({
       }),
       await insertStmt(c.db, c.ws, "events", { id: newId("evt"), type: "wo.created", entity_type: "work_orders", entity_id: woId, property_id: r.property_id, payload: { source: "Inspection", inspection_id: r.id }, created_at: at }),
     ]);
-    return ok(`${woId} raised for ${item.item}. The triage agent picks it up next.`, `/app/maintenance/intake/${woId}`);
+    return ok(`${woId} raised for ${item.item}. Open it to triage and dispatch.`, `/app/maintenance/intake/${woId}`);
   },
 });
 
