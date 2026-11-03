@@ -37,7 +37,8 @@ export function crumbsFor(pathname: string, nav: ShellNavSection[], title: strin
   const rest = pathname.slice(href.length).split("/").filter(Boolean);
   out.push({ label: item.label, href: rest.length ? item.href : undefined });
   rest.forEach((seg, i) => out.push({ label: i === rest.length - 1 && title ? title : humanize(decodeURIComponent(seg)) }));
-  return out;
+  // A section and its item can share a name ("Settings › Settings"); keep the later, linked one.
+  return out.filter((c, i) => c.label !== out[i + 1]?.label);
 }
 
 export function TopBar({ onMenu }: { onMenu: () => void }) {
