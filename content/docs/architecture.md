@@ -226,7 +226,7 @@ Every AI request passes the guards before the LLM module chooses a provider. The
 | `importer.ts` | Strict CSV/TSV parsing (bad quoting and wrong-width rows rejected), header matching, row checks, existing-unit check at preview and again at import, commercial typing, merge into the portfolio |
 | `mockAi.ts` | Rule-based invoice checks, computed facts for the assistant, mock answers |
 
-87 unit tests in 11 files cover these modules, the AI provider logic and the API routes. The storage tests run the real migrations on SQLite, plus one test on a local D1 database (Miniflare). They include two identical requests at once (a double-click) creating one payment. Coverage of the logic and API code is 81% of lines and 75% of branches (table in the README).
+110 unit tests in 13 files cover these modules, the AI provider logic and the API routes. The storage tests run the real migrations on SQLite, plus one test on a local D1 database (Miniflare). They include two identical requests at once (a double-click) creating one payment. Coverage of the logic and API code is 83% of lines and 75% of branches (table in the README).
 
 **What is real and what is simulated**
 
@@ -302,7 +302,7 @@ The prototype holds no accounts or real money. It keeps each visitor's demo data
 | Secrets | Keys in code | Nothing committed; Cloudflare secrets; the placeholder `unset` counts as no key |
 | Browser | Clickjacking, sniffing, downgrade | CSP (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`), HSTS, `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy |
 | Forms | Credentials in URLs | POST forms that stay disabled until the page is interactive |
-| Supply chain | Vulnerable or drifting dependencies | Locked installs (`npm ci`); CI runs lint, type check, 87 unit tests and both builds on every push |
+| Supply chain | Vulnerable or drifting dependencies | Locked installs (`npm ci`); CI runs lint, type check, 110 unit tests and both builds on every push |
 
 **Known gaps before production**
 
