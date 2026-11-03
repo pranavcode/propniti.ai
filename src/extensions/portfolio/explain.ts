@@ -55,13 +55,13 @@ function driverText(d: NoiExplanation["drivers"][number]) {
 // SLA comes from work orders (maintenance.sla), not metrics_monthly, so the explanation matches
 // the number on every home. Same row shape as metrics.monthly: one row per property per month.
 async function slaRows(ctx: AgentCtx, propertyIds?: string[]): Promise<{ rows: Row[] }> {
-  const m = getMetric("portfolio.sla_by_property")!;
+  const m = getMetric("maintenance.sla_by_property")!;
   const mctx = { db: ctx.db, ws: ctx.ws === "base" ? null : ctx.ws, actor: ctx.actor, propertyIds: ctx.actor.propertyIds, asOf: ctx.today };
   const closed = addMonths(ctx.today.slice(0, 7), -1);
   const months = [addMonths(closed, -1), closed];
   const rows = (await Promise.all(months.map(async (month) => (await m.run(mctx, { month })).points.map((p): Row => ({ ...p, month, property: p.name })))))
     .flat().filter((r) => !propertyIds?.length || propertyIds.includes(String(r.property_id)));
-  await ctx.step({ kind: "message", output: { looked_up: "maintenance.sla per property", months, properties: new Set(rows.map((r) => r.property_id)).size }, ok: true });
+  await ctx.step({ kind: "message", output: { looked_up: "maintenance.sla_by_property", months, properties: new Set(rows.map((r) => r.property_id)).size }, ok: true });
   return { rows };
 }
 

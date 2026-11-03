@@ -36,7 +36,7 @@ export async function homeMetrics(q: QueryCtx) {
     safe(metrics(q, "portfolio.by_property", { month: addMonths(LAST_CLOSED, -1) })),
     safe(metrics(q, "receivables.aging", { month: LAST_CLOSED })),
     safe(metrics(q, "portfolio.aging_by_property", { month: LAST_CLOSED })),
-    safe(metrics(q, "portfolio.sla_by_property", { month: LAST_CLOSED })),
+    safe(metrics(q, "maintenance.sla_by_property", { month: LAST_CLOSED })),
     safe(metrics(q, "portfolio.income_expense", closed)),
     safe(metrics(q, "portfolio.by_region", { month: LAST_CLOSED })),
   ]);
@@ -66,7 +66,7 @@ export function compareRows(m: HomeMetrics): CompareRow[] {
       id, name: String(p.name), metro: String(p.metro), photo: `/img/props/${id}-400.webp`, units: Number(p.units ?? 0),
       occupancy: num(p.occupancy), economic: num(p.economic_occupancy), noi, budget, vsBudget: noi != null && budget ? (noi - budget) / Math.abs(budget) : null,
       noiPrev: num(prev.get(id)?.noi), collections: num(p.collections_rate), delinquent: num(p.delinquent),
-      woDue: Number(s?.due ?? 0), breached: Number(s?.missed ?? 0), sla: num(s?.sla),
+      woDue: Number(s?.due ?? 0), breached: Number(s?.missed ?? 0), sla: num(s?.value),
     };
   });
 }

@@ -134,29 +134,45 @@ monthly("maintenance.wo_open", "Open work orders", (m) => m.wo_open, { opened: (
 // SLA met rate: work orders completed by their SLA due time ÷ work orders due in the month (the
 // current month counts only what is due by the demo's today). Open jobs past due count as missed,
 // so the rate is always between 0 and 1. Live from work_orders, scoped like every list.
+// One query serves both the scope total and the per-property split, so they can't drift.
+async function slaCounts(ctx: MetricCtx, params: MetricParams, byProperty: boolean) {
+  const to = params.month ?? ctx.asOf;
+  const from = addMonths(to, -Math.max(1, Math.min(24, params.months ?? 12)) + 1);
+  const s = scopeSql(ctx, params, "w.property_id");
+  const asOf = "coalesce((SELECT value FROM meta WHERE key = 'as_of'), date('now'))";
+  const res = await ctx.db.prepare(
+    `SELECT substr(w.sla_due_at, 1, 7) AS month${byProperty ? ", w.property_id" : ""}, count(*) AS due, coalesce(sum(w.completed_at IS NOT NULL AND w.completed_at <= w.sla_due_at), 0) AS met
+     FROM ${effective("work_orders", ctx.ws)} AS w
+     WHERE w.sla_due_at IS NOT NULL AND w.status <> 'Cancelled' AND substr(w.sla_due_at, 1, 10) <= ${asOf} AND substr(w.sla_due_at, 1, 7) BETWEEN ? AND ?${s.sql}
+     GROUP BY 1${byProperty ? ", 2" : ""}`,
+  ).bind(from, to, ...s.binds).all<{ month: string; property_id?: string; due: number; met: number }>();
+  return { from, to, rows: res.results.map((r) => ({ month: String(r.month), property_id: r.property_id, due: Number(r.due), met: Number(r.met) })) };
+}
+const slaPoint = (due: number, met: number) => ({ value: due ? met / due : null, due, met, missed: due - met });
+
 registerMetric({
   key: "maintenance.sla",
   label: "SLA met",
   run: async (ctx, params) => {
-    const to = params.month ?? ctx.asOf;
-    const from = addMonths(to, -Math.max(1, Math.min(24, params.months ?? 12)) + 1);
-    const s = scopeSql(ctx, params, "w.property_id");
-    const asOf = "coalesce((SELECT value FROM meta WHERE key = 'as_of'), date('now'))";
-    const res = await ctx.db.prepare(
-      `SELECT substr(w.sla_due_at, 1, 7) AS month, count(*) AS due, coalesce(sum(w.completed_at IS NOT NULL AND w.completed_at <= w.sla_due_at), 0) AS met
-       FROM ${effective("work_orders", ctx.ws)} AS w
-       WHERE w.sla_due_at IS NOT NULL AND w.status <> 'Cancelled' AND substr(w.sla_due_at, 1, 10) <= ${asOf} AND substr(w.sla_due_at, 1, 7) BETWEEN ? AND ?${s.sql}
-       GROUP BY 1`,
-    ).bind(from, to, ...s.binds).all<{ month: string; due: number; met: number }>();
-    const by = new Map(res.results.map((r) => [String(r.month), r]));
+    const { from, to, rows } = await slaCounts(ctx, params, false);
+    const by = new Map(rows.map((r) => [r.month, r]));
     const points: Row[] = [];
-    for (let m = from; m <= to; m = addMonths(m, 1)) {
-      const r = by.get(m);
-      const due = Number(r?.due ?? 0), met = Number(r?.met ?? 0);
-      points.push({ month: m, value: due ? met / due : null, due, met, missed: due - met });
-    }
+    for (let m = from; m <= to; m = addMonths(m, 1)) points.push({ month: m, ...slaPoint(by.get(m)?.due ?? 0, by.get(m)?.met ?? 0) });
     const vals = points.map((p) => p.value as number | null);
     return { value: vals.at(-1) ?? null, previous: vals.at(-2) ?? null, spark: vals.map((v) => v ?? 0), points, asOf: to, source: "work_orders (live)" };
+  },
+});
+
+// The same SLA, one point per property for one month (default: the demo's current month).
+// Summing met and due across points gives maintenance.sla for the scope.
+registerMetric({
+  key: "maintenance.sla_by_property",
+  label: "SLA met by property",
+  run: async (ctx, params) => {
+    const { to, rows } = await slaCounts(ctx, { ...params, months: 1 }, true);
+    const names = new Map((await ctx.db.prepare(`SELECT id, name FROM ${effective("properties", ctx.ws)}`).all<{ id: string; name: string }>()).results.map((p) => [p.id, p.name]));
+    const points = rows.map((r) => ({ property_id: r.property_id!, name: names.get(r.property_id!) ?? r.property_id!, ...slaPoint(r.due, r.met) })).sort((a, b) => b.missed - a.missed);
+    return { points, asOf: to, source: "work_orders (live)" };
   },
 });
 monthly("intelligence.ai_minutes_saved", "Staff hours saved by AI", (m) => Math.round(m.ai_minutes_saved / 60), { hours: (m) => Math.round(m.ai_minutes_saved / 60), actions: (m) => m.ai_actions }, "flow");
