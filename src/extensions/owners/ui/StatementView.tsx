@@ -70,8 +70,8 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
         <caption className="sr-only">Statement lines</caption>
         <thead>
           <tr className="border-b text-[11.5px] text-muted-foreground">
-            <th scope="col" className="px-5 py-2 text-left font-medium">Line</th>
-            <th scope="col" className="px-5 py-2 text-right font-medium">Amount</th>
+            <th scope="col" className="py-2 pl-3 text-left font-medium sm:px-5">Line</th>
+            <th scope="col" className="px-2 py-2 text-right font-medium sm:px-5">Amount</th>
             <th scope="col" className="w-px px-3 py-2 print:hidden"><span className="sr-only">Explain</span></th>
           </tr>
         </thead>
@@ -83,7 +83,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
             return (
               <Fragment key={l.key}>
                 <tr className={cn("border-b align-top", total && "bg-muted/40 font-semibold", l.key === "gap" && "bg-tone-danger/5")}>
-                  <td className="px-5 py-2.5">
+                  <td className="py-2.5 pr-2 pl-3 sm:px-5">
                     <div className="flex items-start gap-1.5">
                       {expandable ? (
                         <button type="button" onClick={() => setOpen(isOpen ? null : l.key)} aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} detail for ${l.label}`}
@@ -98,10 +98,10 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
                       </div>
                     </div>
                   </td>
-                  <td className={cn("px-5 py-2.5 text-right tabular-nums whitespace-nowrap", l.sign < 0 && !total && "text-muted-foreground")}>
+                  <td className={cn("px-2 py-2.5 text-right tabular-nums whitespace-nowrap sm:px-5", l.sign < 0 && !total && "text-muted-foreground")}>
                     {l.sign < 0 && !total ? `(${usd(l.amount_cents)})` : usd(l.amount_cents)}
                   </td>
-                  <td className="px-3 py-2 print:hidden">
+                  <td className="py-2 pr-2 pl-0 sm:px-3 print:hidden">
                     <ExplainButton url={`${explainUrl}?entity=${st.entity.id}&period=${st.period}&line=${l.key}`} label={l.label} onAsk={onAsk} tour={l.key === "rent"} />
                   </td>
                 </tr>
@@ -153,7 +153,7 @@ function ExplainButton({ url, label, onAsk, tour }: { url: string; label: string
     <Popover onOpenChange={(o) => o && load()}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="xs" className="text-tone-ai hover:text-tone-ai" aria-label={`Explain ${label}`} data-tour={tour ? "explain-line" : undefined}>
-          <Sparkles />Explain
+          <Sparkles /><span className="max-sm:sr-only">Explain</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(92vw,400px)] p-0">
