@@ -1,5 +1,5 @@
 import { getPersona, personaCookie, PN_AS } from "@/auth/personas";
-import { rateLimit } from "@/lib/guard";
+import { rateLimit, readBodyLimited } from "@/lib/guard";
 import { sameOrigin } from "../e/_lib/http";
 
 // Demo sign-in and "Switch role": sets the pn_as cookie and lands on the persona's home.
@@ -12,15 +12,20 @@ export async function POST(request: Request) {
   let id: string | undefined;
   let next: string | undefined;
   const type = request.headers.get("content-type") ?? "";
-  if (Number(request.headers.get("content-length") ?? 0) > 4096) return Response.json({ error: "Request too large" }, { status: 413 });
+  const bytes = await readBodyLimited(request, 4096);
+  if (bytes instanceof Response) return bytes;
+  const text = new TextDecoder().decode(bytes);
   if (type.includes("application/json")) {
-    const b = (await request.json().catch(() => ({}))) as { persona?: unknown; next?: unknown };
+    let b: { persona?: unknown; next?: unknown } = {};
+    try {
+      b = JSON.parse(text);
+    } catch {}
     id = typeof b.persona === "string" ? b.persona : undefined;
     next = typeof b.next === "string" ? b.next : undefined;
   } else {
-    const f = await request.formData().catch(() => null);
-    id = f?.get("persona")?.toString();
-    next = f?.get("next")?.toString();
+    const f = new URLSearchParams(text);
+    id = f.get("persona") ?? undefined;
+    next = f.get("next") ?? undefined;
   }
   const persona = getPersona(id);
   if (!persona) return Response.json({ error: "Unknown persona" }, { status: 400 });
