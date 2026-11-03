@@ -22,7 +22,7 @@ export default async function BudgetVsActualPage({ searchParams }: Props) {
   const sp = await searchParams;
   const db = getPlatform().db;
   const ids = session.actor.propertyIds;
-  const props = (await db.prepare(`SELECT id, name FROM ${effective("properties", session.ws)} WHERE 1 = 1${ids === "all" ? "" : " AND id IN (SELECT value FROM json_each(?))"} ORDER BY name`).bind(...(ids === "all" ? [] : [JSON.stringify(ids)])).all<{ id: string; name: string }>()).results;
+  const props = (await db.prepare(`SELECT id, name FROM ${effective("properties", session.ws)} WHERE 1 = 1${ids === "all" ? "" : " AND id IN (SELECT value FROM json_each(?))"} ORDER BY name`).bind(...(ids === "all" ? [] : [JSON.stringify(ids)])).all<{ id: string; name: string }>()).results.map((r) => ({ id: String(r.id), name: String(r.name) }));
   const years = (await db.prepare(`SELECT DISTINCT year FROM ${effective("budgets", session.ws)} ORDER BY year DESC`).all<{ year: number }>()).results.map((r) => Number(r.year));
   const year = years.includes(Number(one(sp.year))) ? Number(one(sp.year)) : years[0] ?? 2026;
   const property = props.some((p) => p.id === one(sp.property)) ? one(sp.property) : null;
