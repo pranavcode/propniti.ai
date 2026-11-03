@@ -99,11 +99,13 @@ export async function paidByPayer(c: PortalCtx, year: string) {
      WHERE t.kind = 'Vendor payout' AND t.to_id = ? AND t.status = 'Cleared' AND substr(t.created, 1, 4) = ? GROUP BY t.owner_entity_id ORDER BY amount_cents DESC`, c.me, year);
 }
 
+// A certificate the vendor uploaded counts only after staff verify it; until then it stays
+// "Pending verification". Verified ones are Valid, Expiring (≤ 30 days) or Expired by date.
 export type Coi = { id: string; carrier: string; gl_limit_cents: number; workers_comp: number; expires_on: string; status: string; days: number };
 
 export async function cois(c: PortalCtx) {
   return rows<Coi>(c, `SELECT k.id, k.carrier, k.gl_limit_cents, k.workers_comp, k.expires_on,
-      CASE WHEN k.expires_on < ?2 THEN 'Expired' WHEN julianday(k.expires_on) - julianday(?2) <= 30 THEN 'Expiring' ELSE 'Valid' END AS status,
+      CASE WHEN k.status = 'Pending verification' THEN 'Pending verification' WHEN k.expires_on < ?2 THEN 'Expired' WHEN julianday(k.expires_on) - julianday(?2) <= 30 THEN 'Expiring' ELSE 'Valid' END AS status,
       CAST(julianday(k.expires_on) - julianday(?2) AS INTEGER) AS days
     FROM {vendor_cois} k WHERE k.vendor_id = ?1 ORDER BY k.expires_on DESC LIMIT 20`, c.me, AS_OF);
 }

@@ -24,7 +24,7 @@ export default async function VendorInsurance() {
                 {list.map((k) => (
                   <li key={k.id} className="flex items-center gap-3 px-4 py-2.5">
                     <div className="min-w-0 flex-1"><p className="truncate text-[13px] font-medium">{k.carrier}</p><p className="text-[12px] text-muted-foreground">General liability <Money value={k.gl_limit_cents} cents style="whole" /> · {k.workers_comp ? "workers' comp included" : "no workers' comp"}</p></div>
-                    <div className="text-right"><StatusBadge value={k.status} tone={k.status === "Valid" ? "success" : k.status === "Expiring" ? "warning" : "danger"} /><p className="mt-0.5 text-[11.5px] text-muted-foreground tabular-nums">{k.days >= 0 ? `${k.days} days left` : `expired ${-k.days} days ago`}</p></div>
+                    <div className="text-right"><StatusBadge value={k.status} tone={k.status === "Valid" ? "success" : k.status === "Expiring" || k.status === "Pending verification" ? "warning" : "danger"} /><p className="mt-0.5 text-[11.5px] text-muted-foreground tabular-nums">{k.days >= 0 ? `${k.days} days left` : `expired ${-k.days} days ago`}</p></div>
                   </li>
                 ))}
               </ul>

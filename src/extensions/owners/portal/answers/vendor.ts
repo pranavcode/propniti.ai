@@ -36,7 +36,7 @@ export async function answerVendor(c: PortalCtx, q: string): Promise<Answer> {
     const cur = list[0];
     trace.push({ label: "Your insurance certificates", detail: `${list.length} on file` });
     return {
-      answer: !cur ? "We don't have an insurance certificate for you. Upload one under Insurance so we can keep assigning jobs." : cur.status === "Expired" ? `Your certificate from ${cur.carrier} expired on ${cur.expires_on}. Upload the renewal under Insurance; new jobs are held until we have it.` : `Your certificate from ${cur.carrier} is valid until ${cur.expires_on} (${cur.days} days from today).${cur.status === "Expiring" ? " That's within 30 days, so please upload the renewal soon." : ""}`,
+      answer: !cur ? "We don't have an insurance certificate for you. Upload one under Insurance so we can keep assigning jobs." : cur.status === "Pending verification" ? `Your certificate from ${cur.carrier} (valid to ${cur.expires_on}) is pending verification. The maintenance team checks it before it counts for new jobs.` : cur.status === "Expired" ? `Your certificate from ${cur.carrier} expired on ${cur.expires_on}. Upload the renewal under Insurance; new jobs are held until we have it.` : `Your certificate from ${cur.carrier} is valid until ${cur.expires_on} (${cur.days} days from today).${cur.status === "Expiring" ? " That's within 30 days, so please upload the renewal soon." : ""}`,
       facts: cur ? { carrier: cur.carrier, expires_on: cur.expires_on, days: cur.days } : {}, trace, links: [{ label: "Insurance", href: "/portal/vendor/insurance" }],
     };
   }
