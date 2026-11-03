@@ -1,7 +1,8 @@
 import type { ActionKey, AgentKey, EntityKey, Role } from "@/entities/types";
+// registry must load before runtime: runtime → actions → entities → leasing agent → defineAgent (cycle).
+import { registerAgent } from "./registry";
 import { modelLoop, truncate, type AgentCtx, type ProposeInput } from "../runtime";
 import type { AgentDef, Autonomy, EventType, RunContext, ToolKey, TriggerKind } from "../types";
-import { registerAgent } from "./registry";
 
 // Every agent runs the same loop:
 //   1. collect: rules gather candidates through logged tool calls (figures come from the data);
