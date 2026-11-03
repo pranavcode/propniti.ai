@@ -51,7 +51,8 @@ export async function entityInScope(c: Ctx, entityId: string, propertyIds: strin
 // Closed months (newest first) plus the open month at the top.
 export async function periodsOf(c: Ctx, entityId: string): Promise<Period[]> {
   const { results } = await c.db
-    .prepare(`SELECT d.id, d.period, d.amount_cents, d.paid_on, t.status, (d.income_cents - d.expense_cents - d.fee_cents - d.reserve_cents - d.amount_cents) AS gap
+    .prepare(`SELECT d.id, d.period, d.amount_cents, d.paid_on, t.status, (d.income_cents - d.expense_cents - d.fee_cents - d.reserve_cents - d.amount_cents
+        - coalesce((SELECT a.amount_cents FROM ${effective("transfers", c.ws)} a WHERE a.key = 'owner-adj:' || d.id AND a.status <> 'Returned'), 0)) AS gap
       FROM ${effective("owner_distributions", c.ws)} d LEFT JOIN ${effective("transfers", c.ws)} t ON t.id = d.transfer_id
       WHERE d.owner_entity_id = ? ORDER BY d.period DESC, t.seq DESC`)
     .bind(entityId)
@@ -127,7 +128,9 @@ export async function statementOf(c: Ctx, entityId: string, period: string): Pro
   const { totals } = agg;
   const net = totals.rent_cents + totals.other_cents - totals.vendor_cents - totals.fee_cents;
   const d = r.dist;
-  const gap = d ? d.income_cents - d.expense_cents - d.fee_cents - d.reserve_cents - d.amount_cents : 0;
+  // A correction (Lane A's payOwnerAdjustment, key owner-adj:<distribution>) settles the gap.
+  const adj = d ? await c.db.prepare(`SELECT t.amount_cents, t.created FROM ${effective("transfers", c.ws)} t WHERE t.key = 'owner-adj:' || ? AND t.status <> 'Returned'`).bind(d.id).first<{ amount_cents: number; created: string }>() : null;
+  const gap = d ? d.income_cents - d.expense_cents - d.fee_cents - d.reserve_cents - d.amount_cents - (adj?.amount_cents ?? 0) : 0;
   const issue = d
     ? await c.db.prepare(`SELECT id, rule_id, status FROM ${effective("data_issues", c.ws)} i WHERE i.entity_type = 'owner_distributions' AND i.entity_id = ? ORDER BY i.detected_at DESC LIMIT 1`).bind(d.id).first<{ id: string; rule_id: string; status: string }>()
     : null;
@@ -140,6 +143,7 @@ export async function statementOf(c: Ctx, entityId: string, period: string): Pro
   ];
   if (d) {
     if (d.reserve_cents) lines.push({ key: "reserve", label: d.reserve_cents > 0 ? "Added to operating reserve" : "Released from operating reserve", amount_cents: Math.abs(d.reserve_cents), sign: d.reserve_cents > 0 ? -1 : 1, detail: `Reserve target ${(entity.reserve_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} per the management agreement` });
+    if (adj) lines.push({ key: "gap", label: "Correction paid to owner", amount_cents: adj.amount_cents, sign: -1, detail: `Rounding shortfall paid ${adj.created.slice(0, 10)} by ACH` });
     if (gap) lines.push({ key: "gap", label: "Unreconciled difference", amount_cents: Math.abs(gap), sign: gap > 0 ? -1 : 1, detail: "The payout and the statement disagree" });
     lines.push({ key: "distribution", label: "Distributed to owner", amount_cents: d.amount_cents, sign: -1, detail: `Paid ${d.paid_on} by ACH` });
   } else {
@@ -229,7 +233,9 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
   } else if (line === "gap") {
     facts.gap = usd(st.gap_cents);
     trace.push({ label: "Data Health", detail: st.issue ? `Issue ${st.issue.id} (${st.issue.rule_id}), ${st.issue.status}` : "Rule owner_distributions.rounding_cent", href: href(st.issue ? `/app/data-health?issue=${st.issue.id}` : "/app/data-health") });
-    text = `Income less expenses, the fee and the reserve comes to ${usd(st.net_cents - (st.distribution?.reserve_cents ?? 0))}, but ${usd(st.distribution?.amount_cents ?? 0)} was paid. The ${usd(Math.abs(st.gap_cents))} ${st.gap_cents > 0 ? "is still in the trust account and is owed to the owner" : "was overpaid"}. This is a rounding error on the payout, not a missing transaction; the suggested fix pays the difference.`;
+    if (!st.gap_cents) {
+      text = `The original payout was ${usd(l.amount_cents)} short because of a rounding error. That correction has been paid to ${st.entity.owner_name}, so this statement now reconciles to $0.00.`;
+    } else text = `Income less expenses, the fee and the reserve comes to ${usd(st.net_cents - (st.distribution?.reserve_cents ?? 0))}, but ${usd(st.distribution?.amount_cents ?? 0)} was paid. The ${usd(Math.abs(st.gap_cents))} ${st.gap_cents > 0 ? "is still in the trust account and is owed to the owner" : "was overpaid"}. This is a rounding error on the payout, not a missing transaction; the suggested fix pays the difference.`;
   } else {
     const d = st.distribution;
     if (d) {

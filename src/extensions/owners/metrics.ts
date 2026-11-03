@@ -96,7 +96,7 @@ registerMetric({
   run: async (ctx) => {
     const s = entityScope(ctx, "d");
     const r = await ctx.db
-      .prepare(`SELECT count(*) AS n FROM ${effective("owner_distributions", ctx.ws)} d WHERE (d.income_cents - d.expense_cents - d.fee_cents - d.reserve_cents - d.amount_cents) <> 0${s.sql}`)
+      .prepare(`SELECT count(*) AS n FROM ${effective("owner_distributions", ctx.ws)} d WHERE (d.income_cents - d.expense_cents - d.fee_cents - d.reserve_cents - d.amount_cents - coalesce((SELECT a.amount_cents FROM ${effective("transfers", ctx.ws)} a WHERE a.key = 'owner-adj:' || d.id AND a.status <> 'Returned'), 0)) <> 0${s.sql}`)
       .bind(...s.binds)
       .first<{ n: number }>();
     return { value: r?.n ?? 0, points: [], asOf: ctx.asOf, source: "owner_distributions" };

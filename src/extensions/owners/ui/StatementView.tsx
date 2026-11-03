@@ -82,7 +82,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
             const total = l.key === "distribution";
             return (
               <Fragment key={l.key}>
-                <tr className={cn("border-b align-top", total && "bg-muted/40 font-semibold", l.key === "gap" && "bg-tone-danger/5")}>
+                <tr className={cn("border-b align-top", total && "bg-muted/40 font-semibold", l.key === "gap" && st.gap_cents !== 0 && "bg-tone-danger/5")}>
                   <td className="py-2.5 pr-2 pl-3 sm:px-5">
                     <div className="flex items-start gap-1.5">
                       {expandable ? (
@@ -92,9 +92,9 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
                         </button>
                       ) : <span className="w-3.5 shrink-0 print:hidden" />}
                       <div className="min-w-0">
-                        <p className={cn(l.key === "gap" && "text-tone-danger")}>{l.label}</p>
+                        <p className={cn(l.key === "gap" && st.gap_cents !== 0 && "text-tone-danger")}>{l.label}</p>
                         {l.detail && <p className="text-[11.5px] font-normal text-muted-foreground">{l.detail}</p>}
-                        {l.key === "gap" && canFix && st.distributionId && <FixGap distributionId={st.distributionId} amount={l.amount_cents} />}
+                        {l.key === "gap" && canFix && st.gap_cents > 0 && st.distributionId && <FixGap distributionId={st.distributionId} amount={l.amount_cents} />}
                       </div>
                     </div>
                   </td>
@@ -239,7 +239,6 @@ function DistributeButton({ entityId, entityName, amount }: { entityId: string; 
 function FixGap({ distributionId, amount }: { distributionId: string; amount: number }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [key] = useState(() => crypto.randomUUID().replace(/-/g, ""));
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.05] px-2 py-1.5 text-[12px] font-normal print:hidden">
       <Sparkles className="size-3.5 text-tone-ai" />
@@ -247,7 +246,7 @@ function FixGap({ distributionId, amount }: { distributionId: string; amount: nu
       <Button size="xs" variant="outline" disabled={busy} onClick={async () => {
         setBusy(true);
         try {
-          const out = await runAction(`/api/e/owner_distributions/${distributionId}/actions/owner_distributions.pay_rounding_cent`, { idempotencyKey: key });
+          const out = await runAction(`/api/e/owner_distributions/${distributionId}/actions/owner_distributions.pay_rounding_cent`, { amountCents: amount });
           toast.success(out.message ?? "Paid");
           router.refresh();
         } catch (e) {

@@ -145,8 +145,9 @@ registerEntity({
   help: { summary: "The LLCs that hold title to properties. Each has a management agreement, a trust account and a monthly statement.", article: "owner-entities" },
 });
 
-// Income − expenses − fee − reserve − paid. Anything but zero means the statement and the payout disagree.
-const GAP = "(owner_distributions.income_cents - owner_distributions.expense_cents - owner_distributions.fee_cents - owner_distributions.reserve_cents - owner_distributions.amount_cents)";
+// Income − expenses − fee − reserve − paid − corrections. Anything but zero means the statement and the payout disagree.
+// A paid correction (transfer key owner-adj:<distribution>) closes the gap.
+const GAP = "(owner_distributions.income_cents - owner_distributions.expense_cents - owner_distributions.fee_cents - owner_distributions.reserve_cents - owner_distributions.amount_cents - coalesce((SELECT a.amount_cents FROM {transfers} a WHERE a.key = 'owner-adj:' || owner_distributions.id AND a.status <> 'Returned'), 0))";
 
 registerEntity({
   key: "owner_distributions",

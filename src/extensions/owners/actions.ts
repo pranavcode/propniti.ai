@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { BadgeDollarSign, Coins } from "lucide-react";
-import type { ActionContext, ActionResult, Row } from "@/entities/types";
+import type { ActionContext } from "@/entities/types";
 import type { DbStatement } from "@/lib/platform/types";
-import { effective, overlayUpsertSql } from "@/server/effective";
-import * as money from "@/server/money";
-import { distributeOwner, uid } from "@/server/money";
+import { effective } from "@/server/effective";
+import { distributeOwner, payOwnerAdjustment, uid } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { registerAction } from "../actions";
 
@@ -28,8 +27,6 @@ registerAction({
   help: { summary: "Pays the owner entity its open statement balance from the trust account and closes the statement.", article: "owner-statements" },
 });
 
-type Adjust = (ctx: ActionContext, distributionId: string, idempotencyKey: string) => Promise<ActionResult>;
-
 registerAction({
   key: "owner_distributions.pay_rounding_cent",
   label: "Pay the difference",
@@ -37,37 +34,17 @@ registerAction({
   roles: ["principal", "accountant"],
   icon: Coins,
   money: true,
-  input: z.object({ idempotencyKey: IdemKey.optional() }),
+  // The amount the person saw; money.ts pays only if the statement still owes exactly that (key owner-adj:<id>).
+  input: z.object({ amountCents: z.number().int().positive().max(100_000) }),
   when: (r) => Number(r.gap ?? 0) > 0,
   confirm: { title: "Pay the owner the difference?", body: "Sends the unreconciled amount to the owner from the trust account and marks the Data Health issue fixed.", tone: "warning" },
   handler: async (ctx, row, input) => {
-    // INTEGRATE: Lane A adds payOwnerAdjustment to money.ts (research/lane-requests.md); until then this refuses.
-    const pay = (money as unknown as { payOwnerAdjustment?: Adjust }).payOwnerAdjustment;
-    if (!pay) return { status: 409, error: "Owner adjustments aren't available yet. The issue stays open; nothing was paid." };
     const id = String(row.id);
-    const r = await pay(ctx, id, input.idempotencyKey ?? `round-${id}`);
-    if (r.status === 200) await closeIssues(ctx, id, row);
-    return r;
+    const issue = await ctx.db.prepare(`SELECT id FROM ${effective("data_issues")} AS i WHERE i.rule_id = 'owner_distributions.rounding_cent' AND i.entity_id = ?2 AND i.status = 'open'`).bind(ctx.ws, id).first<{ id: string }>();
+    return payOwnerAdjustment(ctx, id, input.amountCents, issue?.id);
   },
   help: { summary: "Fixes a statement whose payout is off by a rounding difference: pays the gap and closes the Data Health issue.", article: "owner-statements" },
 });
-
-const ISSUE_COLS = ["id", "deleted", "rule_id", "entity_type", "entity_id", "property_id", "detected_at", "severity", "evidence", "suggested_fix", "status", "fixed_by", "fixed_at"];
-
-async function closeIssues(ctx: ActionContext, distributionId: string, row: Row) {
-  const { db, ws, actor, nowMs } = ctx;
-  const at = nowIso(nowMs);
-  const open = await db.prepare(`SELECT id FROM ${effective("data_issues")} AS i WHERE i.entity_type = 'owner_distributions' AND i.entity_id = ?2 AND i.status = 'open'`).bind(ws, distributionId).all<{ id: string }>();
-  const stmts: DbStatement[] = [];
-  for (const i of open.results) {
-    stmts.push(
-      db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?3", fixed_at: "?4" }, "e.status = 'open'")).bind(ws, i.id, actor.personaId, at),
-      db.prepare("INSERT INTO data_fix_log (workspace_id, id, issue_id, entity_type, entity_id, before_json, after_json, fixed_by, at) VALUES (?1, ?2, ?3, 'owner_distributions', ?4, ?5, ?6, ?7, ?8)")
-        .bind(ws, uid("fix"), i.id, distributionId, JSON.stringify({ gap_cents: Math.round(Number(row.gap ?? 0) * 100) }), JSON.stringify({ gap_cents: 0, paid_cents: Math.round(Number(row.gap ?? 0) * 100) }), actor.personaId, at),
-    );
-  }
-  if (stmts.length) await db.batch(stmts);
-}
 
 // Approval limit for maintenance spend on an owner entity's properties: the entity's own policy,
 // else the org default. null = the owner never needs to approve.
