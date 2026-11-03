@@ -131,7 +131,34 @@ monthly("receivables.delinquency", "Delinquent balance", (m) => dollars(aging(m)
 monthly("leasing.vacancy_loss", "Vacancy loss", (m) => dollars(m.vacancy_loss_cents), undefined, "flow");
 monthly("leasing.move_ins", "Move-ins", (m) => m.move_ins, { move_ins: (m) => m.move_ins, move_outs: (m) => m.move_outs }, "flow");
 monthly("maintenance.wo_open", "Open work orders", (m) => m.wo_open, { opened: (m) => m.wo_opened, open: (m) => m.wo_open, breached: (m) => m.wo_sla_breach });
-monthly("maintenance.sla", "Within SLA", (m) => (m.wo_open ? 1 - m.wo_sla_breach / m.wo_open : null));
+// SLA met rate: work orders completed by their SLA due time ÷ work orders due in the month (the
+// current month counts only what is due by the demo's today). Open jobs past due count as missed,
+// so the rate is always between 0 and 1. Live from work_orders, scoped like every list.
+registerMetric({
+  key: "maintenance.sla",
+  label: "SLA met",
+  run: async (ctx, params) => {
+    const to = params.month ?? ctx.asOf;
+    const from = addMonths(to, -Math.max(1, Math.min(24, params.months ?? 12)) + 1);
+    const s = scopeSql(ctx, params, "w.property_id");
+    const asOf = "coalesce((SELECT value FROM meta WHERE key = 'as_of'), date('now'))";
+    const res = await ctx.db.prepare(
+      `SELECT substr(w.sla_due_at, 1, 7) AS month, count(*) AS due, coalesce(sum(w.completed_at IS NOT NULL AND w.completed_at <= w.sla_due_at), 0) AS met
+       FROM ${effective("work_orders", ctx.ws)} AS w
+       WHERE w.sla_due_at IS NOT NULL AND w.status <> 'Cancelled' AND substr(w.sla_due_at, 1, 10) <= ${asOf} AND substr(w.sla_due_at, 1, 7) BETWEEN ? AND ?${s.sql}
+       GROUP BY 1`,
+    ).bind(from, to, ...s.binds).all<{ month: string; due: number; met: number }>();
+    const by = new Map(res.results.map((r) => [String(r.month), r]));
+    const points: Row[] = [];
+    for (let m = from; m <= to; m = addMonths(m, 1)) {
+      const r = by.get(m);
+      const due = Number(r?.due ?? 0), met = Number(r?.met ?? 0);
+      points.push({ month: m, value: due ? met / due : null, due, met, missed: due - met });
+    }
+    const vals = points.map((p) => p.value as number | null);
+    return { value: vals.at(-1) ?? null, previous: vals.at(-2) ?? null, spark: vals.map((v) => v ?? 0), points, asOf: to, source: "work_orders (live)" };
+  },
+});
 monthly("intelligence.ai_minutes_saved", "Staff hours saved by AI", (m) => Math.round(m.ai_minutes_saved / 60), { hours: (m) => Math.round(m.ai_minutes_saved / 60), actions: (m) => m.ai_actions }, "flow");
 
 byProperty("portfolio.by_property", "Property comparison", {
