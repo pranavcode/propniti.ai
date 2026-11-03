@@ -182,6 +182,22 @@ export async function technicians(db: Db, ws: string | null, actor: Actor) {
      WHERE w.status IN ${OPEN_SQL} AND w.vendor_id IS NULL${s.sql} GROUP BY st.id ORDER BY st.name LIMIT 40`, s.binds);
 }
 
+// Staff whose role assignment covers the property: the property itself, its region, or the whole org.
+const COVERS = (ws: string | null, staff: string, property: string) => `EXISTS (SELECT 1 FROM ${effective("role_assignments", ws)} ra WHERE ra.staff_id = ${staff} AND (
+  ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id = ${property})
+  OR (ra.scope_kind = 'region' AND ra.scope_id = (SELECT p.region_id FROM ${effective("properties", ws)} p WHERE p.id = ${property}))))`;
+
+export async function techCovers(db: Db, ws: string | null, techId: string, propertyId: string) {
+  return !!(await db.prepare(`SELECT 1 AS x WHERE ${COVERS(ws, "?", "?")}`).bind(techId, propertyId, propertyId).first());
+}
+
+// Technicians who can be dispatched to a property, with their open in-house jobs.
+export async function techniciansFor(db: Db, ws: string | null, propertyId: string) {
+  return all<{ id: string; name: string; open: number }>(db,
+    `SELECT st.id, st.name, (SELECT count(*) FROM ${effective("work_orders", ws)} w WHERE w.assignee_id = st.id AND w.status IN ${OPEN_SQL} AND w.vendor_id IS NULL) AS open
+     FROM ${effective("staff", ws)} st WHERE st.id LIKE 't-%' AND st.active = 1 AND ${COVERS(ws, "st.id", "?")} ORDER BY st.name LIMIT 40`, [propertyId, propertyId]);
+}
+
 export async function techJobs(db: Db, ws: string | null, actor: Actor, techId: string) {
   const s = scoped(actor.propertyIds, "w.property_id");
   return all<Row>(db,

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
-import { latestTriage, policyFor, rankVendors, technicians } from "@/extensions/maintenance/queries";
+import { latestTriage, policyFor, rankVendors, techniciansFor } from "@/extensions/maintenance/queries";
 import { all, effective } from "@/extensions/maintenance/store";
 import { PhotoCheckBadge } from "@/extensions/maintenance/tabs";
 import { ActionButton } from "@/extensions/maintenance/ui/client";
@@ -36,7 +36,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
   const trade = (sp.trade && sp.trade.length < 40 ? sp.trade : null) ?? String(suggestion?.changes.category ?? wo.category);
   const [vendors, techs, policy, photos] = await Promise.all([
     rankVendors(db, ws, trade, String(wo.property_id)),
-    technicians(db, ws, actor),
+    techniciansFor(db, ws, String(wo.property_id)),
     policyFor(db, ws, String(wo.property_id)),
     all<Row>(db, `SELECT * FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 6`, [id]),
   ]);

@@ -36,6 +36,8 @@ beforeEach(async () => {
     db.prepare("INSERT INTO purchase_orders (workspace_id, id, property_id, vendor_id, work_order_id, number, status, total_cents, issued_on) VALUES ('base', 'po-1', 'p01', 'v01', 'WO-2', 'PO-5001', 'Open', 30000, '2026-10-21')"),
     db.prepare("INSERT INTO po_lines (workspace_id, id, po_id, gl_account_id, description, unit_cents, amount_cents) VALUES ('base', 'po-1-1', 'po-1', 'gl-6000', 'Labor: Toilet running', 18000, 18000), ('base', 'po-1-2', 'po-1', 'gl-6000', 'Parts and materials', 12000, 12000)"),
     db.prepare("INSERT INTO photos (workspace_id, id, entity_type, entity_id, property_id, url, stage) VALUES ('base', 'ph-2', 'work_orders', 'WO-2', 'p01', '/img/wo/wo-toilet.webp', 'Before')"),
+    db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 't-andre', 'org1', 'Andre Washington', 'Technician', 'a@x.example'), ('base', 't-gus', 'org1', 'Gus Ortega', 'Technician', 'g@x.example')"),
+    db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-1', 't-andre', 'maintenance_supervisor', 'property', 'p01'), ('base', 'ra-2', 't-gus', 'maintenance_supervisor', 'region', 'r-se')"),
     db.prepare("INSERT INTO pm_schedules (workspace_id, id, property_id, name, category, frequency, next_due_on, checklist) VALUES ('base', 'pms-1', 'p01', 'HVAC filter change', 'HVAC', 'Quarterly', '2026-11-01', '[\"Replace filters\"]')"),
   ]);
 });
@@ -52,6 +54,14 @@ describe("dispatch", () => {
     const wo = await db.prepare("SELECT status, sla_due_at FROM work_orders WHERE workspace_id = ? AND id = 'WO-1'").bind(WS).first<{ status: string; sla_due_at: string }>();
     expect(wo).toMatchObject({ status: "Assigned", sla_due_at: "2026-10-29T09:00:00Z" });
     expect(await act("work_orders.dispatch", "WO-1", { vendor_id: "v01", priority: "Normal", category: "Plumbing", estimate: 3000 })).toMatchObject({ status: 200, message: expect.stringContaining("on hold until the owner approves") });
+  });
+});
+
+describe("in-house dispatch", () => {
+  it("accepts only technicians assigned to the work order's property", async () => {
+    expect(await act("work_orders.dispatch", "WO-1", { vendor_id: null, assignee_id: "t-gus", priority: "Normal", category: "Plumbing" })).toMatchObject({ status: 403, error: expect.stringContaining("doesn't work at this property") });
+    expect(await act("work_orders.dispatch", "WO-1", { vendor_id: null, assignee_id: "t-nobody", priority: "Normal", category: "Plumbing" })).toMatchObject({ status: 403 });
+    expect(await act("work_orders.dispatch", "WO-1", { vendor_id: null, assignee_id: "t-andre", priority: "Normal", category: "Plumbing" })).toMatchObject({ status: 200 });
   });
 });
 

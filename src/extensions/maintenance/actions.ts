@@ -9,7 +9,7 @@ import { AS_OF } from "@/seed/constants";
 import { registerAction } from "../actions";
 import { checkPhoto, nextDue, PHOTO_TAGS, policyCheck, usd, validateInvoice } from "./rules";
 import { insertStmt, newId, OPEN_STATUSES, parse, row as readRow, update, updateStmt } from "./store";
-import { invoiceInputs, policyFor } from "./queries";
+import { invoiceInputs, policyFor, techCovers } from "./queries";
 
 // Named actions for the maintenance module. Each runs inside the generic action route, which has
 // already checked the role, module access, the record's scope and `when`, and audits success.
@@ -84,7 +84,7 @@ registerAction({
       if (!v.coi || v.coi < AS_OF) return conflict(`${v.company}'s insurance certificate ${v.coi ? `expired on ${v.coi}` : "is missing"}. Request a current COI before dispatching.`);
       vendorName = v.company;
     }
-    if (input.assignee_id && !(await readRow(c.db, c.ws, "staff", input.assignee_id))) return { status: 404, error: "Technician not found" };
+    if (input.assignee_id && !(await techCovers(c.db, c.ws, input.assignee_id, String(r.property_id)))) return { status: 403, error: "That technician doesn't work at this property. Pick one assigned to it." };
     const estimateCents = Math.round((input.estimate ?? Number(r.estimate ?? 0)) * 100);
     const pol = policyCheck(estimateCents, await policyFor(c.db, c.ws, String(r.property_id)));
     const status = pol.level === "owner" ? "On hold" : "Assigned";
