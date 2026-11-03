@@ -392,6 +392,22 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1", c.ws)).toBe(0);
   });
 
+  it("late fees: more than 90 eligible leases post in rounds, never twice per lease", async () => {
+    const c = await ctx({ ...grace, role: "principal", personaId: "daniel", name: "Daniel Reyes" });
+    const tx = ["p01", "p02", "p03", "p04", "p07", "p08", "p09", "p10", "p11"];
+    const first = (await postLateFees(c, tx)) as { status: number; posted?: number; remaining?: number };
+    expect(first).toMatchObject({ status: 200, posted: 90 });
+    expect(first.remaining).toBeGreaterThan(0);
+    const second = (await postLateFees(c, tx)) as { posted?: number; remaining?: number };
+    expect(second.posted).toBe(Math.min(90, first.remaining!));
+    let rounds = 0;
+    for (let r = second; (r.remaining ?? 0) > 0 && rounds < 10; rounds++) r = (await postLateFees(c, tx)) as typeof r;
+    expect(await postLateFees(c, tx)).toMatchObject({ status: 409 });
+    const fees = await n("SELECT count(*) AS n FROM charges WHERE workspace_id = ?1 AND gl_account_id = 'gl-4100'", c.ws);
+    expect(await n("SELECT count(DISTINCT lease_id) AS n FROM charges WHERE workspace_id = ?1 AND gl_account_id = 'gl-4100'", c.ws)).toBe(fees);
+    expect(fees).toBe(90 + first.remaining!);
+  });
+
   it("late fees: posted once per lease and month, capped by the state rule", async () => {
     const c = await ctx();
     const r = await postLateFees(c, ["p01", "p02", "p03"]);

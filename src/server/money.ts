@@ -3,7 +3,7 @@ import type { ActionContext, Actor, ModuleKey } from "@/entities/types";
 import { MANAGEMENT_FEE_RATE, SETTLE_MS } from "@/lib/ledger";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { AS_OF, CURRENT_PERIOD } from "@/seed/constants";
-import { AVAILABLE_SQL, OPEN_NET_SQL, chargeOpenSql, ownerStatement } from "./data";
+import { AVAILABLE_SQL, CHARGE_IS_OPEN, OPEN_NET_SQL, chargeOpenSql, ownerStatement } from "./data";
 import { effective, overlayUpsertSql } from "./effective";
 import { nowIso } from "./workspace";
 
@@ -260,7 +260,7 @@ export async function recordPayment(ctx: ActionContext, input: RecordPaymentInpu
 
 // Posts late fees on this month's unpaid rent past the grace period, capped by state rules.
 // One fee per lease per month: the charge id lf-<lease>-<yyyymm> is the idempotency key.
-export async function postLateFees(ctx: ActionContext, propertyIds: string[], period = CURRENT_PERIOD): Promise<Outcome & { posted?: number }> {
+export async function postLateFees(ctx: ActionContext, propertyIds: string[], period = CURRENT_PERIOD): Promise<Outcome & { posted?: number; remaining?: number }> {
   const { db, ws, nowMs, actor } = ctx;
   // Only properties in the actor's scope; the caller's list is never trusted on its own.
   const inScope = actor.propertyIds === "all" ? propertyIds : propertyIds.filter((id) => (actor.propertyIds as string[]).includes(id));
@@ -276,6 +276,8 @@ export async function postLateFees(ctx: ActionContext, propertyIds: string[], pe
         `SELECT c.id, c.lease_id, c.amount_cents, c.due_on, c.property_id, p.state, p.name AS property_name, ${chargeOpenSql("c")} AS open_cents
          FROM ${effective("charges")} AS c JOIN ${effective("properties")} AS p ON p.id = c.property_id
          WHERE c.period = ?2 AND c.gl_account_id IN ('gl-4000', 'gl-4010') AND c.property_id IN (SELECT value FROM json_each(?3))
+           AND ${CHARGE_IS_OPEN("c")}
+           AND NOT EXISTS (SELECT 1 FROM ${effective("charges")} AS x WHERE x.lease_id = c.lease_id AND x.gl_account_id = 'gl-4100' AND x.period = ?2)
          ORDER BY c.id LIMIT 900`,
       )
       .bind(ws, period, props)
@@ -309,19 +311,20 @@ export async function postLateFees(ctx: ActionContext, propertyIds: string[], pe
         .bind(ws, feeId, c.id, period, AS_OF, fee),
     );
   }
-  if (!stmts.length) return { status: 409, error: "No unpaid rent is past its grace period in the selected properties." };
+  if (!stmts.length) return { status: 409, error: `No unpaid rent past its grace period without a ${period} late fee in the selected properties.` };
   // D1 counts every statement in a batch toward its per-request query limit: post at most 90.
+  const remaining = Math.max(0, stmts.length - 90);
   stmts.splice(90);
   posted.splice(90);
   const results = await db.batch(stmts);
   const n = results.reduce((s, r) => s + r.meta.changes, 0);
-  if (!n) return { status: 409, error: `Late fees for ${period} are already posted.` };
+  if (!n) return { status: 409, error: `Late fees for ${period} are already posted.`, remaining };
   const total = posted.filter((_, i) => results[i].meta.changes).reduce((s, p) => s + p.amount, 0);
   await db.batch([
     eventStmt(db, ws, at, "charge.late_fees_posted", "properties", propertyIds[0], propertyIds.length === 1 ? propertyIds[0] : null, { count: n, total_cents: total, period, property_ids: propertyIds }),
     auditStmt(db, ws, at, actor, { action: "Late fees posted", entityType: "properties", entityId: propertyIds.join(","), detail: `${n} late fees, ${dollars(total)} total, for ${period} (capped by state rules)` }),
   ]);
-  return { status: 200, message: `Posted ${n} late fees (${dollars(total)}).`, posted: n };
+  return { status: 200, message: `Posted ${n} late fees (${dollars(total)}).${remaining ? ` ${remaining} more to post: run it again.` : ""}`, posted: n, remaining };
 }
 
 // ---------------------------------------------------------------------------------------------
