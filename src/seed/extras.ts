@@ -1,6 +1,6 @@
 import { FIRST, LAST, RENTERS_CARRIERS, VENDORS } from "./catalog";
 import { AS_OF } from "./constants";
-import { ASOF, PERIODS, WO_TYPES, createWorkOrder, type Ctx, type Household, type Prop, type R, type Unit } from "./generate";
+import { ASOF, PERIODS, WO_TYPES, createWorkOrder, type Ctx, type Household, type Lease, type Prop, type R, type Unit } from "./generate";
 import { HELP_ARTICLES } from "./help";
 import { addMonths, day, iso, monthStart, rng, round, ts, type Rng } from "./rng";
 
@@ -726,28 +726,28 @@ class Extras {
       const r = rng(`dh:${hh.id}`);
       const res = hh.residents[0];
       if (!res || hh.company) continue;
-      if (r.chance(0.022)) {
+      if (r.chance(0.035)) {
         const nid = `${res.id}-dup`;
         const first = String(res.first_name);
         const alt = first.length > 3 ? first.slice(0, -1) + first.slice(-1).repeat(2) : first + "e";
         add("residents", { ...res, id: nid, first_name: alt, email: `${alt.toLowerCase()}.${String(res.last_name).toLowerCase().replace(/[^a-z]/g, "")}@mail.example`, is_primary: 0 });
         issue("residents.possible_duplicate", "residents", nid, hh.p.id, "warn", { duplicate_of: res.id, name: `${alt} ${res.last_name}`, matches: `${res.first_name} ${res.last_name}`, phone: res.phone }, { action: "residents.merge", params: { keep: res.id, merge: nid }, why: ["Same phone number", `Names differ by one letter ("${alt}" vs "${first}")`, "Same household and property"], confidence: 0.94, source: "rule" });
-      } else if (r.chance(0.018)) {
+      } else if (r.chance(0.03) && res.id !== "res-p01-0001") {
         const before = res.email;
         res.email = String(res.phone).replace(/\D/g, "");
-        issue("residents.phone_in_email", "residents", res.id as string, hh.p.id, "warn", { email: res.email, phone: res.phone }, { changes: { email: null, phone: res.phone }, why: ["The email field holds a 10-digit phone number", "It matches the phone on file"], confidence: 0.97, source: "rule", note: `Previous email was ${before}` });
+        issue("residents.phone_in_email", "residents", res.id as string, hh.p.id, "warn", { email: res.email, phone: res.phone }, { changes: { email: "", phone: res.phone }, why: ["The email field holds a 10-digit phone number", "It matches the phone on file; email is marked missing"], confidence: 0.97, source: "rule", note: `Previous email was ${before}` });
       }
     }
     // Leases: end before start; rent ten times market (typo).
     for (const l of c.leases) {
       const r = rng(`dhl:${l.id}`);
       if (l.commercial || l.status === "Future") continue;
-      if (r.chance(0.012) && l.end !== null) {
+      if (r.chance(0.026) && l.end !== null) {
         const [s, e] = [l.row.start_on, l.row.end_on];
         l.row.start_on = e;
         l.row.end_on = s;
         issue("leases.end_before_start", "leases", l.id, l.u.p.id, "critical", { start_on: e, end_on: s, term_months: l.term }, { changes: { start_on: s, end_on: e }, why: ["End date is before start date", `Swapping them gives a ${l.term}-month term, matching term_months`], confidence: 0.96, source: "rule" });
-      } else if (r.chance(0.01) && CURRENT.has(l.status)) {
+      } else if (r.chance(0.03) && CURRENT.has(l.status) && l.hh.residents[0]?.id !== "res-p01-0001") {
         l.row.rent_cents = l.rent * 10;
         issue("leases.rent_outlier", "leases", l.id, l.u.p.id, "critical", { rent_cents: l.rent * 10, market_rent_cents: l.u.market, billed_cents: l.rent }, { changes: { rent_cents: l.rent }, why: [`Rent is ${Math.round((l.rent * 10) / l.u.market)}× the unit's market rent`, "Monthly charges bill one tenth of it", "Looks like an extra zero typed at entry"], confidence: 0.92, source: "rule" });
       }
@@ -761,33 +761,48 @@ class Extras {
     issue("properties.missing_zip_state", "properties", "p21", "p21", "warn", { zip: "", city: p21.city, state: p21.state }, { changes: { zip }, why: ["ZIP is missing", `Street and city match ZIP ${zip} (Kirkwood, Atlanta)`], confidence: 0.9, source: "rule" });
     const street = p05.street;
     p05.street = String(street).toUpperCase().replace(" AVE", " AVENUE") + ".";
+    const p27 = c.propById.p27.row;
+    p27.state = "";
+    issue("properties.missing_zip_state", "properties", "p27", "p27", "warn", { zip: p27.zip, city: p27.city, state: "" }, { changes: { state: "AZ" }, why: ["State is missing", `ZIP ${p27.zip} and the Phoenix metro are in Arizona`], confidence: 0.98, source: "rule" });
     issue("properties.address_format", "properties", "p05", "p05", "info", { street: p05.street }, { changes: { street }, why: ["Street is in capitals with a trailing period", "USPS style abbreviates the suffix (Ave)"], confidence: 0.88, source: "rule" });
     // Units: orphaned property link; impossible square footage.
-    for (const [i, u] of c.units.filter((u) => u.status === "Vacant" && !u.commercial && u.p.id !== "p01").entries()) {
-      if (i % 9 === 4 && i < 60) {
+    // About 4% of units: orphaned property links (vacant units only) and 10× square footage.
+    for (const u of c.units.filter((u) => !u.commercial && u.number !== "412")) {
+      const r = rng(`dhu:${u.id}`);
+      if (u.status === "Vacant" && r.chance(0.3)) {
         const right = u.p.id;
         u.row.property_id = right.toUpperCase();
         issue("units.orphan_property", "units", u.id, right, "critical", { property_id: right.toUpperCase(), unit_number: u.number }, { changes: { property_id: right }, why: [`No property has id ${right.toUpperCase()}`, `Unit id and number match ${u.p.name} (${right})`], confidence: 0.95, source: "rule" });
-      } else if (i % 13 === 6 && i < 120) {
+      } else if (r.chance(0.033)) {
         u.row.sqft = u.sqft * 10;
         issue("units.sqft_outlier", "units", u.id, u.p.id, "warn", { sqft: u.sqft * 10, unit_type_sqft: u.sqft }, { changes: { sqft: u.sqft }, why: ["10× the floor plan's square footage"], confidence: 0.9, source: "rule" });
       }
     }
     // Payments posted to a neighbouring lease (same property, so totals still tie).
-    const pays = c.t.payments;
-    for (let i = 4000; i < pays.length; i += 9000) {
-      const pmt = pays[i];
+    // Kept to two per property: receivables compute balances by lease, so each misposted payment
+    // shows a false balance on one household and a false credit on another.
+    const currentBy = new Map<string, Lease[]>();
+    for (const l of this.currentLeases()) (currentBy.get(l.u.p.id) ?? currentBy.set(l.u.p.id, []).get(l.u.p.id)!).push(l);
+    const perProp = new Map<string, number>();
+    for (const pmt of c.t.payments) {
+      if (pmt.nsf || !pmt.charge_id || (pmt.received_on as string) < "2026-08-01" || (perProp.get(pmt.property_id as string) ?? 0) >= 2 || !rng(`dhp:${pmt.id}`).chance(0.01)) continue;
       const lease = c.leaseById[pmt.lease_id as string];
-      const other = c.leases.find((l) => l.u.p === lease.u.p && l !== lease && CURRENT.has(l.status) && l.u.floor === lease.u.floor);
+      if (lease.hh.residents[0]?.id === "res-p01-0001") continue;
+      const other = currentBy.get(lease.u.p.id)?.find((l) => l !== lease && l.u.floor === lease.u.floor && !l.commercial);
       if (!other) continue;
+      perProp.set(lease.u.p.id, (perProp.get(lease.u.p.id) ?? 0) + 1);
       pmt.lease_id = other.id;
       issue("payments.wrong_lease", "payments", pmt.id as string, lease.u.p.id, "warn", { posted_to: other.id, charge_id: pmt.charge_id, charge_lease: lease.id, amount_cents: pmt.amount_cents }, { changes: { lease_id: lease.id }, why: ["The charge it pays belongs to another lease", `Amount matches ${lease.id}'s charge exactly`], confidence: 0.91, source: "rule" });
     }
     // Ledger-side plants from generate.ts.
-    for (const id of c.planted["bill_lines.gl_miscoded"] ?? []) {
-      const line = c.t.bill_lines.find((l) => l.bill_id === id)!;
-      const bill = c.bills.find((b) => b.id === id)!;
-      issue("bill_lines.gl_miscoded", "bill_lines", line.id as string, bill.property_id as string, "warn", { gl_account: "6100 Landscaping", description: line.description, vendor: c.vendorName[bill.vendor_id as string] }, { changes: { gl_account_id: "gl-6000" }, why: ["Plumbing repair on a work order", "Vendor's trade is plumbing; landscaping doesn't fit"], confidence: 0.89, source: "ap" });
+    const lineById = new Map(c.t.bill_lines.map((l) => [l.id as string, l]));
+    const billById = new Map(c.bills.map((b) => [b.id as string, b]));
+    const glName = new Map(c.t.gl_accounts.map((g) => [g.id as string, `${g.number} ${g.name}`]));
+    for (const planted of c.planted["bill_lines.gl_miscoded"] ?? []) {
+      const [lineId, right] = planted.split("|");
+      const line = lineById.get(lineId)!;
+      const bill = billById.get(line.bill_id as string)!;
+      issue("bill_lines.gl_miscoded", "bill_lines", lineId, bill.property_id as string, "warn", { gl_account: glName.get(line.gl_account_id as string), description: line.description, vendor: c.vendorName[bill.vendor_id as string] }, { changes: { gl_account_id: `gl-${right}` }, why: [bill.work_order_id ? "Repair billed on a work order" : "Recurring contract with a fixed GL account", `This vendor's past bills are coded to ${glName.get(`gl-${right}`)}`], confidence: 0.89, source: "ap" });
     }
     for (const id of c.planted["owner_distributions.rounding_cent"] ?? []) issue("owner_distributions.rounding_cent", "owner_distributions", id, null, "info", { difference_cents: 1 }, { action: "owner_distributions.adjust", params: { amount_cents: 1 }, why: ["Statement net is $0.01 more than the distribution plus reserve"], confidence: 0.99, source: "owner_reporting" });
     for (const id of c.planted["bank_transactions.unmatched_deposit"] ?? []) {
@@ -808,13 +823,28 @@ class Extras {
     v26.bank_last4 = "0917";
     v26.bank_changed_at = ts(ASOF - 3, 1310);
     issue("vendors.unverified_bank_change", "vendors", "v26", null, "critical", { bank_last4: "0917", previous_last4: "5521", changed_at: v26.bank_changed_at, requested_by: "email from keyright-locksmiths.co (lookalike domain)" }, { action: "vendors.hold_payments", params: { create_task: true }, why: ["Bank details changed 3 days ago", "No verification task or callback on file", "Request came from a lookalike email domain"], confidence: 0.95, source: "ap" });
-    // Completed vendor jobs with no cost recorded.
-    for (const w of c.workOrders.filter((w) => w.status === "Completed" && w.vendor_id && (w.completed_at as string) >= iso(ASOF - 60)).filter((_, i) => i % 40 === 3)) {
-      w.cost_cents = null;
-      issue("work_orders.completed_without_cost", "work_orders", w.id as string, w.property_id as string, "info", { status: "Completed", cost_cents: null }, { changes: { cost_cents: w.estimate_cents }, why: ["Vendor job completed with no cost", "Use the approved estimate until the invoice arrives"], confidence: 0.7, source: "rule" });
+    for (const v of c.t.vendors.filter((v) => v.id === "v19" || v.id === "v42")) v.w9_on_file = 0;
+    for (const v of c.t.vendors.filter((v) => v.is_1099 && !v.w9_on_file)) issue("vendors.missing_w9", "vendors", v.id as string, null, "warn", { w9_on_file: 0, is_1099: 1 }, { action: "vendors.request_w9", params: {}, why: ["1099 vendor with no W-9 on file", "Payments this year need a TIN for 1099 filing"], confidence: 0.97, source: "rule" });
+    // Work orders (~4%): completed vendor jobs with no cost, and completion stamped before opening.
+    for (const w of c.workOrders) {
+      if (!w.completed_at) continue;
+      const r = rng(`dhw:${w.id}`);
+      if (w.vendor_id && r.chance(0.07)) {
+        w.cost_cents = null;
+        issue("work_orders.completed_without_cost", "work_orders", w.id as string, w.property_id as string, "info", { status: w.status, cost_cents: null }, { changes: { cost_cents: w.estimate_cents }, why: ["Vendor job completed with no cost", "Use the approved estimate until the invoice arrives"], confidence: 0.7, source: "rule" });
+      } else if (r.chance(0.02)) {
+        const right = w.completed_at as string;
+        w.completed_at = ts(day(w.opened_at as string) - 1, 600);
+        issue("work_orders.closed_before_opened", "work_orders", w.id as string, w.property_id as string, "warn", { opened_at: w.opened_at, completed_at: w.completed_at }, { changes: { completed_at: right }, why: ["Completed one day before it was opened", "The completion event in the history has the right time"], confidence: 0.9, source: "rule" });
+      }
     }
-    // A few already fixed (history in data_fix_log + audit).
-    for (const iss of issues.filter((_, i) => i % 11 === 5)) {
+    // A few already fixed (history in data_fix_log + audit). The row then holds the corrected value.
+    const byId = new Map<string, Map<string, R>>();
+    const rowOf = (table: string, id: string) => (byId.get(table) ?? byId.set(table, new Map(c.t[table].map((r) => [r.id as string, r]))).get(table)!).get(id);
+    for (const iss of issues.filter((x, i) => i % 11 === 5 && JSON.parse(x.suggested_fix as string).changes)) {
+      const row = rowOf(iss.entity_type as string, iss.entity_id as string);
+      if (!row) continue;
+      Object.assign(row, JSON.parse(iss.suggested_fix as string).changes);
       iss.status = "fixed";
       iss.fixed_by = "marcus";
       iss.fixed_at = ts(ASOF - 2, 1000);
@@ -837,14 +867,16 @@ class Extras {
       ["units.orphan_property", "units", "Unit points to a missing property", "critical", "property_id doesn't match any property.", "SELECT u.id FROM {{units}} u WHERE NOT EXISTS (SELECT 1 FROM {{properties}} p WHERE p.id = u.property_id)"],
       ["units.sqft_outlier", "units", "Square footage outlier", "warn", "Unit sq ft is more than 3× its floor plan.", "SELECT u.id FROM {{units}} u JOIN {{unit_types}} t ON t.id = u.unit_type_id WHERE u.sqft > 3 * t.sqft"],
       ["payments.wrong_lease", "payments", "Payment posted to the wrong lease", "warn", "The payment's lease differs from the lease of the charge it pays.", "SELECT p.id FROM {{payments}} p JOIN {{charges}} c ON c.id = p.charge_id WHERE p.lease_id <> c.lease_id"],
-      ["bill_lines.gl_miscoded", "bills", "GL account doesn't fit the line", "warn", "A repair line on a work-order bill is coded to Landscaping.", "SELECT l.id FROM {{bill_lines}} l JOIN {{bills}} b ON b.id = l.bill_id WHERE b.work_order_id IS NOT NULL AND l.gl_account_id = 'gl-6100'"],
+      ["bill_lines.gl_miscoded", "bills", "GL account doesn't fit the line", "warn", "A recurring-contract line differs from the contract's GL account, or a work-order repair isn't coded to repairs.", "SELECT l.id FROM {{bill_lines}} l JOIN {{bills}} b ON b.id = l.bill_id LEFT JOIN {{recurring_bills}} rb ON rb.id = b.recurring_bill_id WHERE (rb.id IS NOT NULL AND l.gl_account_id <> rb.gl_account_id) OR (b.work_order_id IS NOT NULL AND l.gl_account_id NOT IN ('gl-6000', 'gl-6050'))"],
       ["bank_transactions.unmatched_deposit", "bank_transactions", "Unmatched bank deposit", "warn", "A deposit on the bank feed has no matching transfer batch.", "SELECT id FROM {{bank_transactions}} WHERE transfer_id IS NULL AND amount_cents > 0"],
       ["owner_distributions.rounding_cent", "owner_distributions", "Statement off by a cent", "info", "Net income differs from distribution plus reserve by one cent.", "SELECT id FROM {{owner_distributions}} WHERE abs(income_cents - expense_cents - fee_cents - amount_cents - reserve_cents) = 1"],
       ["vendors.unverified_bank_change", "vendors", "Unverified vendor bank change", "critical", "Bank details changed in the last 30 days with no verification task.", "SELECT v.id FROM {{vendors}} v WHERE v.bank_changed_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {{tasks}} t WHERE t.entity_type = 'vendors' AND t.entity_id = v.id AND t.title LIKE 'Verify bank%' AND t.status = 'Done')"],
       ["documents.import_swapped_columns", "documents", "Import columns look swapped", "warn", "An import's rent is lower than its deposit on every row, or names are reversed.", null],
       ["documents.misfiled", "documents", "Document filed to the wrong record", "info", "The document type doesn't fit the record it's filed to.", "SELECT id FROM {{documents}} WHERE doc_type = 'Lease' AND entity_type <> 'leases'"],
       ["prospects.invalid_email", "prospects", "Invalid prospect email", "info", "Email has a typo in the domain.", "SELECT id FROM {{prospects}} WHERE email NOT LIKE '%@%.%' OR email LIKE '%,%'"],
-      ["work_orders.completed_without_cost", "work_orders", "Completed vendor job without cost", "info", "A vendor work order is completed with no cost recorded.", "SELECT id FROM {{work_orders}} WHERE status = 'Completed' AND vendor_id IS NOT NULL AND cost_cents IS NULL"],
+      ["work_orders.completed_without_cost", "work_orders", "Completed vendor job without cost", "info", "A vendor work order is completed with no cost recorded.", "SELECT id FROM {{work_orders}} WHERE status IN ('Completed', 'Paid') AND vendor_id IS NOT NULL AND cost_cents IS NULL"],
+      ["work_orders.closed_before_opened", "work_orders", "Completed before it was opened", "warn", "completed_at is earlier than opened_at.", "SELECT id FROM {{work_orders}} WHERE completed_at < opened_at"],
+      ["vendors.missing_w9", "vendors", "1099 vendor without a W-9", "warn", "A vendor that gets a 1099 has no W-9 on file.", "SELECT id FROM {{vendors}} WHERE is_1099 = 1 AND w9_on_file = 0"],
     ];
     for (const [id, entity, nm, severity, description, sql] of RULES) add("data_rules", { id, entity_type: entity, name: nm, severity, description, check_kind: sql ? "sql" : "computed", check_sql: sql, help_slug: "data-health-fix-issues", enabled: 1 });
   }
@@ -938,7 +970,7 @@ class Extras {
     for (let d = ASOF - 6; d <= ASOF; d++) for (const h of [2, 8, 14, 20]) {
       if (d === ASOF && h > 8) continue;
       const fresh = d === ASOF - 1 && h === 2;
-      doRun("data_health", d, h * 60, "schedule", ["data_rules.run", "data_issues.list"], fresh ? crit.slice(0, 40).map((i) => ({ entity: i.entity_type as string, id: i.entity_id as string, pid: i.property_id as string | null, action: "data_issues.apply_fix", title: `Fix: ${String(i.rule_id).split(".")[1].replace(/_/g, " ")} (${i.entity_id})`, why: JSON.parse(i.suggested_fix as string).why, conf: JSON.parse(i.suggested_fix as string).confidence, risk: i.rule_id === "vendors.unverified_bank_change" || String(i.rule_id).startsWith("payments") || String(i.rule_id).startsWith("owner_distributions") ? "High" : "Low", queue: i.severity === "info" ? "auto_handled" : "needs_you", role: "admin", payload: { issue_id: i.id } })) : [], fresh ? `Ran 18 rules; ${crit.length} open issues, ${crit.filter((i) => i.severity === "critical").length} critical.` : "Ran 18 rules; no new issues.");
+      doRun("data_health", d, h * 60, "schedule", ["data_rules.run", "data_issues.list"], fresh ? crit.slice(0, 40).map((i) => ({ entity: i.entity_type as string, id: i.entity_id as string, pid: i.property_id as string | null, action: "data_issues.apply_fix", title: `Fix: ${String(i.rule_id).split(".")[1].replace(/_/g, " ")} (${i.entity_id})`, why: JSON.parse(i.suggested_fix as string).why, conf: JSON.parse(i.suggested_fix as string).confidence, risk: i.rule_id === "vendors.unverified_bank_change" || String(i.rule_id).startsWith("payments") || String(i.rule_id).startsWith("owner_distributions") ? "High" : "Low", queue: i.severity === "info" ? "auto_handled" : "needs_you", role: "admin", payload: { issue_id: i.id } })) : [], fresh ? `Ran 21 rules; ${crit.length} open issues, ${crit.filter((i) => i.severity === "critical").length} critical.` : "Ran 21 rules; no new issues.");
     }
     // Compliance and owner reporting.
     doRun("compliance", ASOF, 11 * 60, "schedule", ["vendor_cois.list_expiring", "compliance_items.list"], (this.t.vendor_cois ?? []).filter((x) => x.status !== "Valid").map((x) => ({ entity: "vendors", id: x.vendor_id as string, pid: null, action: "vendors.request_coi", title: `Request a current COI from ${c.vendorName[x.vendor_id as string]} (${x.status === "Expired" ? "expired" : "expires"} ${x.expires_on})`, why: [`Certificate ${x.status === "Expired" ? "expired" : "expires"} on ${x.expires_on}`, "Vendor has open or scheduled jobs"], conf: 0.97, risk: x.status === "Expired" ? "Medium" : "Low", queue: x.status === "Expired" ? "needs_you" : "auto_handled", role: "maintenance_supervisor" })), "Checked 34 certificates and 120 compliance items.");

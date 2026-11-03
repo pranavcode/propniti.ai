@@ -133,6 +133,20 @@ describe("seed generator", () => {
     }
   });
 
+  it("plants about 4% corrupted records per major entity, in every property's scope", () => {
+    const open = T.data_issues.filter((i) => i.status === "open" || i.status === "fixed");
+    const rate = (entity: string, rows: number) => open.filter((i) => i.entity_type === entity).length / rows;
+    for (const [entity, table] of [["residents", "residents"], ["leases", "leases"], ["units", "units"], ["work_orders", "work_orders"], ["bill_lines", "bills"]] as const) {
+      expect(rate(entity, T[table].length), entity).toBeGreaterThan(0.03);
+      expect(rate(entity, T[table].length), entity).toBeLessThan(0.08);
+    }
+    expect(open.filter((i) => i.entity_type === "properties").length).toBeGreaterThanOrEqual(3);
+    expect(open.filter((i) => i.entity_type === "vendors").length).toBeGreaterThanOrEqual(2);
+    expect(open.filter((i) => i.entity_type === "payments").length).toBeGreaterThanOrEqual(30);
+    const props = new Set(open.map((i) => i.property_id));
+    for (const p of T.properties) expect(props.has(p.id), p.id as string).toBe(true);
+  });
+
   it("lands in the planned ranges: occupancy, delinquency, open work orders", () => {
     const oct = T.metrics_monthly.filter((m) => m.month === "2026-10");
     const occ = sum(oct, (m) => m.occupied as number) / sum(oct, (m) => m.units as number);

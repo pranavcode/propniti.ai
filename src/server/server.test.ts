@@ -58,12 +58,26 @@ describe("migrations and base", () => {
   });
 });
 
+describe("data health", { timeout: 120_000 }, () => {
+  it("every planted corrupted record is caught by its rule's SQL", async () => {
+    const rules = (await db.prepare("SELECT id, check_sql FROM data_rules WHERE workspace_id = 'base' AND check_kind = 'sql'").all<{ id: string; check_sql: string }>()).results;
+    expect(rules.length).toBeGreaterThan(15);
+    for (const r of rules) {
+      const sql = r.check_sql.replace(/\{\{(\w+)\}\}/g, (_, t) => `(SELECT * FROM ${t} WHERE workspace_id = 'base' AND deleted = 0)`);
+      const found = new Set((await db.prepare(sql).all<{ id: string }>()).results.map((x) => x.id));
+      const planted = (await db.prepare("SELECT entity_id FROM data_issues WHERE workspace_id = 'base' AND rule_id = ?1 AND status = 'open'").bind(r.id).all<{ entity_id: string }>()).results;
+      for (const p of planted) expect(found.has(p.entity_id), `${r.id} misses ${p.entity_id}`).toBe(true);
+    }
+  });
+});
+
 describe("workspaces", { timeout: 60_000 }, () => {
   it("are one row: creating one writes no overlay data", async () => {
     const ws = await newWorkspace();
     expect(await n("SELECT count(*) AS n FROM workspaces WHERE id = ?1 AND base_version = (SELECT value FROM meta WHERE key = 'base_version')", ws)).toBe(1);
     expect(await overlayRows(ws)).toBe(0);
-    expect((await list({ db, ws }, "units", { propertyIds: ["p01"] })).total).toBe(186);
+    const p01 = await n("SELECT count(*) AS n FROM units WHERE workspace_id = 'base' AND property_id = 'p01'");
+    expect((await list({ db, ws }, "units", { propertyIds: ["p01"] })).total).toBe(p01);
   });
 
   it("read overlay rows over base rows, and a tombstone hides the base row", async () => {
@@ -72,7 +86,7 @@ describe("workspaces", { timeout: 60_000 }, () => {
     await db.prepare("INSERT INTO units (workspace_id, id, deleted, property_id, number) VALUES (?1, 'u-p01-101', 1, 'p01', '101')").bind(ws).run();
     expect(await get({ db, ws }, "units", "u-p01-412")).toMatchObject({ status: "Down", market_rent_cents: 999900 });
     expect(await get({ db, ws }, "units", "u-p01-101")).toBeNull();
-    expect((await list({ db, ws }, "units", { propertyIds: ["p01"] })).total).toBe(185);
+    expect((await list({ db, ws }, "units", { propertyIds: ["p01"] })).total).toBe((await n("SELECT count(*) AS n FROM units WHERE workspace_id = 'base' AND property_id = 'p01'")) - 1);
     // Another visitor still sees the base.
     const other = await newWorkspace();
     expect(await get({ db, ws: other }, "units", "u-p01-101")).not.toBeNull();
@@ -197,8 +211,9 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await n("SELECT count(*) AS n FROM events WHERE workspace_id = ?1 AND type IN ('wo.approved', 'payment.sent')", c.ws)).toBe(2);
     const open = await one<{ id: string }>(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'In progress' LIMIT 1`, c.ws);
     expect(await approveAndPayWorkOrder(c, open!.id)).toMatchObject({ status: 409, error: expect.stringContaining("in progress") });
-    // Fraud hold: KeyRight Locksmiths changed bank details without verification.
-    const held = await one<{ id: string }>(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id = 'v26' LIMIT 1`, c.ws);
+    // Fraud hold: an open unverified-bank-change issue on the vendor blocks payment.
+    const held = await one<{ id: string; vendor_id: string }>(`SELECT w.id, w.vendor_id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id IS NOT NULL AND w.id <> ?2 LIMIT 1`, c.ws, wo!.id);
+    await db.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, detected_at, severity, status) VALUES (?1, 'hold-1', 'vendors.unverified_bank_change', 'vendors', ?2, 'x', 'critical', 'open')").bind(c.ws, held!.vendor_id).run();
     expect(await approveAndPayWorkOrder(c, held!.id)).toMatchObject({ status: 409, error: expect.stringContaining("payment hold") });
     expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Approval refused'", c.ws)).toBe(1);
   });

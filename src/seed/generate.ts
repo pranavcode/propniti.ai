@@ -906,6 +906,8 @@ export const COMMON_WO: [string, string, string, number, number, string | null][
   ["Electrical", "Parking lot lights out", "Electrical", 22_000, 95_000, "electrical"],
   ["General", "Trash compactor jammed", "General", 18_000, 75_000, null],
 ];
+// Plausible wrong account for each expense account (all expense-to-expense, so NOI is unchanged).
+const MISCODE: Record<string, string> = { "6000": "6100", "6100": "6000", "6150": "6600", "6230": "6150", "6400": "6500", "6500": "6400", "6600": "6150", "6700": "6000" };
 const PRIORITY: [string, number][] = [["Emergency", 5], ["Urgent", 18], ["Normal", 62], ["Low", 15]];
 const SLA_HOURS: Record<string, number> = { Emergency: 4, Urgent: 24, Normal: 72, Low: 168 };
 
@@ -928,8 +930,14 @@ function operations(c: Ctx) {
       approved_by: status === "Paid" || status === "Approved" || status === "Scheduled" ? (amount > 500_000 ? "grace" : "s-lucy") : null, approved_at: status === "Paid" || status === "Approved" || status === "Scheduled" ? ts(billDate + 2, 600 + br.int(0, 300)) : null,
     });
     c.bills.push(row);
-    for (const [g, d, a] of lines) {
-      add("bill_lines", { id: `bl-${String(c.next("bill_line")).padStart(6, "0")}`, bill_id: id, gl_account_id: gl(g), description: d, qty: 1, unit_cents: a, amount_cents: a });
+    // Corrupted case: about 5.5% of contract and work-order bills are coded to the wrong GL account.
+    // The journal posts what was coded, so the books still agree; Data Health finds the mismatch.
+    const miscode = (opts.recurring || opts.wo) && rng(`miscode:${id}`).chance(0.055) ? MISCODE[lines[0][0]] : undefined;
+    for (const [g0, d, a] of lines) {
+      const g = miscode && g0 === lines[0][0] ? miscode : g0;
+      const lineId = `bl-${String(c.next("bill_line")).padStart(6, "0")}`;
+      add("bill_lines", { id: lineId, bill_id: id, gl_account_id: gl(g), description: d, qty: 1, unit_cents: a, amount_cents: a });
+      if (g !== g0) (c.planted["bill_lines.gl_miscoded"] ??= []).push(`${lineId}|${g0}`);
       je(p.id, g, ym(billDate), a, 0);
     }
     je(p.id, "2000", ym(billDate), 0, amount);
@@ -1097,12 +1105,7 @@ export function createWorkOrder(c: Ctx, p: Prop, u: Unit | null, spec: (typeof W
   if (spec[5] && recent && (open || pr.chance(0.35))) {
     add("photos", { id: `ph-${id}`, entity_type: "work_orders", entity_id: id, property_id: p.id, url: `/img/wo/wo-${spec[5]}.webp`, caption: spec[1], stage: "Before", taken_at: ts(opened, openedMin + 2), check_result: pr.chance(0.9) ? "Matches" : "Unclear", check_confidence: Math.round((0.7 + pr() * 0.28) * 100) / 100, check_note: null });
   }
-  if (completedDay && vendor && !c.sealed) {
-    // Corrupted case: a plumbing repair coded to Landscaping (posted that way, so the books agree).
-    const miscode = spec[0] === "Plumbing" && pr.chance(0.02);
-    const b = c.bill(p, vendor, [[miscode ? "6100" : "6000", `${spec[1]}${unitNo} (${id})`, cost]], completedDay + pr.int(1, 3), { wo: id });
-    if (miscode && b) (c.planted["bill_lines.gl_miscoded"] ??= []).push(b.id as string);
-  }
+  if (completedDay && vendor && !c.sealed) c.bill(p, vendor, [["6000", `${spec[1]}${unitNo} (${id})`, cost]], completedDay + pr.int(1, 3), { wo: id });
   return row;
 }
 
