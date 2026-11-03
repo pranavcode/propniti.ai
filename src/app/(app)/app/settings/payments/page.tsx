@@ -87,7 +87,7 @@ export default async function PaymentsPage() {
             {[
               ["Bank transfer (ACH)", "Free for residents. Settles in 2–3 business days; returns (NSF) reverse the payment and can post a fee.", "Always on"],
               ["Card", "2.9% + 30¢ passed to the resident. Settles next business day.", stripe === "Connected" ? "On" : "Off: connect Stripe"],
-              ["Autopay", "Residents opt in from the portal; runs on the due date, skips if a payment plan is active.", stripe === "Connected" ? "On" : "Off: connect Stripe"],
+              ["Autopay", "Residents opt in from the portal; the payment runs on the due date.", stripe === "Connected" ? "On" : "Off: connect Stripe"],
             ].map(([t, d, s]) => (
               <li key={t} className="rounded-lg border bg-card p-3">
                 <div className="flex items-center justify-between gap-2"><span className="font-medium">{t}</span><span className={s.startsWith("Off") ? "text-[12px] text-tone-warning" : "text-[12px] text-tone-success"}>{s}</span></div>

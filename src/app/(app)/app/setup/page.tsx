@@ -33,7 +33,7 @@ export default async function SetupPage() {
   const session = await currentSession();
   return (
     <>
-      <PageHeader icon={<ListChecks />} title="Set up Propniti" description="Six steps take an organization from sign-up to live: company, bank, portfolio, roles, team and payment rules. Most teams finish in under an hour." />
+      <PageHeader icon={<ListChecks />} title="Set up Propniti" description="Six steps to go live: company, bank, portfolio, roles, team and payment rules." />
       <PageBody>
         <SetupView hints={await hints(session.ws)} />
       </PageBody>

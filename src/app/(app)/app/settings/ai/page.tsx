@@ -71,7 +71,7 @@ export default async function AiSettingsPage() {
 
         <Section title="How your data is used">
           <ul className="grid gap-2 rounded-lg border bg-card p-4 text-[13px] md:grid-cols-2">
-            <li><span className="font-medium">Not used for training.</span> <span className="text-muted-foreground">Requests go to the model provider under terms that exclude training on your data.</span></li>
+            <li><span className="font-medium">Labelled by source.</span> <span className="text-muted-foreground">Every AI result says whether it came from a live model, a saved result or rules, and links to its run.</span></li>
             <li><span className="font-medium">Minimum data per request.</span> <span className="text-muted-foreground">Agents send the records a step needs, not your database. Each run lists what it read.</span></li>
             <li><span className="font-medium">Treated as data, never instructions.</span> <span className="text-muted-foreground">Invoice text, messages and imports cannot change what an agent is allowed to do.</span></li>
             <li><span className="font-medium">Every action is audited.</span> <span className="text-muted-foreground">Who approved, which agent and model, and what changed. <Link href="/app/settings/audit?view=ai" className="text-primary hover:underline">AI actions in the audit log</Link></span></li>

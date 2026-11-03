@@ -169,7 +169,7 @@ export default async function CompliancePage() {
       <PageHeader
         icon={<ShieldAlert />}
         title="Compliance"
-        description="Insurance, vendor certificates, inspections, permits and legal cases in one place, with what lapses next."
+        description="Property insurance, vendor certificates, inspections, permits and legal cases, with what lapses next."
         meta={<><span>{session.actor.scope.label}</span>{timeline?.today && <span>As of <RelativeDate value={timeline.today} mode="date" /></span>}</>}
         actions={<Button asChild size="sm" variant="outline"><Link href="/app/agents"><Bot /> Run Compliance agent</Link></Button>}
       >

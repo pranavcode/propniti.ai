@@ -35,7 +35,7 @@ export default async function StateRulesPage() {
   const ruleKeys = Object.keys(STATE_RULES).filter((k) => all.some((r) => r.rule === k)) as (keyof typeof STATE_RULES)[];
   return (
     <>
-      <PageHeader icon={<Landmark />} title="State rules" description="Late-fee caps, grace periods, deposit limits and notice periods by state. Late fees post capped by the rule in force on the posting date, and the Collections agent quotes these in notices. Plain-English summaries, not legal advice: confirm changes with counsel." />
+      <PageHeader icon={<Landmark />} title="State rules" description="Late-fee caps, grace periods, deposit limits and notice periods by state. Late fees post capped by the rule in force on the posting date. Plain-English summaries, not legal advice: confirm changes with counsel." />
       <PageBody>
         {!all.length ? (
           <EmptyState kind="table" title="No state rules yet" description="Add the rules for Texas, Georgia and Arizona before posting late fees. Until then late fees use each property's late-fee policy without a state cap." />
@@ -71,7 +71,7 @@ export default async function StateRulesPage() {
             ))}
           </div>
         )}
-        <Section title="Change history" description="Each amendment is a new dated version; earlier versions still apply to charges before their end date.">
+        <Section title="Change history" description="Each amendment adds a dated version. Charges posted before that date still use the earlier version.">
           <ChangeHistory ctx={ctx} entityTypes={["state_rules"]} empty="Amendments to state rules appear here with who made them." />
         </Section>
         {all.length > 0 && (
