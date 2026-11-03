@@ -41,11 +41,11 @@ const save = () => {
   writeFileSync(OUT, `-- AI summaries and briefings, generated ${new Date().toISOString()} by scripts/ai-precompute.mjs\n${lines.join("\n")}\n`);
 };
 let models = new Set();
-for (let i = 0; i < todo.length; i += 10) {
-  const { rows } = await call("POST", { items: todo.slice(i, i + 10) });
+for (let i = 0; i < todo.length; i += 5) {
+  const { rows } = await call("POST", { items: todo.slice(i, i + 5) });
   for (const r of rows) if (!r.error) { lines.push(insert(r)); models.add(r.model); }
   save();
-  console.log(`  ${Math.min(i + 10, todo.length)}/${todo.length}`);
+  console.log(`  ${Math.min(i + 5, todo.length)}/${todo.length}`);
 }
 const { rows: briefings } = await call("POST", { briefings: true });
 for (const r of briefings) { lines.push(insert(r)); models.add(r.model); }
