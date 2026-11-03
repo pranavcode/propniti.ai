@@ -16,6 +16,8 @@ export type Sort = [column: string, dir: "asc" | "desc"];
 export type ListOptions = { where?: Where; sort?: Sort | Sort[]; page?: number; size?: number; columns?: string[]; propertyIds?: string[] | "all" };
 
 const IDENT = /^[a-z_][a-z0-9_]*$/;
+// Operators are spliced into SQL, so only these pass (types aren't enforced at runtime).
+const COMPARE = new Set(["=", "<>", "<", "<=", ">", ">=", "like"]);
 const ident = (c: string) => {
   if (!IDENT.test(c)) throw new Error(`Bad column: ${c}`);
   return c;
@@ -33,7 +35,8 @@ export function whereSql(where: Where | undefined, params: unknown[], alias = "t
     else if (cond.op === "null") parts.push(`${c} IS NULL`);
     else if (cond.op === "not null") parts.push(`${c} IS NOT NULL`);
     else if (cond.op === "in" || cond.op === "not in") parts.push(`${c} ${cond.op.toUpperCase()} (SELECT value FROM json_each(${bind(JSON.stringify(cond.value))}))`);
-    else if ("value" in cond) parts.push(`${c} ${cond.op === "like" ? "LIKE" : cond.op} ${bind(cond.value)}`);
+    else if ("value" in cond && COMPARE.has(cond.op)) parts.push(`${c} ${cond.op === "like" ? "LIKE" : cond.op} ${bind(cond.value)}`);
+    else throw new Error(`Bad operator: ${String((cond as { op?: unknown }).op)}`);
   }
   return parts.length ? parts.join(" AND ") : "1 = 1";
 }
