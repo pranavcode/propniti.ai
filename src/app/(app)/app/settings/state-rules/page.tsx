@@ -18,8 +18,8 @@ type R = { id: string; state: string; rule: keyof typeof STATE_RULES; value: str
 function show(r: R) {
   const meta = STATE_RULES[r.rule];
   const n = Number(r.value);
-  if (!meta || Number.isNaN(n)) return r.value;
-  if (n === 0) return meta.zeroMeans;
+  if (!meta || (Number.isNaN(n) && r.value !== "none")) return r.value;
+  if (n === 0 || r.value === "none") return meta.zeroMeans;
   if (r.rule === "late_fee_cap_pct") return `${r.value}% of monthly rent`;
   if (r.rule === "late_fee_cap_cents") return `$${(n / 100).toLocaleString("en-US")}`;
   return `${r.value} ${meta.unit}`;
