@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type { Actor } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
@@ -27,13 +28,14 @@ export type Session = { persona: Persona; actor: Actor; ws: string | null };
 
 // Server components: the acting persona, its resolved scope and the visitor's workspace (null
 // until their first write; reads then see base data only).
-export async function currentSession(): Promise<Session> {
+// Memoized per request (React cache): the layout, the page and its metadata share one scope lookup.
+export const currentSession = cache(async (): Promise<Session> => {
   const jar = await cookies();
   const persona = getPersona(jar.get(PN_AS)?.value) ?? getPersona(DEFAULT_PERSONA)!;
   const raw = jar.get("pn_ws")?.value;
   const ws = raw && WS_ID.test(raw) ? raw : null;
   return { persona, ws, actor: await actorFor(getPlatform().db, ws, persona) };
-}
+});
 
 // Route handlers: same, from the request headers.
 export async function sessionFromRequest(request: Request): Promise<Session> {
