@@ -41,7 +41,8 @@ async function agentRun(c) {
   const { runId } = await postJson(`/api/ai/agents/${c.agent}/run`, {}, c.persona);
   for (let i = 0; i < 90; i++) {
     const r = await fetch(`${BASE_URL}/api/ai/runs/${runId}`, { headers: { cookie: [`pn_as=${c.persona}`, wsCookie].join("; ") } }).then((x) => x.json());
-    if (r.run?.status !== "running") return { ...r, source: r.run?.model === "rules" ? "mock" : r.run?.model };
+    // A run with nothing to do never calls the model; that isn't a fallback.
+    if (r.run?.status !== "running") return { ...r, source: /^Nothing to do/.test(r.run?.summary ?? "") ? "n/a (nothing to do)" : r.run?.model === "rules" ? "mock" : r.run?.model };
     await new Promise((res) => setTimeout(res, 2000));
   }
   throw new Error("run did not finish in 3 minutes");
