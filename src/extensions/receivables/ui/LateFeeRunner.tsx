@@ -17,6 +17,8 @@ export function LateFeeRunner({ policies, period }: { policies: PolicyRow[]; per
   const router = useRouter();
   const [confirm, setConfirm] = useState<PolicyRow | null>(null);
   const [busy, setBusy] = useState(false);
+  // After a capped run: how many leases are still eligible, and for which policy.
+  const [more, setMore] = useState<{ policy: PolicyRow; posted: string; remaining: number } | null>(null);
   if (!policies.length) {
     return (
       <div className="px-4 py-3 text-[12.5px] text-muted-foreground">
@@ -24,16 +26,22 @@ export function LateFeeRunner({ policies, period }: { policies: PolicyRow[]; per
       </div>
     );
   }
-  const run = async () => {
-    if (!confirm) return;
+  const post = async (policy: PolicyRow) => {
     setBusy(true);
-    const r = await runAction("late_fee_policies", confirm.id, "post_late_fees", { period });
+    const r = await runAction("late_fee_policies", policy.id, "post_late_fees", { period });
     setBusy(false);
     setConfirm(null);
-    if (!r.ok) return toast.error(r.error);
-    toast.success(r.message ?? "Late fees posted", r.href ? { action: { label: "See the fees", onClick: () => router.push(r.href!) } } : undefined);
+    if (!r.ok) {
+      setMore(null);
+      return toast.error(r.error);
+    }
+    const remaining = Number(r.href ? new URL(r.href, location.origin).searchParams.get("remaining") : 0) || 0;
+    const posted = (r.message ?? "Late fees posted").replace(/\s*\d+ more to post: run it again\.$/, "");
+    setMore(remaining ? { policy, posted, remaining } : null);
+    toast.success(remaining ? `${posted} ${remaining} more eligible.` : posted, r.href ? { action: { label: "See the fees", onClick: () => router.push(r.href!.replace(/&remaining=\d+/, "")) } } : undefined);
     router.refresh();
   };
+  const run = () => confirm && post(confirm);
   return (
     <>
       <ul className="divide-y">
@@ -47,6 +55,12 @@ export function LateFeeRunner({ policies, period }: { policies: PolicyRow[]; per
           </li>
         ))}
       </ul>
+      {more && (
+        <div role="status" className="flex items-center gap-3 border-t bg-tone-warning/[0.06] px-4 py-2 text-[12.5px]">
+          <span className="flex-1">{more.posted} {more.remaining} more eligible.</span>
+          <Button size="xs" disabled={busy} onClick={() => post(more.policy)}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}Run again</Button>
+        </div>
+      )}
       {policies.length > 4 && <Link href="/app/receivables/late-fees" className="block border-t px-4 py-2 text-[12px] text-muted-foreground hover:text-foreground hover:underline">{policies.length - 4} more policies →</Link>}
       <Dialog open={!!confirm} onOpenChange={(o) => !o && !busy && setConfirm(null)}>
         <DialogContent className="sm:max-w-md">

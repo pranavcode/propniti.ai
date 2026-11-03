@@ -69,7 +69,11 @@ registerAction({
     const ids = await policyProperties(ctx, row);
     if (!ids.length) return { status: 403, error: "That policy's property is outside your portfolio." };
     const r = await postLateFees(ctx, ids, i.period);
-    return r.status === 200 ? { status: 200, message: r.message, href: `/app/receivables/charges?f.gl_account_id=gl-4100&f.period=${i.period}` } : r;
+    if (r.status !== 200) return r;
+    // Fees post in rounds (postLateFees caps a run); `remaining` rides on the link so the runner can
+    // offer "Run again". The list page ignores the extra parameter.
+    const remaining = r.remaining ?? 0;
+    return { status: 200, message: r.message, href: `/app/receivables/charges?f.gl_account_id=gl-4100&f.period=${i.period}${remaining ? `&remaining=${remaining}` : ""}` };
   },
   help: { summary: "Adds a late fee to each lease whose rent is still unpaid after the grace period, once per month, never above the state cap.", article: "post-late-fees" },
 });

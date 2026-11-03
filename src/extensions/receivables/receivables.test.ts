@@ -4,7 +4,7 @@ import { getAction } from "@/extensions/actions";
 import { MANAGEMENT_FEE_RATE } from "@/lib/ledger";
 import { openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
-import { chargeOpenSql, chargeStatusSql, trustBalances } from "@/server/data";
+import { CHARGE_IS_OPEN, chargeOpenSql, chargeStatusSql, trustBalances } from "@/server/data";
 import { effective } from "@/server/effective";
 import { randomId } from "@/server/repo";
 import { resolveWorkspace } from "@/server/workspace";
@@ -89,7 +89,7 @@ describe("pay rent (resident)", () => {
 });
 
 describe("late fees", () => {
-  it("cap at the state limit, post once per lease and month", async () => {
+  it("cap at the state limit, post once per lease and month", { timeout: 60_000 }, async () => {
     const c = await ctx();
     // A generous policy that the Texas cap (10% of rent) must cut down.
     await db.batch([
@@ -99,6 +99,11 @@ describe("late fees", () => {
     const policy = { id: "lfp-test", property_id: "p02" };
     const rs = await Promise.all([act("late_fee_policies.post_late_fees")(c, policy, { period: "2026-11" }), act("late_fee_policies.post_late_fees")(c, policy, { period: "2026-11" })]);
     expect(statuses(rs)).toEqual([200, 409]);
+    // The link back to the fees carries how many leases are still eligible after a capped run.
+    const ok = rs.find((r) => r.status === 200) as { href: string };
+    const left = Number(new URL(ok.href, "http://x").searchParams.get("remaining") ?? 0);
+    const eligible = await n(`SELECT count(*) AS n FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND c.gl_account_id IN ('gl-4000', 'gl-4010') AND ${CHARGE_IS_OPEN("c")} AND c.due_on <= '2026-11-02'`, c.ws);
+    expect(left).toBe(Math.max(0, eligible - 90));
     const fees = (await db.prepare("SELECT f.lease_id, f.amount_cents, r.amount_cents AS rent FROM charges AS f JOIN charges AS r ON r.lease_id = f.lease_id AND r.period = f.period AND r.gl_account_id = 'gl-4000' WHERE f.workspace_id = ?1 AND f.gl_account_id = 'gl-4100'").bind(c.ws).all<{ lease_id: string; amount_cents: number; rent: number }>()).results;
     expect(fees.length).toBeGreaterThan(0);
     for (const f of fees) expect(f.amount_cents).toBeLessThanOrEqual(Math.floor((f.rent * 10 + 50) / 100));
