@@ -18,8 +18,7 @@ const safe = <T,>(p: Promise<T>, fallback: T) => p.catch((e) => {
 });
 
 const EMPTY_Q = { rows: [], total: 0, page: 1, size: 0, counts: { needs_you: 0, auto_handled: 0, waiting: 0, decided: 0 } };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- an empty DbResult of any row type
-const NO_ROWS = { results: [], meta: { changes: 0 } } as any;
+const noRows = <T,>() => ({ results: [] as T[], meta: { changes: 0 } });
 
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const monthName = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
@@ -47,11 +46,11 @@ export async function financeHome(db: Db, ws: string | null, actor: Actor) {
     safe(db.prepare(`SELECT count(*) AS n, coalesce(sum(b.amount_cents), 0) AS c FROM ${effective("bills", ws)} b WHERE b.status = 'Pending approval'${sb.sql}`).bind(...sb.binds).first<{ n: number; c: number }>(), null),
     safe(db.prepare(`SELECT v.id, v.company, v.bank_changed_at FROM ${effective("vendors", ws)} v
         WHERE v.bank_changed_at IS NOT NULL AND julianday(?) - julianday(substr(v.bank_changed_at, 1, 10)) <= 60
-          AND NOT EXISTS (SELECT 1 FROM ${effective("data_issues", ws)} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status IN ('fixed', 'dismissed') AND di.fixed_at >= v.bank_changed_at)
-        ORDER BY v.bank_changed_at DESC LIMIT 5`).bind(today).all<{ id: string; company: string; bank_changed_at: string }>(), NO_ROWS),
+          AND NOT EXISTS (SELECT 1 FROM ${effective("data_issues", ws)} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status = 'fixed' AND di.fixed_at >= v.bank_changed_at)
+        ORDER BY v.bank_changed_at DESC LIMIT 5`).bind(today).all<{ id: string; company: string; bank_changed_at: string }>(), noRows<{ id: string; company: string; bank_changed_at: string }>()),
     safe(db.prepare(`SELECT count(*) AS n FROM ${effective("data_issues", ws)} di WHERE di.rule_id LIKE '%gl_miscoded' AND di.status = 'open'`).first<{ n: number }>(), null),
     safe(db.prepare(`SELECT count(*) AS n, coalesce(sum(b.amount_cents), 0) AS c FROM ${effective("bills", ws)} b WHERE b.status = 'Approved' AND b.due_on <= date(?, '+7 days')${sb.sql}`).bind(today, ...sb.binds).first<{ n: number; c: number }>(), null),
-    safe(db.prepare(`SELECT agent_key, count(*) AS n, sum(status = 'done') AS ok FROM ${effective("agent_runs", ws)} WHERE agent_key IN ('ap', 'reconciliation', 'data_health') AND started_at >= datetime(?, '-2 days') GROUP BY agent_key`).bind(today).all<{ agent_key: string; n: number; ok: number }>(), NO_ROWS),
+    safe(db.prepare(`SELECT agent_key, count(*) AS n, sum(status = 'done') AS ok FROM ${effective("agent_runs", ws)} WHERE agent_key IN ('ap', 'reconciliation', 'data_health') AND started_at >= datetime(?, '-2 days') GROUP BY agent_key`).bind(today).all<{ agent_key: string; n: number; ok: number }>(), noRows<{ agent_key: string; n: number; ok: number }>()),
     // Largest expense overrun against budget, by property, in the last closed month.
     safe(db.prepare(`SELECT x.property_id, p.name, sum(x.actual) AS actual, sum(x.budget) AS budget FROM (
         SELECT j.property_id, j.debit_cents - j.credit_cents AS actual, 0 AS budget FROM ${effective("journal_entries", ws)} j JOIN ${effective("gl_accounts", ws)} g ON g.id = j.gl_account_id WHERE g.type = 'Expense' AND j.period = ?1

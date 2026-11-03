@@ -4,3 +4,4 @@ import "./actions";
 import "./tabs";
 import "./widgets";
 import "./nav";
+import "./vendor/tab";

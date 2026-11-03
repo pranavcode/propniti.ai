@@ -98,12 +98,12 @@ export async function FinanceHome({ session }: { session: Session }) {
 
         <div data-tour="kpis">
           <KpiRow className="xl:grid-cols-6">
-            <KpiCard label="Open payables" format="money" value={k.openAp} href="/app/payables/bills?f.status=Draft,Pending%20approval,Approved" footnote="Draft, pending and approved" help="Bills not yet sent to the bank." goodWhen="down" />
-            <KpiCard label="Past due" format="money" value={k.pastDue} href="/app/payables/bills?view=past-due" footnote="Open bills past their due date" goodWhen="down" />
-            <KpiCard label="Unreconciled items" format="count" value={k.unreconciled} href="/app/banking/reconciliations?f.status=Open" footnote="Suggested and unmatched bank lines" goodWhen="down" />
-            <KpiCard label="Cash in trust" format="money" value={k.trust} href="/app/banking/accounts?f.kind=Trust" footnote="Book balance, all trust accounts" />
+            <KpiCard label="Open payables" format="money" value={k.openAp} href="/app/payables/bills?f.status=Draft,Pending%20approval,Approved" footnote="Not yet paid" help="Draft, pending and approved bills not yet sent to the bank." goodWhen="down" />
+            <KpiCard label="Past due" format="money" value={k.pastDue} href="/app/payables/bills?view=past-due" footnote="Open bills" goodWhen="down" />
+            <KpiCard label="Unreconciled items" format="count" value={k.unreconciled} help="AI-suggested and unmatched bank lines in open reconciliations." href="/app/banking/reconciliations?f.status=Open" footnote="Open reconciliations" goodWhen="down" />
+            <KpiCard label="Cash in trust" format="money" value={k.trust} href="/app/banking/accounts?f.kind=Trust" footnote="Book balance" />
             <KpiCard label="NOI" format="money" value={k.noi} previous={k.noiPrev} spark={k.noiSpark} goodWhen="up" href="/app/reports?r=pnl" footnote={monthLong(h.lastClosed)} />
-            <KpiCard label="Expense vs budget" format="pct" value={k.expenseVar} goodWhen="down" href="/app/finance/budget-vs-actual" footnote="Year to date; above 0 is over budget" />
+            <KpiCard label="Expense vs budget" format="pct" value={k.expenseVar} goodWhen="down" help="Operating expense over (+) or under (−) budget, year to date." href="/app/finance/budget-vs-actual" footnote="Year to date" />
           </KpiRow>
         </div>
 

@@ -32,7 +32,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const scope = ids === "all" ? "" : " AND x.property_id IN (SELECT value FROM json_each(?2))";
   const rows = (await db
     .prepare(`SELECT v.id, v.company, v.trade, v.status, v.is_1099, v.w9_on_file, v.bank_last4, v.bank_changed_at,
-        (SELECT count(*) FROM ${effective("data_issues", ws)} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status IN ('fixed', 'dismissed') AND di.fixed_at >= v.bank_changed_at) AS verified,
+        (SELECT count(*) FROM ${effective("data_issues", ws)} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status = 'fixed' AND di.fixed_at >= v.bank_changed_at) AS verified,
         coalesce((SELECT sum(x.amount_cents) FROM ${effective("transfers", ws)} x WHERE x.kind = 'Vendor payout' AND x.to_id = v.id AND x.status <> 'Returned' AND substr(x.created, 1, 4) = ?1${scope}), 0) AS paid_ytd,
         coalesce((SELECT sum(x.amount_cents) FROM ${effective("bills", ws)} x WHERE x.vendor_id = v.id AND x.status IN ('Draft', 'Pending approval', 'Approved')${scope}), 0) AS open_cents,
         (SELECT count(*) FROM ${effective("bills", ws)} x WHERE x.vendor_id = v.id AND x.status IN ('Draft', 'Pending approval', 'Approved')${scope}) AS open_n,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Ban, BadgeCheck, CircleDollarSign, Send, ShieldCheck, Wand2 } from "lucide-react";
+import { Ban, BadgeCheck, CircleDollarSign, Landmark, Send, ShieldCheck, Wand2 } from "lucide-react";
 import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
 import { approveBill, auditStmt, eventStmt, payBill, uid } from "@/server/money";
 import { effective, overlayUpsertSql } from "@/server/effective";
@@ -25,7 +25,7 @@ export async function bankHold(ctx: Pick<ActionContext, "db" | "ws">, vendorId: 
   const v = await ctx.db
     .prepare(`SELECT v.company, v.bank_changed_at,
         (SELECT count(*) FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status = 'open') AS open_issue,
-        (SELECT count(*) FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status IN ('fixed', 'dismissed') AND di.fixed_at >= v.bank_changed_at) AS verified,
+        (SELECT count(*) FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = v.id AND di.status = 'fixed' AND di.fixed_at >= v.bank_changed_at) AS verified,
         julianday(coalesce((SELECT value FROM meta WHERE key = 'as_of'), date('now'))) - julianday(substr(v.bank_changed_at, 1, 10)) AS days
       FROM ${effective("vendors", "?1")} v WHERE v.id = ?2`)
     .bind(ctx.ws, vendorId)
@@ -181,37 +181,98 @@ registerAction({
   help: { summary: "Moves a bill line to the right GL account. Suggested recodes need a person to accept them.", article: "gl-recode-miscoded-bills" },
 });
 
-// A person confirms by phone (number on file, not the one on the request) that the new bank
-// details are genuine. Closes the fraud flag and lifts the payment hold.
-// Registered on bills because that's where the hold stops a payment (and the vendors module is
-// read-only for accountants).
+// Vendor bank changes (fraud control). A change is entered by an accountant, recorded as an open
+// vendors.unverified_bank_change issue (which money.ts and bankHold() treat as a payment hold) and
+// a vendor.bank_changed event for the Payables agent. Lifting the hold needs a callback on the
+// phone number already on file, recorded by a different person than the one who made the change.
+
+const ConfirmInput = z.strictObject({ spoke_with: z.string().trim().min(2).max(120), phone_on_file: z.literal(true) });
+const CONFIRM = { title: "Confirm the new bank details?", body: "Only confirm after calling the vendor on the phone number already on file, not one from the request. Payments resume right away.", tone: "warning" as const };
+
+async function confirmBankChange(ctx: ActionContext, vendor: string, input: z.infer<typeof ConfirmInput>): Promise<ActionResult> {
+  const { db, ws } = ctx;
+  const at = nowIso(ctx.nowMs);
+  const v = await db.prepare(`SELECT v.company, v.status, v.bank_changed_at FROM ${effective("vendors", "?1")} v WHERE v.id = ?2`).bind(ws, vendor).first<{ company: string; status: string; bank_changed_at: string | null }>();
+  if (!v?.bank_changed_at) return { status: 409, error: "This vendor has no bank change to confirm" };
+  const open = await db.prepare(`SELECT di.id, di.evidence FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ?2 AND di.status = 'open'`).bind(ws, vendor).all<{ id: string; evidence: string }>();
+  const changedBy = open.results.map((r) => { try { return (JSON.parse(r.evidence) as { changed_by?: string }).changed_by; } catch { return undefined; } }).find(Boolean);
+  if (changedBy === ctx.actor.personaId) return { status: 403, error: "You entered this bank change, so someone else has to verify it" };
+  const issueId = open.results[0]?.id ?? uid("di");
+  const fix = open.results.length
+    ? open.results.map((r) => db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?3", fixed_at: "?4" }, "e.status = 'open'")).bind(ws, r.id, ctx.actor.personaId, at))
+    : [db.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, status, fixed_by, fixed_at) VALUES (?, ?, 'vendors.unverified_bank_change', 'vendors', ?, NULL, ?, 'critical', ?, 'fixed', ?, ?)")
+        .bind(ws, issueId, vendor, at, JSON.stringify({ bank_changed_at: v.bank_changed_at }), ctx.actor.personaId, at)];
+  await db.batch([
+    ...fix,
+    // The Payables agent's hold proposal sets a vendor Inactive; verification reactivates it.
+    db.prepare(overlayUpsertSql("vendors", VENDOR_COLS, { status: "?3" })).bind(ws, vendor, v.status === "Inactive" ? "Active" : v.status),
+    eventStmt(db, ws, at, "vendor.bank_change_verified", "vendors", vendor, null, { spoke_with: input.spoke_with, by: ctx.actor.personaId }),
+    auditStmt(db, ws, at, ctx.actor, { action: "Vendor bank change verified", entityType: "vendors", entityId: vendor, detail: `${v.company}: verified by callback with ${input.spoke_with} on the number on file`, before: { hold: true }, after: { hold: false } }),
+  ]);
+  return { status: 200, message: `Bank change verified. Payments to ${v.company} can go out again.` };
+}
+
+registerAction({
+  key: "vendors.change_bank_account",
+  label: "Change bank account",
+  entity: "vendors",
+  roles: ["accountant"],
+  icon: Landmark,
+  input: z.strictObject({
+    bank_last4: z.string().regex(/^\d{4}$/, "Enter the last 4 digits of the new account"),
+    received_via: z.enum(["Vendor portal", "Email", "Letter", "Phone call"]),
+    requested_by: z.string().trim().min(2).max(120),
+    note: z.string().trim().max(500).optional(),
+  }),
+  confirm: { title: "Record a bank account change?", body: "Payments to this vendor stop until someone else calls the vendor on the number already on file and confirms the change.", tone: "warning" },
+  handler: async (ctx, row, input) => {
+    const { db, ws } = ctx;
+    const vendor = String(row.id);
+    const old = await db.prepare(`SELECT v.bank_last4 FROM ${effective("vendors", "?1")} v WHERE v.id = ?2`).bind(ws, vendor).first<{ bank_last4: string }>();
+    if (old?.bank_last4 === input.bank_last4) return { status: 409, error: "That's the account already on file" };
+    const at = nowIso(ctx.nowMs);
+    const evidence = { old_last4: old?.bank_last4 ?? "", new_last4: input.bank_last4, received_via: input.received_via, requested_by: input.requested_by, changed_by: ctx.actor.personaId, note: input.note ?? "" };
+    const why = ["Bank details changed and not yet verified by a callback on the number on file", `Request came by ${input.received_via.toLowerCase()} from ${input.requested_by}`];
+    await db.batch([
+      db.prepare(overlayUpsertSql("vendors", VENDOR_COLS, { bank_last4: "?3", bank_changed_at: "?4" })).bind(ws, vendor, input.bank_last4, at),
+      // Close earlier open flags so exactly one open hold describes the latest change.
+      db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'dismissed'", fixed_by: "?3", fixed_at: "?4" }, "e.status = 'open'").replace("WHERE e.id = ?2", "WHERE e.entity_id = ?2 AND e.rule_id = 'vendors.unverified_bank_change'")).bind(ws, vendor, ctx.actor.personaId, at),
+      db.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix, status) VALUES (?, ?, 'vendors.unverified_bank_change', 'vendors', ?, NULL, ?, 'critical', ?, ?, 'open')")
+        .bind(ws, uid("di"), vendor, at, JSON.stringify(evidence), JSON.stringify({ action: "vendors.confirm_bank_change", why, confidence: 0.99, source: "rule" })),
+      db.prepare("INSERT INTO tasks (workspace_id, id, title, detail, entity_type, entity_id, assignee_role, created_by, due_on, priority, status, queue_state, source, created_at) VALUES (?, ?, ?, ?, 'vendors', ?, 'accountant', ?, ?, 'High', 'Open', 'needs_you', 'Automation', ?)")
+        .bind(ws, uid("task"), `Verify ${String(row.company ?? vendor)}'s new bank account by callback`, `Call the number already on file (not one from the request). Account ending ${input.bank_last4}, requested by ${input.requested_by} via ${input.received_via.toLowerCase()}. Someone other than ${ctx.actor.name} must confirm.`, vendor, ctx.actor.personaId, at.slice(0, 10), at),
+      eventStmt(db, ws, at, "vendor.bank_changed", "vendors", vendor, null, { old_last4: evidence.old_last4, new_last4: input.bank_last4, received_via: input.received_via, by: ctx.actor.personaId }),
+      auditStmt(db, ws, at, ctx.actor, { action: "Vendor bank account changed", entityType: "vendors", entityId: vendor, detail: `Account ending ${evidence.old_last4 || "none"} → ${input.bank_last4}; requested by ${input.requested_by} via ${input.received_via.toLowerCase()}. Payments held until verified.`, before: { bank_last4: evidence.old_last4 }, after: { bank_last4: input.bank_last4 } }),
+    ]);
+    return { status: 200, message: `Bank account updated. Payments to ${String(row.company ?? vendor)} are on hold until someone else verifies it by callback.` };
+  },
+  help: { summary: "Records a new vendor bank account and holds payments until a second person verifies it by phone.", article: "vendor-bank-change-fraud-hold" },
+});
+
+registerAction({
+  key: "vendors.confirm_bank_change",
+  label: "Verify bank change",
+  entity: "vendors",
+  roles: ["accountant", "principal"],
+  icon: ShieldCheck,
+  when: (r: Row) => !!r.bank_changed_at,
+  input: ConfirmInput,
+  confirm: CONFIRM,
+  handler: (ctx, row, input) => confirmBankChange(ctx, String(row.id), input),
+  help: { summary: "Lifts the payment hold after a callback on the number on file. The person who entered the change can't verify it.", article: "vendor-bank-change-fraud-hold" },
+});
+
+// The same check from a held bill, where the hold actually stops a payment.
 registerAction({
   key: "bills.confirm_vendor_bank",
-  label: "Confirm vendor bank change",
+  label: "Verify vendor bank change",
   entity: "bills",
   roles: ["accountant", "principal"],
   icon: ShieldCheck,
   when: (r: Row) => ["Draft", "Pending approval", "Approved"].includes(String(r.status)),
-  input: z.strictObject({ spoke_with: z.string().trim().min(2).max(120), phone_on_file: z.literal(true) }),
-  confirm: { title: "Confirm the new bank details?", body: "Only confirm after calling the vendor on the phone number already on file. Payments resume right away.", tone: "warning" },
-  handler: async (ctx, row, input) => {
-    const { db, ws } = ctx;
-    const at = nowIso(ctx.nowMs);
-    const vendor = String(row.vendor_id);
-    const v = await db.prepare(`SELECT v.company, v.bank_changed_at FROM ${effective("vendors", "?1")} v WHERE v.id = ?2`).bind(ws, vendor).first<{ company: string; bank_changed_at: string | null }>();
-    if (!v?.bank_changed_at) return { status: 409, error: "This vendor has no bank change to confirm" };
-    const open = await db.prepare(`SELECT di.id FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ?2 AND di.status = 'open'`).bind(ws, vendor).all<{ id: string }>();
-    const issueId = open.results[0]?.id ?? uid("di");
-    await db.batch([
-      open.results.length
-        ? db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?3", fixed_at: "?4" }, "e.status = 'open'")).bind(ws, issueId, ctx.actor.personaId, at)
-        : db.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, status, fixed_by, fixed_at) VALUES (?, ?, 'vendors.unverified_bank_change', 'vendors', ?, NULL, ?, 'critical', ?, 'fixed', ?, ?)")
-          .bind(ws, issueId, vendor, at, JSON.stringify({ bank_changed_at: v.bank_changed_at }), ctx.actor.personaId, at),
-      db.prepare(overlayUpsertSql("vendors", VENDOR_COLS, { status: "CASE WHEN e.status = 'Inactive' THEN 'Active' ELSE e.status END" })).bind(ws, vendor),
-      auditStmt(db, ws, at, ctx.actor, { action: "Vendor bank change verified", entityType: "vendors", entityId: vendor, detail: `${v.company}: verified by phone with ${input.spoke_with} on the number on file`, before: { hold: true }, after: { hold: false } }),
-    ]);
-    return { status: 200, message: `Bank change verified. Payments to ${v.company} can go out again.` };
-  },
-  help: { summary: "Lifts the fraud hold after you verify a vendor's new bank details by phone.", article: "vendor-bank-change-fraud-hold" },
+  input: ConfirmInput,
+  confirm: CONFIRM,
+  handler: (ctx, row, input) => confirmBankChange(ctx, String(row.vendor_id), input),
+  help: { summary: "Lifts the vendor's payment hold after a callback on the number on file.", article: "vendor-bank-change-fraud-hold" },
 });
 

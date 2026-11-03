@@ -95,3 +95,24 @@ describe("bill money flow", () => {
     expect(line?.gl_account_id).toBe("gl-6000");
   });
 });
+
+describe("vendor bank account changes", () => {
+  it("holds payments after a change until a different person verifies it by callback", async () => {
+    const grace = write();
+    const daniel = { ...grace, actor: await resolveActor(db, getPersona("daniel")!, WS) };
+    const vendor = await getRow(ctx, "vendors", "v03");
+    const change = getAction("vendors.change_bank_account")!;
+    // Accountants only have read access to the maintenance module, so call the handler directly
+    // (the registry check is covered by the lead's PERMISSIONS change).
+    const r = await change.handler(grace, vendor!, { bank_last4: "7781", received_via: "Email", requested_by: "Office manager" });
+    expect(r.status).toBe(200);
+    const draft = await createRecord(grace, "bills", { vendor_id: "v03", property_id: "p01", owner_entity_id: "oe01", invoice_number: "CCE-TEST-3", bill_date: "2026-11-03", due_on: "2026-12-03", amount: 300, status: "Draft" });
+    await runAction(grace, getAction("bills.submit")!, String(draft.id), { lines: [{ description: "Breaker", gl_account_id: "gl-6000", amount: 300 }] });
+    expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(409);
+    const confirm = getAction("vendors.confirm_bank_change")!;
+    const after = await getRow(ctx, "vendors", "v03");
+    expect((await confirm.handler(grace, after!, { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(403);
+    expect((await confirm.handler(daniel, after!, { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(200);
+    expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(200);
+  });
+});
