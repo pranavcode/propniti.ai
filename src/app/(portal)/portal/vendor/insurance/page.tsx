@@ -13,7 +13,7 @@ export default async function VendorInsurance() {
   const list = await cois(c);
   return (
     <>
-      <PortalTitle title="Insurance" description="We need a current certificate of insurance before assigning jobs. We remind you 30 days before it expires." />
+      <PortalTitle title="Insurance" description="We need a current certificate of insurance before assigning jobs. This page warns you when yours has 30 days or less left." />
       <div className="space-y-4">
         <CoiBanner coi={list[0]} />
         <div className="grid items-start gap-4 lg:grid-cols-2">

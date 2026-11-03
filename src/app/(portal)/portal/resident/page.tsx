@@ -60,7 +60,7 @@ export default async function ResidentHome() {
           <ShieldAlert className="mt-0.5 size-5 shrink-0 text-tone-warning" aria-hidden />
           <div className="min-w-0 flex-1 text-[13px]">
             <p className="font-semibold">{policy.status === "Lapsed" || daysUntil(policy.expires_on) < 0 ? "Your renters insurance has lapsed" : `Your renters insurance expires ${fmtDay(policy.expires_on)}`}</p>
-            <p className="text-muted-foreground">Your lease requires active coverage. Send us the renewal declarations page when you have it.</p>
+            <p className="text-muted-foreground">Your lease requires active coverage. Message the office to find out how to send your renewal declarations page.</p>
           </div>
           <Button asChild size="sm" variant="outline"><Link href="/portal/resident/lease#insurance">Details</Link></Button>
         </div>

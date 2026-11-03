@@ -78,7 +78,7 @@ export function ApprovalCard({ a, me }: { a: Approval; me: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{decision === "Approved" ? `Approve ${usd(a.amount_cents)} for ${a.title}?` : `Decline ${a.title}?`}</DialogTitle>
-            <DialogDescription>{decision === "Approved" ? "The property team schedules the work. The cost appears on next month's statement." : "The work stays on hold. The property team will contact you about other options."}</DialogDescription>
+            <DialogDescription>{decision === "Approved" ? "The property team schedules the work. The cost appears on your statement once the vendor is paid." : "The work stays on hold. The property team will contact you about other options."}</DialogDescription>
           </DialogHeader>
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note for the property team (optional)…" aria-label="Note" name="note" maxLength={500} rows={3} />
           <DialogFooter>

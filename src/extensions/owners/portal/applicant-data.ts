@@ -45,12 +45,12 @@ export function stepOf(stage: string) {
 
 export const NEXT: Record<string, string> = {
   Started: "Finish and submit your application. Once it's in, screening usually takes 1–2 business days.",
-  Submitted: "We've received your application. Screening (identity, income and rental history) starts within one business day.",
+  Submitted: "We've received your application. Screening (identity, income and rental history) is next.",
   Screening: "Screening is in progress. It usually takes 1–2 business days; we'll message you if anything else is needed.",
   Review: "Screening is complete and the leasing team is reviewing your application. Most decisions take 1–2 business days.",
   Approved: "You're approved. The leasing office will send your lease to sign and confirm your move-in date.",
   Conditional: "You're approved with conditions. The leasing office will message you with what's needed before the lease.",
   Denied: "We weren't able to approve this application. The leasing office will send a written notice with the reasons and your rights.",
-  Leased: "Your lease is signed. Welcome home. Look out for move-in instructions.",
+  Leased: "Your lease is signed. The leasing office will send move-in instructions.",
   Withdrawn: "This application was withdrawn. You can apply again from our listings at any time.",
 };

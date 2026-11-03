@@ -28,7 +28,7 @@ export function JobActions({ me, id, title, status, invoiced, compact }: { me: s
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{mode === "accept" ? `Accept ${id}?` : `Decline ${id}?`}</DialogTitle>
-              <DialogDescription>{title}. {mode === "accept" ? "Propose a visit time; the resident is told once the property team confirms." : "The job goes back to the property team to reassign."}</DialogDescription>
+              <DialogDescription>{title}. {mode === "accept" ? "Add a visit time if you have one. The property team sees it right away." : "The job goes back to the property team to reassign."}</DialogDescription>
             </DialogHeader>
             {mode === "accept" && (
               <div className="space-y-1.5">

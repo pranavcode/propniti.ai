@@ -120,7 +120,7 @@ export function Messages({ base, entity, me, threads, active, messages, teamName
             {composer}
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center p-6"><EmptyState kind="inbox" title="Pick a conversation" description="Or start a new one. We usually reply within one business day." compact /></div>
+          <div className="flex flex-1 items-center justify-center p-6"><EmptyState kind="inbox" title="Pick a conversation" description="Or start a new one." compact /></div>
         )}
       </section>
     </div>

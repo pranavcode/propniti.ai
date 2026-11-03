@@ -90,9 +90,9 @@ export default async function ResidentLease() {
                     <div><dt className="text-[11.5px] text-muted-foreground">Liability</dt><dd className="font-medium"><Money value={policy.liability_cents} cents style="whole" tone="none" /></dd></div>
                     <div><dt className="text-[11.5px] text-muted-foreground">Expires</dt><dd className="font-medium tabular-nums">{fmtDay(policy.expires_on, true)}</dd></div>
                   </dl>
-                  {daysUntil(policy.expires_on) <= 30 && <p className="rounded-lg bg-tone-warning/10 px-3 py-2 text-[12.5px]">{daysUntil(policy.expires_on) < 0 ? "This policy has expired." : `Expires in ${daysUntil(policy.expires_on)} days.`} Send the renewal declarations page in Messages to stay covered.</p>}
+                  {daysUntil(policy.expires_on) <= 30 && <p className="rounded-lg bg-tone-warning/10 px-3 py-2 text-[12.5px]">{daysUntil(policy.expires_on) < 0 ? "This policy has expired." : `Expires in ${daysUntil(policy.expires_on)} days.`} Message the office to find out how to send your renewal declarations page.</p>}
                 </div>
-              ) : <p className="text-[13px] text-muted-foreground">Your lease requires renters insurance. Send your declarations page in Messages and we&apos;ll add it.</p>}
+              ) : <p className="text-[13px] text-muted-foreground">Your lease requires renters insurance. Message the office and they&apos;ll tell you how to send your declarations page.</p>}
             </Card>
           </div>
         </div>

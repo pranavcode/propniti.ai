@@ -186,8 +186,8 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
     { label: "Owner entity", detail: `${st.entity.name} (${st.entity.id})`, href: href(`/app/owner-entities/${st.entity.id}`) },
     st.distribution
       ? { label: "Distribution record", detail: `${st.distribution.id}: income ${usd(st.distribution.income_cents)}, expenses ${usd(st.distribution.expense_cents)}, fee ${usd(st.distribution.fee_cents)}, paid ${usd(st.distribution.amount_cents)}`, href: href(`/app/owner-distributions/${st.distribution.id}`) }
-      : { label: "Open statement", detail: `Items after payout ${st.range.fromId ?? "(none)"}` },
-    { label: "Trust transfers", detail: `${st.totals.items} movements in ba-${st.entity.id}-trust between ${st.range.fromId ?? "the first payout"} and ${st.range.toId ?? "today"}` },
+      : { label: "Open statement", detail: `Transfers since the last payout${st.range.fromId ? "" : " (no payout yet)"}` },
+    { label: "Trust transfers", detail: `${st.totals.items} transfers in the ${st.entity.name} trust account since ${st.range.fromId ? "the previous payout" : "the first payout"}` },
   ];
   if (prior) trace.push({ label: "Prior statement", detail: `${monthLabel(prior.period)}: ${prior.lines.map((x) => `${x.label.toLowerCase()} ${usd(x.amount_cents)}`).join(", ")}` });
   const facts: Record<string, string | number> = { entity: st.entity.name, period: monthLabel(period), line: l.label, amount: usd(l.amount_cents) };
@@ -224,9 +224,9 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
     const flat = Math.round(base * MANAGEMENT_FEE_RATE);
     facts.fee_base = usd(base);
     facts.rate = `${Math.round(MANAGEMENT_FEE_RATE * 100)}%`;
-    trace.push({ label: "Management fee transfers", detail: `One fee per cleared deposit to ba-mgmt, each rounded to the cent` });
+    trace.push({ label: "Management fee transfers", detail: "One fee per cleared deposit, paid to the management company and rounded to the cent" });
     text = `The management agreement sets the fee at ${Math.round(MANAGEMENT_FEE_RATE * 100)}% of cleared rent and other income. ${Math.round(MANAGEMENT_FEE_RATE * 100)}% of ${usd(base)} is ${usd(flat)}; the fee charged was ${usd(l.amount_cents)}.`;
-    text += flat === l.amount_cents ? " They match exactly." : ` The ${usd(Math.abs(flat - l.amount_cents))} difference comes from rounding each deposit's fee to the cent${Math.abs(flat - l.amount_cents) > st.totals.items ? " and from fees on deposits that cleared after the cutoff" : ""}.`;
+    text += flat === l.amount_cents ? " They match exactly." : ` The ${usd(Math.abs(flat - l.amount_cents))} difference ${Math.abs(flat - l.amount_cents) > st.totals.items ? "is more than rounding each deposit's fee would explain. Check the fee transfers for this period." : "comes from rounding each deposit's fee to the cent."}`;
   } else if (line === "reserve") {
     facts.reserve_target = usd(st.entity.reserve_cents);
     text = `The management agreement keeps ${usd(st.entity.reserve_cents)} in the trust account as an operating reserve before anything is distributed. ${l.sign < 0 ? `This month ${usd(l.amount_cents)} was held back to bring the reserve up to that target.` : `This month ${usd(l.amount_cents)} of reserve was released.`}`;
@@ -235,7 +235,7 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
     trace.push({ label: "Data Health", detail: st.issue ? `Issue ${st.issue.id} (${st.issue.rule_id}), ${st.issue.status}` : "Rule owner_distributions.rounding_cent", href: href(st.issue ? `/app/data-health?issue=${st.issue.id}` : "/app/data-health") });
     if (!st.gap_cents) {
       text = `The original payout was ${usd(l.amount_cents)} short because of a rounding error. That correction has been paid to ${st.entity.owner_name}, so this statement now reconciles to $0.00.`;
-    } else text = `Income less expenses, the fee and the reserve comes to ${usd(st.net_cents - (st.distribution?.reserve_cents ?? 0))}, but ${usd(st.distribution?.amount_cents ?? 0)} was paid. The ${usd(Math.abs(st.gap_cents))} ${st.gap_cents > 0 ? "is still in the trust account and is owed to the owner" : "was overpaid"}. This is a rounding error on the payout, not a missing transaction; the suggested fix pays the difference.`;
+    } else text = `Income less expenses, the fee and the reserve comes to ${usd(st.net_cents - (st.distribution?.reserve_cents ?? 0))}, but ${usd(st.distribution?.amount_cents ?? 0)} was paid. The ${usd(Math.abs(st.gap_cents))} ${st.gap_cents > 0 ? "is still in the trust account and is owed to the owner" : "was overpaid"}. The payout was rounded wrong; no transaction is missing. Paying the owner the difference fixes it.`;
   } else {
     const d = st.distribution;
     if (d) {

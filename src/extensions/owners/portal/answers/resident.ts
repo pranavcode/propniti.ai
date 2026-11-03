@@ -74,13 +74,13 @@ export async function answerResident(c: PortalCtx, q: string): Promise<Answer> {
     const i = await insurance(c, lease.id);
     trace.push({ label: "Renters insurance", detail: i ? `${i.carrier} ${i.policy_number}, ${usd(i.liability_cents)} liability, expires ${i.expires_on} (${i.status})` : "No policy on file" });
     const answer = !i
-      ? "We don't have a renters insurance policy on file for you. Your lease requires one; upload your declarations page by replying in Messages."
+      ? "We don't have a renters insurance policy on file for you. Your lease requires one. Message the office and they'll tell you how to send your declarations page."
       : `Your policy with ${i.carrier} has ${usd(i.liability_cents)} of liability cover and expires on ${day(i.expires_on)}.${daysUntil(i.expires_on) <= 30 ? " That's soon: send us the renewal so you stay covered." : ""}`;
     return { answer, facts: { expires_on: i?.expires_on ?? null }, trace, links: [{ label: "My lease", href: "/portal/resident/lease" }] };
   }
 
   return {
-    answer: "I can help with your balance and rent due dates, autopay, maintenance requests, your renewal and renters insurance. For anything else, message the office and someone will reply within one business day.",
+    answer: "I can help with your balance and rent due dates, autopay, maintenance requests, your renewal and renters insurance. For anything else, message the office.",
     facts: {},
     trace,
     links: [{ label: "Message the office", href: "/portal/resident/messages" }],

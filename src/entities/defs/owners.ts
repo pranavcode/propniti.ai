@@ -53,7 +53,7 @@ registerEntity({
   capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
   kpis: [
     { key: "distributed", label: "Distributed last month", metric: "owners.distributions", format: "money", delta: "mom", goodWhen: "up", drill: "/app/owner-distributions", help: { summary: "Cash paid to owners for the last closed month, after expenses, the management fee and reserves.", article: "owner-statements" } },
-    { key: "owed", label: "Owed to owners now", metric: "owners.owed_now", format: "money", drill: "/app/owner-statements", help: { summary: "Open statement balances: cleared rent since each entity's last payout, less fees and vendor payments.", article: "owner-statements" } },
+    { key: "owed", label: "Owed to owners now", metric: "owners.owed_now", format: "money", drill: "/app/owner-statements", help: { summary: "Open statement balances: cleared rent and other income since each entity's last payout, less fees and vendor payments.", article: "owner-statements" } },
   ],
   ai: {
     facts: (r) => ({ owner: String(r.name), kind: String(r.kind), entities: Number(r.entities ?? 0), properties: Number(r.properties ?? 0), units: Number(r.units ?? 0), distributed_12m: Number(r.distributed_12m ?? 0) }),
@@ -88,11 +88,11 @@ registerEntity({
     ein_last4: { type: "text", label: "EIN (last 4)", hiddenFor: ["leasing_agent", "maintenance_supervisor", "owner"] },
     properties: { type: "number", label: "Properties", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {properties} p WHERE p.owner_entity_id = owner_entities.id)" },
     units: { type: "number", label: "Units", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE p.owner_entity_id = owner_entities.id)" },
-    mgmt_fee_pct: { type: "number", label: "Management fee", format: "pct", list: { default: false, align: "right" }, help: { summary: "From the management agreement. Fees on statements are always computed at the org's contracted rate.", article: "owner-entities" } },
+    mgmt_fee_pct: { type: "number", label: "Management fee", format: "pct", list: { default: false, align: "right" }, help: { summary: "The rate in this entity's management agreement. Statements currently charge every entity the standard 8% rate.", article: "owner-entities" } },
     reserve: { type: "money", label: "Operating reserve", column: "reserve_cents", sortable: true, list: { default: true, align: "right" }, help: { summary: "Cash kept in the trust account for this entity before anything is distributed.", article: "owner-statements" } },
     owed_now: { type: "money", label: "Owed now", sortable: true, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"],
       sql: `(SELECT coalesce(sum(CASE WHEN t.kind IN ('Rent', 'Other receipt') THEN CASE WHEN t.status = 'Cleared' THEN t.amount_cents ELSE 0 END WHEN t.kind = 'Management fee' THEN CASE WHEN t.status = 'Cleared' THEN -t.amount_cents ELSE 0 END WHEN t.kind = 'Vendor payout' THEN -t.amount_cents ELSE 0 END), 0) FROM {transfers} t WHERE ${OPEN_ITEM})`,
-      help: { summary: "The open statement: cleared rent since the last payout, less the management fee and vendor payments.", article: "owner-statements" } },
+      help: { summary: "The open statement: cleared rent and other income since the last payout, less the management fee and vendor payments.", article: "owner-statements" } },
     last_distribution: { type: "money", label: "Last distribution", sortable: true, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"],
       sql: "(SELECT d.amount_cents FROM {owner_distributions} d WHERE d.owner_entity_id = owner_entities.id ORDER BY d.period DESC, d.paid_on DESC LIMIT 1)" },
     last_distribution_on: { type: "date", label: "Last paid", sortable: true, list: { default: true }, sql: "(SELECT max(d.paid_on) FROM {owner_distributions} d WHERE d.owner_entity_id = owner_entities.id)" },
@@ -128,7 +128,7 @@ registerEntity({
   kpis: [
     { key: "owed", label: "Owed to owners now", metric: "owners.owed_now", format: "money", drill: "/app/owner-entities?view=owed", help: { summary: "Open statement balances across entities in your scope.", article: "owner-statements" } },
     { key: "distributed", label: "Distributed last month", metric: "owners.distributions", format: "money", delta: "mom", goodWhen: "up", drill: "/app/owner-distributions" },
-    { key: "unreconciled", label: "Statements off by a cent or more", metric: "owners.unreconciled", format: "count", goodWhen: "down", drill: "/app/owner-distributions?view=unreconciled" },
+    { key: "unreconciled", label: "Unreconciled statements", metric: "owners.unreconciled", format: "count", goodWhen: "down", drill: "/app/owner-distributions?view=unreconciled" },
   ],
   charts: [
     { key: "dist_trend", title: "Owner distributions, trailing 12 months", kind: "bar", metric: "owners.distributions", x: "month", series: [{ key: "amount", label: "Distributed", format: "money" }], drill: "/app/owner-distributions?f.period={month}" },
@@ -174,7 +174,7 @@ registerEntity({
     status: { type: "enum", label: "Payment", facet: true, list: { default: true }, sql: "(SELECT t.status FROM {transfers} t WHERE t.id = owner_distributions.transfer_id)", enum: [
       { value: "Pending", tone: "info", label: "On its way" }, { value: "Cleared", tone: "success", label: "Paid" }, { value: "Returned", tone: "danger" },
     ] },
-    gap: { type: "money", label: "Unreconciled", sortable: true, list: { default: false, align: "right" }, sql: GAP, help: { summary: "Statement net less reserve less the amount paid. It should be $0.00; anything else is a Data Health issue.", article: "owner-statements" } },
+    gap: { type: "money", label: "Unreconciled", sortable: true, list: { default: false, align: "right" }, sql: GAP, help: { summary: "Income less expenses, fee and reserve, minus what was paid and any correction. Should be $0.00; anything else opens a Data Health issue.", article: "owner-statements" } },
     transfer_id: { type: "text", label: "Transfer" },
     issues: issuesField("owner_distributions"),
   },

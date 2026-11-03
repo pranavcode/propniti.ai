@@ -56,7 +56,7 @@ test("owner sees the briefing, a statement and approves a repair", async ({ page
   await as(context, "owner");
   const errors = watch(page);
   await go(page, `${BASE}/portal/owner`);
-  await expect(page.getByRole("heading", { name: /Good morning, Helen/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Hi Helen/ })).toBeVisible();
   await expect(page.getByText("Your monthly briefing")).toBeVisible();
 
   await go(page, `${BASE}/portal/owner/statements`);
@@ -87,7 +87,7 @@ test("resident pays rent once and opens a request with an AI triage preview", as
   await expect(page.getByRole("heading", { name: "Pay rent" })).toBeVisible();
   await go(page, `${BASE}/portal/resident/requests?new=1`);
   await page.getByLabel("What's wrong?").fill("The kitchen sink is leaking under the cabinet");
-  await expect(page.getByLabel("AI triage preview").getByText("Plumbing").first()).toBeVisible();
+  await expect(page.getByLabel("AI first read").getByText("Plumbing").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 

@@ -34,7 +34,7 @@ export async function answerApplicant(c: PortalCtx, q: string): Promise<Answer> 
     return { answer: `${where(app.stage)}${since} ${NEXT[app.stage] ?? ""}${missing.length && !["Approved", "Denied", "Leased", "Withdrawn"].includes(app.stage) ? ` Sending the remaining documents (${missing.join(", ")}) helps us finish sooner.` : ""}`.trim(), facts, trace, links };
   }
   return {
-    answer: `Here's where things stand for ${app.property}, unit ${app.unit}: ${where(app.stage)} ${missing.length ? `Still needed: ${missing.join(", ")}.` : "All documents are in."} Ask me what's left, when you'll hear back, or about the application fee.`,
+    answer: `${app.property}, unit ${app.unit}: ${where(app.stage)} ${missing.length ? `Still needed: ${missing.join(", ")}.` : "All documents are in."}`,
     facts, trace, links,
   };
 }

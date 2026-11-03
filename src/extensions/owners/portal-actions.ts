@@ -58,7 +58,7 @@ function messageAction(entity: EntityKey, party: Party, role: Role, propertyOf: 
       stmts.push(ctx.db.prepare("INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES (?1, ?2, ?3, 'Portal', 'in', ?4, ?5, ?6, ?7)")
         .bind(ctx.ws, uid("msg"), threadId, party, partyId, input.body, at));
       await ctx.db.batch(stmts);
-      return ok("Message sent. The team usually replies within one business day.", `?thread=${threadId}`);
+      return ok("Message sent. The team replies in this conversation.", `?thread=${threadId}`);
     },
   });
 }
@@ -129,7 +129,7 @@ registerAction({
       else errors.push(r.error);
     }
     if (!paid.length) return no(409, errors[0] ?? "Nothing was paid");
-    return ok(errors.length ? `${paid.length} paid; ${errors.join(" ")}` : paid.length === 1 ? paid[0] : `${paid.length} payments are processing.`);
+    return ok(errors.length ? `Paid ${paid.length} of ${input.chargeIds.length} charges. ${errors.join(" ")}` : paid.length === 1 ? paid[0] : `${paid.length} payments are processing.`);
   },
   help: { summary: "Pays open charges by ACH into the property's trust account. Each charge can only be paid once.", article: "resident-portal" },
 });
@@ -155,7 +155,7 @@ const Request = z.object({
 
 registerAction({
   key: "residents.request_maintenance",
-  label: "Request maintenance",
+  label: "Send maintenance request",
   entity: "residents",
   roles: ["resident"],
   input: Request,
@@ -252,7 +252,7 @@ const Line = z.object({ description: z.string().trim().min(1).max(200), amount_c
 
 registerAction({
   key: "vendors.submit_invoice",
-  label: "Submit invoice",
+  label: "Send invoice",
   entity: "vendors",
   roles: ["vendor"],
   input: z.object({
@@ -342,7 +342,7 @@ registerAction({
       eventStmt(ctx.db, ctx.ws, at, "application.document_added", "applications", app.id, app.property_id, { doc_type: input.docType }),
       notifyManager(ctx, app.property_id, "Application document received", `${String(row.first_name)} ${String(row.last_name)} uploaded: ${input.docType}.`, `/app/leasing/applications/${app.id}`, ["applications", app.id]),
     ]);
-    return ok(`${input.docType} received. We'll review it within one business day.`);
+    return ok(`${input.docType} received. The leasing team will message you if anything else is needed.`);
   },
 });
 

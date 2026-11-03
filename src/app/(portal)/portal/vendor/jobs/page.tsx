@@ -84,7 +84,7 @@ export default async function VendorJobs({ searchParams }: Props) {
       </div>
       <section className="overflow-hidden rounded-xl border bg-card">
         {list.rows.length ? <ul className="divide-y">{list.rows.map((j) => <JobRow key={j.id} j={j} me={c.me} />)}</ul>
-          : <div className="p-4"><EmptyState kind="tasks" title={tab === "new" ? "No new assignments" : tab === "invoice" ? "Nothing left to invoice" : "No jobs here"} description={tab === "new" ? "We'll notify you when the maintenance team assigns you a job." : "Jobs move here as their status changes."} compact /></div>}
+          : <div className="p-4"><EmptyState kind="tasks" title={tab === "new" ? "No new assignments" : tab === "invoice" ? "Nothing left to invoice" : "No jobs here"} description={tab === "new" ? "New assignments from the maintenance team show up here." : "Jobs move here as their status changes."} compact /></div>}
         <Pager base="/portal/vendor/jobs" params={{ tab }} page={page} size={list.size} total={list.total} />
       </section>
     </>

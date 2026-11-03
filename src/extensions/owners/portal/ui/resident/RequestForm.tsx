@@ -37,7 +37,7 @@ async function shrink(file: File): Promise<string> {
       const data = canvas.toDataURL("image/jpeg", q);
       if (data.length <= MAX_CHARS) return data;
     }
-    throw new Error("That photo is too detailed to send. Try a closer shot.");
+    throw new Error("That photo is too large to send. Try a different photo.");
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -149,9 +149,9 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
         </div>
       </div>
 
-      <aside className="h-fit rounded-xl border border-tone-ai/25 bg-tone-ai/[0.04] p-4" aria-live="polite" aria-label="AI triage preview">
+      <aside className="h-fit rounded-xl border border-tone-ai/25 bg-tone-ai/[0.04] p-4" aria-live="polite" aria-label="AI first read">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="flex items-center gap-1.5 text-[13px] font-semibold"><Sparkles className="size-4 text-tone-ai" />AI triage preview</p>
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold"><Sparkles className="size-4 text-tone-ai" />AI&apos;s first read</p>
           {triage && <AIBadge source="rules" size="xs" />}
         </div>
         {!valid && !triage && <p className="text-[12.5px] text-muted-foreground">Start describing the problem and we&apos;ll suggest the trade, how urgent it is and a typical cost.</p>}

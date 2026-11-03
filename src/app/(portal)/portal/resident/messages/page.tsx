@@ -11,7 +11,7 @@ export default async function ResidentMessages({ searchParams }: { searchParams:
   const active = threads.find((t) => t.id === thread) ?? null;
   return (
     <>
-      <PortalTitle title="Messages" description="Questions for the leasing office? Write here; we usually reply within one business day." />
+      <PortalTitle title="Messages" description="Questions for the leasing office? Write here and the team replies in this thread." />
       <Messages base="/portal/resident/messages" entity="residents" me={c.me} threads={threads} active={active} messages={active ? await messagesIn(c, active.id, "resident") : []} teamName="Leasing office" />
     </>
   );
