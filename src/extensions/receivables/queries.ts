@@ -2,11 +2,18 @@ import "server-only";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
+import { settle } from "@/server/money";
 import { effective, type QueryCtx } from "@/server/query";
 
 // Receivables reads for the custom pages, tabs and widgets. Every figure is computed the same way
 // as the charges list (open = amount − good payments − credits; aged by due date, past due only),
 // so a number on a page and the rows behind its drill link always agree.
+
+// Settle on read (plan §1): the visitor's ACH payments whose window has passed clear before any
+// receivables figure is computed.
+export async function settleDue(ctx: Pick<QueryCtx, "db" | "ws">) {
+  if (ctx.ws) await settle(ctx.db, ctx.ws, Date.now());
+}
 
 export const BUCKETS = [
   { key: "0-30", label: "0–30 days", lo: 1, hi: 30 },

@@ -6,9 +6,8 @@ import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { settle } from "@/server/money";
 import type { QueryCtx } from "@/server/query";
-import { leaseFor, leaseLedger, leasesOfHousehold } from "../queries";
+import { leaseFor, leaseLedger, leasesOfHousehold, settleDue } from "../queries";
 import { RecordPaymentButton } from "./RecordPayment";
 
 // A lease's ledger: every charge, payment and credit with a running balance. Each figure in the
@@ -17,8 +16,7 @@ import { RecordPaymentButton } from "./RecordPayment";
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
 export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx: QueryCtx; leaseId: string; highlight?: string; switchHref?: (leaseId: string) => string }) {
-  // Settle on read (plan §1): portal ACH payments whose window has passed clear before we show them.
-  if (ctx.ws) await settle(ctx.db, ctx.ws, Date.now());
+  await settleDue(ctx);
   const lease = await leaseFor(ctx, leaseId);
   if (!lease) return <EmptyState compact kind="table" title="No ledger to show" description="This lease isn't in your scope, or it doesn't exist." />;
   const [{ rows, totals }, siblings] = await Promise.all([leaseLedger(ctx, leaseId), switchHref ? leasesOfHousehold(ctx, lease.household_id) : Promise.resolve([])]);

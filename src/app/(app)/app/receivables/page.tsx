@@ -8,10 +8,9 @@ import { KpiCard } from "@/components/app/dashboard/KpiCard";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { getPlatform } from "@/lib/platform";
 import { AS_OF } from "@/seed/constants";
-import { settle } from "@/server/money";
 import { effective, metrics, type QueryCtx } from "@/server/query";
 import { workbench } from "@/extensions/receivables/collections";
-import { depositsInTransit } from "@/extensions/receivables/queries";
+import { depositsInTransit, settleDue } from "@/extensions/receivables/queries";
 import { PageHeader } from "@/extensions/receivables/ui/bits";
 import { LateFeeRunner, type PolicyRow } from "@/extensions/receivables/ui/LateFeeRunner";
 import { AgingCard, NsfCard, ScheduledVsCollected } from "@/extensions/receivables/widgets";
@@ -39,8 +38,7 @@ export default async function ReceivablesPage() {
   const role = session.actor.role;
   if (!can(role, "read", "charges")) return <main className="p-6"><EmptyState title="Receivables isn't part of your role" description="Switch role from your avatar menu to see this area." action={{ label: "Go to your home", href: "/app" }} /></main>;
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
-  // Settle on read: ACH payments past their window clear before the figures are computed.
-  if (session.ws) await settle(ctx.db, session.ws, Date.now());
+  await settleDue(ctx);
   const [aging, rate, transit, dispo, byProp, trend, mix, wb, pol] = await Promise.all([
     safe(metrics(ctx, "receivables.aging_live")),
     safe(metrics(ctx, "receivables.collections_rate", { months: 12 })),
