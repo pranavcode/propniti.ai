@@ -113,7 +113,7 @@ export function ComposerForm({ properties, templates, draft, provenance, initial
           {provenance && (
             <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
               <AIBadge source={provenance.source} />
-              <span>{provenance.source === "live" ? "Drafted by the model from your request. Read it before sending." : "Drafted from a notice template by rules; no model was used."}</span>
+              <span>{provenance.source === "live" ? "Drafted by the model from your request. Read it before sending." : "Drafted by rules from your description or a notice template; no model was used."}</span>
               <Link href={`/app/ai/runs/${encodeURIComponent(provenance.runId)}`} className="text-primary hover:underline">View run</Link>
               {provenance && <Button size="xs" variant="ghost" disabled={busy !== null} onClick={() => { setTopic(`${title}. ${body}`); void aiDraft(); }}>{busy === "draft" ? <Loader2 className="animate-spin" /> : <Sparkles />}Redraft</Button>}
             </div>

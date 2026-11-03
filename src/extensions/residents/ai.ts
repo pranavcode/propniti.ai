@@ -266,7 +266,10 @@ export function rulesAnnouncement(topic: string, property: string, templates: Ro
   const hit = templates.find((t) => words.some((w) => String(t.name).toLowerCase().includes(w) || String(t.body).toLowerCase().includes(w)));
   if (hit) return { title: fillTemplate(String(hit.subject || hit.name), { property, due_date: "[date]" }), body: fillTemplate(String(hit.body), { property, due_date: "[date]" }), template: String(hit.id) };
   const t = topic.trim().replace(/\.$/, "");
-  return { title: t.charAt(0).toUpperCase() + t.slice(1), body: `Residents of ${property}: ${t}. If you have questions, reply to this message or contact the leasing office.\n\nThank you,\n${property} management`, template: null };
+  // Title: the first clause, cut at a word boundary.
+  const head = t.split(/[,.;:]| for | because /)[0].trim();
+  const short = head.length > 70 ? head.slice(0, 70).replace(/\s+\S*$/, "") : head;
+  return { title: short.charAt(0).toUpperCase() + short.slice(1), body: `Residents of ${property}: ${t}. If you have questions, reply to this message or contact the leasing office.\n\nThank you,\n${property} management`, template: null };
 }
 
 export async function draftAnnouncement(data: Data, id: string, topic: string) {

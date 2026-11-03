@@ -64,6 +64,15 @@ describe("lease abstraction", () => {
   });
 });
 
+describe("swapped lease dates", () => {
+  it("reads the signed start and end back when the record has them swapped", () => {
+    const bad = { ...lease, kind: "Residential", start_on: "2025-08-31", end_on: "2024-03-01", term_months: 18 };
+    const cmp = compareAbstract(abstractByRules(leaseDocument(bad)), bad);
+    expect(cmp.find((c) => c.key === "start_on")).toMatchObject({ match: false, document: "2024-03-01", record: "2025-08-31" });
+    expect(cmp.find((c) => c.key === "end_on")).toMatchObject({ match: false, document: "2025-08-31", record: "2024-03-01" });
+  });
+});
+
 describe("fillTemplate", () => {
   it("fills known fields and leaves unknown ones visible", () => {
     expect(fillTemplate("Hi {{first_name}}, {{balance}} due {{ due_date }} {{x}}", { first_name: "Ana", balance: "$12.50", due_date: "Nov 1" })).toBe("Hi Ana, $12.50 due Nov 1 {{x}}");

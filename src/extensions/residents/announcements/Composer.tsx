@@ -30,7 +30,7 @@ export async function Composer({ id, run, src, property }: { id?: string; run?: 
         <h1 className="mt-0.5 flex items-center gap-2 text-[20px] font-semibold tracking-tight"><Megaphone className="size-5 text-muted-foreground" />{a ? String(a.title) : "New announcement"}</h1>
         <p className="text-[12.5px] text-muted-foreground">One message to every current and on-notice resident of a property. Sending is simulated in this demo.</p>
       </div>
-      <ComposerForm
+      <ComposerForm key={`${a?.id ?? "new"}-${run ?? ""}`}
         properties={props.map((p) => ({ id: p.id, name: p.name, recipients: Number(p.recipients) }))}
         templates={templates.map((t) => ({ id: String(t.id), name: String(t.name), subject: String(t.subject ?? ""), body: String(t.body) }))}
         draft={a ? { id: String(a.id), title: String(a.title), body: String(a.body), channels: JSON.parse(String(a.channels ?? "[]")), propertyId: String(pid), status: String(a.status), sendAt: (a.send_at as string) ?? null } : null}

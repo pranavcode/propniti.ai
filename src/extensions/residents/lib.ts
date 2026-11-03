@@ -130,8 +130,13 @@ export function signedTerms(l: LeaseRecord) {
   const typo = l.market_rent_cents && l.rent_cents > l.market_rent_cents * 5 && l.rent_cents % 10 === 0;
   const rent = typo ? l.rent_cents / 10 : l.rent_cents;
   const term = l.term_months ?? 12;
+  if (l.end_on && l.end_on < l.start_on) {
+    // Dates keyed in the wrong fields: swapped back, they span the lease term.
+    const months = (Number(l.start_on.slice(0, 4)) - Number(l.end_on.slice(0, 4))) * 12 + Number(l.start_on.slice(5, 7)) - Number(l.end_on.slice(5, 7));
+    if (Math.abs(months - term) <= 1) return { rent, start: l.end_on, end: l.start_on, term };
+  }
   const end = !l.end_on || l.end_on < l.start_on ? addMonths(l.start_on, term) : l.end_on;
-  return { rent, end, term };
+  return { rent, start: l.start_on, end, term };
 }
 
 export function leaseDocument(l: LeaseRecord): string[] {
@@ -151,7 +156,7 @@ export function leaseDocument(l: LeaseRecord): string[] {
     ``,
     `3. TERM. The term of this lease is ${t.term} months.`,
     `Term: ${t.term} months`,
-    `Commencement Date: ${longDate(l.start_on)}`,
+    `Commencement Date: ${longDate(t.start)}`,
     `Expiration Date: ${longDate(t.end)}`,
   ];
   const p2 = [
@@ -191,7 +196,7 @@ export function leaseDocument(l: LeaseRecord): string[] {
     `SIGNATURES`,
     `Landlord: ${l.property} Owner LLC, by its managing agent`,
     `${party}: ${l.tenant}`,
-    `Signed: ${l.signed_at ? longDate(l.signed_at.slice(0, 10)) : longDate(l.start_on)}`,
+    `Signed: ${l.signed_at ? longDate(l.signed_at.slice(0, 10)) : longDate(t.start)}`,
   ]);
   return pages.map((p) => p.join("\n"));
 }

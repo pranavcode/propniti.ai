@@ -19,6 +19,7 @@ const show = (c: Comparison, v: unknown) => {
   if (v == null || v === "") return <span className="text-muted-foreground">—</span>;
   if (c.key.endsWith("_cents")) return `$${(Number(v) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
   if (c.key === "nnn_share_pct") return `${v}%`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return new Date(`${v}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   return String(v);
 };
 
@@ -62,7 +63,7 @@ export async function Abstraction({ id, actor }: TabProps) {
         </div>
       )}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <section aria-label="Lease document" className="max-h-[720px] overflow-y-auto rounded-lg border bg-muted/30 p-3">
           {pages.map((p, i) => (
             <article key={i} id={`page-${i + 1}`} className="mb-3 scroll-mt-3 rounded-md border bg-card px-5 py-4 font-serif text-[12.5px] leading-relaxed shadow-xs last:mb-0">
@@ -79,12 +80,12 @@ export async function Abstraction({ id, actor }: TabProps) {
             <EmptyState compact kind="table" title="No abstraction yet" description={canRun ? "Run it on the lease on file, or upload a text copy of a lease to check it against this record." : "A property manager or broker can run abstraction on this lease."} />
           ) : (
             <div className="overflow-hidden rounded-lg border bg-card">
-              <table className="w-full text-[12.5px]">
+              <table className="w-full table-fixed text-[12.5px]">
                 <thead>
                   <tr className="border-b bg-muted/30 text-left text-[11px] text-muted-foreground">
-                    <th className="px-3 py-1.5 font-medium">Term</th>
-                    <th className="px-3 py-1.5 font-medium">Document</th>
-                    <th className="px-3 py-1.5 font-medium">Record</th>
+                    <th className="w-[30%] px-3 py-1.5 font-medium">Term</th>
+                    <th className="px-3 py-1.5 font-medium">Document says</th>
+                    <th className="px-3 py-1.5 font-medium">Record has</th>
                     <th className="w-24 px-3 py-1.5 font-medium">Check</th>
                   </tr>
                 </thead>
@@ -92,11 +93,11 @@ export async function Abstraction({ id, actor }: TabProps) {
                   {r.comparisons.map((c) => (
                     <tr key={c.key} className={cn("border-b align-top last:border-0", c.match === false && "bg-tone-warning/[0.05]")}>
                       <td className="px-3 py-1.5 font-medium">{c.label}</td>
-                      <td className="px-3 py-1.5">
-                        <div className="tabular-nums">{show(c, c.document)}</div>
-                        <a href={`#page-${c.page}`} className="text-[11px] text-primary hover:underline" title={c.quote}>p. {c.page} · “{c.quote.length > 48 ? `${c.quote.slice(0, 48)}…` : c.quote}”</a>
+                      <td className="max-w-0 px-3 py-1.5">
+                        <div className="line-clamp-2 tabular-nums" title={String(c.document ?? "")}>{show(c, c.document)}</div>
+                        <a href={`#page-${c.page}`} className="text-[11px] text-primary hover:underline" title={`“${c.quote}”`}>Page {c.page}</a>
                       </td>
-                      <td className="px-3 py-1.5 tabular-nums">{c.match == null ? <span className="text-muted-foreground">Not stored</span> : show(c, c.record)}</td>
+                      <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{c.match == null ? <span className="text-muted-foreground">—</span> : show(c, c.record)}</td>
                       <td className="px-3 py-1.5">{c.match == null ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Minus className="size-3" />Info</span> : c.match ? <StatusBadge value="Matches" tone="success" /> : <StatusBadge value="Differs" tone="warning" />}</td>
                     </tr>
                   ))}
@@ -112,7 +113,9 @@ export async function Abstraction({ id, actor }: TabProps) {
           {issues.map((i) => {
             const fix = JSON.parse(String(i.suggested_fix ?? "{}"));
             const ev = JSON.parse(String(i.evidence ?? "{}"));
-            const changes = Object.entries(fix.changes ?? {}).map(([k, after]) => ({ field: k, label: FIX_LABEL[k] ?? k, before: k.endsWith("_cents") ? `$${(Number(ev.record ?? ev[k] ?? 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : (ev.record ?? null), after: k.endsWith("_cents") ? `$${(Number(after) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : after }));
+            const cur = lease as unknown as Record<string, unknown>;
+            const fmtV = (k: string, v: unknown) => (v == null || v === "" ? null : k.endsWith("_cents") ? `$${(Number(v) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : String(v));
+            const changes = Object.entries(fix.changes ?? {}).map(([k, after]) => ({ field: k, label: FIX_LABEL[k] ?? k, before: fmtV(k, k in cur ? cur[k] : ev.record ?? ev[k]), after: fmtV(k, after) }));
             return (
               <IssueFix key={String(i.id)} issueId={String(i.id)} rule={String(i.rule_id)}
                 title={i.rule_id === "leases.abstract_mismatch" ? `AI: fix ${String(ev.label ?? "term").toLowerCase()} from the signed lease` : String(i.rule_id).replace("leases.", "").replace(/_/g, " ")}
