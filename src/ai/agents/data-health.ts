@@ -72,7 +72,8 @@ export default defineAgent({
   maxProposals: 12,
   async collect(ctx) {
     // Detection: each SQL rule is a read-only SELECT returning offending ids.
-    const rules = await ctx.call<{ rows: Row[] }>("records.search", { entity: "data_rules", filters: [{ field: "enabled", op: "eq", value: 1 }], size: 50 });
+    // Only the shipped rules (base rows) run their SQL; overlay edits can't inject a query.
+    const rules = { rows: (await ctx.db.prepare("SELECT id, check_kind, check_sql FROM data_rules WHERE workspace_id = 'base' AND deleted = 0 AND enabled = 1 LIMIT 50").all<Row>()).results };
     const counts: Record<string, number | string> = {};
     for (const r of rules.rows) {
       const q = String(r.check_sql ?? "").trim();

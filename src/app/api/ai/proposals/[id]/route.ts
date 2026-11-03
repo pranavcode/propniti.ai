@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { executeProposal, rejectProposal } from "@/ai/effects";
+import { Edits, executeProposal, rejectProposal } from "@/ai/effects";
 import { canDecide, dataOf, guarded, json, writeSession } from "@/ai/http";
 import { proposal, proposalOut } from "@/ai/views";
 
 const Decide = z.object({
   decision: z.enum(["approve", "reject", "snooze"]),
   note: z.string().max(500).default(""),
-  // Edit before approving: the proposal's payload with the person's changes (same shape).
-  payload: z.record(z.string(), z.unknown()).optional(),
+  // Edit before approving: only the message wording can change.
+  payload: Edits.optional(),
 });
 
 // Accept (runs the action once), edit and accept, reject or snooze. Every decision is audited.

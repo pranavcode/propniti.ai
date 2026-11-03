@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getAction } from "@/extensions/actions";
+import { can } from "@/entities";
 import type { ActionKey, AgentKey, Row } from "@/entities/types";
 import { eff, get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
 
@@ -90,6 +91,16 @@ async function runEffect(data: DataCtx, e: Effect, by: By, proposal: Row): Promi
   return e.tombstone ? `Merged ${e.table} ${e.id}` : `Updated ${e.table} ${e.id}: ${Object.entries(after).map(([k, v]) => `${k} → ${v}`).join(", ")}`;
 }
 
+// A person may edit only the wording of a proposal's message before approving. Everything else
+// (records, amounts, recipients, effects) stays as the rules built it, so an edit can't widen what runs.
+export const Edits = z.object({ message: z.object({ subject: z.string().max(200).optional(), body: z.string().min(1).max(4000).optional() }).optional() });
+function withEdits(payload: Record<string, unknown>, edited: unknown) {
+  if (edited === undefined) return payload;
+  const e = Edits.parse(edited);
+  const effects = (Array.isArray(payload.effects) ? payload.effects : []).map((x: Record<string, unknown>) => (x.kind === "message" && e.message ? { ...x, ...e.message } : x));
+  return { ...payload, effects };
+}
+
 // Runs an approved proposal once. The decision row is inserted first with a guarded insert, so a
 // double click or two approvers can't run it twice; a failed run removes the decision again.
 export async function executeProposal(data: DataCtx, proposal: Row, by: By, edited?: unknown, note = ""): Promise<ExecResult> {
@@ -103,12 +114,13 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
     .run();
   if (!claimed.meta.changes) return { ok: false, status: 409, message: "Already decided" };
 
-  const payload = edited ?? parseJson(proposal.payload, {});
+  const payload = withEdits(parseJson<Record<string, unknown>>(proposal.payload, {}), edited);
   const action = String(proposal.action) as ActionKey;
   let result: ExecResult;
   try {
     const registered = getAction(action);
     if (registered) {
+      if (!can(data.actor.role, action, registered.entity)) throw new Error(`${data.actor.role.replace(/_/g, " ")} can't ${registered.label.toLowerCase()}`);
       const row = isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
       const input = registered.input ? registered.input.parse((payload as { input?: unknown }).input ?? payload) : undefined;
       const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);

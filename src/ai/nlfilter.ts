@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getEntity } from "@/entities";
+import { can, getEntity } from "@/entities";
 import type { EntityDef, FieldDef, Role, ViewState } from "@/entities/types";
 import { addDays } from "./agents/framework";
 import { asOf, sql, type DataCtx } from "./data";
@@ -113,6 +113,7 @@ async function rulesSpec(data: DataCtx, def: EntityDef, role: Role, text: string
 export async function nlFilter(data: DataCtx, entity: string, text: string): Promise<NlFilterResult> {
   const def = getEntity(entity);
   if (!def) throw new Error(`Unknown entity ${entity}`);
+  if (!can(data.actor.role, "read", def.key)) throw new Error(`You can't view ${def.label.many.toLowerCase()}`);
   const role = data.actor.role;
   const today = await asOf(data.db);
   const model = currentModel();

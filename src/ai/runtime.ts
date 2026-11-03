@@ -93,6 +93,7 @@ export async function createRunContext(opts: {
     async call<O>(key: ToolKey, input: unknown): Promise<O> {
       const tool = getTool(key);
       if (!tool) throw new Error(`Unknown tool ${key}`);
+      if (!tool.roles.includes(actor.role)) throw new Error(`${key} isn't available to the ${actor.role.replace(/_/g, " ")} role`);
       await ctx.step({ kind: "tool_call", toolKey: key, input, ok: true });
       const t0 = Date.now();
       try {

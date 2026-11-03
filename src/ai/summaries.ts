@@ -15,6 +15,8 @@ export type Summary = { entity_type: string; entity_id: string; summary: string;
 const summaryId = (entity: string, id: string) => `sum:${entity}:${id}`;
 
 export async function cachedSummary(data: DataCtx, entity: string, id: string): Promise<Summary | null> {
+  // The record must be readable in this persona's scope before its summary is.
+  if (!getEntity(entity) || !(await getRow({ db: data.db, ws: data.ws === "base" ? null : data.ws, actor: data.actor }, entity, id).catch(() => null))) return null;
   const e = eff("ai_summaries", data.ws);
   const r = await data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.entity_type = ? AND t.entity_id = ? ORDER BY t.generated_at DESC LIMIT 1`).bind(...e.params, entity, id).first<Row>();
   if (!r) return null;
