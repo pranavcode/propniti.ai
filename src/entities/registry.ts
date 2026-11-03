@@ -53,7 +53,8 @@ export function navTree(role: Role): NavGroup[] {
 }
 
 // The def's permissions decide; a module the role has no access to (PERMISSIONS) always denies.
-// Named actions check the action's own roles. Scope (which rows) is applied by the query layer.
+// Named actions are gated by their own explicit roles (module read access is enough), so a
+// cross-module action such as an accountant's vendor bank change works. Scope is applied by the query layer.
 export function can(role: Role, action: "read" | "create" | "update" | "delete" | ActionKey, entity: EntityKey): boolean {
   const def = entities.get(entity);
   if (!def) return false;
@@ -64,5 +65,5 @@ export function can(role: Role, action: "read" | "create" | "update" | "delete" 
     return access !== "read" && def.writes === "generic" && (def.permissions[action] ?? []).includes(role);
   }
   const a = getAction(action);
-  return !!a && a.entity === entity && a.roles.includes(role) && access !== "read";
+  return !!a && a.entity === entity && a.roles.includes(role);
 }

@@ -77,7 +77,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "grace", name: "Grace Kim", title: "Senior accountant", role: "accountant",
-    scope: { kind: "org", label: "All owner entities" }, home: "/app/payables/bills",
+    scope: { kind: "org", label: "All owner entities" }, home: "/app/finance",
     quickActions: [
       { label: "Bills to approve", href: "/app/payables/bills?f.status=Pending%20approval" },
       { label: "Reconcile trust", href: "/app/banking/reconciliations" },

@@ -136,10 +136,10 @@ describe("POST /api/session", () => {
     const form = (data: Record<string, string>) => req("/api/session", { method: "POST", body: new URLSearchParams(data), headers: { "content-type": "application/x-www-form-urlencoded" } });
     const ok = await sessionRoute.POST(form({ persona: "grace" }));
     expect(ok.status).toBe(303);
-    expect(ok.headers.get("location")).toBe("/app/payables/bills");
+    expect(ok.headers.get("location")).toBe("/app/finance");
     expect(ok.headers.get("set-cookie")).toContain("pn_as=grace");
     expect((await sessionRoute.POST(form({ persona: "mallory" }))).status).toBe(400);
-    expect((await sessionRoute.POST(form({ persona: "grace", next: "https://evil.example" }))).headers.get("location")).toBe("/app/payables/bills");
+    expect((await sessionRoute.POST(form({ persona: "grace", next: "https://evil.example" }))).headers.get("location")).toBe("/app/finance");
     expect((await sessionRoute.POST(form({ persona: "grace", next: "/app/properties/p01" }))).headers.get("location")).toBe("/app/properties/p01");
   });
 });
