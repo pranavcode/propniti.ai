@@ -47,13 +47,13 @@ describe("seed generator", () => {
     expect(T.transfers.every((t) => (t.created as string) < `${AS_OF}T23:59`)).toBe(true);
   });
 
-  it("dates nothing that already happened after the demo's today morning", () => {
+  it("dates nothing that already happened later than 01:00 on the demo's today", () => {
     const past = ["created_at", "at", "opened_at", "completed_at", "sent_at", "submitted_at", "decided_at", "detected_at", "generated_at", "uploaded_at", "approved_at", "signed_at", "started_at", "ended_at", "cleared", "created"];
-    for (const [name, rows] of Object.entries(T)) for (const r of rows) for (const k of past) if (typeof r[k] === "string" && (r[k] as string)[10] === "T") expect((r[k] as string) <= `${AS_OF}T08:00:00Z`, `${name}.${k} = ${r[k]}`).toBe(true);
+    for (const [name, rows] of Object.entries(T)) for (const r of rows) for (const k of past) if (typeof r[k] === "string" && (r[k] as string)[10] === "T") expect((r[k] as string) <= `${AS_OF}T01:00:00Z`, `${name}.${k} = ${r[k]}`).toBe(true);
     // AI history in particular: proposals, runs, steps, decisions and processed events.
     for (const [t, cols] of [["ai_proposals", ["created_at"]], ["agent_runs", ["started_at", "ended_at"]], ["agent_steps", ["at"]], ["ai_decisions", ["decided_at"]], ["events", ["created_at", "processed_at"]]] as const) {
       expect(T[t].length, t).toBeGreaterThan(0);
-      for (const r of T[t]) for (const k of cols) if (r[k]) expect((r[k] as string) <= `${AS_OF}T08:00:00Z`, `${t}.${k} = ${r[k]}`).toBe(true);
+      for (const r of T[t]) for (const k of cols) if (r[k]) expect((r[k] as string) <= `${AS_OF}T01:00:00Z`, `${t}.${k} = ${r[k]}`).toBe(true);
     }
   });
 

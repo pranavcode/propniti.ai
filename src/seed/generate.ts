@@ -122,14 +122,15 @@ export function generate(): Base {
 export const INFLOW = new Set(["Rent", "Deposit", "Other receipt"]);
 
 // Columns that record something that already happened. On the demo's "today" they are squeezed
-// into 00:00–08:00 (order kept) and never land after it, so the UI never shows a past event as
-// "later today" or "tomorrow". Scheduled columns (due, SLA, scheduled_at, send_at, expiry) are left.
+// into 00:00–00:59 (order kept) and never land after it, so the demo clock (AS_OF plus the Pacific
+// wall-clock time) never shows a past event as "in 1h", even when presenting just after midnight
+// Pacific. Scheduled columns (due, SLA, scheduled_at, send_at, expiry) are left as they are.
 const PAST_COLUMNS = new Set([
   "created_at", "created", "cleared", "at", "opened_at", "completed_at", "sent_at", "submitted_at", "decided_at", "detected_at", "fixed_at",
   "started_at", "ended_at", "generated_at", "uploaded_at", "approved_at", "signed_at", "last_contact_at", "last_message_at", "responded_at",
   "taken_at", "processed_at", "read_at", "last_active_at", "updated_at", "done_at", "completed_at",
 ]);
-export const TODAY_CAP = `${AS_OF}T08:00:00Z`;
+export const TODAY_CAP = `${AS_OF}T00:59:59Z`;
 function capToToday(t: Tables) {
   for (const rows of Object.values(t)) {
     for (const r of rows) {
@@ -137,8 +138,9 @@ function capToToday(t: Tables) {
         const v = r[k];
         if (typeof v !== "string" || v.length < 16 || v[10] !== "T" || !PAST_COLUMNS.has(k)) continue;
         if (v.startsWith(AS_OF)) {
-          const minutes = Math.floor((Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16))) / 3);
-          r[k] = `${AS_OF}T${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${v.slice(17, 19) || "00"}Z`;
+          // A day's 86,400 seconds onto the first hour's 3,600, in order.
+          const sec = Math.floor(((Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16))) * 60 + Number(v.slice(17, 19) || 0)) / 24);
+          r[k] = `${AS_OF}T00:${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}Z`;
         } else if (v > TODAY_CAP) r[k] = TODAY_CAP;
       }
     }
