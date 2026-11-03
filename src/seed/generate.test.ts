@@ -161,6 +161,16 @@ describe("seed generator", () => {
     for (const p of T.properties) expect(props.has(p.id), p.id as string).toBe(true);
   });
 
+  it("seeds platform usage per org and a change history for policies and state rules", () => {
+    expect(new Set(T.org_usage_monthly.map((u) => u.org_id)).size).toBe(5);
+    const summit = T.org_usage_monthly.filter((u) => u.org_id === "org-summit");
+    expect(summit.reduce((s, u) => s + (u.agent_runs as number), 0)).toBe(T.agent_runs.filter((r) => (r.started_at as string) >= "2025-09").length);
+    const changes = T.audit.filter((a) => ["approval_policies", "late_fee_policies", "state_rules"].includes(a.entity_type as string));
+    expect(changes.length).toBeGreaterThanOrEqual(12);
+    for (const a of changes) expect(a.before_json, a.id as string).not.toBeNull();
+    expect(T.help_articles.some((h) => h.id === "state-rules")).toBe(true);
+  });
+
   it("lands in the planned ranges: occupancy, delinquency, open work orders", () => {
     const oct = T.metrics_monthly.filter((m) => m.month === "2026-10");
     const occ = sum(oct, (m) => m.occupied as number) / sum(oct, (m) => m.units as number);

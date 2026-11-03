@@ -85,13 +85,15 @@ class Extras {
       ["TX", "deposit_return_days", "30", "Refund or itemized deductions within 30 days after surrender (§92.103).", "2015-01-01", null],
       ["TX", "notice_days", "3", "Notice to vacate before filing eviction for nonpayment, unless the lease sets a shorter period.", "2015-01-01", null],
       ["GA", "late_fee_cap_pct", "0", "No statutory cap; the fee must be stated in the lease and be reasonable.", "2015-01-01", null],
-      ["GA", "grace_days", "5", "Company policy; Georgia sets no statutory grace period.", "2015-01-01", null],
+      ["GA", "grace_days", "3", "Company policy; Georgia sets no statutory grace period.", "2015-01-01", null],
+      ["GA", "grace_days", "5", "Raised to 5 days to match the Atlanta market and cut first-of-month late fees.", "2026-05-01", "sam"],
       ["GA", "deposit_max_months", "none", "No statutory maximum.", "2015-01-01", null],
       ["GA", "deposit_max_months", "2", "Safe at Home Act (HB 404): security deposit may not exceed two months' rent.", "2024-07-01", "sam"],
       ["GA", "notice_days", "3", "Safe at Home Act: 3-business-day notice to pay or vacate before filing a dispossessory.", "2024-07-01", "sam"],
       ["GA", "deposit_return_days", "30", "Return within one month after termination (O.C.G.A. §44-7-34).", "2015-01-01", null],
       ["AZ", "late_fee_cap_pct", "0", "No statutory cap; the fee must be in the lease and reasonable (A.R.S. §33-1368).", "2015-01-01", null],
-      ["AZ", "grace_days", "3", "Company policy; Arizona sets no statutory grace period.", "2015-01-01", null],
+      ["AZ", "grace_days", "5", "Company policy; Arizona sets no statutory grace period.", "2015-01-01", null],
+      ["AZ", "grace_days", "3", "Shortened to 3 days after the Q2 delinquency review.", "2026-06-15", "priya"],
       ["AZ", "deposit_max_months", "1.5", "Deposit and prepaid rent may not exceed 1.5 months' rent (A.R.S. §33-1321).", "2015-01-01", null],
       ["AZ", "deposit_return_days", "14", "Return within 14 business days after termination and delivery of possession.", "2015-01-01", null],
       ["AZ", "notice_days", "5", "Five-day notice for nonpayment of rent.", "2015-01-01", null],
@@ -1215,6 +1217,31 @@ class Extras {
       ["ow01", "October statement ready", "/portal/owner/statements", "Bluebonnet Residential Fund II."], ["apl-0001", "Finish your application", "/portal/applicant", "Upload paystubs and pay the $55 fee."],
     ];
     NOTIF.forEach(([user, title, href, body], i) => add("notifications", { id: `nt-seed-${i + 1}`, user_id: user, channel: "In-app", title, body, href, entity_type: null, entity_id: null, read_at: i % 4 === 3 ? ts(ASOF - 1, 900) : null, at: ts(ASOF - (i % 3), 480 + i * 7) }));
+    // Platform usage per customer org and month. The demo org's figures come from its agent runs and
+    // proposals; the other orgs are scaled by their size and plan.
+    const months = PERIODS.filter((m) => m >= "2025-09");
+    const runsBy = new Map<string, R[]>();
+    for (const run of this.t.agent_runs ?? []) (runsBy.get((run.started_at as string).slice(0, 7)) ?? runsBy.set((run.started_at as string).slice(0, 7), []).get((run.started_at as string).slice(0, 7))!).push(run);
+    const actionsBy = new Map<string, number>();
+    for (const p of this.t.ai_proposals ?? []) actionsBy.set((p.created_at as string).slice(0, 7), (actionsBy.get((p.created_at as string).slice(0, 7)) ?? 0) + 1);
+    for (const m of months) {
+      const runs = runsBy.get(m) ?? [];
+      add("org_usage_monthly", { id: `ou-org-summit-${m}`, org_id: "org-summit", month: m, agent_runs: runs.length, ai_actions: actionsBy.get(m) ?? 0, tokens_in: runs.reduce((a, x) => a + (x.tokens_in as number), 0), tokens_out: runs.reduce((a, x) => a + (x.tokens_out as number), 0), cost_cents: runs.reduce((a, x) => a + (x.cost_cents as number), 0), active_users: 30 + rng(`au:${m}`).int(0, 8), units_managed: 3318 });
+    }
+    for (const o of c.t.orgs.filter((x) => x.id !== "org-summit")) {
+      const units = o.units_managed as number;
+      const scale = units / 3318;
+      const startIdx = o.status === "Trial" ? months.length - 2 : o.id === "org-harbor" ? 0 : 3;
+      months.forEach((m, i) => {
+        if (i < startIdx) return;
+        const r = rng(`ou:${o.id}:${m}`);
+        const ramp = Math.min(1, (i - startIdx + 1) / 6) * (o.status === "Past due" && i > months.length - 3 ? 0.4 : 1);
+        const runs = Math.round((runsBy.get(m)?.length ?? 300) * scale * ramp * (0.8 + r() * 0.4));
+        const tin = runs * r.int(2500, 6000), tout = runs * r.int(300, 900);
+        add("org_usage_monthly", { id: `ou-${o.id}-${m}`, org_id: o.id, month: m, agent_runs: runs, ai_actions: Math.round(runs * (2 + r() * 3)), tokens_in: tin, tokens_out: tout, cost_cents: Math.round((tin * 3 + tout * 15) / 10000 * (o.plan === "Enterprise" ? 0.6 : 1)), active_users: Math.max(2, Math.round((o.seats as number) * ramp * (0.6 + r() * 0.35))), units_managed: units });
+      });
+    }
+
     // Delinquency risk score on residents of households with balances.
     for (const h of c.households) {
       const owed = h.open.reduce((s, o) => s + Math.max(0, o.rem), 0);
@@ -1225,7 +1252,24 @@ class Extras {
     // Audit history for staff actions (who did what), beyond money and AI.
     let au = 0;
     for (const b of c.bills.filter((b) => b.approved_at && (b.approved_at as string) >= iso(ASOF - 30))) add("audit", { id: `au-h-${++au}`, at: b.approved_at, actor: c.staffName[b.approved_by as string], actor_id: b.approved_by, role: "accountant", agent: null, model: null, action: "Bill approved", entity_type: "bills", entity_id: b.id, property_id: b.property_id, detail: `${b.id}: $${((b.amount_cents as number) / 100).toFixed(2)}`, before_json: JSON.stringify({ status: "Pending approval" }), after_json: JSON.stringify({ status: "Approved" }) });
-    for (const r of (this.t.state_rules ?? []).filter((r) => r.changed_by)) add("audit", { id: `au-h-${++au}`, at: `${r.effective_from}T15:00:00Z`, actor: c.staffName[r.changed_by as string], actor_id: r.changed_by, role: "admin", agent: null, model: null, action: "State rule changed", entity_type: "state_rules", entity_id: r.id, property_id: null, detail: `${r.state} ${r.rule} = ${r.value}`, before_json: null, after_json: JSON.stringify({ value: r.value }) });
+    const prevRule = (r: R) => (this.t.state_rules ?? []).filter((x) => x.state === r.state && x.rule === r.rule && (x.effective_from as string) < (r.effective_from as string)).at(-1)?.value ?? null;
+    for (const r of (this.t.state_rules ?? []).filter((r) => r.changed_by)) add("audit", { id: `au-h-${++au}`, at: `${r.effective_from}T15:00:00Z`, actor: c.staffName[r.changed_by as string], actor_id: r.changed_by, role: r.changed_by === "priya" ? "regional_manager" : r.changed_by === "grace" ? "accountant" : "admin", agent: null, model: null, action: "State rule changed", entity_type: "state_rules", entity_id: r.id, property_id: null, detail: `${r.state} ${r.rule}: ${prevRule(r) ?? "none"} → ${r.value}`, before_json: JSON.stringify({ value: prevRule(r) }), after_json: JSON.stringify({ value: r.value }) });
+    // Change history for approval and late-fee policies over the last six months (before/after).
+    const POLICY_CHANGES: [string, string, object, object, string, number][] = [
+      ["pol-org-maintenance-spend", "approval_policies", { limit_cents: 50_000 }, { limit_cents: 75_000 }, "sam", 160],
+      ["pol-org-maintenance-spend", "approval_policies", { owner_approval_over_cents: 200_000 }, { owner_approval_over_cents: 250_000 }, "daniel", 75],
+      ["pol-org-bill-payment", "approval_policies", { limit_cents: 250_000 }, { limit_cents: 500_000 }, "grace", 130],
+      ["pol-org-concession", "approval_policies", { approver_role: "property_manager" }, { approver_role: "regional_manager" }, "daniel", 110],
+      ["pol-org-write-off", "approval_policies", { limit_cents: 10_000 }, { limit_cents: 0 }, "grace", 52],
+      ["pol-oe01-maintenance-spend", "approval_policies", { limit_cents: 75_000, owner_approval_over_cents: 500_000 }, { limit_cents: 50_000, owner_approval_over_cents: 250_000 }, "sam", 40],
+      ["pol-oe04-maintenance-spend", "approval_policies", { limit_cents: 75_000 }, { limit_cents: 100_000 }, "sam", 95],
+      ["pol-oe07-bill-payment", "approval_policies", { owner_approval_over_cents: 5_000_000 }, { owner_approval_over_cents: 2_500_000 }, "grace", 21],
+      ["pol-org-legal", "approval_policies", { always_human: 0 }, { always_human: 1 }, "daniel", 170],
+      ["lfp-org", "late_fee_policies", { flat_cents: 7_500 }, { flat_cents: 5_000 }, "sam", 140],
+      ["lfp-p28", "late_fee_policies", { daily_cents: 1_500, max_cents: 20_000 }, { daily_cents: 1_000, max_cents: 15_000 }, "s-colton", 64],
+      ["lfp-p09", "late_fee_policies", { pct: 12 }, { pct: 10 }, "priya", 33],
+    ];
+    for (const [id, table, before, after, by, ago] of POLICY_CHANGES) add("audit", { id: `au-h-${++au}`, at: ts(ASOF - ago, 900), actor: c.staffName[by], actor_id: by, role: by === "daniel" ? "principal" : by === "grace" ? "accountant" : by === "sam" ? "admin" : "regional_manager", agent: null, model: null, action: table === "approval_policies" ? "Approval policy changed" : "Late-fee policy changed", entity_type: table, entity_id: id, property_id: id.startsWith("lfp-p") ? id.slice(4) : null, detail: Object.keys(after).map((k) => `${k}: ${(before as Record<string, unknown>)[k]} → ${(after as Record<string, unknown>)[k]}`).join("; "), before_json: JSON.stringify(before), after_json: JSON.stringify(after) });
     add("audit", { id: `au-h-${++au}`, at: "2026-03-28T22:15:00Z", actor: "Sam Okafor", actor_id: "sam", role: "admin", agent: null, model: null, action: "User deactivated", entity_type: "staff", entity_id: "s-former", property_id: null, detail: "Brent Calloway (leasing agent) deactivated; access removed", before_json: JSON.stringify({ active: 1 }), after_json: JSON.stringify({ active: 0 }) });
   }
 

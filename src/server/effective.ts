@@ -13,7 +13,7 @@ export const TABLES = [
   "messages", "templates", "announcements", "insurance_policies", "vendor_cois", "compliance_items", "legal_cases", "approval_policies", "state_rules",
   "automation_rules", "automation_runs", "agent_definitions", "agent_runs", "agent_steps", "events", "ai_proposals", "ai_decisions", "ai_summaries",
   "ai_feedback", "assistant_threads", "assistant_messages", "assistant_actions", "tasks", "notes", "activity_events", "notifications", "saved_views",
-  "user_preferences", "onboarding_progress", "tour_progress", "help_articles", "data_rules", "data_issues", "data_fix_log", "audit", "metrics_monthly",
+  "user_preferences", "onboarding_progress", "tour_progress", "help_articles", "data_rules", "data_issues", "data_fix_log", "audit", "metrics_monthly", "org_usage_monthly",
 ] as const;
 export type Table = (typeof TABLES)[number];
 
