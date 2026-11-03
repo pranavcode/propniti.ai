@@ -1,5 +1,6 @@
 import { extractInvoice } from "@/lib/llm";
 import { rateLimit, readBodyLimited } from "@/lib/guard";
+import { sameOrigin } from "@/ai/session";
 
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
@@ -20,6 +21,7 @@ function toBase64(bytes: Uint8Array) {
 
 // Uploaded documents are read and discarded; nothing is stored.
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return Response.json({ error: "Cross-site request refused" }, { status: 403 });
   const limited = await rateLimit(request);
   if (limited) return limited;
   // Cap the whole multipart body while streaming, then parse it from memory.
