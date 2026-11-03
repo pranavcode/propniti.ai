@@ -79,7 +79,7 @@ export const chargeOpenSql = (c = "c", ws = "?1") =>
 export const chargeStatusSql = (c = "c", ws = "?1") => `(CASE
     WHEN ${chargeOpenSql(c, ws)} <= 0 THEN 'Paid'
     WHEN EXISTS (SELECT 1 FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending') THEN 'Processing'
-    WHEN ${c}.due_on < '${AS_OF}' AND julianday('${AS_OF}') - julianday(${c}.due_on) > 3 THEN 'Overdue'
+    WHEN julianday('${AS_OF}') - julianday(${c}.due_on) >= 3 THEN 'Overdue'
     WHEN ${chargeOpenSql(c, ws)} < ${c}.amount_cents THEN 'Partial'
     ELSE 'Due' END)`;
 

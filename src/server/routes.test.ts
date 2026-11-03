@@ -1,76 +1,64 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Actor } from "@/entities/types";
 import { openSqlite } from "@/lib/platform/sqlite";
-import { seed } from "@/lib/seed";
-import type { DemoState } from "@/lib/types";
+import type { Db } from "@/lib/platform/types";
+import { chargeStatusSql } from "./data";
+import { effective } from "./effective";
+import { approveAndPayWorkOrder, payRent, recordPayment } from "./money";
+import { cookieHeader, resolveWorkspace } from "./workspace";
 
-const { db } = vi.hoisted(() => ({ db: { current: null as ReturnType<typeof openSqlite> | null } }));
-vi.mock("@/lib/platform", () => ({ getPlatform: () => ({ db: (db.current ??= openSqlite(":memory:")) }) }));
+// Request-level behaviour of the workspace cookie and of concurrent writes from one browser.
+// (The generic /api/e routes have their own tests in src/app/api/e/__tests__.)
 
-const state = await import("@/app/api/state/route");
-const approve = await import("@/app/api/work-orders/[id]/approve/route");
-const submit = await import("@/app/api/work-orders/[id]/submit/route");
-const pay = await import("@/app/api/invoices/[id]/pay/route");
-const nudges = await import("@/app/api/nudges/route");
-const disburse = await import("@/app/api/owners/[id]/disburse/route");
+const T0 = Date.parse("2026-11-04T17:00:00Z");
+const grace: Actor = { personaId: "grace", name: "Grace Kim", role: "accountant", scope: { kind: "org", label: "All" }, propertyIds: "all" };
+let db: Db;
+beforeAll(() => {
+  db = openSqlite(":memory:");
+}, 240_000);
+const count = (sql: string, ...p: unknown[]) => db.prepare(sql).bind(...p).first<{ n: number }>().then((r) => Number(r!.n));
 
-const ORIGIN = "http://localhost:3000";
-const post = (path: string, body: unknown, { cookie, origin = ORIGIN, headers = {} }: { cookie?: string; origin?: string | null; headers?: Record<string, string> } = {}) =>
-  new Request(`${ORIGIN}${path}`, {
-    method: "POST",
-    body: typeof body === "string" ? body : JSON.stringify(body),
-    headers: { host: "localhost:3000", ...(origin && { origin }), ...(cookie && { cookie }), ...headers },
-  });
-const params = (id: string) => ({ params: Promise.resolve({ id }) });
-const cookieOf = (res: Response) => res.headers.get("set-cookie")!.split(";")[0];
-
-describe("demo data routes", () => {
-  it("serve seed data and a cookie to a first-time reader, without creating a workspace", async () => {
-    const res = await state.GET(new Request(`${ORIGIN}/api/state`));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("set-cookie")).toMatch(/^pn_ws=[\w-]{22,}; Path=\/; HttpOnly; SameSite=Lax/);
-    expect(((await res.json()) as { state: DemoState }).state).toEqual(seed());
+describe("workspace cookie", { timeout: 60_000 }, () => {
+  it("a first-time reader gets a cookie and base data, without a workspace row", async () => {
+    const before = await count("SELECT count(*) AS n FROM workspaces");
+    const r = await resolveWorkspace(db, new Request("http://x/app"), T0, false, false);
+    expect(r).toMatchObject({ ws: null, setCookie: expect.stringMatching(/^[\w-]{22,}$/) });
+    expect(await count("SELECT count(*) AS n FROM workspaces")).toBe(before);
+    expect(cookieHeader("abc")).toMatch(/^pn_ws=abc; Path=\/; HttpOnly; SameSite=Lax; Max-Age=2592000/);
   });
 
-  it("refuse cross-site posts (403), bad bodies (400) and oversized bodies (413)", async () => {
-    expect((await nudges.POST(post("/api/nudges", { userId: "u-t1", message: "hi", actor: "x" }, { origin: "https://evil.example" }))).status).toBe(403);
-    expect((await nudges.POST(post("/api/nudges", { userId: "u-t1", message: "hi", actor: "x" }, { origin: null }))).status).toBe(403);
-    expect((await submit.POST(post("/api/work-orders/WO-1041/submit", { items: "lots" }), params("WO-1041"))).status).toBe(400);
-    expect((await nudges.POST(post("/api/nudges", "{"))).status).toBe(400);
-    expect((await nudges.POST(post("/api/nudges", { userId: "u-t1", message: "x".repeat(70 * 1024), actor: "x" }))).status).toBe(413);
-    expect((await disburse.POST(post("/api/owners/u-owner1/disburse", {}), params("u-owner1"))).status).toBe(400); // no Idempotency-Key
+  it("the first write creates the workspace; later requests reuse it without a new cookie", async () => {
+    const first = await resolveWorkspace(db, new Request("http://x/app"), T0, true, false);
+    if (first instanceof Response) throw new Error("refused");
+    expect(first.setCookie).toBe(first.ws);
+    const again = await resolveWorkspace(db, new Request("http://x/app", { headers: { cookie: `pn_ws=${first.ws}` } }), T0 + 1000, true, false);
+    expect(again).toEqual({ ws: first.ws });
   });
 
-  it("create a workspace on the first write, then keep using it", async () => {
-    const first = await nudges.POST(post("/api/nudges", { userId: "u-t2", message: "Rent reminder", actor: "Maya Patel" }));
-    expect(first.status).toBe(200);
-    const cookie = cookieOf(first);
-    const again = await state.GET(new Request(`${ORIGIN}/api/state`, { headers: { cookie } }));
-    expect(again.headers.get("set-cookie")).toBeNull();
-    expect(((await again.json()) as { state: DemoState }).state.notifications[0].message).toBe("Rent reminder");
+  it("refuses ids that don't match the cookie pattern and limits creates per network", async () => {
+    expect(await resolveWorkspace(db, new Request("http://x", { headers: { cookie: "pn_ws=../../etc" } }), T0, false, false)).toMatchObject({ ws: null });
+    const make = () => resolveWorkspace(db, new Request("http://x", { headers: { "cf-connecting-ip": "9.9.9.9" } }), T0, true, true);
+    for (let i = 0; i < 30; i++) expect(await make()).not.toBeInstanceOf(Response);
+    const res = (await make()) as Response;
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("3600");
   });
 
-  it("answer a refused approval with 409, the reason and the fresh state", async () => {
-    const cookie = cookieOf(await state.GET(new Request(`${ORIGIN}/api/state`)));
-    const res = await approve.POST(post("/api/work-orders/WO-1043/approve", {}, { cookie }), params("WO-1043"));
-    expect(res.status).toBe(409);
-    const body = (await res.json()) as { error: string; state: DemoState };
-    expect(body.error).toMatch(/Only submitted work/);
-    expect(body.state.workOrders).toHaveLength(seed().workOrders.length);
-  });
-
-  it("apply changes from two tabs at once without losing either (the old cross-tab race)", async () => {
-    const cookie = cookieOf(await state.GET(new Request(`${ORIGIN}/api/state`)));
+  it("applies writes from two tabs at once without losing either; a double approve moves money once", async () => {
+    const r = await resolveWorkspace(db, new Request("http://x"), T0, true, false);
+    if (r instanceof Response) throw new Error("refused");
+    const ctx = { db, ws: r.ws!, actor: grace, nowMs: T0 };
+    const [a, b] = (await db.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 2`).bind(ctx.ws).all<{ id: string }>()).results;
+    const wo = await db.prepare(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id = 'v01' LIMIT 1`).bind(ctx.ws).first<{ id: string }>();
     const results = await Promise.all([
-      pay.POST(post("/api/invoices/INV-2611-03/pay", {}, { cookie }), params("INV-2611-03")),
-      approve.POST(post("/api/work-orders/WO-1041/approve", {}, { cookie }), params("WO-1041")),
-      approve.POST(post("/api/work-orders/WO-1041/approve", {}, { cookie }), params("WO-1041")),
-      nudges.POST(post("/api/nudges", { userId: "u-t2", message: "From tab two", actor: "Maya Patel" }, { cookie })),
+      payRent(ctx, a.id),
+      approveAndPayWorkOrder(ctx, wo!.id),
+      approveAndPayWorkOrder(ctx, wo!.id),
+      recordPayment(ctx, { chargeId: b.id, amountCents: 20_000, method: "Money order", reference: "MO 1", idempotencyKey: "tab-two" }),
     ]);
-    expect(results.map((r) => r.status).sort()).toEqual([200, 200, 200, 409]);
-    const s = ((await (await state.GET(new Request(`${ORIGIN}/api/state`, { headers: { cookie } }))).json()) as { state: DemoState }).state;
-    expect(s.invoices.find((i) => i.id === "INV-2611-03")?.status).toBe("Processing");
-    expect(s.workOrders.find((w) => w.id === "WO-1041")?.status).toBe("Payment pending");
-    expect(s.transfers.filter((t) => t.key === "vendor:WO-1041")).toHaveLength(1);
-    expect(s.notifications.some((n) => n.message === "From tab two")).toBe(true);
+    expect(results.map((x) => x.status).sort()).toEqual([200, 200, 200, 409]);
+    expect(await count("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = ?2", ctx.ws, `vendor:${wo!.id}`)).toBe(1);
+    expect(await count("SELECT count(*) AS n FROM payments WHERE workspace_id = ?1 AND reference = 'MO 1'", ctx.ws)).toBe(1);
+    expect(await count("SELECT count(*) AS n FROM events WHERE workspace_id = ?1", ctx.ws)).toBe(3);
   });
 });

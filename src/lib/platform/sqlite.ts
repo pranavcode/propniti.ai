@@ -59,13 +59,20 @@ export function applyMigrations(raw: DatabaseSync, dir = join(/* turbopackIgnore
   }
 }
 
+// A loaded in-memory database image, so each further ":memory:" database in this process (tests)
+// starts from a copy instead of regenerating the base.
+let memoryImage: Uint8Array | undefined;
+
 // Opens the database, applies migrations and loads the generated base dataset when it is missing
 // or from an older generator (ensureBase).
 export function openSqlite(path: string, migrationsDir?: string): Db {
+  const memory = path === ":memory:" && !migrationsDir;
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const raw = new DatabaseSync(path);
+  if (memory && memoryImage) raw.deserialize(memoryImage);
   raw.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000");
   applyMigrations(raw, migrationsDir);
   ensureBase(raw);
+  if (memory && !memoryImage) memoryImage = raw.serialize();
   return sqliteDb(raw);
 }

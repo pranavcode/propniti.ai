@@ -3,7 +3,7 @@ import { checkInvoice, money } from "@/lib/mockAi";
 import { submissionKey } from "@/lib/names";
 import type { Db } from "@/lib/platform/types";
 import type { DemoState, ExtractedInvoice, LineItem, RatingSubject, ValidationResult, WorkOrder } from "@/lib/types";
-import type { Outcome } from "./money";
+import type { Outcome } from "./legacy-money";
 import { auditStmt, insertItems, notifyStmt, uid } from "./repo";
 import { stamp } from "./workspace";
 

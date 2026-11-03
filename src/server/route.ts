@@ -5,7 +5,7 @@ import type { Db } from "@/lib/platform/types";
 import { parseBody } from "@/lib/requests";
 import { seed } from "@/lib/seed";
 import type { DemoState } from "@/lib/types";
-import { settle, type Outcome } from "./money";
+import { settle, type Outcome } from "./legacy-money";
 import { loadState, trimStatements } from "./repo";
 import { cookieHeader, resolveWorkspace } from "./workspace";
 

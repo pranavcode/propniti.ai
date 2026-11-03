@@ -39,12 +39,13 @@ export function effective(table: string, ws = "?1") {
 
 // Copy-on-write: moves the row into the overlay (copying the base row the first time) and applies
 // `set` (column → SQL expression, e.g. { status: "?3" }). `cols` is the table's column list.
-export function overlayUpsertSql(table: string, cols: readonly string[], set: Record<string, string>, ws = "?1", idParam = "?2") {
+// `where` adds a guard on the current row (alias e), e.g. "e.status = 'Submitted'".
+export function overlayUpsertSql(table: string, cols: readonly string[], set: Record<string, string>, where = "1 = 1", ws = "?1", idParam = "?2") {
   assertTable(table);
   const list = cols.filter((c) => c !== "workspace_id" && c !== "seq");
   const exprs = list.map((c) => (c in set ? `${set[c]}` : `e.${c}`));
   const updates = Object.entries(set).map(([c, v]) => `${c} = ${v}`);
   return `INSERT INTO ${table} (workspace_id, ${list.join(", ")})
-    SELECT ${ws}, ${exprs.join(", ")} FROM ${effective(table, ws)} AS e WHERE e.id = ${idParam}
+    SELECT ${ws}, ${exprs.join(", ")} FROM ${effective(table, ws)} AS e WHERE e.id = ${idParam} AND (${where})
     ON CONFLICT (workspace_id, id) DO UPDATE SET ${updates.join(", ") || "deleted = deleted"}`;
 }

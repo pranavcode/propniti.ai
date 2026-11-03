@@ -29,11 +29,19 @@ export function writeBase(raw: DatabaseSync, b: Base = baseData()) {
     raw.exec("DELETE FROM workspaces WHERE id <> 'base'");
     for (const t of baseTables(b)) raw.prepare(`DELETE FROM ${t} WHERE workspace_id = 'base'`).run();
     raw.exec("DELETE FROM base_balances; DELETE FROM meta");
+    // Multi-row inserts: far fewer statement executions than one row at a time.
     for (const t of baseTables(b)) {
       for (const [cols, rows] of columnsOf(b.tables[t])) {
         const names = cols.split(",");
-        const stmt = raw.prepare(`INSERT INTO ${t} (workspace_id, ${cols}) VALUES ('base', ${names.map(() => "?").join(", ")})`);
-        for (const r of rows) stmt.run(...names.map((n) => r[n] as SQLInputValue));
+        const per = Math.max(1, Math.min(200, Math.floor(30_000 / names.length)));
+        const tuple = `('base', ${names.map(() => "?").join(", ")})`;
+        const sql = (n: number) => `INSERT INTO ${t} (workspace_id, ${cols}) VALUES ${Array(n).fill(tuple).join(", ")}`;
+        const full = raw.prepare(sql(per));
+        for (let i = 0; i < rows.length; i += per) {
+          const chunk = rows.slice(i, i + per);
+          const params = chunk.flatMap((r) => names.map((n) => r[n] as SQLInputValue));
+          (chunk.length === per ? full : raw.prepare(sql(chunk.length))).run(...params);
+        }
       }
     }
     const bal = raw.prepare("INSERT INTO base_balances (account_id, cleared_cents) VALUES (?, ?)");
@@ -69,10 +77,11 @@ export function ensureBase(raw: DatabaseSync, root = process.cwd()) {
   }
 }
 
+const utf8 = new TextEncoder();
 const lit = (v: Value) => (v === null || v === undefined ? "NULL" : typeof v === "number" ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 
 // The base as SQL statements for D1: multi-row INSERTs kept under D1's 100 KB statement limit.
-export function* baseSql(b: Base = baseData(), maxBytes = 90_000): Generator<string> {
+export function* baseSql(b: Base = baseData(), maxBytes = 60_000): Generator<string> {
   yield "DELETE FROM workspaces WHERE id <> 'base';";
   for (const t of baseTables(b)) yield `DELETE FROM ${t} WHERE workspace_id = 'base';`;
   yield "DELETE FROM base_balances;";
@@ -85,13 +94,14 @@ export function* baseSql(b: Base = baseData(), maxBytes = 90_000): Generator<str
       let size = head.length;
       for (const r of rows) {
         const v = `('base', ${names.map((n) => lit(r[n])).join(", ")})`;
-        if (parts.length && (size + v.length + 2 > maxBytes || parts.length >= 500)) {
+        const bytes = utf8.encode(v).length;
+        if (parts.length && (size + bytes + 2 > maxBytes || parts.length >= 500)) {
           yield head + parts.join(", ") + ";";
           parts = [];
           size = head.length;
         }
         parts.push(v);
-        size += v.length + 2;
+        size += bytes + 2;
       }
       if (parts.length) yield head + parts.join(", ") + ";";
     }

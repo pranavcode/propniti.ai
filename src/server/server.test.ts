@@ -1,308 +1,242 @@
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
-import { SETTLE_MS, TRUST, addTransfer, approveWorkOrder as ledgerApprove, disburse as ledgerDisburse, ownerStatement, settle as ledgerSettle, trustBalance, vendorPaidYtd } from "@/lib/ledger";
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Actor } from "@/entities/types";
+import { SETTLE_MS } from "@/lib/ledger";
 import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
-import { submissionKey } from "@/lib/names";
-import { seed } from "@/lib/seed";
-import type { DemoState } from "@/lib/types";
-import { attachDocument, importRows, reportIssue, setValidation, submitInvoice, updateJob } from "./actions";
-import { approveWorkOrder, disburseOwner, payInvoice, settle } from "./money";
-import { loadState, randomId } from "./repo";
+import { chargeStatusSql, get, list, ownerStatement, trustBalances } from "./data";
+import { effective } from "./effective";
+import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payRent, postLateFees, recordPayment, settle } from "./money";
+import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
-// 10:00 in Los Angeles on the demo's date.
-const T0 = Date.parse("2026-10-28T17:00:00Z");
+// v2 storage on node:sqlite: the generated base plus a per-visitor overlay. One database holds
+// the base for the whole file; each test gets its own workspace (an overlay), which is the point.
 
-const req = (ws?: string) => new Request("http://localhost/api/state", { headers: ws ? { cookie: `pn_ws=${ws}` } : {} });
+const T0 = Date.parse("2026-11-04T17:00:00Z"); // 9:00 in Los Angeles on the demo's date
+const req = (ws?: string) => new Request("http://localhost/app", { headers: ws ? { cookie: `pn_ws=${ws}` } : {} });
+const marcus: Actor = { personaId: "marcus", name: "Marcus Bell", role: "property_manager", scope: { kind: "property", ids: ["p01", "p02", "p03"], label: "3 Austin properties" }, propertyIds: ["p01", "p02", "p03"] };
+const grace: Actor = { personaId: "grace", name: "Grace Kim", role: "accountant", scope: { kind: "org", label: "All" }, propertyIds: "all" };
 
-async function setup(now = T0) {
-  const db = openSqlite(":memory:");
-  const ws = await newWorkspace(db, now);
-  return { db, ws };
-}
-async function newWorkspace(db: Db, now = T0) {
+let db: Db;
+beforeAll(() => {
+  db = openSqlite(":memory:");
+}, 240_000);
+
+async function newWorkspace(now = T0) {
   const id = randomId();
   const r = await resolveWorkspace(db, req(id), now, true, false);
   if (r instanceof Response) throw new Error(`workspace not created: ${r.status}`);
   return id;
 }
-// What a request sees: due transfers settled first, then the state.
-async function view(db: Db, ws: string, now: number) {
-  await settle(db, ws, now);
-  return loadState(db, ws);
-}
-const count = (db: Db, sql: string, ...params: unknown[]) => db.prepare(sql).bind(...params).first<{ n: number }>().then((r) => r!.n);
+const ctx = async (actor = marcus, now = T0) => ({ db, ws: await newWorkspace(now), actor, nowMs: now });
+const n = (sql: string, ...params: unknown[]) => db.prepare(sql).bind(...params).first<{ n: number }>().then((r) => Number(r!.n));
+const one = <T = Record<string, unknown>>(sql: string, ...params: unknown[]) => db.prepare(sql).bind(...params).first<T>();
+const chargeStatus = (ws: string, id: string) => one<{ s: string }>(`SELECT ${chargeStatusSql("c")} AS s FROM ${effective("charges")} AS c WHERE c.id = ?2`, ws, id).then((r) => r!.s);
+const available = (ws: string, account: string) => trustBalances({ db, ws }).then((rows) => rows.find((r) => r.id === account)!.available_cents);
+const overlayRows = async (ws: string) => {
+  const tables = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT IN ('workspaces', 'meta', 'base_balances', 'd1_migrations', 'sqlite_sequence')").all<{ name: string }>()).results;
+  let total = 0;
+  for (const t of tables) total += await n(`SELECT count(*) AS n FROM ${t.name} WHERE workspace_id = ?1`, ws);
+  return total;
+};
 
-describe("migrations", () => {
+describe("migrations and base", () => {
   it("apply to an empty database, and running them again changes nothing", () => {
     const raw = new DatabaseSync(":memory:");
     applyMigrations(raw);
-    const tables = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name);
-    expect(tables).toEqual(expect.arrayContaining(["workspaces", "users", "properties", "vendors", "tenancies", "invoices", "work_orders", "transfers", "ratings", "notifications", "audit", "d1_migrations"]));
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
     expect(raw.prepare("SELECT count(*) AS n FROM sqlite_master").get()).toEqual(before);
-    expect(raw.prepare("SELECT count(*) AS n FROM d1_migrations").get()!.n).toBe(1);
+    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql"]);
+  });
+
+  it("loads the base once, with its version, as-of date and trust constants", async () => {
+    expect(await one("SELECT value FROM meta WHERE key = 'as_of'")).toEqual({ value: "2026-11-04" });
+    expect(await n("SELECT count(*) AS n FROM properties WHERE workspace_id = 'base'")).toBe(30);
+    expect(await n("SELECT count(*) AS n FROM base_balances")).toBe(16);
   });
 });
 
-describe("workspace data", () => {
-  it("round-trips the seed exactly: a new workspace reads back as seed()", async () => {
-    const { db, ws } = await setup();
-    expect(await loadState(db, ws)).toEqual(seed());
-  });
-});
-
-describe("money", () => {
-  it("rent: pending until 8 s pass, then trust gains the rent, the 8% fee is taken and the invoice is Paid", async () => {
-    const { db, ws } = await setup();
-    const before = await view(db, ws, T0);
-    expect(await payInvoice(db, ws, before, "INV-2611-01", T0)).toEqual({ status: 200 });
-    const paying = await view(db, ws, T0 + SETTLE_MS - 1);
-    expect(paying.invoices.find((i) => i.id === "INV-2611-01")?.status).toBe("Processing");
-    expect(trustBalance(paying).pendingIn).toBe(1850);
-    const after = await view(db, ws, T0 + SETTLE_MS);
-    expect(after.invoices.find((i) => i.id === "INV-2611-01")?.status).toBe("Paid");
-    expect(after.transfers.find((t) => t.key === "fee:INV-2611-01")).toMatchObject({ amount: 148, status: "Cleared", kind: "Management fee" });
-    expect(trustBalance(after).cleared).toBe(trustBalance(before).cleared + 1850 - 148);
-    expect(after.notifications[0]).toMatchObject({ userId: "u-t1", message: "Payment received: $1,850 for INV-2611-01. Thank you!" });
-    // Settling again does nothing more.
-    await settle(db, ws, T0 + SETTLE_MS * 3);
-    expect(await count(db, "SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = 'fee:INV-2611-01'", ws)).toBe(1);
+describe("workspaces", { timeout: 60_000 }, () => {
+  it("are one row: creating one writes no overlay data", async () => {
+    const ws = await newWorkspace();
+    expect(await n("SELECT count(*) AS n FROM workspaces WHERE id = ?1 AND base_version = (SELECT value FROM meta WHERE key = 'base_version')", ws)).toBe(1);
+    expect(await overlayRows(ws)).toBe(0);
+    expect((await list({ db, ws }, "units", { propertyIds: ["p01"] })).total).toBe(186);
   });
 
-  it("vendor approval: Payment pending, then Paid when it clears; year-to-date counts cleared payouts only", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    expect(await approveWorkOrder(db, ws, s, "WO-1041", T0)).toEqual({ status: 200 });
-    const pending = await view(db, ws, T0 + 1);
-    expect(pending.workOrders.find((w) => w.id === "WO-1041")?.status).toBe("Payment pending");
-    // Seed: 3,620 before the ledger plus September's cleared 1,240.
-    expect(vendorPaidYtd(pending, "v1")).toBe(4860);
-    const paid = await view(db, ws, T0 + SETTLE_MS);
-    expect(paid.workOrders.find((w) => w.id === "WO-1041")?.status).toBe("Paid");
-    expect(vendorPaidYtd(paid, "v1")).toBe(4860 + 635);
-    expect(paid.notifications.some((n) => n.userId === "u-v1" && n.message === "$635 for WO-1041 has arrived in your account.")).toBe(true);
+  it("read overlay rows over base rows, and a tombstone hides the base row", async () => {
+    const ws = await newWorkspace();
+    await db.prepare("INSERT INTO units (workspace_id, id, property_id, number, sqft, market_rent_cents, status) VALUES (?1, 'u-p01-412', 'p01', '412', 900, 999900, 'Down')").bind(ws).run();
+    await db.prepare("INSERT INTO units (workspace_id, id, deleted, property_id, number) VALUES (?1, 'u-p01-101', 1, 'p01', '101')").bind(ws).run();
+    expect(await get({ db, ws }, "units", "u-p01-412")).toMatchObject({ status: "Down", market_rent_cents: 999900 });
+    expect(await get({ db, ws }, "units", "u-p01-101")).toBeNull();
+    expect((await list({ db, ws }, "units", { propertyIds: ["p01"] })).total).toBe(185);
+    // Another visitor still sees the base.
+    const other = await newWorkspace();
+    expect(await get({ db, ws: other }, "units", "u-p01-101")).not.toBeNull();
+    expect((await get<{ status: string }>({ db, ws: other }, "units", "u-p01-412"))?.status).not.toBe("Down");
   });
 
-  it("only approves submitted work", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    expect(await approveWorkOrder(db, ws, s, "WO-1043", T0)).toMatchObject({ status: 409, error: expect.stringContaining("in progress") });
-    expect(await count(db, "SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = 'vendor:WO-1043'", ws)).toBe(0);
-  });
+  it("reset and the midnight wipe delete only the overlay; base rows are never touched", async () => {
+    const c = await ctx();
+    const charge = await one<{ id: string }>(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND ${chargeStatusSql("c")} <> 'Paid' LIMIT 1`, c.ws);
+    expect((await payRent(c, charge!.id)).status).toBe(200);
+    const baseCount = await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = 'base'");
+    expect(await overlayRows(c.ws)).toBeGreaterThan(0);
+    await resetWorkspace(db, c.ws, T0 + 1);
+    expect(await overlayRows(c.ws)).toBe(0);
+    expect(await n("SELECT count(*) AS n FROM workspaces WHERE id = ?1", c.ws)).toBe(1);
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = 'base'")).toBe(baseCount);
 
-  it("disburse pays exactly the owner's net, stamps the items, and refuses a second payout with nothing owed", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    const { net, items } = ownerStatement(s, "u-owner1");
-    expect(net).toBe(4784);
-    expect(await disburseOwner(db, ws, s, "u-owner1", "key-aaaaaaaa", T0)).toEqual({ status: 200 });
-    const after = await view(db, ws, T0 + 1);
-    const payout = after.transfers.find((t) => t.kind === "Owner payout" && t.status === "Pending")!;
-    expect(payout).toMatchObject({ amount: 4784, key: "owner:key-aaaaaaaa", to: { id: "u-owner1" } });
-    expect(after.transfers.filter((t) => t.statement === payout.id).map((t) => t.id).sort()).toEqual(items.map((t) => t.id).sort());
-    expect(ownerStatement(after, "u-owner1").net).toBe(0);
-    expect(await disburseOwner(db, ws, after, "u-owner1", "key-bbbbbbbb", T0 + 2)).toMatchObject({ status: 409, error: expect.stringContaining("Nothing is owed") });
-    // A retry with the first key is answered as done, without paying again.
-    expect(await disburseOwner(db, ws, after, "u-owner1", "key-aaaaaaaa", T0 + 3)).toEqual({ status: 200 });
-    expect(await count(db, "SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND kind = 'Owner payout' AND status = 'Pending'", ws)).toBe(1);
-  });
-
-  it("refuses a vendor payout trust can't cover: no transfer, a refusal in the audit log", async () => {
-    const { db, ws } = await setup();
-    let s = await view(db, ws, T0);
-    await disburseOwner(db, ws, s, "u-owner1", "key-owner-1", T0);
-    s = await view(db, ws, T0);
-    await disburseOwner(db, ws, s, "u-owner2", "key-owner-2", T0);
-    s = await view(db, ws, T0);
-    expect(trustBalance(s).available).toBe(160);
-    const r = await approveWorkOrder(db, ws, s, "WO-1041", T0);
-    expect(r).toMatchObject({ status: 409, error: "Trust account can't cover 635.00 (available 160.00)" });
-    expect(await count(db, "SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = 'vendor:WO-1041'", ws)).toBe(0);
-    const after = await loadState(db, ws);
-    expect(after.audit[0]).toMatchObject({ action: "Approval refused", detail: "WO-1041: Trust account can't cover 635.00 (available 160.00)" });
-    expect(after.workOrders.find((w) => w.id === "WO-1041")?.status).toBe("Submitted");
-  });
-
-  it("double clicks move money once: approve, pay and disburse", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    const approvals = await Promise.all([approveWorkOrder(db, ws, s, "WO-1041", T0), approveWorkOrder(db, ws, s, "WO-1041", T0)]);
-    expect(approvals.map((r) => r.status).sort()).toEqual([200, 409]);
-    expect(approvals).toContainEqual({ status: 409, error: "WO-1041 is already approved" });
-    const pays = await Promise.all([payInvoice(db, ws, s, "INV-2611-02", T0), payInvoice(db, ws, s, "INV-2611-02", T0)]);
-    expect(pays.map((r) => r.status).sort()).toEqual([200, 409]);
-    const s2 = await view(db, ws, T0);
-    await Promise.all([
-      disburseOwner(db, ws, s2, "u-owner2", "same-key-1234", T0),
-      disburseOwner(db, ws, s2, "u-owner2", "same-key-1234", T0),
-      disburseOwner(db, ws, s2, "u-owner2", "other-key-1234", T0),
-    ]);
-    const n = (key: string) => count(db, "SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key LIKE ?2", ws, key);
-    expect(await n("vendor:WO-1041")).toBe(1);
-    expect(await n("rent:INV-2611-02")).toBe(1);
-    expect(await n("owner:%-key-1234")).toBe(1);
-    const after = await loadState(db, ws);
-    expect(after.audit.filter((a) => a.action === "Payment approved")).toHaveLength(1);
-    expect(trustBalance(after).available).toBeGreaterThanOrEqual(0);
-  });
-
-  it("matches the pure ledger after the same flows", async () => {
-    const { db, ws } = await setup();
-    let s = await view(db, ws, T0);
-    await payInvoice(db, ws, s, "INV-2611-01", T0);
-    await approveWorkOrder(db, ws, s, "WO-1041", T0);
-    s = await view(db, ws, T0 + SETTLE_MS);
-    await disburseOwner(db, ws, s, "u-owner1", "parity-key-1", T0 + SETTLE_MS);
-    const server = await view(db, ws, T0 + SETTLE_MS * 2);
-
-    let n = 0;
-    const id = () => `x${++n}`;
-    let p: DemoState = seed();
-    const inv = p.invoices.find((i) => i.id === "INV-2611-01")!;
-    p = addTransfer(p, { key: "rent:INV-2611-01", kind: "Rent", from: { kind: "tenant", id: "u-t1", name: "Jasmine Brooks" }, to: TRUST, amount: inv.amount, propertyId: "p1", ref: inv.id, created: "now" }, T0, id());
-    p = ledgerApprove(p, "WO-1041", T0, "now", id()).state;
-    p = ledgerSettle(p, T0 + SETTLE_MS, "now", id).state;
-    p = ledgerDisburse(p, "u-owner1", T0 + SETTLE_MS, "now", id()).state;
-    p = ledgerSettle(p, T0 + SETTLE_MS * 2, "now", id).state;
-
-    expect(trustBalance(server)).toEqual(trustBalance(p));
-    for (const o of ["u-owner1", "u-owner2"]) expect({ ...ownerStatement(server, o), items: undefined }).toEqual({ ...ownerStatement(p, o), items: undefined });
-    for (const v of ["v1", "v2", "v3"]) expect(vendorPaidYtd(server, v)).toBe(vendorPaidYtd(p, v));
-    expect(server.invoices.map((i) => i.status)).toEqual(p.invoices.map((i) => i.status));
-    expect(server.workOrders.map((w) => [w.id, w.status])).toEqual(p.workOrders.map((w) => [w.id, w.status]));
-    expect(server.transfers.map((t) => [t.kind, t.amount, t.status]).sort()).toEqual(p.transfers.map((t) => [t.kind, t.amount, t.status]).sort());
-  });
-});
-
-describe("other actions", () => {
-  it("keeps a validation only for the invoice it was run on", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    const wo = s.workOrders.find((w) => w.id === "WO-1042")!;
-    const stale = submissionKey(wo);
-    await submitInvoice(db, ws, s, "WO-1042", [{ description: "Valve", amount: 120 }], [], "QF-1", T0);
-    const v = { decision: "approve" as const, confidence: 0.9, matched: [], issues: [], summary: "ok", source: "mock" as const };
-    await setValidation(db, ws, await loadState(db, ws), "WO-1042", v, stale, T0);
-    expect((await loadState(db, ws)).workOrders.find((w) => w.id === "WO-1042")?.validation).toBeUndefined();
-    const current = await loadState(db, ws);
-    await setValidation(db, ws, current, "WO-1042", v, submissionKey(current.workOrders.find((w) => w.id === "WO-1042")!), T0);
-    expect((await loadState(db, ws)).workOrders.find((w) => w.id === "WO-1042")?.validation).toEqual(v);
-  });
-
-  it("refuses to attach a scanned invoice whose lines don't add up", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    const inv = { isInvoice: true, vendor: "QuickFix", invoiceNumber: "Q-1", invoiceDate: "", lineItems: [{ description: "Valve", amount: 120 }], total: 500, currency: "USD", confidence: 0.9, issues: [] };
-    expect(await attachDocument(db, ws, s, "WO-1042", inv, T0)).toMatchObject({ status: 409 });
-    expect(await attachDocument(db, ws, s, "WO-1042", { ...inv, total: 120 }, T0)).toEqual({ status: 200 });
-  });
-
-  it("completes in-house jobs without a payout", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    expect(await updateJob(db, ws, s, "WO-1045", "Completed", undefined, T0)).toEqual({ status: 200 });
-    await db.prepare("UPDATE work_orders SET status = 'Submitted' WHERE workspace_id = ?1 AND id = 'WO-1044'").bind(ws).run();
-    expect(await approveWorkOrder(db, ws, await loadState(db, ws), "WO-1044", T0)).toEqual({ status: 200 });
-    const after = await loadState(db, ws);
-    expect(after.workOrders.filter((w) => ["WO-1044", "WO-1045"].includes(w.id)).map((w) => w.status)).toEqual(["Completed", "Completed"]);
-    expect(after.transfers.some((t) => t.ref === "WO-1044" || t.ref === "WO-1045")).toBe(false);
-  });
-
-  it("numbers new jobs from the workspace counter, even when reported at once", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    await Promise.all([reportIssue(db, ws, s, "u-t1", "Sink leaking", T0), reportIssue(db, ws, s, "u-t1", "Door sticks", T0)]);
-    const ids = (await loadState(db, ws)).workOrders.slice(0, 2).map((w) => w.id).sort();
-    expect(ids).toEqual(["WO-1050", "WO-1051"]);
-  });
-
-  it("imports a rent roll once, even when the same file is imported twice at once", async () => {
-    const { db, ws } = await setup();
-    const s = await view(db, ws, T0);
-    const rows = [
-      { property: "Maple Court", unit: "1A", tenant: "Ana Ruiz", rent: "1500", owner: "Robert Chen" },
-      { property: "Maple Court", unit: "1B", tenant: "Ben Ode", rent: "1450" },
-    ];
-    const results = await Promise.all([importRows(db, ws, s, rows, "test.csv", T0), importRows(db, ws, s, rows, "test.csv", T0)]);
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
-    const after = await loadState(db, ws);
-    expect(after.tenancies.filter((t) => t.unit === "1A" || t.unit === "1B")).toHaveLength(2);
-    expect(after.properties.find((p) => p.name === "Maple Court")).toMatchObject({ units: 2, occupied: 2, ownerId: "u-owner1" });
-    expect(new Set(after.users.map((u) => u.id)).size).toBe(after.users.length);
-    expect(await importRows(db, ws, after, rows, "test.csv", T0)).toEqual({ status: 200 });
-    expect((await loadState(db, ws)).tenancies).toHaveLength(after.tenancies.length);
-    expect((await loadState(db, ws)).setup?.importedRows).toBe(2);
-  });
-});
-
-describe("workspaces", () => {
-  it("are isolated from each other", async () => {
-    const db = openSqlite(":memory:");
-    const a = await newWorkspace(db);
-    const b = await newWorkspace(db);
-    await payInvoice(db, a, await loadState(db, a), "INV-2611-01", T0);
-    expect((await loadState(db, a)).invoices.find((i) => i.id === "INV-2611-01")?.status).toBe("Processing");
-    expect(await loadState(db, b)).toEqual(seed());
-  });
-
-  it("reset puts the seed back under the same id", async () => {
-    const { db, ws } = await setup();
-    await payInvoice(db, ws, await loadState(db, ws), "INV-2611-01", T0);
-    await resetWorkspace(db, ws, T0 + 1);
-    expect(await loadState(db, ws)).toEqual(seed());
-  });
-
-  it("are wiped and started fresh after midnight, and old ones are swept", async () => {
-    const db = openSqlite(":memory:");
-    const ws = await newWorkspace(db);
-    const other = await newWorkspace(db);
-    await payInvoice(db, ws, await loadState(db, ws), "INV-2611-01", T0);
+    await payRent(c, charge!.id);
     const midnight = nextMidnight(T0);
-    expect(await resolveWorkspace(db, req(ws), midnight - 1, false, false)).toEqual({ ws });
-    expect((await loadState(db, ws)).invoices.find((i) => i.id === "INV-2611-01")?.status).toBe("Processing");
-    expect(await resolveWorkspace(db, req(ws), midnight, false, false)).toEqual({ ws });
-    expect(await loadState(db, ws)).toEqual(seed());
-    expect(await count(db, "SELECT count(*) AS n FROM workspaces WHERE id = ?1", other)).toBe(0);
-    expect(await count(db, "SELECT count(*) AS n FROM users WHERE workspace_id = ?1", other)).toBe(0);
+    expect(await resolveWorkspace(db, req(c.ws), midnight - 1, false, false)).toEqual({ ws: c.ws });
+    expect(await overlayRows(c.ws)).toBeGreaterThan(0);
+    expect(await resolveWorkspace(db, req(c.ws), midnight, false, false)).toEqual({ ws: c.ws });
+    expect(await overlayRows(c.ws)).toBe(0);
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = 'base'")).toBe(baseCount);
   });
 
-  it("aren't created for a reader that never sends the cookie back", async () => {
-    const db = openSqlite(":memory:");
-    const r = await resolveWorkspace(db, req(), T0, false, false);
-    expect(r).toMatchObject({ ws: null, setCookie: expect.any(String) });
-    expect(await count(db, "SELECT count(*) AS n FROM workspaces")).toBe(0);
+  it("wipe an overlay built on an older base version", async () => {
+    const ws = await newWorkspace();
+    await db.prepare("INSERT INTO notes (workspace_id, id, entity_type, entity_id, author_id, body, created_at) VALUES (?1, 'n1', 'units', 'u-p01-412', 'marcus', 'hi', 'x')").bind(ws).run();
+    await db.prepare("UPDATE workspaces SET base_version = 'old' WHERE id = ?1").bind(ws).run();
+    expect(await resolveWorkspace(db, req(ws), T0 + 1, false, false)).toEqual({ ws });
+    expect(await overlayRows(ws)).toBe(0);
   });
 
-  it("limits how many a network can create in an hour", async () => {
-    const db = openSqlite(":memory:");
-    const make = () => resolveWorkspace(db, new Request("http://x", { headers: { "cf-connecting-ip": "9.9.9.9" } }), T0, true, true);
-    for (let i = 0; i < 30; i++) expect(await make()).not.toBeInstanceOf(Response);
-    expect(((await make()) as Response).status).toBe(429);
+  it("can never be the base: 'base' is not a valid cookie id", async () => {
+    const r = await resolveWorkspace(db, req("base"), T0, false, false);
+    expect(r).toMatchObject({ ws: null });
+    await resetWorkspace(db, "base", T0);
+    expect(await n("SELECT count(*) AS n FROM properties WHERE workspace_id = 'base'")).toBe(30);
   });
 });
 
-describe("nextMidnight", () => {
-  const wall = (ms: number, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", dateStyle: "short", timeStyle: "short" }).format(ms);
-
-  it("finds the next local midnight in UTC and in New York", () => {
-    expect(nextMidnight(Date.parse("2026-10-28T23:59:00Z"), "UTC")).toBe(Date.parse("2026-10-29T00:00:00Z"));
-    // 11 pm on Oct 28 in New York (UTC-4) is already Oct 29 in UTC.
-    expect(nextMidnight(Date.parse("2026-10-29T03:00:00Z"), "America/New_York")).toBe(Date.parse("2026-10-29T04:00:00Z"));
+describe("money", { timeout: 60_000 }, () => {
+  it("pay rent: Processing until settled, then Paid with the 8% fee, and trust grows by the rent", async () => {
+    const c = await ctx();
+    const jordan = await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c JOIN ${effective("residents")} AS r ON r.household_id = c.household_id WHERE r.id = 'res-p01-0001' AND c.period = '2026-11' AND c.gl_account_id = 'gl-4000'`, c.ws);
+    expect(await chargeStatus(c.ws, jordan!.id)).toBe("Overdue");
+    const before = await available(c.ws, "ba-oe01-trust");
+    expect(await payRent(c, jordan!.id)).toMatchObject({ status: 200 });
+    expect(await chargeStatus(c.ws, jordan!.id)).toBe("Processing");
+    expect(await available(c.ws, "ba-oe01-trust")).toBe(before);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect(await chargeStatus(c.ws, jordan!.id)).toBe("Paid");
+    const fee = Math.floor((jordan!.amount_cents * 8 + 50) / 100);
+    expect(await available(c.ws, "ba-oe01-trust")).toBe(before + jordan!.amount_cents - fee);
+    expect(await n("SELECT count(*) AS n FROM events WHERE workspace_id = ?1 AND type = 'payment.received'", c.ws)).toBe(1);
+    expect(await n("SELECT count(*) AS n FROM notifications WHERE workspace_id = ?1 AND user_id = 'res-p01-0001'", c.ws)).toBe(1);
+    // Settling again does nothing more.
+    await settle(db, c.ws, T0 + SETTLE_MS * 3);
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND kind = 'Management fee'", c.ws)).toBe(1);
+    expect(await payRent(c, jordan!.id)).toMatchObject({ status: 409, error: expect.stringContaining("already paid") });
   });
 
-  it("lands on 00:00 Los Angeles time across daylight saving changes", () => {
-    const la = "America/Los_Angeles";
-    // Fall back (Nov 1, 2026): 1:30 am PDT → midnight starting Nov 2, now PST (UTC-8).
-    expect(nextMidnight(Date.parse("2026-11-01T08:30:00Z"), la)).toBe(Date.parse("2026-11-02T08:00:00Z"));
-    // 11 pm PDT on Oct 31 → midnight Nov 1, still PDT (UTC-7).
-    expect(nextMidnight(Date.parse("2026-11-01T06:00:00Z"), la)).toBe(Date.parse("2026-11-01T07:00:00Z"));
-    // Spring forward (Mar 14, 2027): 1 am PST → midnight Mar 15, now PDT (UTC-7).
-    expect(nextMidnight(Date.parse("2027-03-14T09:00:00Z"), la)).toBe(Date.parse("2027-03-15T07:00:00Z"));
-    // 11 pm PST on Mar 13 → midnight Mar 14, still PST.
-    expect(nextMidnight(Date.parse("2027-03-14T07:00:00Z"), la)).toBe(Date.parse("2027-03-14T08:00:00Z"));
-    for (const t of ["2026-11-01T08:30:00Z", "2027-03-14T09:00:00Z", "2026-10-28T17:00:00Z"]) expect(wall(nextMidnight(Date.parse(t), la), la)).toMatch(/, 00:00$/);
+  it("record payment: partial amounts apply, a retry with the same key is a no-op, overpaying is refused", async () => {
+    const c = await ctx();
+    const ch = await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws);
+    const input = { chargeId: ch!.id, amountCents: 50_000, method: "Check" as const, reference: "Check #2231", idempotencyKey: "rec-key-1" };
+    expect(await recordPayment(c, input)).toMatchObject({ status: 200 });
+    expect(await recordPayment(c, input)).toMatchObject({ status: 200, message: "Already recorded." });
+    expect(await chargeStatus(c.ws, ch!.id)).toBe("Overdue");
+    expect(await recordPayment(c, { ...input, amountCents: ch!.amount_cents, idempotencyKey: "rec-key-2" })).toMatchObject({ status: 409, error: expect.stringContaining("Only") });
+    expect(await recordPayment(c, { ...input, amountCents: ch!.amount_cents - 50_000, idempotencyKey: "rec-key-3" })).toMatchObject({ status: 200 });
+    expect(await chargeStatus(c.ws, ch!.id)).toBe("Paid");
+    expect(await n("SELECT count(*) AS n FROM payments WHERE workspace_id = ?1", c.ws)).toBe(2);
+    expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Payment recorded'", c.ws)).toBe(2);
+  });
+
+  it("bills: approve, then pay from trust once; refused when trust can't cover it", async () => {
+    const c = await ctx(grace);
+    const bill = await one<{ id: string; amount_cents: number; owner_entity_id: string }>(`SELECT b.* FROM ${effective("bills")} AS b WHERE b.status = 'Pending approval' AND b.property_id = 'p02' ORDER BY b.amount_cents LIMIT 1`, c.ws);
+    expect(await payBill(c, bill!.id)).toMatchObject({ status: 409, error: expect.stringContaining("Only approved bills") });
+    expect(await approveBill(c, bill!.id)).toMatchObject({ status: 200 });
+    const before = await available(c.ws, "ba-oe01-trust");
+    expect(await payBill(c, bill!.id)).toMatchObject({ status: 200 });
+    expect(await available(c.ws, "ba-oe01-trust")).toBe(before - bill!.amount_cents);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect((await get<{ status: string }>(c, "bills", bill!.id))?.status).toBe("Paid");
+    expect(await payBill(c, bill!.id)).toMatchObject({ status: 409 });
+
+    // Drain trust with a pending payout, then try a bill bigger than what's left.
+    const big = await one<{ id: string; amount_cents: number }>(`SELECT b.* FROM ${effective("bills")} AS b WHERE b.status = 'Approved' AND b.owner_entity_id = 'oe01' ORDER BY b.amount_cents DESC LIMIT 1`, c.ws);
+    const left = await available(c.ws, "ba-oe01-trust");
+    await db.prepare("INSERT INTO transfers (workspace_id, id, key, kind, bank_account_id, owner_entity_id, from_kind, from_id, from_name, to_kind, to_id, to_name, amount_cents, property_id, ref, status, created, settles_at) VALUES (?1, 'drain', 'test:drain', 'Vendor payout', 'ba-oe01-trust', 'oe01', 'trust', 'ba-oe01-trust', 'T', 'vendor', 'v01', 'V', ?2, 'p01', 'x', 'Pending', 'x', 9e15)").bind(c.ws, left - big!.amount_cents + 1).run();
+    expect(await payBill(c, big!.id)).toMatchObject({ status: 409, error: expect.stringContaining("Trust account can't cover") });
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key = ?2", c.ws, `vendor:${big!.id}`)).toBe(0);
+  });
+
+  it("work orders: approve-and-pay a submitted vendor job, then Paid when it clears", async () => {
+    const c = await ctx(grace);
+    const wo = await one<{ id: string; property_id: string }>(`SELECT w.id, w.property_id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id IS NOT NULL AND w.vendor_id <> 'v26' LIMIT 1`, c.ws);
+    expect(await approveAndPayWorkOrder(c, wo!.id)).toMatchObject({ status: 200 });
+    expect((await get<{ status: string }>(c, "work_orders", wo!.id))?.status).toBe("Completed");
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect((await get<{ status: string }>(c, "work_orders", wo!.id))?.status).toBe("Paid");
+    expect(await n("SELECT count(*) AS n FROM events WHERE workspace_id = ?1 AND type IN ('wo.approved', 'payment.sent')", c.ws)).toBe(2);
+    const open = await one<{ id: string }>(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'In progress' LIMIT 1`, c.ws);
+    expect(await approveAndPayWorkOrder(c, open!.id)).toMatchObject({ status: 409, error: expect.stringContaining("in progress") });
+    // Fraud hold: KeyRight Locksmiths changed bank details without verification.
+    const held = await one<{ id: string }>(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id = 'v26' LIMIT 1`, c.ws);
+    expect(await approveAndPayWorkOrder(c, held!.id)).toMatchObject({ status: 409, error: expect.stringContaining("payment hold") });
+    expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Approval refused'", c.ws)).toBe(1);
+  });
+
+  it("owner distribution: pays exactly the open statement net, closes it by seq cutoff, and replays by key", async () => {
+    const c = await ctx(grace);
+    const st = await ownerStatement(c, "oe01");
+    expect(st.net_cents).toBeGreaterThan(0);
+    expect(await distributeOwner(c, "oe01", "key-aaaaaaaa")).toMatchObject({ status: 200 });
+    expect(await one(`SELECT amount_cents, key FROM transfers WHERE workspace_id = ?1 AND kind = 'Owner payout'`, c.ws)).toEqual({ amount_cents: st.net_cents, key: "owner:key-aaaaaaaa" });
+    expect((await ownerStatement(c, "oe01")).net_cents).toBe(0);
+    expect(await distributeOwner(c, "oe01", "key-bbbbbbbb")).toMatchObject({ status: 409, error: expect.stringContaining("Nothing is owed") });
+    expect(await distributeOwner(c, "oe01", "key-aaaaaaaa")).toMatchObject({ status: 200 });
+    expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND kind = 'Owner payout'", c.ws)).toBe(1);
+    expect(await n("SELECT count(*) AS n FROM owner_distributions WHERE workspace_id = ?1", c.ws)).toBe(1);
+    // A new receipt after the payout opens the next statement.
+    const ch = await one<{ id: string }>(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws);
+    await payRent(c, ch!.id);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect((await ownerStatement(c, "oe01")).net_cents).toBeGreaterThan(0);
+  });
+
+  it("late fees: posted once per lease and month, capped by the state rule", async () => {
+    const c = await ctx();
+    const r = await postLateFees(c, ["p01", "p02", "p03"]);
+    expect(r).toMatchObject({ status: 200 });
+    const fees = (await db.prepare("SELECT f.amount_cents, c.amount_cents AS rent FROM charges AS f JOIN charges AS c ON c.lease_id = f.lease_id AND c.period = f.period AND c.gl_account_id = 'gl-4000' WHERE f.workspace_id = ?1 AND f.gl_account_id = 'gl-4100'").bind(c.ws).all<{ amount_cents: number; rent: number }>()).results;
+    expect(fees.length).toBe((r as { posted: number }).posted);
+    // Texas: at most 10% of monthly rent for buildings with more than 4 units.
+    for (const f of fees) expect(f.amount_cents).toBeLessThanOrEqual(Math.floor((f.rent * 10 + 50) / 100));
+    expect(await postLateFees(c, ["p01", "p02", "p03"])).toMatchObject({ status: 409 });
+  });
+
+  it("double clicks move money once: pay, record, approve, pay bill, distribute, late fees", async () => {
+    const c = await ctx(grace);
+    const charges = (await db.prepare(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p01' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 2`).bind(c.ws).all<{ id: string }>()).results;
+    const twice = <T extends { status: number }>(f: () => Promise<T>) => Promise.all([f(), f()]).then((rs) => rs.map((r) => r.status).sort());
+    expect(await twice(() => payRent(c, charges[0].id))).toEqual([200, 409]);
+    const rec = { chargeId: charges[1].id, amountCents: 10_000, method: "Check" as const, reference: "Check #1", idempotencyKey: "dbl-rec" };
+    expect(await twice(() => recordPayment(c, rec))).toEqual([200, 200]);
+    const bill = await one<{ id: string }>(`SELECT b.id FROM ${effective("bills")} AS b WHERE b.status = 'Pending approval' AND b.owner_entity_id = 'oe01' LIMIT 1`, c.ws);
+    expect(await twice(() => approveBill(c, bill!.id))).toEqual([200, 409]);
+    expect(await twice(() => payBill(c, bill!.id))).toEqual([200, 409]);
+    const wo = await one<{ id: string }>(`SELECT w.id FROM ${effective("work_orders")} AS w WHERE w.status = 'Submitted' AND w.vendor_id IS NOT NULL AND w.vendor_id <> 'v26' LIMIT 1`, c.ws);
+    expect(await twice(() => approveAndPayWorkOrder(c, wo!.id))).toEqual([200, 409]);
+    const dist = await Promise.all([distributeOwner(c, "oe02", "same-key-1234"), distributeOwner(c, "oe02", "same-key-1234"), distributeOwner(c, "oe02", "other-key-1234")]);
+    expect(dist.filter((r) => r.status === 200).length).toBeGreaterThanOrEqual(2);
+    expect(await twice(() => postLateFees({ ...c, actor: marcus }, ["p02"]))).toEqual([200, 409]);
+    const keys = (like: string) => n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND key LIKE ?2", c.ws, like);
+    expect(await keys(`rent:${charges[0].id}`)).toBe(1);
+    expect(await keys("pmt:dbl-rec")).toBe(1);
+    expect(await keys(`vendor:${bill!.id}`)).toBe(1);
+    expect(await keys(`vendor:${wo!.id}`)).toBe(1);
+    expect(await keys("owner:%-key-1234")).toBe(1);
+    expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Payment approved'", c.ws)).toBe(1);
+    for (const b of await trustBalances(c)) expect(b.available_cents, b.id).toBeGreaterThanOrEqual(0);
   });
 });
