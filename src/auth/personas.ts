@@ -97,7 +97,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "sam", name: "Sam Okafor", title: "Administrator", role: "admin",
-    scope: { kind: "org", label: "Org settings" }, home: "/app/settings/users",
+    scope: { kind: "org", label: "Org settings" }, home: "/app/admin",
     quickActions: [
       { label: "Invite a user", href: "/app/settings/users?new=1" },
       { label: "Roles and permissions", href: "/app/settings/roles" },
@@ -107,7 +107,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "nadia", name: "Nadia Brooks", title: "Platform admin", role: "platform_admin",
-    scope: { kind: "platform", label: "All customer orgs" }, home: "/app/settings/platform",
+    scope: { kind: "platform", label: "All customer orgs" }, home: "/app/admin",
     quickActions: [
       { label: "Customer orgs", href: "/app/settings/platform" },
       { label: "AI usage", href: "/app/ai/activity" },
