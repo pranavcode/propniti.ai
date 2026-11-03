@@ -22,7 +22,7 @@ function Tip({ active, payload, label, series, x }: { active?: boolean; payload?
   return (
     <div className="min-w-40 rounded-md border bg-popover px-2.5 py-2 text-[12px] text-popover-foreground shadow-lg">
       {head != null && <div className="mb-1 font-medium">{String(head)}</div>}
-      <div className="space-y-0.5">
+      <div className="flex flex-col gap-0.5">
         {payload.map((p) => {
           const s = series.find((s) => s.key === p.dataKey) ?? series.find((s) => s.key === p.name);
           return (

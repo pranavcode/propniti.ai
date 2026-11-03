@@ -28,7 +28,7 @@ export function RailCard({ title, action, children, className }: { title: React.
 
 export function RelatedRail({ groups }: { groups: RelatedGroup[] }) {
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {groups.map((g) => (
         <RailCard
           key={g.key}

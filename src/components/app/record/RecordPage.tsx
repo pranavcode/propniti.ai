@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
@@ -9,7 +10,7 @@ import type { Capabilities, Row, Tone } from "@/entities/types";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useUrlState } from "@/hooks/use-url-state";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DataHealthBadge, type HealthIssue } from "../ai/DataHealthBadge";
@@ -126,14 +127,16 @@ export function RecordPage(p: RecordPageProps) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button variant="outline" size="icon-sm" aria-label="More actions"><MoreHorizontal /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuGroup>
                   {p.secondaryActions.map((a, i) => (
-                    <span key={a.key}>
+                    <Fragment key={a.key}>
                       {a.tone === "danger" && i > 0 && <DropdownMenuSeparator />}
                       {a.href
                         ? <DropdownMenuItem asChild><Link href={a.href}>{a.icon}{a.label}</Link></DropdownMenuItem>
                         : <DropdownMenuItem variant={a.tone === "danger" ? "destructive" : "default"} onSelect={a.onSelect}>{a.icon}{a.label}</DropdownMenuItem>}
-                    </span>
+                    </Fragment>
                   ))}
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -179,11 +182,11 @@ export function RecordPage(p: RecordPageProps) {
           {body ?? (pending ? <TabSkeleton /> : null)}
         </div>
         {hasRail && (
-          <aside className="min-w-0 space-y-3">
+          <aside className="min-w-0 flex flex-col gap-3">
             {p.aiSummary}
             {p.fields && p.fields.length > 0 && (
               <RailCard title="Details">
-                <div className="space-y-0.5 px-3 py-2">
+                <div className="flex flex-col gap-0.5 px-3 py-2">
                   {p.fields.map((f) => <InlineField key={f.key} spec={f} value={p.values?.[f.key]} entity={p.entity} id={p.id} onSave={p.onSaveField} />)}
                 </div>
               </RailCard>
@@ -205,5 +208,5 @@ function NavBtn({ href, label, k, icon }: { href?: string; label: string; k: str
 }
 
 function TabSkeleton() {
-  return <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" style={{ opacity: 1 - i * 0.2 }} />)}</div>;
+  return <div className="flex flex-col gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" style={{ opacity: 1 - i * 0.2 }} />)}</div>;
 }

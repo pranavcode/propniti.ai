@@ -101,7 +101,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
   return (
     <article className={cn("rounded-lg border bg-card", state !== "open" && "opacity-75", className)}>
       <div className="flex items-start gap-3 p-3.5 pb-2">
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 flex-1 flex flex-col gap-1">
           <h3 className="font-semibold leading-snug">{title}</h3>
           {meta}
         </div>
@@ -118,8 +118,8 @@ export function ApprovalItem(p: ApprovalItemProps) {
 
 function Details({ why, evidence, confidence, policy, runHref, recordHref, className }: Pick<ApprovalItemProps, "why" | "evidence" | "confidence" | "policy" | "runHref" | "recordHref" | "className">) {
   return (
-    <div className={cn("space-y-2", className)}>
-      <ul className="space-y-1 text-[12.5px] text-muted-foreground">
+    <div className={cn("flex flex-col gap-2", className)}>
+      <ul className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
         {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
       </ul>
       {policy && <div className="flex items-center gap-1.5 rounded-md bg-tone-warning/[0.08] px-2 py-1 text-[12px] text-tone-warning"><Lock className="size-3" />{policy}</div>}

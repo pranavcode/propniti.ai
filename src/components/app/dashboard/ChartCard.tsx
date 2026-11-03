@@ -13,7 +13,7 @@ import type { ChartKind, ChartPoint, ChartSeries } from "./types";
 
 export function ChartSkeleton({ kind = "bar", height = 240 }: { kind?: ChartKind; height?: number }) {
   if (kind === "donut") {
-    return <div className="flex items-center gap-4" style={{ height }} aria-busy><Skeleton className="aspect-square rounded-full" style={{ height: height * 0.85 }} /><div className="flex-1 space-y-2.5">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-3" style={{ width: `${80 - i * 12}%` }} />)}</div></div>;
+    return <div className="flex items-center gap-4" style={{ height }} aria-busy><Skeleton className="aspect-square rounded-full" style={{ height: height * 0.85 }} /><div className="flex-1 flex flex-col gap-2.5">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-3" style={{ width: `${80 - i * 12}%` }} />)}</div></div>;
   }
   if (kind === "hbar" || kind === "funnel") {
     return <div className="flex flex-col justify-around" style={{ height }} aria-busy>{[92, 78, 64, 51, 40, 30].map((w, i) => <div key={i} className="flex items-center gap-3"><Skeleton className="h-3 w-20" /><Skeleton className="h-4" style={{ width: `${w * 0.75}%` }} /></div>)}</div>;
@@ -96,7 +96,7 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
 function Funnel({ data, x, series, onPoint }: { data: ChartPoint[]; x: string; series: ChartSeries; onPoint?: (p: ChartPoint) => void }) {
   const first = Number(data[0]?.[series.key]) || 1;
   return (
-    <ol className="space-y-1.5">
+    <ol className="flex flex-col gap-1.5">
       {data.map((d, i) => {
         const v = Number(d[series.key]) || 0;
         const prev = i ? Number(data[i - 1]![series.key]) || 0 : null;

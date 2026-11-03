@@ -108,7 +108,7 @@ function StepRow({ step, last, pulsing }: { step: TraceStep; last: boolean; puls
         </span>
       </button>
       {open && (
-        <div className="space-y-1.5 pr-3 pb-2 pl-[46px]">
+        <div className="flex flex-col gap-1.5 pr-3 pb-2 pl-[46px]">
           {step.input !== undefined && <Json label="Input" value={step.input} />}
           {step.output !== undefined && typeof step.output !== "string" && <Json label="Output" value={step.output} />}
         </div>

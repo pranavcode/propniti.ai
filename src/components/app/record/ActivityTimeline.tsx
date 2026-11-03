@@ -75,7 +75,7 @@ function Item({ e, people }: { e: ActivityEvent; people?: Record<string, string>
           <span className="ml-auto pl-2 text-[11.5px] text-muted-foreground"><RelativeDate value={e.at} /></span>
         </div>
         {changes.length > 0 && (
-          <ul className="mt-1.5 space-y-1">
+          <ul className="mt-1.5 flex flex-col gap-1">
             {changes.map((c) => (
               <li key={c.field} className="flex flex-wrap items-center gap-1.5 text-[12.5px]">
                 <span className="text-muted-foreground">{humanize(c.field)}</span>
@@ -111,14 +111,14 @@ export function ActivityTimeline({ events, people, loading, className }: { event
 
   if (loading) {
     return (
-      <div className={cn("space-y-4", className)} aria-busy>
-        {[0, 1, 2, 3].map((i) => <div key={i} className="flex gap-3"><Skeleton className="size-6 rounded-full" /><div className="flex-1 space-y-1.5 pt-1"><Skeleton className="h-3 w-2/3" /><Skeleton className="h-3 w-1/3" /></div></div>)}
+      <div className={cn("flex flex-col gap-4", className)} aria-busy>
+        {[0, 1, 2, 3].map((i) => <div key={i} className="flex gap-3"><Skeleton className="size-6 rounded-full" /><div className="flex-1 flex flex-col gap-1.5 pt-1"><Skeleton className="h-3 w-2/3" /><Skeleton className="h-3 w-1/3" /></div></div>)}
       </div>
     );
   }
 
   return (
-    <div className={cn("space-y-5", className)}>
+    <div className={cn("flex flex-col gap-5", className)}>
       {groups.map((g) => (
         <section key={g.label}>
           <h3 className="mb-2.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase" suppressHydrationWarning>{g.label}</h3>

@@ -70,7 +70,7 @@ export function FixPreview({ title, rule, changes, why, confidence, source, need
         </tbody>
       </table>
 
-      <ul className="space-y-1 border-t px-3 py-2 text-[12.5px] text-muted-foreground">
+      <ul className="flex flex-col gap-1 border-t px-3 py-2 text-[12.5px] text-muted-foreground">
         {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
       </ul>
 

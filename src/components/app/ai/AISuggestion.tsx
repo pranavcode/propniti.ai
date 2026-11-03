@@ -50,14 +50,14 @@ export function AISuggestion({ title, why, confidence, evidence = [], source = "
   return (
     <div className={cn("relative overflow-hidden rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_70%)]", className)}>
       <span className="absolute inset-y-0 left-0 w-0.5 bg-tone-ai/70" aria-hidden />
-      <div className="space-y-2.5 py-3 pr-3 pl-3.5">
+      <div className="flex flex-col gap-2.5 py-3 pr-3 pl-3.5">
         <div className="flex items-start gap-2">
           <Sparkles className="mt-0.5 size-3.5 shrink-0 text-tone-ai" />
           <div className="min-w-0 flex-1 font-medium leading-snug">{title}</div>
           <AIBadge source={source} model={model} size="xs" />
         </div>
         {why.length > 0 && (
-          <ul className="space-y-1 pl-5.5 text-[12.5px] text-muted-foreground">
+          <ul className="flex flex-col gap-1 pl-5.5 text-[12.5px] text-muted-foreground">
             {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
           </ul>
         )}

@@ -93,7 +93,7 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
         ))}
       </dl>
 
-      <div className="space-y-2.5 p-4 pt-3 text-[12px]">
+      <div className="flex flex-col gap-2.5 p-4 pt-3 text-[12px]">
         {pct != null && (
           <div className="flex items-center gap-2">
             <span className="w-20 text-muted-foreground">Success</span>

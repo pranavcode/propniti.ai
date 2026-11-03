@@ -89,7 +89,7 @@ export function InlineField({ spec, value, entity, id, onSave, layout = "row", c
     control = (
       <div className="relative -ml-2 flex items-center">
         {spec.type === "money" && <span className="pointer-events-none absolute left-2 text-muted-foreground">$</span>}
-        <input
+        <input autoComplete="off"
           ref={inputRef}
           autoFocus
           type={spec.type === "date" ? "date" : "text"}

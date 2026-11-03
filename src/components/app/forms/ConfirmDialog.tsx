@@ -38,16 +38,16 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
         <DialogHeader>
           <div className="flex items-start gap-3">
             {tone === "danger" && <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-tone-danger/10 text-tone-danger"><AlertTriangle className="size-4" /></span>}
-            <div className="space-y-1">
+            <div className="flex flex-col gap-1">
               <DialogTitle>{title}</DialogTitle>
               {description && <DialogDescription>{description}</DialogDescription>}
             </div>
           </div>
         </DialogHeader>
         {typeToConfirm && (
-          <label className="block space-y-1.5">
+          <label className="block flex flex-col gap-1.5">
             <span className="text-[12.5px] text-muted-foreground">Type <span className="font-medium text-foreground">{typeToConfirm}</span> to confirm</span>
-            <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" />
+            <input autoComplete="off" autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" />
           </label>
         )}
         {err && <div role="alert" className="rounded-md bg-tone-danger/[0.06] px-3 py-2 text-[12.5px] text-tone-danger">{err}</div>}

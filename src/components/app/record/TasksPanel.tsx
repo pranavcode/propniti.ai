@@ -79,16 +79,16 @@ export function TasksPanel({ entity, id, people, initial }: { entity: string; id
   );
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <form onSubmit={(e) => { e.preventDefault(); void add(); }} className="flex items-center gap-1.5 rounded-lg border bg-card p-1 pl-2.5 shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/15">
         <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task… e.g. Call resident about the move-out inspection" aria-label="New task" className="h-7 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/80" />
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" className="h-7 rounded-md border bg-background px-1.5 text-[12px] text-muted-foreground tabular-nums outline-none focus:border-ring" />
+        <input autoComplete="off" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task, e.g. Call resident about the move-out inspection…" aria-label="New task" className="h-7 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/80" />
+        <input autoComplete="off" type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" className="h-7 rounded-md border bg-background px-1.5 text-[12px] text-muted-foreground tabular-nums outline-none focus:border-ring" />
         <Button size="sm" type="submit" disabled={!title.trim()}>Add</Button>
       </form>
       {error && <ErrorBanner title="Couldn't load tasks" message={error} onRetry={reload} />}
       {loading ? (
-        <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
+        <div className="flex flex-col gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
       ) : !rows.length && !error ? (
         <EmptyState compact kind="tasks" title="No tasks on this record" description="Add follow-ups here; agents add theirs too, marked with ✦." />
       ) : (

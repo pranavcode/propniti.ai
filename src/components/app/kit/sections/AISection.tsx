@@ -25,7 +25,7 @@ export function AISection() {
   return (
     <Section id="ai" title="AI surfaces" description="Restrained, labelled honestly: live model, saved result or rule fallback. Every suggestion shows why, how sure, and what it looked at. People approve anything that moves money.">
       <div className="grid gap-4 xl:grid-cols-12">
-        <div className="space-y-4 xl:col-span-7">
+        <div className="flex flex-col gap-4 xl:col-span-7">
           <div className="flex flex-wrap items-center gap-2">
             <AIBadge source="live" model="Workers AI · llama-3.3-70b" />
             <AIBadge source="precomputed" />
@@ -45,7 +45,7 @@ export function AISection() {
             acceptLabel="Assign vendor" onAccept={() => wait()} onEdit={() => toast("Edit triage")} onReject={() => wait(300)}
           />
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <ApprovalItem
               agent="Payables agent" title="Approve bill from ABC HVAC · INV-88213" amount={2140} risk="High"
               why={["Amount is 2.4× this vendor's median for a service call", "Vendor bank details changed 6 days ago, not yet verified", "Matches PO-1182 for the rooftop unit at Uptown Tower"]}
@@ -74,7 +74,7 @@ export function AISection() {
           />
         </div>
 
-        <div className="space-y-4 xl:col-span-5">
+        <div className="flex flex-col gap-4 xl:col-span-5">
           <AISummaryCard
             title="Resident summary"
             bullets={["Jordan Lee, #412 at The Lofts at Riverside, 2 years 3 months", "Paid on time 23 of 26 months; currently 34 days late ($2,140.00)", "One open work order (AC not cooling), vendor scheduled Thursday", "Lease ends Feb 28; renewal likelihood 64%, down from 82% in July"]}

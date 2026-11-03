@@ -25,7 +25,7 @@ const explain = <Button size="xs" variant="ghost" className="text-tone-ai hover:
 export function DashboardSection() {
   return (
     <Section id="dashboard" title="Dashboard kit" description="KpiCard (delta coloured by good direction, sparkline, drill link), ChartCard in every kind with click-through drills, lazy client-only Recharts, skeletons and empty states, and the responsive grid.">
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <KpiRow>
           <KpiCard label="NOI, month to date" value={1_241_600} previous={1_318_700} format="money" spark={NOI} href="/app/reports?r=noi" help="Net operating income: rent and other income minus operating expenses, before debt service." footnote="vs $1.27M budget" />
           <KpiCard label="Physical occupancy" value={0.951} previous={0.946} format="pct" spark={occupancy.map((o) => o.physical)} href="/app/units?f.status=Vacant" />

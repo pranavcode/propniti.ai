@@ -88,7 +88,7 @@ export function EntityFormSheet({ open, onOpenChange, mode, entity, label, field
           <SheetTitle className="text-[15px]">{title ?? (mode === "create" ? `New ${one}` : `Edit ${one}`)}</SheetTitle>
           <SheetDescription>{description ?? (mode === "create" ? `Fields marked * are required.` : `Only changed fields are saved. You can undo from the toast.`)}</SheetDescription>
         </SheetHeader>
-        <form id={`form-${entity}`} onSubmit={submit} noValidate className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <form id={`form-${entity}`} onSubmit={submit} noValidate className="min-h-0 flex-1 flex flex-col gap-4 overflow-y-auto px-5 py-4">
           {shown.map((f) => (
             <Controller
               key={f.key}
@@ -123,7 +123,7 @@ function FormControl({ spec, id, value, onChange, onBlur, invalid }: { spec: Fie
     case "enum":
     case "ref": {
       const opts = spec.type === "enum" ? (spec.enum ?? []).map((e) => ({ value: e.value, label: e.label ?? e.value, tone: e.tone })) : (spec.options ?? []).map((o) => ({ ...o, tone: undefined }));
-      if (spec.type === "ref" && !opts.length) return <input id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} aria-invalid={invalid} placeholder={spec.placeholder ?? "Record id"} className={inputCls} />;
+      if (spec.type === "ref" && !opts.length) return <input autoComplete="off" id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} aria-invalid={invalid} placeholder={spec.placeholder ?? "Record id"} className={inputCls} />;
       return (
         <Select value={value == null || value === "" ? undefined : String(value)} onValueChange={onChange}>
           <SelectTrigger id={id} aria-invalid={invalid} onBlur={onBlur} className="h-9 w-full text-[13px]"><SelectValue placeholder={spec.placeholder ?? `Choose ${spec.label.toLowerCase()}`} /></SelectTrigger>
@@ -136,7 +136,7 @@ function FormControl({ spec, id, value, onChange, onBlur, invalid }: { spec: Fie
       return (
         <div className="relative">
           {spec.type === "money" && <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">$</span>}
-          <input
+          <input autoComplete="off"
             id={id}
             inputMode="decimal"
             value={value == null ? "" : String(value)}
@@ -149,12 +149,12 @@ function FormControl({ spec, id, value, onChange, onBlur, invalid }: { spec: Fie
         </div>
       );
     case "date":
-      return <input id={id} type="date" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value || null)} onBlur={onBlur} aria-invalid={invalid} className={inputCls} />;
+      return <input autoComplete="off" id={id} type="date" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value || null)} onBlur={onBlur} aria-invalid={invalid} className={inputCls} />;
     case "datetime":
-      return <input id={id} type="datetime-local" value={(value as string)?.slice(0, 16) ?? ""} onChange={(e) => onChange(e.target.value || null)} onBlur={onBlur} aria-invalid={invalid} className={inputCls} />;
+      return <input autoComplete="off" id={id} type="datetime-local" value={(value as string)?.slice(0, 16) ?? ""} onChange={(e) => onChange(e.target.value || null)} onBlur={onBlur} aria-invalid={invalid} className={inputCls} />;
     default:
       return LONG.test(spec.key) || LONG.test(spec.label)
-        ? <Textarea id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} aria-invalid={invalid} placeholder={spec.placeholder} rows={4} className="text-[13px]" />
-        : <input id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} aria-invalid={invalid} placeholder={spec.placeholder} className={inputCls} />;
+        ? <Textarea autoComplete="off" id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} aria-invalid={invalid} placeholder={spec.placeholder} rows={4} className="text-[13px]" />
+        : <input autoComplete="off" id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} aria-invalid={invalid} placeholder={spec.placeholder} className={inputCls} />;
   }
 }

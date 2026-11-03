@@ -55,13 +55,13 @@ export function NotesPanel({ entity, id, people = [], initial }: { entity: strin
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <Composer people={people} onSend={add} />
       {error && <ErrorBanner title="Couldn't load notes" message={error} onRetry={reload} />}
       {loading ? <ActivityTimeline events={[]} loading /> : !sorted.length && !error ? (
         <EmptyState compact kind="notes" title="No notes yet" description="Leave context for the team. Type @ to mention someone; they get a notification." />
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="flex flex-col gap-2.5">
           {sorted.map((n) => {
             const who = n.author_name ?? names[n.author_id] ?? n.author_id;
             return (
@@ -119,7 +119,7 @@ function Composer({ people, onSend }: { people: Person[]; onSend: (body: string)
 
   return (
     <div className="relative rounded-lg border bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/15">
-      <textarea
+      <textarea autoComplete="off"
         ref={ref}
         value={text}
         rows={2}
@@ -133,7 +133,7 @@ function Composer({ people, onSend }: { people: Person[]; onSend: (body: string)
           }
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
         }}
-        placeholder="Add a note… type @ to mention a teammate"
+        placeholder="Add a note. Type @ to mention a teammate…"
         aria-label="New note"
         className="block w-full resize-none bg-transparent px-3 pt-2.5 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/80"
       />

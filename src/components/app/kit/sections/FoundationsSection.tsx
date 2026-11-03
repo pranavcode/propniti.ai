@@ -35,9 +35,11 @@ function Card({ title, children, className = "" }: { title: string; children: Re
   );
 }
 
+// Sample dates are relative to page load; read once, outside render.
+const now = Date.now();
+
 export function FoundationsSection() {
   const shell = useShellMaybe();
-  const now = Date.now();
   return (
     <div className="flex flex-col gap-8">
       <Section id="foundations" title="Foundations" description="Neutral greys, one deep-teal accent, Geist with tabular numbers, 6px radius, 13px body, 36px rows. Status colour is reserved for status.">

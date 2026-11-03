@@ -25,7 +25,7 @@ export function DocumentsPanel({ entity, id, initial }: { entity: string; id: st
   const [preview, setPreview] = useState<DocumentRow | null>(null);
 
   if (error) return <ErrorBanner title="Couldn't load documents" message={error} onRetry={reload} />;
-  if (loading) return <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+  if (loading) return <div className="flex flex-col gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
   if (!rows.length) return <EmptyState compact kind="documents" title="No documents filed here" description="Leases, invoices, COIs and notices land here. The document agent files uploads automatically and shows its confidence." />;
 
   return (

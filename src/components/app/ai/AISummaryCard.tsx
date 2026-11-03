@@ -38,9 +38,9 @@ export function AISummaryCard({ title = "AI summary", bullets, generatedAt, sour
       </div>
       <div className="px-3 py-2.5">
         {busy ? (
-          <div className="space-y-2">{[92, 84, 70].map((w) => <Skeleton key={w} className="h-3 bg-tone-ai/10" style={{ width: `${w}%` }} />)}</div>
+          <div className="flex flex-col gap-2">{[92, 84, 70].map((w) => <Skeleton key={w} className="h-3 bg-tone-ai/10" style={{ width: `${w}%` }} />)}</div>
         ) : (
-          <ul className="space-y-1.5 text-[12.5px] leading-snug">
+          <ul className="flex flex-col gap-1.5 text-[12.5px] leading-snug">
             {bullets.map((b) => <li key={b} className="flex gap-2"><span className="mt-[7px] size-1 shrink-0 rounded-full bg-tone-ai/60" />{b}</li>)}
           </ul>
         )}
