@@ -1,6 +1,6 @@
 import type { Delinquent } from "../facts";
 import { addDays, defineAgent, money, type Candidate } from "./framework";
-import { planMessage, reminder } from "../rules";
+import { planMessage, planSplit, reminder } from "../rules";
 export { reminder } from "../rules";
 
 // Delinquency follow-up: a reminder for the recently late, a payment plan offer at 31–90 days,
@@ -26,7 +26,7 @@ export default defineAgent({
     return rows.filter((d) => d.days_late <= 90 || legal++ < 3).map((d): Candidate => {
       const facts = {
         resident: d.resident, property: d.property, unit: d.unit, language: d.language, balance_cents: d.balance_cents, days_late: d.days_late,
-        oldest_due_on: d.oldest_due_on, aging_90p_cents: d.aging.d90p, installment_cents: Math.ceil(d.balance_cents / 3 / 100) * 100, risk_score: d.risk_score,
+        oldest_due_on: d.oldest_due_on, aging_90p_cents: d.aging.d90p, ...planSplit(d.balance_cents), risk_score: d.risk_score,
       };
       const base = { entity: "leases" as const, entityId: d.lease_id, propertyId: d.property_id, facts, evidence: [{ entity_type: "leases", entity_id: d.lease_id, label: `${d.resident} · ${d.property} #${d.unit}` }] };
       const party = d.resident_id ? { party_kind: "resident" as const, party_id: d.resident_id } : null;
@@ -41,10 +41,10 @@ export default defineAgent({
       if (d.days_late > 30 && !d.open_plan && party) {
         return {
           ...base, action: "leases.offer_payment_plan", title: `Offer ${d.resident} a 3-payment plan for ${money(d.balance_cents)}`,
-          why: [`${money(d.balance_cents)} owed, ${d.days_late} days late`, "No payment plan on file", `Three payments of about ${money(facts.installment_cents)}`],
+          why: [`${money(d.balance_cents)} owed, ${d.days_late} days late`, "No payment plan on file", facts.installment_cents === facts.final_installment_cents ? `Three payments of ${money(facts.installment_cents)}` : `Two payments of ${money(facts.installment_cents)} and a final ${money(facts.final_installment_cents)}`],
           confidence: 0.8, risk: "Medium", priority: 2000 + d.days_late,
-          message: { ...party, ...planMessage(d, facts.installment_cents) },
-          effects: [{ kind: "task", title: `Payment plan follow-up: ${d.resident}`, detail: `Offered 3 payments of about ${money(facts.installment_cents)}.`, assignee_role: "property_manager", due_on: addDays(ctx.today, 7) }],
+          message: { ...party, ...planMessage(d) },
+          effects: [{ kind: "task", title: `Payment plan follow-up: ${d.resident}`, detail: `Offered 3 payments totalling ${money(d.balance_cents)}.`, assignee_role: "property_manager", due_on: addDays(ctx.today, 7) }],
         };
       }
       return {

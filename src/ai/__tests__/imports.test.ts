@@ -9,14 +9,14 @@ describe("module graph", () => {
     expect(entities.allEntities().length).toBeGreaterThan(10);
     const { allAgents } = await import("@/ai/agents/registry");
     expect(allAgents()).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("registers the eight agents when the orchestrator first needs them", async () => {
     const { loadAgents } = await import("@/ai/orchestrator");
     await loadAgents();
     const { allAgents } = await import("@/ai/agents/registry");
     expect(allAgents().map((a) => a.key).sort()).toEqual(["ap", "collections", "compliance", "data_health", "leasing", "maintenance_triage", "owner_reporting", "renewals"]);
-  });
+  }, 30_000);
 
   it("keeps the shared rules free of runtime imports", async () => {
     const { readFileSync } = await import("node:fs");

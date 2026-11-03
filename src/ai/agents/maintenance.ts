@@ -2,6 +2,7 @@ import type { Row } from "@/entities/types";
 import { parseJson, sql } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
 import { triage } from "../rules";
+import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
 export { triage } from "../rules";
 
 // Triage of new work orders: trade, urgency, a cost estimate from history, ranked vendors and the
@@ -30,7 +31,7 @@ export default defineAgent({
       sql<{ category: string; cost: number }>(ctx.data, "SELECT category, cost_cents AS cost FROM {work_orders} WHERE cost_cents > 0 AND status IN ('Completed', 'Paid') ORDER BY category, cost_cents", [], { unscoped: true }),
       sql<Row>(ctx.data,
         `SELECT v.id, v.company, v.trade, v.metros, v.rating, v.status, (SELECT count(*) FROM {work_orders} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs,
-                (SELECT min(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = v.id AND c.status <> 'Expired') AS coi_expires
+                ${verifiedCoiExpirySql("{vendor_cois}", "v.id")} AS coi_expires
          FROM {vendors} v WHERE v.status = 'Active'`, [], { unscoped: true }),
       sql<{ id: string; metro: string; name: string }>(ctx.data, "SELECT id, metro, name FROM {properties}"),
     ]);

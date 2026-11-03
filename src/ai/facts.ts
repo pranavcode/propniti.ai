@@ -9,7 +9,7 @@ export type Delinquent = {
   resident: string; resident_id: string | null; phone: string; email: string; language: string;
   balance_cents: number; days_late: number; oldest_due_on: string;
   aging: { d0_30: number; d31_60: number; d61_90: number; d90p: number };
-  lease_status: string; risk_score: number | null; open_plan: boolean;
+  lease_status: string; risk_score: number | null; open_plan: boolean; manager: string | null;
 };
 
 const METROS = ["Austin", "Dallas", "Atlanta", "Phoenix"];
@@ -32,12 +32,12 @@ export async function delinquency(ctx: DataCtx, today: string, f: { minDays?: nu
     filters.push("l.id IN (SELECT value FROM json_each(?))");
     params.push(JSON.stringify(f.leaseIds));
   }
-  const owing = await sql<{ lease_id: string; property_id: string; household_id: string; unit_id: string; status: string; property: string; metro: string; charged: number; paid: number }>(
+  const owing = await sql<{ lease_id: string; property_id: string; household_id: string; unit_id: string; status: string; property: string; metro: string; manager: string | null; charged: number; paid: number }>(
     ctx,
     `WITH ch AS (SELECT lease_id, sum(amount_cents) AS s FROM {charges} WHERE due_on <= ? GROUP BY lease_id),
           pa AS (SELECT lease_id, sum(amount_cents) AS s FROM {payments} WHERE nsf = 0 AND received_on <= ? GROUP BY lease_id),
           cr AS (SELECT lease_id, sum(amount_cents) AS s FROM {credits} GROUP BY lease_id)
-     SELECT l.id AS lease_id, l.property_id, l.household_id, l.unit_id, l.status, p.name AS property, p.metro,
+     SELECT l.id AS lease_id, l.property_id, l.household_id, l.unit_id, l.status, p.name AS property, p.metro, (SELECT s.name FROM {staff} s WHERE s.id = p.manager_id) AS manager,
             ch.s AS charged, coalesce(pa.s, 0) + coalesce(cr.s, 0) AS paid
      FROM ch JOIN {leases} l ON l.id = ch.lease_id JOIN {properties} p ON p.id = l.property_id
      LEFT JOIN pa ON pa.lease_id = ch.lease_id LEFT JOIN cr ON cr.lease_id = ch.lease_id
@@ -77,7 +77,7 @@ export async function delinquency(ctx: DataCtx, today: string, f: { minDays?: nu
     }
     const p = person.get(o.household_id);
     return {
-      lease_id: o.lease_id, property_id: o.property_id, property: o.property, metro: o.metro, unit: unit.get(o.unit_id) ?? o.unit_id, household_id: o.household_id,
+      lease_id: o.lease_id, property_id: o.property_id, property: o.property, metro: o.metro, manager: o.manager ?? null, unit: unit.get(o.unit_id) ?? o.unit_id, household_id: o.household_id,
       resident: p ? `${p.first_name} ${p.last_name}` : o.household_id, resident_id: p?.id ?? null, phone: p?.phone ?? "", email: p?.email ?? "", language: p?.language ?? "en",
       balance_cents: o.charged - o.paid, days_late: daysBetween(oldest, today), oldest_due_on: oldest, aging, lease_status: o.status,
       risk_score: p?.risk_score ?? null, open_plan: planned.has(o.lease_id),

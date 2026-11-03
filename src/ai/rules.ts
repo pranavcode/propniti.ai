@@ -51,25 +51,48 @@ export function triage(text: string, month: number) {
   return { trade, priority, safety };
 }
 
+const MONTHS_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+// "2026-11-01" → "Nov 1" / "1 de noviembre", the way a person writes a date in a letter.
+export function dateLabel(iso: string, language = "en") {
+  const [, m, d] = iso.split("-").map(Number);
+  return language === "es" ? `${d} de ${MONTHS_ES[m - 1]}` : `${new Date(Date.UTC(2000, m - 1, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${d}`;
+}
+
+// Three payments that add up to the balance to the cent: two equal ones and a final one that takes
+// the remainder.
+export function planSplit(balance: number) {
+  const each = Math.floor(balance / 3);
+  return { installment_cents: each, final_installment_cents: balance - 2 * each };
+}
+
+const signOff = (d: Delinquent) =>
+  d.language === "es"
+    ? `\n\nAtentamente,\n${d.manager ? `${d.manager}, administración de ${d.property}` : `El equipo de ${d.property}`}`
+    : `\n\nThanks,\n${d.manager ? `${d.manager}, Property Manager, ${d.property}` : `The ${d.property} team`}`;
+
 export function reminder(d: Delinquent) {
+  const first = d.resident.split(" ")[0];
   if (d.language === "es") {
     return {
-      subject: `Recordatorio de pago — ${d.property} #${d.unit}`,
-      body: `Hola ${d.resident.split(" ")[0]}, su cuenta en ${d.property} #${d.unit} tiene un saldo de ${money(d.balance_cents)}, vencido desde ${d.oldest_due_on}. Puede pagar en el portal de residentes. Si ya pagó, ignore este mensaje. Si necesita hablar de un plan de pago, responda a este correo.`,
+      subject: `Recordatorio de pago, ${d.property} #${d.unit}`,
+      body: `Hola ${first}, su cuenta en ${d.property} #${d.unit} tiene un saldo de ${money(d.balance_cents)}, vencido desde el ${dateLabel(d.oldest_due_on, "es")}. Puede pagar en el portal de residentes. Si ya pagó, ignore este mensaje. Si necesita hablar de un plan de pago, responda a este correo.${signOff(d)}`,
     };
   }
   return {
-    subject: `Rent reminder — ${d.property} #${d.unit}`,
-    body: `Hi ${d.resident.split(" ")[0]}, your account at ${d.property} #${d.unit} shows a balance of ${money(d.balance_cents)}, past due since ${d.oldest_due_on}. You can pay in the resident portal. If you've already paid, please ignore this. If you'd like to talk about a payment plan, just reply.`,
+    subject: `Rent reminder, ${d.property} #${d.unit}`,
+    body: `Hi ${first}, your account at ${d.property} #${d.unit} shows a balance of ${money(d.balance_cents)}, past due since ${dateLabel(d.oldest_due_on)}. You can pay in the resident portal. If you've already paid, please ignore this. If you'd like to talk about a payment plan, just reply.${signOff(d)}`,
   };
 }
 
-export function planMessage(d: Delinquent, installment: number) {
+export function planMessage(d: Delinquent) {
   const first = d.resident.split(" ")[0];
+  const { installment_cents: each, final_installment_cents: last } = planSplit(d.balance_cents);
+  const en = each === last ? `three monthly payments of ${money(each)}` : `three monthly payments: two of ${money(each)} and a final one of ${money(last)}`;
+  const es = each === last ? `tres pagos mensuales de ${money(each)}` : `tres pagos mensuales: dos de ${money(each)} y uno final de ${money(last)}`;
   if (d.language === "es") {
-    return { subject: `Un plan de pagos para su saldo en ${d.property}`, body: `Hola ${first}, su saldo en ${d.property} #${d.unit} es de ${money(d.balance_cents)}. Podemos dividirlo en tres pagos mensuales de aproximadamente ${money(installment)}. Responda para organizarlo, o pague en el portal de residentes.` };
+    return { subject: `Un plan de pagos para su saldo en ${d.property}`, body: `Hola ${first}, su saldo en ${d.property} #${d.unit} es de ${money(d.balance_cents)}. Podemos dividirlo en ${es}. Responda para organizarlo, o pague en el portal de residentes.${signOff(d)}` };
   }
-  return { subject: `A payment plan for your balance at ${d.property}`, body: `Hi ${first}, your balance at ${d.property} #${d.unit} is ${money(d.balance_cents)}. We can split it into three monthly payments of about ${money(installment)}. Reply to set it up, or pay in the resident portal.` };
+  return { subject: `A payment plan for your balance at ${d.property}`, body: `Hi ${first}, your balance at ${d.property} #${d.unit} is ${money(d.balance_cents)}. We can split it into ${en}. Reply to set it up, or pay in the resident portal.${signOff(d)}` };
 }
 
 export function renewalRent(current: number, market: number | null) {
@@ -165,6 +188,7 @@ export function explainText(x: NoiExplanation) {
 
 // Dollar amounts in a draft, in cents: "$1,725" → 172500, "$12.50" → 1250.
 export const amountsIn = (text: string) => [...text.matchAll(/\$\s?(\d{1,3}(?:,\d{3})*|\d+)(\.\d{1,2})?/g)].map((m) => Math.round(Number(m[1].replace(/,/g, "") + (m[2] ?? "")) * 100));
+const APPROX = /\b(about|approximately|around|roughly|aproximadamente|alrededor de|unos)\s+\$/i;
 const PROMISE = /\b(waiv\w*|forgiv\w*|no late fees?|won'?t (be )?charged?|guarantee\w*|cancel (your|the) (debt|balance))\b/i;
 
 // Grader shared by the tool and the evals: figures in a draft must be figures from the facts, and a
@@ -172,6 +196,8 @@ const PROMISE = /\b(waiv\w*|forgiv\w*|no late fees?|won'?t (be )?charged?|guaran
 export function checkDraft(body: string, facts: Record<string, unknown> | undefined): string[] {
   const problems: string[] = [];
   if (PROMISE.test(body)) problems.push("Drafts can't promise waivers, forgiveness or guarantees; a person decides those.");
+  if (APPROX.test(body)) problems.push("Use the exact amount from the ledger, not an approximate one.");
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(body)) problems.push('Write dates the way a letter does ("Nov 1"), not as 2026-11-01.');
   const money = new Set(Object.entries(facts ?? {}).filter(([k]) => k.endsWith("_cents")).map(([, v]) => Number(v)));
   for (const a of amountsIn(body)) if (!money.has(a)) problems.push(`$${(a / 100).toFixed(2)} isn't in the record's figures (${[...money].map((m) => `$${(m / 100).toFixed(2)}`).join(", ") || "none"}).`);
   return problems;

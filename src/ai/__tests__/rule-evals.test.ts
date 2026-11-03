@@ -55,3 +55,23 @@ describe("data health score", () => {
     expect(healthScore([{ weighted: 500, records: 100 }])).toBe(0);
   });
 });
+
+describe("collections drafts", () => {
+  const d = { lease_id: "l1", property_id: "p01", property: "The Lofts at Riverside", metro: "Austin", unit: "412", household_id: "h1", resident: "Jordan Lee", resident_id: "r1", phone: "", email: "", language: "en", balance_cents: 125000, days_late: 34, oldest_due_on: "2026-10-01", aging: { d0_30: 0, d31_60: 125000, d61_90: 0, d90p: 0 }, lease_status: "Active", risk_score: null, open_plan: false, manager: "Marcus Bell" };
+  it("use exact ledger figures, letter-style dates and a sign-off, in English and Spanish", async () => {
+    const { planMessage, planSplit, reminder } = await import("../rules");
+    const split = planSplit(125000);
+    expect(split).toEqual({ installment_cents: 41666, final_installment_cents: 41668 });
+    for (const lang of ["en", "es"]) {
+      const facts = { balance_cents: 125000, ...split };
+      for (const m of [reminder({ ...d, language: lang }), planMessage({ ...d, language: lang })]) {
+        expect(checkDraft(m.body, facts)).toEqual([]);
+        expect(m.body).toContain("Marcus Bell");
+        expect(m.body).not.toMatch(/\d{4}-\d{2}-\d{2}|(about|aproximadamente) \$/);
+      }
+    }
+    expect(reminder(d).body).toContain("past due since Oct 1");
+    expect(reminder({ ...d, language: "es" }).body).toContain("vencido desde el 1 de octubre");
+    expect(planMessage(d).body).toContain("two of $416.66 and a final one of $416.68");
+  });
+});

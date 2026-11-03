@@ -102,7 +102,6 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
     const market = e?.market_rent_cents ?? 0;
     const dataError = e && (e.outlier || (market > 0 && e.rent_cents >= market * 5)) ? { rent: e.rent_cents, market, flagged: !!e.outlier } : null;
     // Same rounding as the Collections agent, so the preview matches what it sends.
-    const installment = Math.ceil(d.balance_cents / 3 / 100) * 100;
     const s = scoreRisk(d, dataError ? market || Math.round(dataError.rent / 10) : e?.rent_cents ?? 0, nsf12);
     // The agent proposes per lease; precomputed proposals in the seed are per household.
     const p = prop.get(d.lease_id) ?? prop.get(d.household_id);
@@ -115,7 +114,7 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
       lease_id: d.lease_id, property_id: d.property_id, property: d.property, unit: d.unit, resident: d.resident, resident_id: d.resident_id, language: d.language,
       balance: d.balance_cents, days_late: d.days_late, oldest_due_on: d.oldest_due_on, aging: d.aging, lease_status: d.lease_status, rent: e?.rent_cents ?? 0, nsf12,
       ...s, step, safe: step === "reminder", dataError,
-      drafts: step === "legal" ? null : step === "plan" ? { en: planMessage({ ...d, language: "en" }, installment), es: planMessage({ ...d, language: "es" }, installment) } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
+      drafts: step === "legal" ? null : step === "plan" ? { en: planMessage({ ...d, language: "en" }), es: planMessage({ ...d, language: "es" }) } : { en: reminder({ ...d, language: "en" }), es: reminder({ ...d, language: "es" }) },
       proposal: p ? {
         id: String(p.id), title: String(p.title), risk: p.risk as "Low" | "Medium" | "High", confidence: Number(p.confidence), run_id: (p.run_id as string) ?? null, model: (p.model as string) ?? null, created_at: String(p.created_at),
         message: msg?.subject && msg.body ? { subject: msg.subject, body: msg.body } : null, canDecide: canDecideAs(ctx.actor.role, String(p.risk), p.amount_cents),
