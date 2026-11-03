@@ -9,7 +9,9 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { StatusBadge, RelativeDate } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
-import { ChartPanel, KpiTile, type ChartData, type KpiData } from "@/components/entity/Metrics";
+import { KpiTile, type ChartData, type KpiData } from "@/components/entity/Metrics";
+import { ChartCard } from "@/components/app/dashboard";
+import type { ChartPoint, ChartSeries } from "@/components/app/dashboard";
 import { ProposalCard } from "@/ai/ui/RunView";
 import { pageData } from "@/ai/ui/server";
 import { proposalsPage } from "@/ai/views";
@@ -30,6 +32,12 @@ const KPIS: (KpiDef & { needs: EntityKey })[] = [
   { key: "legal", label: "Open legal cases", metric: "risk.legal_open", format: "count", goodWhen: "down", drill: "/app/compliance/legal?view=open", needs: "legal_cases" },
   { key: "legal_balance", label: "Balance in legal cases", metric: "risk.legal_balance", format: "money", goodWhen: "down", drill: "/app/compliance/legal?view=open", help: { summary: "Unpaid balances at issue in open evictions and small-claims cases." }, needs: "legal_cases" },
 ];
+
+// Status is encoded with the reserved status tones (each also labelled in the legend), and the
+// colour follows the status, not its position, so an absent status never repaints the rest.
+const TONE = { success: "var(--tone-success)", warning: "var(--tone-warning)", danger: "var(--tone-danger)", neutral: "var(--tone-neutral)", info: "var(--tone-info)" };
+const SERIES_TONE: Record<string, Record<string, string>> = { by_kind: { overdue: TONE.danger, due_soon: TONE.warning, open: TONE.info, done: TONE.success } };
+const POINT_TONE: Record<string, Record<string, string>> = { coi: { Valid: TONE.success, Expiring: TONE.warning, Expired: TONE.danger, Missing: TONE.neutral } };
 
 const CHARTS: (ChartDef & { needs: EntityKey })[] = [
   { key: "by_month", title: "Upcoming expiries, next 12 months", kind: "stacked", metric: "risk.expiries_by_month", x: "month", needs: "compliance_items",
@@ -198,7 +206,16 @@ export default async function CompliancePage() {
           </Section>
         </div>
 
-        {charts.length > 0 && <div className="grid gap-3 lg:grid-cols-2">{charts.map((c) => <ChartPanel key={c.key} c={c} />)}</div>}
+        {charts.length > 0 && (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {charts.map((c) => (
+              <ChartCard key={c.key} title={c.title} kind={c.kind} x={c.x} drill={c.drill}
+                series={c.series.map((ser): ChartSeries => ({ ...ser, color: SERIES_TONE[c.key]?.[ser.key] }))}
+                data={c.points.map((pt) => ({ ...pt, color: POINT_TONE[c.key]?.[String(pt[c.x])] ?? null }) as ChartPoint)}
+                empty={c.error ?? "Nothing to chart yet."} />
+            ))}
+          </div>
+        )}
       </PageBody>
     </main>
   );
