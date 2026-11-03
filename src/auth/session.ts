@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import type { Actor } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
 import { actorFor } from "@/server/permissions";
@@ -17,6 +18,14 @@ const WS_ID = /^[A-Za-z0-9_-]{22,64}$/;
 export async function currentPersona(): Promise<Persona> {
   const id = (await cookies()).get(PN_AS)?.value;
   return getPersona(id) ?? getPersona(DEFAULT_PERSONA)!;
+}
+
+// Staff pages (/app/*) only: portal personas (owner, resident, vendor, applicant) go to their
+// portal home. Called by the /app layout for every page and again by pages that read data.
+export async function requireStaff(): Promise<Persona> {
+  const persona = await currentPersona();
+  if (persona.portal || persona.scope.kind === "self") redirect(persona.home);
+  return persona;
 }
 
 // Whether the visitor picked a persona yet (the sign-in page sets it).

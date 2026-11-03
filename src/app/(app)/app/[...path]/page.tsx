@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { allEntities, getEntityByRoute } from "@/entities";
-import { currentSession } from "@/auth/session";
+import { currentSession, requireStaff } from "@/auth/session";
 import { ListView, ModuleIndex, RecordView } from "@/components/entity/pages";
 
 // Generic entity pages (lane C). Any /app path without a static route lands here and resolves
@@ -42,6 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function EntityPage({ params, searchParams }: Props) {
+  await requireStaff();
   const { path } = await params;
   const r = resolve(path);
   if (r.redirect) redirect(r.redirect);
