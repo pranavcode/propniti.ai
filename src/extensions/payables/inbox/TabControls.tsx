@@ -84,7 +84,7 @@ export function ProposalCard(p: { id: string; agent: string; title: string; amou
     }
   };
   if (p.decided) {
-    return <ApprovalItem variant="row" agent={p.agent} title={`${p.title} — ${p.decided.toLowerCase()}`} amount={p.amount} risk={p.risk} why={p.why} evidence={p.evidence} confidence={p.confidence} runHref={p.runHref} createdAt={p.createdAt} source={p.source} model={p.model} />;
+    return <ApprovalItem variant="row" agent={p.agent} title={`${p.title} (${p.decided.toLowerCase()})`} amount={p.amount} risk={p.risk} why={p.why} evidence={p.evidence} confidence={p.confidence} runHref={p.runHref} createdAt={p.createdAt} source={p.source} model={p.model} />;
   }
   return <ApprovalItem agent={p.agent} title={p.title} amount={p.amount} risk={p.risk} why={p.why} evidence={p.evidence} confidence={p.confidence} runHref={p.runHref} createdAt={p.createdAt} source={p.source} model={p.model}
     canApprove={p.canApprove} policy={p.canApprove ? undefined : "Your role can't decide this proposal"} onApprove={() => decide("approve")} onReject={() => decide("reject")} />;

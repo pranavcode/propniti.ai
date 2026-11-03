@@ -378,6 +378,6 @@ registerEntity({
   charts: [{ key: "utilities_trend", title: "Utility cost by month", kind: "stacked", metric: "accounting.utilities_by_month", x: "month", series: [{ key: "Water", label: "Water", format: "money" }, { key: "Electric", label: "Electric", format: "money" }, { key: "Gas", label: "Gas", format: "money" }], drill: "/app/accounting/utilities/bills?f.period={month}" }],
   permissions: { read: FIN_PM, create: [], update: [], delete: [] },
   writes: "none",
-  help: { summary: "Utility invoices per meter and month, linked to the AP bill that paid them. Phoenix electric peaks in summer.", article: "utility-billing-rubs" },
+  help: { summary: "Utility invoices per meter and month, each linked to the AP bill that paid it.", article: "utility-billing-rubs" },
 });
 

@@ -249,7 +249,7 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
               <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
                 <Field label="Vendor" className="col-span-2">
                   <select value={vendorId} disabled={locked} onChange={(e) => setVendor(e.target.value)} className={selectCls} aria-label="Vendor">
-                    <option value="">{extracted?.vendor ? `No match for "${extracted.vendor}" — pick one` : "Pick a vendor"}</option>
+                    <option value="">{extracted?.vendor ? `No match for “${extracted.vendor}”. Pick the vendor` : "Pick a vendor"}</option>
                     {vendors.map((v) => <option key={v.id} value={v.id}>{v.company} · {v.trade}</option>)}
                   </select>
                   {extracted?.vendor && vendor && <span className="text-[11px] text-muted-foreground">Matched from &ldquo;{extracted.vendor}&rdquo;</span>}
