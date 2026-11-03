@@ -25,7 +25,7 @@ export default async function VendorJobs({ searchParams }: Props) {
     return (
       <>
         <Link href="/portal/vendor/jobs" className="mb-3 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" />All jobs</Link>
-        <PortalTitle eyebrow={`${j.id} · ${j.category}`} title={j.title} actions={<JobActions me={c.me} id={j.id} title={j.title} status={j.status} invoiced={!!j.invoiced} />} />
+        <PortalTitle eyebrow={`${j.id} · ${j.category}`} title={j.title} actions={<JobActions me={c.me} id={j.id} title={j.title} status={j.status} invoiced={!!j.invoiced || !!j.owner_declined} />} />
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
             <section className="rounded-xl border bg-card p-4">

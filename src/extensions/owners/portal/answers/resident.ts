@@ -44,7 +44,7 @@ export async function answerResident(c: PortalCtx, q: string): Promise<Answer> {
   }
 
   if (/\b(repair|maintenance|fix|broken|leak|ac|a\/c|heat|hvac|request|work order|technician|scheduled)\b/.test(text)) {
-    const list = await requests(c, lease?.unit_id ?? null);
+    const list = await requests(c, lease?.unit_id ?? null, lease?.move_in_on ?? lease?.start_on ?? null);
     const open = list.filter((w) => OPEN_WO.includes(w.status));
     trace.push({ label: "Maintenance requests", detail: list.length ? list.slice(0, 5).map((w) => `${w.id} ${w.title} (${w.status})`).join("; ") : "None on file" });
     const topic = /\b(ac|a\/c|cool|hvac|heat)\b/.test(text) ? open.find((w) => w.category === "HVAC") : undefined;

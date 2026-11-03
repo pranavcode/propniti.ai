@@ -14,7 +14,7 @@ export default async function ResidentRequests({ searchParams }: { searchParams:
   if (!r) return null;
   const sp = await searchParams;
   const lease = await currentLease(c, r.household_id);
-  const list = await requests(c, lease?.unit_id ?? null);
+  const list = await requests(c, lease?.unit_id ?? null, lease?.move_in_on ?? lease?.start_on ?? null);
   const open = list.filter((w) => OPEN_WO.includes(w.status));
   const done = list.filter((w) => !OPEN_WO.includes(w.status));
   const formOpen = sp.new === "1";

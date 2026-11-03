@@ -31,8 +31,8 @@ export function JobRow({ j, me }: { j: Job; me: string }) {
       </Link>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {j.priority !== "Normal" && j.priority !== "Low" && <StatusBadge value={j.priority} tone={PRIORITY[j.priority]} />}
-        <StatusBadge value={j.invoiced && j.status !== "Paid" ? "Invoiced" : j.status} tone={j.status === "Paid" ? "success" : j.status === "Assigned" ? "info" : undefined} label={j.status === "Assigned" ? "New: accept or decline" : undefined} />
-        <JobActions me={me} id={j.id} title={j.title} status={j.status} invoiced={!!j.invoiced} compact />
+        <StatusBadge value={j.owner_declined ? "Owner declined" : j.invoiced && j.status !== "Paid" ? "Invoiced" : j.status} tone={j.owner_declined ? "danger" : j.status === "Paid" ? "success" : j.status === "Assigned" ? "info" : undefined} label={j.status === "Assigned" ? "New: accept or decline" : undefined} />
+        <JobActions me={me} id={j.id} title={j.title} status={j.status} invoiced={!!j.invoiced || !!j.owner_declined} compact />
       </div>
     </li>
   );

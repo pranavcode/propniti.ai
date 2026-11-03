@@ -20,7 +20,7 @@ export default async function ResidentHome() {
   const lease = await currentLease(c, r.household_id);
   const [charges, reqs, offerList, policy] = await Promise.all([
     openCharges(c, r.household_id),
-    requests(c, lease?.unit_id ?? null),
+    requests(c, lease?.unit_id ?? null, lease?.move_in_on ?? lease?.start_on ?? null),
     lease ? offers(c, lease.id) : [],
     lease ? insurance(c, lease.id) : null,
   ]);

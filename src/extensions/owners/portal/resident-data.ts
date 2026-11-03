@@ -52,13 +52,14 @@ export async function ledger(c: PortalCtx, householdId: string, page: number, si
   return { rows: withBal.slice((page - 1) * size, page * size), total: withBal.length, page, size };
 }
 
-// Work orders for the household: the ones they asked for, plus anything on their unit.
-export async function requests(c: PortalCtx, unitId: string | null) {
+// Work orders for the household: the ones they asked for, plus resident requests on their unit
+// since their lease started (an earlier tenant's requests stay private).
+export async function requests(c: PortalCtx, unitId: string | null, since: string | null) {
   return rows<Request>(c, `SELECT w.id, w.title, w.description, w.category, w.priority, w.status, w.opened_at, w.scheduled_at, w.completed_at, v.company AS vendor,
       (SELECT json_group_array(ph.url) FROM {photos} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id) AS photos
     FROM {work_orders} w LEFT JOIN {vendors} v ON v.id = w.vendor_id
-    WHERE w.id IN (SELECT sr.work_order_id FROM {service_requests} sr WHERE sr.resident_id = ?) OR (w.unit_id = ? AND w.source = 'Resident')
-    ORDER BY w.opened_at DESC LIMIT 50`, c.me, unitId);
+    WHERE w.id IN (SELECT sr.work_order_id FROM {service_requests} sr WHERE sr.resident_id = ?) OR (w.unit_id = ? AND w.source = 'Resident' AND w.opened_at >= coalesce(?, '9999'))
+    ORDER BY w.opened_at DESC LIMIT 50`, c.me, unitId, since);
 }
 
 export const OPEN_WO = ["New", "Triaged", "Assigned", "Scheduled", "In progress", "On hold", "Submitted"];

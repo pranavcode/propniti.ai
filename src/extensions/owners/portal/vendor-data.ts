@@ -6,7 +6,7 @@ import { row, rows, type PortalCtx } from "./context";
 
 export type Job = {
   id: string; title: string; description: string; category: string; priority: string; status: string; property_id: string; property: string; photos: string; street: string; city: string;
-  unit: string | null; sla_due_at: string | null; opened_at: string; scheduled_at: string | null; completed_at: string | null; estimate_cents: number | null; cost_cents: number | null; permission_to_enter: number; invoiced: number;
+  unit: string | null; sla_due_at: string | null; opened_at: string; scheduled_at: string | null; completed_at: string | null; estimate_cents: number | null; cost_cents: number | null; permission_to_enter: number; invoiced: number; owner_declined: number;
 };
 
 export const JOB_TABS = {
@@ -18,7 +18,8 @@ export const JOB_TABS = {
 export type JobTab = keyof typeof JOB_TABS;
 
 const JOB_COLS = `w.id, w.title, w.description, w.category, w.priority, w.status, w.property_id, p.name AS property, p.photos, p.street, p.city, u.number AS unit, w.sla_due_at, w.opened_at, w.scheduled_at, w.completed_at, w.estimate_cents, w.cost_cents, w.permission_to_enter,
-  EXISTS (SELECT 1 FROM {wo_events} e WHERE e.work_order_id = w.id AND e.kind = 'Submission') AS invoiced`;
+  EXISTS (SELECT 1 FROM {wo_events} e WHERE e.work_order_id = w.id AND e.kind = 'Submission') AS invoiced,
+  EXISTS (SELECT 1 FROM {wo_events} e WHERE e.work_order_id = w.id AND e.kind = 'Approval' AND e.actor_kind = 'owner' AND json_extract(e.detail, '$.decision') = 'Declined') AS owner_declined`;
 const JOB_FROM = "FROM {work_orders} w JOIN {properties} p ON p.id = w.property_id LEFT JOIN {units} u ON u.id = w.unit_id";
 
 export async function jobCounts(c: PortalCtx) {
