@@ -100,6 +100,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
       <PageHeader def={def} />
       {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
       <EntityList
+        key={def.key}
         entity={def.key}
         label={def.label}
         routeBase={def.route}
@@ -240,7 +241,7 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
         facetOptions(ctx, rel.key, q).catch(() => ({})),
       ]);
       return (
-        <EntityList entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
+        <EntityList key={rel.key} entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
           counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
           searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
       );
