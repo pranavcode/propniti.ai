@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, initials } from "./format";
+import { formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
 
 const now = new Date("2026-11-04T12:00:00");
 
@@ -36,5 +36,15 @@ describe("format", () => {
   it("makes initials", () => {
     expect(initials("Marcus Bell")).toBe("MB");
     expect(initials("Zoë Ødegaard")).toBe("ZØ");
+  });
+
+  it("greets in the persona's metro time zone, not the server's", () => {
+    const t = new Date("2026-11-04T21:45:00Z"); // 3:45 pm Central, 4:45 pm Eastern, 2:45 pm Phoenix
+    expect(personaGreeting({ name: "Marcus Bell", scope: { label: "3 Austin properties" } }, t)).toBe("Good afternoon, Marcus");
+    expect(personaGreeting({ name: "Priya Shah", scope: { label: "Texas · 14 properties" } }, t)).toBe("Good afternoon, Priya");
+    expect(personaTimeZone({ scope: { label: "All 30 properties · 4 metros" } })).toBe("America/Chicago");
+    expect(personaTimeZone({ scope: { label: "Own lease" }, title: "Applicant · Peachtree Lofts, Atlanta" })).toBe("America/New_York");
+    expect(greeting("Daniel Reyes", "America/Chicago", new Date("2026-11-04T14:30:00Z"))).toBe("Good morning, Daniel");
+    expect(greeting("Daniel Reyes", "America/Phoenix", new Date("2026-11-05T01:30:00Z"))).toBe("Good evening, Daniel");
   });
 });

@@ -4,7 +4,7 @@ import { ArrowRight, Bot, Calculator, ChevronRight, CircleAlert, FlaskConical, I
 import type { Session } from "@/auth/session";
 import type { Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatPct } from "@/lib/format";
+import { formatMoney, formatPct, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
@@ -22,7 +22,6 @@ import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, typ
 const label = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
 const monthLong = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const pts = (rows: Row[]): ChartPoint[] => rows.map((r) => ({ ...(r as ChartPoint), label: label(String(r.month)) }));
-const greeting = (name: string) => `Good morning, ${name.split(" ")[0]}`;
 
 const TONE: Record<BriefingItem["tone"], string> = { danger: "bg-tone-danger", warning: "bg-tone-warning", info: "bg-tone-info", success: "bg-tone-success", ai: "bg-tone-ai" };
 
@@ -122,7 +121,7 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
   return (
     <main>
       <PageHeader
-        title={greeting(persona.name)}
+        title={personaGreeting(persona)}
         meta={<><span>{persona.title}</span><span>·</span><span>{persona.scope.label}</span><span>·</span><span>Books closed through {monthLong(LAST_CLOSED)}</span></>}
         actions={<>
           <Button asChild size="sm" variant="outline"><Link href="/app/portfolio"><Calculator />Portfolio overview</Link></Button>

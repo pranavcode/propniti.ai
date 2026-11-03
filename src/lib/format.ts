@@ -121,3 +121,23 @@ function calendarDays(d: Date, now: Date) {
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${formatNumber(n)} ${n === 1 ? one : many}`;
+
+// Greetings follow the persona's local time, not the server clock. A persona's metro is read from
+// its scope or title ("3 Austin properties", "Texas · 14 properties"); org-wide personas use HQ.
+export const METRO_TIME_ZONES: Record<string, string> = { Austin: "America/Chicago", Dallas: "America/Chicago", Atlanta: "America/New_York", Phoenix: "America/Phoenix" };
+export const HQ_METRO = "Austin";
+
+export function personaTimeZone(p: { scope: { label: string }; title?: string }): string {
+  const text = `${p.scope.label} ${p.title ?? ""}`;
+  const metro = Object.keys(METRO_TIME_ZONES).find((m) => text.includes(m)) ?? (/\bTexas\b/.test(text) ? "Austin" : /\b(Georgia|Southeast)\b/.test(text) ? "Atlanta" : /\b(Arizona|Southwest)\b/.test(text) ? "Phoenix" : HQ_METRO);
+  return METRO_TIME_ZONES[metro]!;
+}
+
+// "Good morning, Daniel" (before noon), "Good afternoon" (to 5 pm), "Good evening" after, in the given zone.
+export function greeting(name: string, timeZone: string, now = new Date()): string {
+  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone }).format(now));
+  const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  return `Good ${part}, ${name.split(" ")[0]}`;
+}
+
+export const personaGreeting = (p: { name: string; scope: { label: string }; title?: string }, now = new Date()) => greeting(p.name, personaTimeZone(p), now);

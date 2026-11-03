@@ -20,7 +20,7 @@ test("principal home explains NOI and drills to a property and unit", async ({ p
   page.on("pageerror", (e) => errors.push(e.message));
 
   await page.goto(`${BASE}/app`);
-  await expect(page.getByRole("heading", { name: "Good morning, Daniel", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Good (morning|afternoon|evening), Daniel$/, level: 1 })).toBeVisible();
   await expect(page.getByText("Briefing")).toBeVisible();
   await expect(page.getByText("Portfolio NOI vs budget")).toBeVisible();
   await expect(page.getByText("AI hours saved").first()).toBeVisible();
