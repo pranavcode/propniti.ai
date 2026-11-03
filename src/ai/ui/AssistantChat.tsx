@@ -188,3 +188,8 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
     </div>
   );
 }
+
+// The ⌘J dock body on every /app page: the same conversation, with the current page as context.
+export function AssistantDock() {
+  return <AssistantChat />;
+}
