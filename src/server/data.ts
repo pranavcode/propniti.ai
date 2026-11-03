@@ -137,9 +137,10 @@ export async function trustBalances(ctx: DataCtx, ownerEntityId?: string) {
 }
 
 // Owner statement open items: trust transfers after the entity's latest owner payout (seq cutoff).
+// Statement corrections (key owner-adj:<distribution>) are payouts too, but don't close a statement.
 export const OPEN_ITEMS_WHERE = (entity: string, ws = "?1") => `t.workspace_id IN ('base', ${ws}) AND t.owner_entity_id = ${entity} AND t.status <> 'Returned'
   AND t.bank_account_id = 'ba-' || ${entity} || '-trust' AND t.kind <> 'Owner payout'
-  AND t.seq > coalesce((SELECT max(seq) FROM transfers WHERE workspace_id IN ('base', ${ws}) AND owner_entity_id = ${entity} AND kind = 'Owner payout' AND status <> 'Returned'), 0)`;
+  AND t.seq > coalesce((SELECT max(seq) FROM transfers WHERE workspace_id IN ('base', ${ws}) AND owner_entity_id = ${entity} AND kind = 'Owner payout' AND status <> 'Returned' AND key NOT LIKE 'owner-adj:%'), 0)`;
 // Net owed to the owner from open items: cleared receipts − fees − vendor payouts (pending ones too).
 export const OPEN_NET_SQL = (entity: string, ws = "?1") => `(SELECT coalesce(sum(CASE
     WHEN t.kind IN ('Rent', 'Other receipt') THEN CASE WHEN t.status = 'Cleared' THEN t.amount_cents ELSE 0 END

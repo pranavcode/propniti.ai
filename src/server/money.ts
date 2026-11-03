@@ -465,3 +465,53 @@ export async function distributeOwner(ctx: ActionContext, ownerEntityId: string,
     error: st.net_cents <= 0 ? `Nothing is owed to ${oe.owner_name} right now.` : st.net_cents > (avail?.a ?? 0) ? `Trust account can't cover ${dollars(st.net_cents)} (available ${dollars(avail?.a ?? 0)})` : `${oe.name}'s statement changed while you were paying it. Check it and try again.`,
   };
 }
+
+// Pays an owner a small correction to a closed statement, e.g. the cent a rounding error left in
+// trust (data issue owner_distributions.rounding_cent). The amount must equal what the statement
+// still owes: net − distribution − reserve − corrections already paid. Its key owner-adj:<dist>
+// makes it one payment per statement, and the period cutoff ignores it, so the open statement
+// isn't closed early. Trust drops by exactly the amount, which was being held there.
+const ISSUE_COLS = ["id", "deleted", "rule_id", "entity_type", "entity_id", "property_id", "detected_at", "severity", "evidence", "suggested_fix", "status", "fixed_by", "fixed_at"];
+export async function payOwnerAdjustment(ctx: ActionContext, distributionId: string, amountCents: number, issueId?: string): Promise<Outcome> {
+  const { db, ws, nowMs, actor } = ctx;
+  const d = await db
+    .prepare(
+      `SELECT d.*, e.owner_id, o.name AS owner_name, e.name AS entity_name,
+         d.income_cents - d.expense_cents - d.fee_cents - d.amount_cents - d.reserve_cents AS owed_cents
+       FROM ${effective("owner_distributions")} AS d JOIN ${effective("owner_entities")} AS e ON e.id = d.owner_entity_id JOIN ${effective("owners")} AS o ON o.id = e.owner_id
+       WHERE d.id = ?2`,
+    )
+    .bind(ws, distributionId)
+    .first<{ id: string; owner_entity_id: string; owner_id: string; owner_name: string; entity_name: string; period: string; owed_cents: number }>();
+  if (!d) return { status: 404, error: "Statement not found" };
+  const denied = forbidden(actor, ["owners"], null);
+  if (denied) return denied;
+  if (!(amountCents > 0)) return { status: 400, error: "Amount must be more than $0" };
+  const at = nowIso(nowMs);
+  const id = uid("tr");
+  const trust = `ba-${d.owner_entity_id}-trust`;
+  const key = `owner-adj:${d.id}`;
+  const statementOwed = `(SELECT d.income_cents - d.expense_cents - d.fee_cents - d.amount_cents - d.reserve_cents FROM ${effective("owner_distributions")} AS d WHERE d.id = ?3)`;
+  const steps: DbStatement[] = [
+    db
+      .prepare(
+        `INSERT INTO transfers (${TRANSFER_COLS})
+         SELECT ?1, ?2, ?4, 'Owner payout', ?5, ?6, 'trust', ?5, 'Operating trust', 'owner', ?7, ?8, ?9, (SELECT min(p.id) FROM ${effective("properties")} AS p WHERE p.owner_entity_id = ?6), 'Statement ' || ?10 || ' correction', 'Pending', ?11, ?12, NULL
+         WHERE ?9 > 0 AND ?9 = ${statementOwed} AND ?9 <= ${AVAILABLE_SQL("?5")}
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = ?4)
+         ON CONFLICT DO NOTHING`,
+      )
+      .bind(ws, id, d.id, key, trust, d.owner_entity_id, d.owner_id, d.owner_name, amountCents, d.period, at, nowMs + SETTLE_MS),
+    eventStmt(db, ws, at, "owner.adjustment_sent", "owner_distributions", d.id, null, { transfer_id: id, amount_cents: amountCents }, done(id)),
+    notifyStmt(db, ws, at, d.owner_id, "Statement correction", `A correction of ${dollars(amountCents)} to your ${d.period} statement for ${d.entity_name} is on its way.`, "/portal/owner/statements", ["owner_distributions", d.id], done(id)),
+    auditStmt(db, ws, at, actor, { action: "Owner statement correction paid", entityType: "owner_distributions", entityId: d.id, detail: `${dollars(amountCents)} to ${d.owner_name} for the ${d.period} statement (${d.entity_name})`, before: { owed_cents: d.owed_cents }, after: { owed_cents: 0 } }, done(id)),
+  ];
+  if (issueId)
+    steps.push(
+      db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?4", fixed_at: "?5" }, "e.status = 'open' AND e.rule_id = 'owner_distributions.rounding_cent' AND e.entity_id = ?6 AND EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, issueId, id, actor.personaId, at, d.id),
+    );
+  const [insert] = await db.batch(steps);
+  if (insert.meta.changes) return { status: 200, message: `${dollars(amountCents)} correction is on its way to ${d.owner_name}.` };
+  if (await transferAt(db, ws, key)) return { status: 409, error: `The ${d.period} statement correction is already paid.` };
+  return { status: 409, error: d.owed_cents <= 0 ? `The ${d.period} statement doesn't owe anything.` : `The ${d.period} statement owes ${dollars(d.owed_cents)}, not ${dollars(amountCents)}.` };
+}

@@ -6,7 +6,7 @@ import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { chargeStatusSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
-import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payRent, postLateFees, recordPayment, settle } from "./money";
+import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
 import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
@@ -274,6 +274,26 @@ describe("money", { timeout: 60_000 }, () => {
     await payRent(c, ch!.id);
     await settle(db, c.ws, T0 + SETTLE_MS);
     expect((await ownerStatement(c, "oe01")).net_cents).toBeGreaterThan(0);
+  });
+
+  it("owner statement correction: pays the rounding cent once, without closing the open statement", async () => {
+    const c = await ctx(grace);
+    const issue = (await one<{ id: string; entity_id: string }>("SELECT id, entity_id FROM data_issues WHERE workspace_id = 'base' AND rule_id = 'owner_distributions.rounding_cent' AND status = 'open'"))!;
+    const oe = (await one<{ owner_entity_id: string }>("SELECT owner_entity_id FROM owner_distributions WHERE workspace_id = 'base' AND id = ?1", issue.entity_id))!.owner_entity_id;
+    const before = await ownerStatement(c, oe);
+    const trust = await available(c.ws, `ba-${oe}-trust`);
+    expect(await payOwnerAdjustment({ ...c, actor: marcus }, issue.entity_id, 1)).toMatchObject({ status: 403 });
+    expect(await payOwnerAdjustment(c, issue.entity_id, 2)).toMatchObject({ status: 409, error: expect.stringContaining("owes $0.01") });
+    const twice = await Promise.all([payOwnerAdjustment(c, issue.entity_id, 1, issue.id), payOwnerAdjustment(c, issue.entity_id, 1, issue.id)]);
+    expect(twice.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await available(c.ws, `ba-${oe}-trust`)).toBe(trust - 1);
+    // The open statement is unchanged: the correction doesn't count as a period close.
+    expect(await ownerStatement(c, oe)).toEqual(before);
+    expect((await get<{ status: string }>(c, "data_issues", issue.id))?.status).toBe("fixed");
+    expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Owner statement correction paid'", c.ws)).toBe(1);
+    // A full distribution still pays exactly the open net afterwards.
+    expect(await distributeOwner(c, oe, "after-adj")).toMatchObject({ status: 200 });
+    expect((await ownerStatement(c, oe)).net_cents).toBe(0);
   });
 
   it("late fees: posted once per lease and month, capped by the state rule", async () => {
