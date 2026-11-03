@@ -1,10 +1,11 @@
 import "server-only";
 import Link from "next/link";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, Info } from "lucide-react";
 import { can } from "@/entities";
 import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
-import { formatDate } from "@/lib/format";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { QueryCtx } from "@/server/query";
 import { leaseFor, leaseLedger, leasesOfHousehold, settleDue } from "../queries";
@@ -51,14 +52,20 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
 
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-5">
         {figures.map((f) => (
-          <Link key={f.label} href={f.href} title={f.hint} className="group bg-card px-3 py-2 hover:bg-muted/40">
-            <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
-            <dd className={cn("mt-0.5 text-[15px] font-medium tabular-nums group-hover:underline", f.strong && "font-semibold", f.tone === "danger" && "text-tone-danger")}><Money value={f.value} cents tone="none" /></dd>
-          </Link>
+          <div key={f.label} className="bg-card px-3 py-2">
+            <dt className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              {f.label}
+              <Tooltip>
+                <TooltipTrigger asChild><button type="button" aria-label={`What ${f.label} includes`} className="rounded text-muted-foreground/60 hover:text-foreground"><Info className="size-3" /></button></TooltipTrigger>
+                <TooltipContent className="max-w-64">{f.hint}</TooltipContent>
+              </Tooltip>
+            </dt>
+            <dd className="mt-0.5"><Link href={f.href} aria-label={`${f.label}: ${formatMoney(f.value / 100)}. Show the rows`} className={cn("text-[15px] font-medium tabular-nums hover:underline", f.strong && "font-semibold", f.tone === "danger" && "text-tone-danger")}><Money value={f.value} cents tone="none" /></Link></dd>
+          </div>
         ))}
       </dl>
       {totals.nsf > 0 && (
-        <p className="flex items-center gap-1.5 text-[12.5px] text-tone-warning"><CircleAlert className="size-3.5" />{totals.nsf} returned payment{totals.nsf === 1 ? "" : "s"} on this lease. Returned payments show struck through and don’t reduce the balance.</p>
+        <p className="flex items-center gap-1.5 text-[12.5px]"><CircleAlert className="size-3.5 text-tone-warning" />{totals.nsf} returned payment{totals.nsf === 1 ? "" : "s"} on this lease. Returned payments show struck through and don’t reduce the balance.</p>
       )}
 
       {rows.length === 0 ? <EmptyState compact kind="table" title="No ledger activity yet" description="Charges appear here when rent is billed." /> : (
@@ -78,14 +85,14 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
             </thead>
             <tbody>
               {newestFirst.map((r) => (
-                <tr key={`${r.kind}-${r.id}`} id={r.id} className={cn("h-[var(--row-h,36px)] border-t", r.id === highlight && "bg-primary/[0.06]", r.nsf && "text-muted-foreground")}>
+                <tr key={`${r.kind}-${r.id}`} id={r.id} className={cn("h-[var(--row-h,36px)] scroll-mt-10 border-t", r.id === highlight && "bg-primary/[0.06]", r.nsf && "text-muted-foreground")}>
                   <td className="whitespace-nowrap px-3 tabular-nums text-muted-foreground">{formatDate(r.date, "always")}</td>
                   <td className="max-w-0 px-3 py-1.5">
                     <Link href={r.href} className={cn("block truncate font-medium hover:text-primary hover:underline", r.nsf && "line-through")}>{r.description}</Link>
                     {r.detail && <span className="block truncate text-[11.5px] text-muted-foreground">{r.detail}</span>}
                   </td>
                   <td className="px-3 text-right">{r.debit ? <Money value={r.debit} cents tone="none" /> : null}</td>
-                  <td className="px-3 text-right">{r.kind !== "charge" ? <Money value={r.nsf ? -0 : r.credit} cents tone="none" className={cn(r.nsf && "line-through")} /> : null}{r.nsf && <span className="sr-only">returned, not counted</span>}</td>
+                  <td className="px-3 text-right">{r.kind !== "charge" ? <Money value={r.nsf ? r.returned : r.credit} cents tone="none" className={cn(r.nsf && "line-through")} /> : null}{r.nsf && <span className="sr-only">returned, not counted</span>}</td>
                   <td className="px-3 text-right font-medium"><Money value={r.balance} cents tone="none" /></td>
                   <td className="px-3">{r.status ? <StatusBadge value={r.status} /> : null}{r.kind === "charge" && (r.open ?? 0) > 0 && r.status !== "Due" && <span className="ml-1.5 text-[11.5px] text-muted-foreground tabular-nums"><Money value={r.open} cents tone="none" /> open</span>}</td>
                   {canRecord && (
@@ -99,7 +106,7 @@ export async function LedgerView({ ctx, leaseId, highlight, switchHref }: { ctx:
           </table>
         </div>
       )}
-      <p className="text-[11.5px] text-muted-foreground">{rows.length} entries · newest first · balance runs oldest to newest</p>
+      <p className="text-[11.5px] text-muted-foreground">{rows.length} entries · newest first · the running balance adds up from the oldest entry</p>
     </div>
   );
 }

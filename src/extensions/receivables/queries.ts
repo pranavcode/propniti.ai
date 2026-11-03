@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
@@ -24,7 +25,7 @@ export const BUCKETS = [
 export type BucketKey = (typeof BUCKETS)[number]["key"];
 
 // Portfolio-wide reads (aging, delinquent lists, deposits in transit) are staff-only. A portal
-// persona ("self" scope) is scoped to a whole property, which would show the neighbours.
+// persona ("self" scope) is scoped to a whole property, which would show the neighbors.
 export const isSelfScope = (actor: Actor) => actor.scope.kind === "self";
 
 const scopeSql = (actor: Actor, col: string) => (actor.propertyIds === "all" ? { sql: "1 = 1", params: [] as unknown[] } : { sql: `${col} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(actor.propertyIds)] });
@@ -122,12 +123,14 @@ export async function delinquentLeases(ctx: QueryCtx, f: { property?: string; bu
 
 export type LedgerEntry = {
   id: string; kind: "charge" | "payment" | "credit"; date: string; description: string; detail: string;
-  debit: number; credit: number; balance: number; open?: number; status?: string; nsf?: boolean; href: string; charge_id?: string | null;
+  debit: number; credit: number; balance: number; open?: number; status?: string; nsf?: boolean; returned?: number; href: string; charge_id?: string | null;
 };
 export type LeaseHeader = { id: string; property_id: string; property: string; unit: string; unit_id: string; household_id: string; household: string; status: string; start_on: string; end_on: string | null; move_out_on: string | null; rent_cents: number; deposit_cents: number; state: string };
 
 // The lease if the actor may see it: in scope, and for a resident only their own household's.
-export async function leaseFor(ctx: QueryCtx, leaseId: string): Promise<LeaseHeader | null> {
+// Cached per request: the ledger page and its LedgerView both resolve the same lease.
+export const leaseFor = cache(leaseForUncached);
+async function leaseForUncached(ctx: QueryCtx, leaseId: string): Promise<LeaseHeader | null> {
   const lease = await ctx.db
     .prepare(
       `SELECT l.id, l.property_id, p.name AS property, p.state, u.number AS unit, l.unit_id, l.household_id, h.name AS household, l.status, l.start_on, l.end_on, l.move_out_on, l.rent_cents, l.deposit_cents
@@ -179,7 +182,7 @@ export async function leaseLedger(ctx: QueryCtx, leaseId: string) {
     c.open_cents <= 0 ? "Paid" : processing.has(c.id) ? "Processing" : c.date < AS_OF ? "Overdue" : c.open_cents < c.amount_cents ? "Partial" : "Due";
   const entries: Omit<LedgerEntry, "balance">[] = [
     ...charges.results.map((c) => ({ ...c, open_cents: c.amount_cents - (applied.get(c.id) ?? 0) })).map((c) => ({ id: c.id, kind: "charge" as const, date: c.date, description: c.description, detail: [c.gl, c.period].filter(Boolean).join(" · "), debit: c.amount_cents, credit: 0, open: Math.max(0, c.open_cents), status: status(c), href: `/app/receivables/charges/${c.id}` })),
-    ...payments.results.map((p) => ({ id: p.id, kind: "payment" as const, date: p.date, description: `Payment · ${p.method}`, detail: [p.reference, p.charge_id ? `applied to ${p.charge_id}` : "unapplied"].filter(Boolean).join(" · "), debit: 0, credit: p.nsf ? 0 : p.amount_cents, nsf: !!p.nsf, status: p.nsf ? "Returned" : undefined, href: `/app/receivables/payments/${p.id}`, charge_id: p.charge_id })),
+    ...payments.results.map((p) => ({ id: p.id, kind: "payment" as const, date: p.date, description: `Payment · ${p.method}`, detail: [p.reference, p.charge_id ? `applied to ${p.charge_id}` : "unapplied"].filter(Boolean).join(" · "), debit: 0, credit: p.nsf ? 0 : p.amount_cents, returned: p.nsf ? p.amount_cents : undefined, nsf: !!p.nsf, status: p.nsf ? "Returned" : undefined, href: `/app/receivables/payments/${p.id}`, charge_id: p.charge_id })),
     ...credits.results.map((x) => ({ id: x.id, kind: "credit" as const, date: x.date, description: `${x.kind} · ${x.description}`, detail: x.charge_id ? `against ${x.charge_id}` : "", debit: 0, credit: x.amount_cents, href: `/app/receivables/credits/${x.id}`, charge_id: x.charge_id })),
   ];
   // Same day: charges first, so a payment on its due date nets to zero instead of dipping negative.
