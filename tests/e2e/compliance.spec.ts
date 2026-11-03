@@ -1,11 +1,13 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment -- see the next line */
-// @ts-nocheck -- @playwright/test is not a dependency yet (requested from the lead); remove once it is.
-import { expect, test } from "@playwright/test";
+import { expect as baseExpect, test } from "@playwright/test";
 
 // Compliance flow as the maintenance supervisor: dashboard → KPI drill-down → filtered list →
 // record with its actions. Run against a dev server: BASE_URL=http://localhost:3201.
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3201";
+// The shared dev server compiles pages on first hit; allow for it.
+test.use({ navigationTimeout: 180_000, actionTimeout: 60_000 });
+test.setTimeout(300_000);
+const expect = baseExpect.configure({ timeout: 60_000 });
 
 test.beforeEach(async ({ context }) => {
   await context.addCookies([{ name: "pn_as", value: "tom", url: BASE }]);
