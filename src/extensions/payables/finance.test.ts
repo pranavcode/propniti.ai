@@ -1,0 +1,97 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import "@/entities";
+import { getPersona } from "@/auth/personas";
+import { getAction } from "@/extensions/actions";
+import { openSqlite } from "@/lib/platform/sqlite";
+import type { Db } from "@/lib/platform/types";
+import { createRecord, getDef, getRow, list, metrics, writeSchema, type QueryCtx } from "@/server/query";
+import { resolveActor } from "@/server/permissions";
+import { runAction } from "@/app/api/e/_lib/actions";
+
+// Finance lane: every entity lists through the generic query layer, every metric runs on the
+// generated base, and the bill money flow (draft → submit → approve → pay) moves money once.
+
+const WS = "finance-test-workspace-0000001";
+const ENTITIES = ["bills", "recurring_bills", "vendor_1099s", "bank_accounts", "bank_transactions", "bank_reconciliations", "gl_accounts", "journal_entries", "budgets", "capex_projects", "utility_meters", "utility_bills"];
+const METRICS = ["payables.aging", "payables.open_ap", "payables.past_due", "payables.to_approve", "payables.paid_month", "payables.spend_by_gl", "accounting.trust_cash", "accounting.unreconciled", "accounting.income_expense", "accounting.budget_vs_actual", "accounting.capex_over", "accounting.capex_by_property", "accounting.utilities_by_month", "accounting.cash_forecast"];
+
+let db: Db;
+let ctx: QueryCtx;
+
+beforeAll(async () => {
+  db = openSqlite(":memory:");
+  await db.prepare("INSERT INTO workspaces (id, kind, created_at, last_seen_at) VALUES (?, 'demo', 0, 0)").bind(WS).run();
+  ctx = { db, ws: WS, actor: await resolveActor(db, getPersona("grace")!, WS) };
+}, 120_000);
+
+const write = () => ({ ...ctx, ws: WS, nowMs: Date.parse("2026-11-04T15:00:00Z") });
+
+describe("finance entities and metrics", () => {
+  it.each(ENTITIES)("lists %s for the accountant", async (e) => {
+    const r = await list(ctx, e, { size: 5 });
+    expect(r.page).toBe(1);
+    expect(r.rows.length).toBeLessThanOrEqual(5);
+  });
+
+  it.each(METRICS)("runs metric %s", async (k) => {
+    const m = await metrics(ctx, k);
+    expect(Array.isArray(m.points)).toBe(true);
+  });
+
+  it("forecasts 13 weeks from the trust balance", async () => {
+    const m = await metrics(ctx, "accounting.cash_forecast");
+    expect(m.points).toHaveLength(13);
+    expect(Number(m.previous)).toBeGreaterThan(0);
+  });
+
+  it("buckets open payables by age", async () => {
+    const m = await metrics(ctx, "payables.aging");
+    expect(m.points.map((p) => p.bucket)).toEqual(["Current", "1-30", "31-60", "61+"]);
+    expect(Number(m.value)).toBeGreaterThan(0);
+  });
+});
+
+describe("bill money flow", () => {
+  it("creates a draft, submits, approves and pays once on a double click", async () => {
+    const w = write();
+    const draft = await createRecord(w, "bills", { vendor_id: "v01", property_id: "p01", owner_entity_id: "oe01", invoice_number: "LSP-TEST-1", bill_date: "2026-11-03", due_on: "2026-12-03", amount: 480, status: "Draft" });
+    const id = String(draft.id);
+    const submit = await runAction(w, getAction("bills.submit")!, id, { lines: [{ description: "Replace kitchen faucet, unit 412", gl_account_id: "gl-6000", amount: 480 }] });
+    expect(submit.status).toBe(200);
+    expect((await getRow(ctx, "bills", id))?.status).toBe("Pending approval");
+    expect((await runAction(w, getAction("bills.approve")!, id, {})).status).toBe(200);
+    const pay = getAction("bills.pay")!;
+    const results = await Promise.all([runAction(w, pay, id, {}), runAction(w, pay, id, {})]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    const n = await db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = ?").bind(WS, `vendor:${id}`).first<{ n: number }>();
+    expect(n?.n).toBe(1);
+  });
+
+  it("refuses to create a bill in any status but Draft", async () => {
+    const schema = writeSchema(getDef("bills"), "accountant", "create");
+    const body = { vendor_id: "v01", property_id: "p01", owner_entity_id: "oe01", invoice_number: "X", bill_date: "2026-11-03", due_on: "2026-12-03", amount: 10 };
+    expect(schema.safeParse({ ...body, status: "Paid" }).success).toBe(false);
+    expect(schema.safeParse({ ...body, status: "Draft" }).success).toBe(true);
+  });
+
+  it("holds approval while a vendor's bank change is unverified, until someone confirms it", async () => {
+    const w = write();
+    await db.prepare("INSERT INTO vendors (workspace_id, id, company, trade, bank_last4, bank_changed_at, status) SELECT ?, id, company, trade, '0001', '2026-10-30T12:00:00Z', status FROM vendors WHERE workspace_id = 'base' AND id = 'v02'").bind(WS).run();
+    const draft = await createRecord(w, "bills", { vendor_id: "v02", property_id: "p01", owner_entity_id: "oe01", invoice_number: "HCH-TEST-9", bill_date: "2026-11-03", due_on: "2026-12-03", amount: 900, status: "Draft" });
+    const id = String(draft.id);
+    await runAction(w, getAction("bills.submit")!, id, { lines: [{ description: "Compressor", gl_account_id: "gl-6000", amount: 900 }] });
+    const refused = await runAction(w, getAction("bills.approve")!, id, {});
+    expect(refused.status).toBe(409);
+    expect(await runAction(w, getAction("bills.confirm_vendor_bank")!, id, { spoke_with: "Dana Whitaker", phone_on_file: true })).toMatchObject({ status: 200 });
+    expect((await runAction(w, getAction("bills.approve")!, id, {})).status).toBe(200);
+  });
+
+  it("recodes a line and records the before and after", async () => {
+    const w = write();
+    const bill = await db.prepare("SELECT b.id, l.id AS line FROM bills b JOIN bill_lines l ON l.bill_id = b.id AND l.workspace_id = 'base' WHERE b.workspace_id = 'base' AND l.gl_account_id = 'gl-6100' AND b.property_id = 'p01' LIMIT 1").first<{ id: string; line: string }>();
+    const r = await runAction(w, getAction("bills.recode")!, bill!.id, { line_id: bill!.line, gl_account_id: "gl-6000" });
+    expect(r.status).toBe(200);
+    const line = await db.prepare("SELECT gl_account_id FROM bill_lines WHERE workspace_id = ? AND id = ?").bind(WS, bill!.line).first<{ gl_account_id: string }>();
+    expect(line?.gl_account_id).toBe("gl-6000");
+  });
+});

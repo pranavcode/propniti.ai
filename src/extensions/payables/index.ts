@@ -1,2 +1,6 @@
-// Actions, tabs, widgets and agents for the payables module (registerAction/registerTab/registerWidget/registerAgent).
-export {};
+// Actions, tabs, widgets and metrics for the payables module (finance lane).
+import "./metrics";
+import "./actions";
+import "./tabs";
+import "./widgets";
+import "./nav";
