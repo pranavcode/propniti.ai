@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { INTERNAL_ROLES, type Row } from "@/entities/types";
-import { get, isTable, list, parseJson, sql, TABLES, columns, type Filter, type Table } from "../data";
+import { get, list, parseJson, sql, TABLES, columns, type Filter, type Table } from "../data";
 import { delinquency, explainNoi, monthly } from "../facts";
 import type { AgentCtx } from "../runtime";
 import type { RunContext } from "../types";
@@ -23,12 +23,6 @@ export function slim(row: Row): Row {
     out[k] = typeof v === "string" && v.length > 300 ? v.slice(0, 300) + "…" : v;
   }
   return out;
-}
-
-export function labelOf(table: string, r: Row): string {
-  if (r.first_name) return `${r.first_name} ${r.last_name ?? ""}`.trim();
-  for (const k of ["name", "title", "company", "headline", "invoice_number", "number", "subject"]) if (r[k]) return String(r[k]);
-  return `${table} ${r.id}`;
 }
 
 const FilterSchema = z.object({
@@ -204,5 +198,3 @@ registerTool({
     return { approval_policies: policies, state_rules: rules, late_fee_policies: fees };
   },
 });
-
-export const isSearchable = (t: string): t is Table => isTable(t) && (SEARCHABLE as string[]).includes(t);
