@@ -6,7 +6,7 @@ import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { chargeStatusSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
-import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
+import { approveAndPayWorkOrder, approveBill, distributeOwner, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle } from "./money";
 import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
@@ -294,6 +294,21 @@ describe("money", { timeout: 60_000 }, () => {
     // A full distribution still pays exactly the open net afterwards.
     expect(await distributeOwner(c, oe, "after-adj")).toMatchObject({ status: 200 });
     expect((await ownerStatement(c, oe)).net_cents).toBe(0);
+  });
+
+  it("application fee: the applicant pays once into the property's trust; other applicants can't", async () => {
+    const c = await ctx();
+    const priyanka: Actor = { personaId: "applicant", name: "Priyanka Rao", role: "applicant", scope: { kind: "self", label: "Own application" }, propertyIds: [] };
+    const other = (await one<{ id: string }>("SELECT id FROM applications WHERE workspace_id = 'base' AND applicant_id <> 'apl-0001' AND stage = 'Screening' LIMIT 1"))!;
+    expect(await payApplicationFee({ ...c, actor: priyanka }, other.id)).toMatchObject({ status: 404 });
+    const trust = await available(c.ws, "ba-oe01-trust");
+    const twice = await Promise.all([payApplicationFee({ ...c, actor: priyanka }, "app-0001"), payApplicationFee({ ...c, actor: priyanka }, "app-0001")]);
+    expect(twice.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect((await get<{ fee_paid: number }>(c, "applications", "app-0001"))?.fee_paid).toBe(1);
+    await settle(db, c.ws, T0 + SETTLE_MS);
+    expect(await available(c.ws, "ba-oe01-trust")).toBe(trust + 5_500);
+    expect(await payApplicationFee({ ...c, actor: priyanka }, "app-0001")).toMatchObject({ status: 409, error: expect.stringContaining("already paid") });
+    expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Application fee paid'", c.ws)).toBe(1);
   });
 
   it("late fees: posted once per lease and month, capped by the state rule", async () => {

@@ -1,4 +1,4 @@
-import { PERMISSIONS } from "@/auth/personas";
+import { PERMISSIONS, getPersona } from "@/auth/personas";
 import type { ActionContext, Actor, ModuleKey } from "@/entities/types";
 import { MANAGEMENT_FEE_RATE, SETTLE_MS } from "@/lib/ledger";
 import type { Db, DbStatement } from "@/lib/platform/types";
@@ -514,4 +514,51 @@ export async function payOwnerAdjustment(ctx: ActionContext, distributionId: str
   if (insert.meta.changes) return { status: 200, message: `${dollars(amountCents)} correction is on its way to ${d.owner_name}.` };
   if (await transferAt(db, ws, key)) return { status: 409, error: `The ${d.period} statement correction is already paid.` };
   return { status: 409, error: d.owed_cents <= 0 ? `The ${d.period} statement doesn't owe anything.` : `The ${d.period} statement owes ${dollars(d.owed_cents)}, not ${dollars(amountCents)}.` };
+}
+
+// Application fee. Policy: the fee is the owner's income (management agreement), so it goes into
+// the property's operating trust as an Other receipt, by card, settling like rent. One fee per
+// application (key appfee:<application>), guarded on fee_paid = 0 in the same statement.
+export const APPLICATION_FEE_CENTS = 5_500;
+const APPLICATION_COLS = ["id", "deleted", "property_id", "unit_id", "listing_id", "applicant_id", "co_applicants", "stage", "desired_move_in", "rent_cents", "income_to_rent", "score", "scoring_factors", "recommendation", "decided_by", "decided_at", "fee_paid", "submitted_at"];
+export async function payApplicationFee(ctx: ActionContext, applicationId: string): Promise<Outcome> {
+  const { db, ws, nowMs, actor } = ctx;
+  const a = await db
+    .prepare(
+      `SELECT a.*, p.owner_entity_id, p.name AS property_name, ap.first_name || ' ' || ap.last_name AS applicant_name
+       FROM ${effective("applications")} AS a JOIN ${effective("properties")} AS p ON p.id = a.property_id JOIN ${effective("applicants")} AS ap ON ap.id = a.applicant_id
+       WHERE a.id = ?2`,
+    )
+    .bind(ws, applicationId)
+    .first<{ id: string; applicant_id: string; property_id: string; owner_entity_id: string; property_name: string; applicant_name: string; fee_paid: number; stage: string }>();
+  if (!a) return { status: 404, error: "Application not found" };
+  // Applicants pay only their own application; staff only within their properties.
+  if (actor.role === "applicant") {
+    if (getPersona(actor.personaId)?.record?.id !== a.applicant_id) return { status: 404, error: "Application not found" };
+  } else {
+    const denied = forbidden(actor, ["leasing"], a.property_id) && forbidden(actor, ["receivables"], a.property_id);
+    if (denied) return denied;
+  }
+  const at = nowIso(nowMs);
+  const id = uid("tr");
+  const trust = `ba-${a.owner_entity_id}-trust`;
+  const [insert] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO transfers (${TRANSFER_COLS})
+         SELECT ?1, ?2, 'appfee:' || a.id, 'Other receipt', ?4, ?5, 'applicant', a.applicant_id, ?6, 'trust', ?4, 'Operating trust', ?7, a.property_id, a.id, 'Pending', ?8, ?9, NULL
+         FROM ${effective("applications")} AS a
+         WHERE a.id = ?3 AND a.fee_paid = 0 AND a.stage NOT IN ('Denied', 'Withdrawn', 'Leased')
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'appfee:' || ?3)
+         ON CONFLICT DO NOTHING`,
+      )
+      .bind(ws, id, a.id, trust, a.owner_entity_id, a.applicant_name, APPLICATION_FEE_CENTS, at, nowMs + SETTLE_MS),
+    db.prepare(overlayUpsertSql("applications", APPLICATION_COLS, { fee_paid: "1" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, a.id, id),
+    eventStmt(db, ws, at, "application.fee_paid", "applications", a.id, a.property_id, { transfer_id: id, amount_cents: APPLICATION_FEE_CENTS }, done(id)),
+    notifyStmt(db, ws, at, a.applicant_id, "Application fee received", `We received your ${dollars(APPLICATION_FEE_CENTS)} application fee for ${a.property_name}.`, "/portal/applicant", ["applications", a.id], done(id)),
+    auditStmt(db, ws, at, actor, { action: "Application fee paid", entityType: "applications", entityId: a.id, propertyId: a.property_id, detail: `${dollars(APPLICATION_FEE_CENTS)} from ${a.applicant_name} into the operating trust` }, done(id)),
+  ]);
+  if (insert.meta.changes) return { status: 200, message: `${dollars(APPLICATION_FEE_CENTS)} application fee paid.` };
+  if (a.fee_paid || (await transferAt(db, ws, `appfee:${a.id}`))) return { status: 409, error: "The application fee is already paid." };
+  return { status: 409, error: `This application is ${a.stage.toLowerCase()}; no fee is due.` };
 }
