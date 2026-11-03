@@ -3,6 +3,7 @@
 import { Bot, History, Landmark, ShieldCheck, UserRound, Workflow } from "lucide-react";
 import { ROLES, type Role } from "../types";
 import { AS_OF } from "../common";
+import { PERMISSIONS } from "@/auth/personas";
 import { registerEntity } from "../registry";
 
 // Settings is org configuration: admins change it, leaders read it (PERMISSIONS gates the module).
@@ -231,6 +232,8 @@ registerEntity({
   // Rows tied to a property follow the reader's property scope. Org-level rows (settings
   // changes, no property) only reach region-scoped readers through the settings pages.
   scopePath: "audit.property_id",
+  // Org-level changes (settings, policies, rules) have no property: anyone with settings access sees them.
+  scopeNullVisible: (role) => (PERMISSIONS[role].settings ?? "none") !== "none",
   fields: {
     at: { type: "datetime", label: "When", sortable: true, list: { default: true, width: 150 } },
     actor: { type: "text", label: "Who", facet: true, search: true, sortable: true, list: { default: true } },
