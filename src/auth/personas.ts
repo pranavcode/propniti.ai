@@ -87,7 +87,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "tom", name: "Tom Alvarez", title: "Maintenance supervisor", role: "maintenance_supervisor",
-    scope: TEXAS, home: "/app/maintenance/work-orders",
+    scope: TEXAS, home: "/app/maintenance",
     quickActions: [
       { label: "Unassigned work orders", href: "/app/maintenance/work-orders?f.status=New" },
       { label: "Make-ready board", href: "/app/maintenance/turnovers" },
