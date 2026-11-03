@@ -46,7 +46,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "marcus", name: "Marcus Bell", title: "Property manager", role: "property_manager",
-    scope: AUSTIN3, home: "/app",
+    scope: AUSTIN3, home: "/app/today",
     quickActions: [
       { label: "Record payment", href: "/app/receivables/payments?new=1" },
       { label: "New work order", href: "/app/maintenance/work-orders?new=1" },
