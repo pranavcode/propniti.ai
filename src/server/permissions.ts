@@ -45,6 +45,9 @@ export async function actorFor(db: Db, ws: string | null, persona: Persona): Pro
   return { personaId: persona.id, name: persona.name, role: persona.role, scope: persona.scope, propertyIds: await scopeProperties(db, ws, persona) };
 }
 
+// Same, for callers without a workspace (lane E's AI session): base data only.
+export const resolveActor = (db: Db, persona: Persona, ws: string | null = null) => actorFor(db, ws, persona);
+
 // Settings → Roles: one row per entity, one cell per role, generated from the defs.
 export type MatrixCell = { read: boolean; create: boolean; update: boolean; delete: boolean; actions: string[] };
 export type MatrixRow = { entity: EntityKey; label: string; module: ModuleKey; writes: string; cells: Record<Role, MatrixCell> };
