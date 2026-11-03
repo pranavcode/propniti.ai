@@ -54,7 +54,7 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
                 <p className="text-[12.5px] font-medium">{explanation.title}</p>
                 <AIBadge source={explanation.source} model={explanation.model} size="xs" />
               </div>
-              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[12.5px] leading-relaxed">{explanation.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
+              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[12.5px] leading-relaxed">{explanation.bullets.map((b) => <li key={b}>{b}</li>)}</ul>
               {explained && !explainKey?.includes("@") && (
                 <p className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
                   Months to look at:

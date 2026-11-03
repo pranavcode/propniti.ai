@@ -30,7 +30,11 @@ type Props = {
   canPay: boolean;
 };
 
-type Line = { description: string; gl_account_id: string; amount: string; proposal: ReturnType<typeof proposeGl> };
+type Line = { key: string; description: string; gl_account_id: string; amount: string; proposal: ReturnType<typeof proposeGl> };
+
+let lineSeq = 0;
+const newKey = () => `line-${++lineSeq}`;
+const blankLine = (): Line => ({ key: newKey(), description: "", gl_account_id: "", amount: "", proposal: null });
 type Stage = { billId: string; status: string } | null;
 
 const addDays = (d: string, n: number) => new Date(Date.parse(d) + n * 86_400_000).toISOString().slice(0, 10);
@@ -46,7 +50,7 @@ export function matchVendor(name: string, vendors: VendorFacts[]): VendorFacts |
 function toLines(src: { description: string; gl_account_id?: string; amount: number }[], vendor: VendorFacts | null, gls: GlOption[]): Line[] {
   return src.map((l) => {
     const proposal = vendor ? proposeGl(vendor, l.description, gls) : null;
-    return { description: l.description, gl_account_id: l.gl_account_id || proposal?.gl_account_id || "", amount: l.amount.toFixed(2), proposal };
+    return { key: newKey(), description: l.description, gl_account_id: l.gl_account_id || proposal?.gl_account_id || "", amount: l.amount.toFixed(2), proposal };
   });
 }
 
@@ -107,6 +111,10 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
     return () => { clearTimeout(t); ctl.abort(); };
   }, [vendorId, invoice, excludeId]);
 
+  // Free the uploaded file's object URL when it's replaced or the workspace closes.
+  const uploadUrl = upload?.url;
+  useEffect(() => () => { if (uploadUrl) URL.revokeObjectURL(uploadUrl); }, [uploadUrl]);
+
   const setVendor = (id: string) => {
     setVendorId(id);
     const v = vendors.find((x) => x.id === id) ?? null;
@@ -124,7 +132,6 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
 
   async function readUpload(file: File) {
     if (file.size > 4 * 1024 * 1024) return toast.error("That file is over 4 MB. Upload a smaller scan.");
-    if (upload) URL.revokeObjectURL(upload.url);
     setUpload({ url: URL.createObjectURL(file), mime: file.type, name: file.name });
     setUploadState("reading");
     setUploadNote(null);
@@ -137,7 +144,7 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
       if (!out.invoice || out.source === "mock") {
         setUploadState("manual");
         setUploadNote(out.note ?? "No vision model is configured, so the invoice can't be read automatically.");
-        setLines([{ description: "", gl_account_id: "", amount: "", proposal: null }]);
+        setLines([blankLine()]);
         return;
       }
       const inv = out.invoice;
@@ -154,7 +161,7 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
     } catch (e) {
       setUploadState("manual");
       setUploadNote(e instanceof Error ? e.message : "The file couldn't be read.");
-      setLines([{ description: "", gl_account_id: "", amount: "", proposal: null }]);
+      setLines([blankLine()]);
     }
   }
 
@@ -272,7 +279,7 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
                     const differs = p && l.gl_account_id && p.gl_account_id !== l.gl_account_id;
                     const pgl = p ? gls.find((g) => g.id === p.gl_account_id) : null;
                     return (
-                      <li key={i} className="flex flex-col gap-1.5 rounded-md border bg-background p-2">
+                      <li key={l.key} className="flex flex-col gap-1.5 rounded-md border bg-background p-2">
                         <div className="flex gap-1.5">
                           <Input value={l.description} disabled={locked} onChange={(e) => setLine(i, { description: e.target.value })} placeholder="Description…" aria-label={`Line ${i + 1} description`} className="flex-1" />
                           <Input value={l.amount} disabled={locked} inputMode="decimal" onChange={(e) => setLine(i, { amount: e.target.value })} aria-label={`Line ${i + 1} amount`} className="w-28 text-right tabular-nums" />
@@ -300,7 +307,7 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
                     );
                   })}
                 </ol>
-                {!locked && <Button size="sm" variant="ghost" className="self-start" onClick={() => setLines((ls) => [...ls, { description: "", gl_account_id: "", amount: "", proposal: null }])}><Plus /> Add line</Button>}
+                {!locked && <Button size="sm" variant="ghost" className="self-start" onClick={() => setLines((ls) => [...ls, blankLine()])}><Plus /> Add line</Button>}
               </div>
             </div>
           )}
