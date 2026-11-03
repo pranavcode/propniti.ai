@@ -41,7 +41,7 @@ export function TechJobCard({ job, photos }: { job: TechJob; photos: { url: stri
         <ChevronDown className={cn("mt-1 size-4 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="space-y-3 border-t px-3.5 pt-3 pb-3.5">
+        <div className="flex flex-col gap-3 border-t px-3.5 pt-3 pb-3.5">
           {job.description && <p className="text-[13px] leading-relaxed">{job.description}</p>}
           <dl className="grid grid-cols-2 gap-2 text-[12px]">
             <div><dt className="text-muted-foreground">Due</dt><dd className={cn("font-medium", job.past_sla && "text-tone-danger")}>{job.sla_due_at ? formatRelative(job.sla_due_at) : "No SLA"}</dd></div>

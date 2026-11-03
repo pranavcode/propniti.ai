@@ -77,7 +77,7 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
 
   return (
     <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]" data-tour="mx-intake">
-      <div className="space-y-4 rounded-lg border bg-card p-4">
+      <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-[12.5px] font-medium">Property
             <select className={cn(FIELD, "h-9")} value={property} onChange={(e) => { setProperty(e.target.value); setUnit(""); }} disabled={busy} required>
@@ -118,7 +118,7 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
       <aside className="flex flex-col gap-3">
         <div className="rounded-lg border border-tone-ai/25 bg-tone-ai/[0.04] p-4">
           <h2 className="flex items-center gap-1.5 text-[13px] font-semibold"><Sparkles className="size-4 text-tone-ai" />What happens next</h2>
-          <ol className="mt-2 space-y-2">
+          <ol className="mt-2 flex flex-col gap-2">
             {STEPS.map((s, i) => {
               const at = STEPS.findIndex((x) => x.key === step);
               const done = busy && i < at;

@@ -50,7 +50,7 @@ export default async function MyJobs({ searchParams }: Props) {
         )}
       </PageHeader>
       <PageBody>
-        <div data-tour="mx-tech" className="mx-auto w-full max-w-xl space-y-3">
+        <div data-tour="mx-tech" className="mx-auto w-full max-w-xl flex flex-col gap-3">
           {jobs.length ? jobs.map((j) => <TechJobCard key={j.id} job={j} photos={photos} />)
             : <EmptyState title={tech ? "No open jobs" : "No technicians with open jobs"} description={tech ? "New in-house jobs show here as soon as they're dispatched." : "Dispatch a request to an in-house technician from the triage page."} action={{ label: "Back to maintenance", href: "/app/maintenance" }} />}
         </div>

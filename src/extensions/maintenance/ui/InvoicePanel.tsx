@@ -61,7 +61,7 @@ export function InvoiceEntry({ woId, initial, poLines }: { woId: string; initial
     });
 
   return (
-    <div className="space-y-3 p-3">
+    <div className="flex flex-col gap-3 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" aria-label="Invoice file"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f); e.target.value = ""; }} />
@@ -143,8 +143,8 @@ export function ApprovePay({ woId, amount, vendor, validation, policy, blocked }
             <DialogDescription>Paid from the property&apos;s trust account by ACH, arriving in 1 to 2 business days. The payment can only be made once.</DialogDescription>
           </DialogHeader>
           {needsNote && (
-            <div className="space-y-2">
-              <ul className="list-disc space-y-0.5 pl-5 text-[12.5px] text-tone-danger">{validation.issues.map((i) => <li key={i}>{i}</li>)}</ul>
+            <div className="flex flex-col gap-2">
+              <ul className="list-disc.5 pl-5 text-[12.5px] text-tone-danger">{validation.issues.map((i) => <li key={i}>{i}</li>)}</ul>
               <label className="grid gap-1 text-[12.5px]">Why pay despite these issues? (recorded in the audit log)
                 <textarea className={cn(FIELD, "h-20 py-1.5")} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Vendor called: trip charge agreed by phone with Marcus on Nov 2." />
               </label>

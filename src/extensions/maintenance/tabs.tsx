@@ -57,9 +57,9 @@ registerTab({
     if (!events.length) return <EmptyState compact kind="table" title="No updates yet" description="Dispatches, status changes, time, invoices and approvals show here as they happen." />;
     const minutes = events.filter((e) => e.kind === "Time").reduce((a, e) => a + Number(parse<{ minutes?: number }>(e.detail, {}).minutes ?? 0), 0);
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {minutes > 0 && <p className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground"><Clock className="size-3.5" />{Math.floor(minutes / 60)} h {minutes % 60} min logged on this job</p>}
-        <ol className="relative space-y-0 border-l pl-4">
+        <ol className="relative border-l pl-4">
           {events.map((e) => {
             const d = parse<Record<string, unknown>>(e.detail, {});
             const agent = e.actor_kind === "agent";
@@ -109,7 +109,7 @@ registerTab({
                     {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public */}
                     <img src={String(p.url).replace(/(?<!-400)\.webp$/, "-400.webp")} alt={String(p.caption || "Work order photo")} className="aspect-[4/3] w-full object-cover" loading="lazy" />
                   </a>
-                  <div className="space-y-1 p-2">
+                  <div className="flex flex-col gap-1 p-2">
                     <p className="flex items-center justify-between gap-2 text-[12.5px]"><span className="truncate font-medium">{String(p.caption || "Photo")}</span><StatusBadge value={p.stage ?? "Photo"} tone="neutral" dot={false} /></p>
                     <PhotoCheckBadge result={p.check_result as string | null} confidence={p.check_confidence as number | null} note={p.check_note as string | null} />
                     {p.check_note ? <p className="text-[11.5px] leading-snug text-muted-foreground">{String(p.check_note)}</p> : null}
@@ -147,7 +147,7 @@ registerTab({
     const status = String(row.status);
     const poByGroup = new Map((po?.lines ?? []).map((l) => [l.description.toLowerCase().split(/[\s,:;(-]+/)[0], l.amount_cents]));
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="grid gap-3 lg:grid-cols-2">
           <Section title={po ? <>Purchase order <Link href={`/app/maintenance/purchase-orders/${po.id}`} className="font-normal text-primary hover:underline">{po.number}</Link></> : "Purchase order"} aside={po && <StatusBadge value={po.status} />}>
             {po ? (
@@ -183,8 +183,8 @@ registerTab({
         ) : v ? (
           <Section title={<span className="flex items-center gap-2">PO check <AIBadge source="rules" size="xs" /></span>} aside={<StatusBadge value={v.decision === "approve" ? "Matches PO" : `${v.issues.length} to review`} tone={v.decision === "approve" ? "success" : "warning"} />}>
             <div className="grid gap-3 p-3 md:grid-cols-2">
-              <ul className="space-y-1 text-[12.5px]">{v.matched.map((m) => <li key={m} className="flex gap-1.5"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-tone-success" />{m}</li>)}</ul>
-              <ul className="space-y-1 text-[12.5px]">{v.issues.length ? v.issues.map((m) => <li key={m} className="flex gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-tone-warning" />{m}</li>) : <li className="text-muted-foreground">No issues found.</li>}</ul>
+              <ul className="flex flex-col gap-1 text-[12.5px]">{v.matched.map((m) => <li key={m} className="flex gap-1.5"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-tone-success" />{m}</li>)}</ul>
+              <ul className="flex flex-col gap-1 text-[12.5px]">{v.issues.length ? v.issues.map((m) => <li key={m} className="flex gap-1.5"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-tone-warning" />{m}</li>) : <li className="text-muted-foreground">No issues found.</li>}</ul>
             </div>
             {status === "Submitted" && canWrite && (
               <ApprovePay woId={id} amount={submission!.total_cents / 100} vendor={String(row.vendor_id__label ?? "the vendor")} validation={v} policy={policyCheck(submission!.total_cents, pol)}
@@ -222,7 +222,7 @@ registerTab({
     const areas = [...new Set(items.map((i) => String(i.area)))];
     const bad = items.filter((i) => ["Damaged", "Missing"].includes(String(i.condition))).length;
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <p className="text-[12.5px] text-muted-foreground">{items.length} items across {areas.length} areas · {bad ? <span className="text-tone-danger">{bad} damaged or missing</span> : "nothing damaged"}{editable ? ". Changes save as you go." : ""}</p>
         <div className="grid gap-3 lg:grid-cols-2">
           {areas.map((area) => (
@@ -279,9 +279,9 @@ registerTab({
             ))}
           </ol>
         </Section>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <Section title="Checklist the technician follows">
-            {steps.length ? <ol className="list-decimal space-y-1 py-2 pr-3 pl-8 text-[13px]">{steps.map((s) => <li key={s}>{s}</li>)}</ol> : <p className="px-3 py-2 text-[12.5px] text-muted-foreground">No checklist steps on this schedule.</p>}
+            {steps.length ? <ol className="list-decimal flex flex-col gap-1 py-2 pr-3 pl-8 text-[13px]">{steps.map((s) => <li key={s}>{s}</li>)}</ol> : <p className="px-3 py-2 text-[12.5px] text-muted-foreground">No checklist steps on this schedule.</p>}
           </Section>
           <Section title="Recent work orders">
             {history.length ? (
@@ -410,7 +410,7 @@ registerTab({
       row.state === "In key box" ? all<{ id: string; company: string }>(db, `SELECT v.id, v.company FROM ${effective("vendors", ws)} v WHERE v.status = 'Active' ORDER BY v.company LIMIT 200`) : Promise.resolve([]),
     ]);
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {row.state === "In key box" && WRITERS.has(role) && (
           <Section title="Check out this key"><KeyCheckout keyId={id} people={[...staff.map((s) => ({ kind: "staff" as const, id: s.id, name: s.name })), ...vendors.map((v) => ({ kind: "vendor" as const, id: v.id, name: v.company }))]} /></Section>
         )}

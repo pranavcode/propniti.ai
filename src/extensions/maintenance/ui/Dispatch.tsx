@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, Loader2, ShieldAlert, ShieldCheck, Star, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AISuggestion } from "@/components/app/ai";
 import { StatusBadge } from "@/components/app/display";
 import { formatDate, formatMoney, formatPct } from "@/lib/format";
@@ -61,7 +62,7 @@ export function DispatchPanel({ wo, trade, suggestion, vendors, techs, policy }:
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {suggestion ? (
         <AISuggestion
           title={`${open ? "Suggested" : suggestion.queue_state === "auto_handled" ? "Applied within policy" : "Decided"}: ${suggestion.title.replace(/^[\w-]+: /, "")}`}
@@ -99,13 +100,12 @@ export function DispatchPanel({ wo, trade, suggestion, vendors, techs, policy }:
           </label>
         </div>
 
-        <div className="flex gap-1 border-b px-3 pt-2" role="tablist" aria-label="Who does the work">
-          {(["vendor", "tech"] as const).map((m) => (
-            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)} className={cn("-mb-px border-b-2 px-2.5 py-1.5 text-[13px]", mode === m ? "border-primary font-medium" : "border-transparent text-muted-foreground hover:text-foreground")}>
-              {m === "vendor" ? `Vendors · ${vendors.length}` : `In-house · ${techs.length}`}
-            </button>
-          ))}
-        </div>
+        <Tabs value={mode} onValueChange={(v) => setMode(v as "vendor" | "tech")} className="border-b px-3 pt-2">
+          <TabsList variant="line" aria-label="Who does the work">
+            <TabsTrigger value="vendor">Vendors · {vendors.length}</TabsTrigger>
+            <TabsTrigger value="tech">In-house · {techs.length}</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {mode === "vendor" ? (
           vendors.length ? (

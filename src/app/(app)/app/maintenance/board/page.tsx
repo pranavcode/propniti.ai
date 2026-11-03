@@ -127,7 +127,7 @@ function Calendar({ month, rows, sp }: { month: string; rows: Row[]; sp: Record<
   for (const r of rows) { const d = Number(String(r.day).slice(8, 10)); (byDay.get(d) ?? byDay.set(d, []).get(d)!).push(r); }
   const label = first.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   return (
-    <div data-tour="mx-board" className="space-y-2">
+    <div data-tour="mx-board" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <Button asChild size="icon-sm" variant="outline"><Link href={`/app/maintenance/board${qs(sp, { view: "calendar", month: addMonth(month, -1) })}`} aria-label="Previous month"><ChevronLeft /></Link></Button>
         <h2 className="w-40 text-center text-[14px] font-semibold">{label}</h2>
@@ -146,7 +146,7 @@ function Calendar({ month, rows, sp }: { month: string; rows: Row[]; sp: Record<
                 {d >= 1 && d <= daysIn && (
                   <>
                     <div className={cn("mb-1 flex size-5 items-center justify-center rounded-full text-[11.5px] tabular-nums", today ? "bg-primary font-semibold text-primary-foreground" : "text-muted-foreground")}>{d}</div>
-                    <ul className="space-y-0.5">
+                    <ul className=".5">
                       {items.slice(0, 3).map((w) => (
                         <li key={String(w.id)}>
                           <Link href={`/app/maintenance/work-orders/${encodeURIComponent(String(w.id))}`} title={`${w.id} · ${w.title} · ${w.property}`}

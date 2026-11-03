@@ -82,7 +82,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
               </>
             ) : null}
           </div>
-          <aside className="space-y-3">
+          <aside className="flex flex-col gap-3">
             <section className="rounded-lg border bg-card p-3">
               <h2 className="text-[12.5px] font-semibold">Request</h2>
               <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed">{String(wo.description || wo.title)}</p>
@@ -94,7 +94,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
                 <figure key={String(p.id)} className="border-b p-2 last:border-0">
                   {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public */}
                   <img src={String(p.url).replace(/(?<!-400)\.webp$/, "-400.webp")} alt={String(p.caption || "Request photo")} className="aspect-[4/3] w-full rounded object-cover" />
-                  <figcaption className="mt-1.5 space-y-0.5">
+                  <figcaption className="mt-1.5.5">
                     <PhotoCheckBadge result={p.check_result as string | null} confidence={p.check_confidence as number | null} note={p.check_note as string | null} />
                     {p.check_note ? <p className="text-[11.5px] text-muted-foreground">{String(p.check_note)}</p> : null}
                   </figcaption>
