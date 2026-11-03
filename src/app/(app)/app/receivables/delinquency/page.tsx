@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { staffSession } from "@/extensions/receivables/staff";
 import Link from "next/link";
 import { ArrowRight, X } from "lucide-react";
-import { currentSession } from "@/auth/session";
 import { can } from "@/entities";
 import { Money } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
@@ -22,7 +22,7 @@ const chargesHref = (f: Record<string, string>) => `/app/receivables/charges?${n
 
 export default async function DelinquencyPage({ searchParams }: Props) {
   const sp = toParams(await searchParams);
-  const session = await currentSession();
+  const session = await staffSession();
   if (!can(session.actor.role, "read", "charges")) return <main className="p-6"><EmptyState title="Delinquency isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></main>;
   const ctx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const bucket = BUCKETS.find((b) => b.key === sp.get("bucket"))?.key as BucketKey | undefined;

@@ -9,6 +9,8 @@ import { effective } from "@/server/effective";
 import { randomId } from "@/server/repo";
 import { resolveWorkspace } from "@/server/workspace";
 import "./actions";
+import { workbench } from "./collections";
+import { agingByProperty, delinquentLeases, depositsInTransit, leaseFor } from "./queries";
 
 // Receivables actions end to end on the generated base, each in its own visitor overlay. Ports the
 // v1 money guarantees: a double click moves money once, and the management fee is exactly the rate.
@@ -174,5 +176,24 @@ describe("payment posted to the wrong lease", () => {
     expect(await n(`SELECT ${chargeOpenSql("c")} AS n FROM ${effective("charges")} AS c WHERE c.id = ?2`, c.ws, target.id)).toBe(target.open - pay.amount_cents);
     expect(await n("SELECT count(*) AS n FROM data_fix_log WHERE workspace_id = ?1 AND issue_id = 'di-test'", c.ws)).toBe(1);
     expect((await one<{ status: string }>(`SELECT i.status FROM ${effective("data_issues")} AS i WHERE i.id = ?2`, c.ws, "di-test"))!.status).toBe("fixed");
+  });
+});
+
+describe("portal personas see no portfolio receivables", () => {
+  it("a resident gets no aging, delinquent list, deposits in transit or collections rows; a manager of the same property does", async () => {
+    const c = await ctx(resident);
+    const q = { db, ws: c.ws, actor: resident };
+    expect(await agingByProperty(q)).toEqual([]);
+    expect((await delinquentLeases(q, { page: 1, size: 25 })).rows).toEqual([]);
+    expect(await depositsInTransit(q)).toEqual({ count: 0, cents: 0 });
+    const wb = await workbench(q, { page: 1, size: 25 });
+    expect(wb.rows).toEqual([]);
+    expect(wb.total).toBe(0);
+    // Another household's ledger stays closed to the resident too.
+    const other = (await one<{ lease_id: string }>(`SELECT l.id AS lease_id FROM ${effective("leases")} AS l WHERE l.property_id = 'p01' AND l.household_id <> (SELECT household_id FROM ${effective("residents")} AS r WHERE r.id = 'res-p01-0001') LIMIT 1`, c.ws))!;
+    expect(await leaseFor(q, other.lease_id)).toBeNull();
+    const marcus: Actor = { personaId: "marcus", name: "Marcus Bell", role: "property_manager", scope: { kind: "property", ids: ["p01"], label: "" }, propertyIds: ["p01"] };
+    expect((await agingByProperty({ db, ws: c.ws, actor: marcus })).length).toBeGreaterThan(0);
+    expect((await delinquentLeases({ db, ws: c.ws, actor: marcus }, { page: 1, size: 5 })).rows.length).toBeGreaterThan(0);
   });
 });

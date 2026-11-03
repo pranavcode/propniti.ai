@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { staffSession } from "@/extensions/receivables/staff";
 import Link from "next/link";
-import { currentSession } from "@/auth/session";
 import { PERMISSIONS } from "@/auth/personas";
 import { can } from "@/entities";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
@@ -18,7 +18,7 @@ const usd = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency"
 
 export default async function CollectionsPage({ searchParams }: Props) {
   const sp = toParams(await searchParams);
-  const session = await currentSession();
+  const session = await staffSession();
   if (!can(session.actor.role, "read", "charges")) return <main className="p-6"><EmptyState title="Collections isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></main>;
   const band = ["High", "Medium", "Low"].includes(sp.get("band") ?? "") ? sp.get("band")! : undefined;
   const step = ["reminder", "plan", "legal"].includes(sp.get("step") ?? "") ? sp.get("step")! : undefined;

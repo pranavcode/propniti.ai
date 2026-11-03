@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { staffSession } from "@/extensions/receivables/staff";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { currentSession } from "@/auth/session";
 import { can } from "@/entities";
 import { Money } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
@@ -36,7 +36,7 @@ async function find(ctx: QueryCtx, q: string): Promise<Hit[]> {
 
 export default async function RecordPaymentPage({ searchParams }: Props) {
   const q = ((await searchParams).q ?? "").trim().slice(0, 80);
-  const session = await currentSession();
+  const session = await staffSession();
   if (!can(session.actor.role, "charges.record_payment", "charges")) return <main className="p-6"><EmptyState title="Recording payments isn't part of your role" description="Property managers and accountants record payments received in the office." action={{ label: "Go to your home", href: "/app" }} /></main>;
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const hits: Hit[] = q ? await find(ctx, q) : (await delinquentLeases(ctx, { page: 1, size: 6, sort: "days" })).rows.map((r) => ({ lease_id: r.lease_id, household: r.household, property: r.property, unit: r.unit, status: r.lease_status }));

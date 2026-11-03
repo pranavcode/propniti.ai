@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { staffSession } from "@/extensions/receivables/staff";
 import { notFound } from "next/navigation";
-import { currentSession } from "@/auth/session";
 import { can } from "@/entities";
 import { getPlatform } from "@/lib/platform";
 import { leaseFor } from "@/extensions/receivables/queries";
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function LeaseLedgerPage({ params, searchParams }: Props) {
   const lease = decodeURIComponent((await params).lease);
   const { highlight } = await searchParams;
-  const session = await currentSession();
+  const session = await staffSession();
   if (!can(session.actor.role, "read", "charges")) notFound();
   const ctx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const header = await leaseFor(ctx, lease);

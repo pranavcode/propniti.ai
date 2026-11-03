@@ -23,6 +23,10 @@ export const BUCKETS = [
 ] as const;
 export type BucketKey = (typeof BUCKETS)[number]["key"];
 
+// Portfolio-wide reads (aging, delinquent lists, deposits in transit) are staff-only. A portal
+// persona ("self" scope) is scoped to a whole property, which would show the neighbours.
+export const isSelfScope = (actor: Actor) => actor.scope.kind === "self";
+
 const scopeSql = (actor: Actor, col: string) => (actor.propertyIds === "all" ? { sql: "1 = 1", params: [] as unknown[] } : { sql: `${col} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(actor.propertyIds)] });
 
 // Open, past-due charges with their open amount and age (one row per charge).
@@ -45,6 +49,7 @@ const agingCache = new Map<string, { at: number; rows: AgingRow[] }>();
 const AGING_TTL_MS = 5 * 60_000;
 
 export async function agingByProperty(ctx: QueryCtx): Promise<AgingRow[]> {
+  if (isSelfScope(ctx.actor)) return [];
   const version = ctx.ws
     ? await ctx.db.prepare("SELECT (SELECT max(seq) FROM payments WHERE workspace_id = ?1) AS p, (SELECT max(seq) FROM credits WHERE workspace_id = ?1) AS c, (SELECT max(seq) FROM charges WHERE workspace_id = ?1) AS ch").bind(ctx.ws).first<Record<string, number | null>>()
     : null;
@@ -77,6 +82,7 @@ export type DelinquentLease = { lease_id: string; property_id: string; property:
 
 // Delinquent leases (drill-down from an aging cell), largest balance first, paginated.
 export async function delinquentLeases(ctx: QueryCtx, f: { property?: string; bucket?: BucketKey; page: number; size: number; sort?: "total" | "days" }) {
+  if (isSelfScope(ctx.actor)) return { rows: [] as DelinquentLease[], total: 0, totalCents: 0, page: f.page, size: f.size };
   const s = scopeSql(ctx.actor, "c.property_id");
   const where = [s.sql];
   const params = [...s.params];
@@ -217,6 +223,7 @@ export async function openCharges(ctx: QueryCtx, householdId: string) {
 // Money received but not yet cleared into trust: pending portal ACH (rent:<charge>) and today's
 // office payments in base batches that clear after the demo date.
 export async function depositsInTransit(ctx: QueryCtx) {
+  if (isSelfScope(ctx.actor)) return { count: 0, cents: 0 };
   const s = scopeSql(ctx.actor, "t.property_id");
   const r = await ctx.db
     .prepare(`SELECT count(*) AS n, coalesce(sum(t.amount_cents), 0) AS cents FROM transfers AS t WHERE t.workspace_id IN ('base', ?) AND t.kind = 'Rent' AND (t.status = 'Pending' OR substr(t.cleared, 1, 10) > '${AS_OF}') AND ${s.sql}`)

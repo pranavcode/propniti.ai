@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { staffSession } from "@/extensions/receivables/staff";
 import Link from "next/link";
 import { ArrowRight, Banknote, Gavel, Landmark, Scale } from "lucide-react";
-import { currentSession } from "@/auth/session";
 import { can } from "@/entities";
 import { ChartCard } from "@/components/app/dashboard/ChartCard";
 import { KpiCard } from "@/components/app/dashboard/KpiCard";
@@ -34,7 +34,7 @@ async function policies(ctx: QueryCtx): Promise<PolicyRow[]> {
 }
 
 export default async function ReceivablesPage() {
-  const session = await currentSession();
+  const session = await staffSession();
   const role = session.actor.role;
   if (!can(role, "read", "charges")) return <main className="p-6"><EmptyState title="Receivables isn't part of your role" description="Switch role from your avatar menu to see this area." action={{ label: "Go to your home", href: "/app" }} /></main>;
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
