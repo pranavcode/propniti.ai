@@ -12,6 +12,10 @@ export function formatValue(v: number | null | undefined, format: ValueFormat = 
   }
 }
 
+// Axis ticks: compact, but percent ticks keep one decimal (trimmed when whole) so a narrow range
+// such as 95.0–95.5% doesn't print "95%" twice.
+export const formatTick = (v: number, format?: ValueFormat) => (format === "pct" ? formatPct(v, 1) : formatValue(v, format, true));
+
 // Series colours follow the chart tokens, so light/dark and the brand accent stay consistent.
 export const SERIES_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 // Fixed order, never cycled: a sixth series and beyond share the neutral "Other" ink.

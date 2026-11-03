@@ -3,7 +3,7 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
-import { formatValue, seriesColor } from "./fmt";
+import { formatTick, formatValue, seriesColor } from "./fmt";
 import type { ChartKind, ChartPoint, ChartSeries } from "./types";
 
 // Recharts lives only in this module. ChartCard loads it with next/dynamic (ssr: false), so the
@@ -51,7 +51,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
   } : undefined;
   const cursor = onPoint ? "cursor-pointer" : undefined;
   const tooltip = <ChartTooltip cursor={kind === "line" || kind === "area" ? { stroke: "var(--border)" } : { fill: "var(--muted)", opacity: 0.5 }} content={<Tip series={series} x={x} />} />;
-  const yAxis = <YAxis tick={tick} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => formatValue(v, fmt, true)} />;
+  const yAxis = <YAxis tick={tick} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => formatTick(v, fmt)} />;
   const xAxis = <XAxis dataKey={x} tick={tick} tickLine={false} axisLine={false} tickMargin={8} minTickGap={16} />;
   const grid = <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />;
 
@@ -92,7 +92,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
       <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
         <BarChart data={data} layout="vertical" margin={{ left: 0, right: 12 }} onClick={click} barCategoryGap="22%">
           <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis type="number" tick={tick} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatValue(v, fmt, true)} />
+          <XAxis type="number" tick={tick} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatTick(v, fmt)} />
           <YAxis type="category" dataKey={x} tick={tick} tickLine={false} axisLine={false} width={132} interval={0} />
           {tooltip}
           {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={`var(--color-${s.key})`} radius={[0, 4, 4, 0]} isAnimationActive={false} />)}
@@ -129,7 +129,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
     <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
       <LineChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
         {/* Lines encode change, not magnitude, so the scale fits the data instead of starting at zero. */}
-        {grid}{xAxis}<YAxis tick={tick} tickLine={false} axisLine={false} width={52} domain={["auto", "auto"]} tickFormatter={(v: number) => formatValue(v, fmt, true)} />{tooltip}
+        {grid}{xAxis}<YAxis tick={tick} tickLine={false} axisLine={false} width={52} domain={["auto", "auto"]} tickFormatter={(v: number) => formatTick(v, fmt)} />{tooltip}
         {series.map((s) => <Line key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} strokeDasharray={s.dashed ? "4 4" : undefined} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} isAnimationActive={false} />)}
       </LineChart>
     </ChartContainer>
