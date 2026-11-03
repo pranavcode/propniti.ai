@@ -4,7 +4,7 @@ import type { Actor, AgentKey, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { openRun, runWithContext } from "@/ai/orchestrator";
 import { rejectProposal } from "@/ai/effects";
-import { checkDraft } from "@/ai/tools/write";
+import { checkDraft } from "@/ai/rules";
 import type { AgentCtx } from "@/ai/runtime";
 import { abstractByRules, ABSTRACT_FIELDS, compareAbstract, fillTemplate, leaseDocument, type AbstractKey, type Comparison, type Extracted } from "./lib";
 import { insertRow, leaseRecord, one, overlayWrite, sql } from "./server";

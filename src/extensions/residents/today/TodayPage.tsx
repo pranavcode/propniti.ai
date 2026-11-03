@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Bot, CalendarClock, CircleDollarSign, HeartP
 import { ApprovalsInbox } from "@/ai/ui/ApprovalsInbox";
 import { pageData } from "@/ai/ui/server";
 import { proposalsPage } from "@/ai/views";
-import { delinquency } from "@/ai/facts";
+import { agingByProperty } from "@/extensions/receivables/queries";
 import { metrics } from "@/server/query";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { ErrorBanner } from "@/components/app/states";
-import { formatDate } from "@/lib/format";
+import { formatDate, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { asOfDate, scopeIn, sql } from "../server";
 import { AskToday } from "./AskToday";
@@ -42,10 +42,10 @@ export async function TodayPage() {
   const { actor, persona } = session;
   const today = await asOfDate(ctx.db);
   const p = (col: string) => scopeIn(actor, col);
-  const props = actor.propertyIds === "all" ? undefined : actor.propertyIds;
 
   const [late, runs, auto, needs, leases, wo, threads, issues, insurance, unread, initialQueue, kColl, kExp, exp, woPri] = await Promise.all([
-    settle(delinquency(data, today, { minDays: 1, propertyIds: props, limit: 1000 }), { rows: [], total: 0, total_balance_cents: 0 }),
+    // Same live aging the receivables pages show (cached per scope), so the figures agree across modules.
+    settle(agingByProperty(ctx), []),
     settle(sql<{ agent_key: string; n: number }>(ctx, "SELECT agent_key, count(*) AS n FROM {agent_runs} WHERE started_at >= datetime(?, '-1 day') GROUP BY agent_key ORDER BY n DESC", [today]), []),
     settle(sql<{ n: number }>(ctx, `SELECT count(*) AS n FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= datetime(?, '-1 day') AND ${p("property_id").sql}`, [today, ...p("property_id").binds]), []),
     settle(sql<{ n: number; high: number }>(ctx, `SELECT count(*) AS n, sum(risk = 'High') AS high FROM {ai_proposals} pr WHERE queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = pr.id) AND ${p("pr.property_id").sql}`, p("pr.property_id").binds), []),
@@ -75,32 +75,30 @@ export async function TodayPage() {
   const unreadN = Number(unread[0]?.n ?? 0);
   const issueN = issues.reduce((a, i) => a + Number(i.n), 0);
   const lapsed = Number(insurance[0]?.lapsed ?? 0);
-  const thirtyPlus = late.rows.filter((r) => r.days_late >= 30).length;
-  // Aging from the same live balances as the briefing and the KPI, so the three always agree.
-  const aging = [["0-30", "d0_30"], ["31-60", "d31_60"], ["61-90", "d61_90"], ["90+", "d90p"]].map(([bucket, k]) => ({ bucket, label: `${bucket} days`, amount: late.rows.reduce((a, r) => a + r.aging[k as keyof typeof r.aging], 0) / 100 }));
-  const largest = [...late.rows].sort((a, b) => b.balance_cents - a.balance_cents)[0];
+  const sum = (k: "b0_30" | "b31_60" | "b61_90" | "b90p" | "total" | "households") => late.reduce((a, r) => a + Number(r[k]), 0);
+  const lateCents = sum("total"), lateHouseholds = sum("households"), over30 = sum("b31_60") + sum("b61_90") + sum("b90p");
+  const aging = ([["0-30", "b0_30"], ["31-60", "b31_60"], ["61-90", "b61_90"], ["90+", "b90p"]] as const).map(([bucket, k]) => ({ bucket, label: `${bucket} days`, amount: sum(k) / 100 }));
+  const worst = late[0];
   const soon30 = leases.filter((l) => String(l.end_on) <= new Date(Date.parse(today) + 30 * 86_400_000).toISOString().slice(0, 10)).length;
 
   // The briefing: what happened, then what needs you, most urgent first. Figures are computed here.
   const bullets: Bullet[] = [];
   if (runN) bullets.push({ icon: Bot, tone: "ai", text: <>Agents ran <b>{runN}</b> time{runN === 1 ? "" : "s"} in the last 24 hours{runs.length ? ` (${runs.slice(0, 3).map((r) => `${r.agent_key.replace(/_/g, " ")} ${r.n}`).join(", ")})` : ""} and handled <b>{autoN}</b> low-risk item{autoN === 1 ? "" : "s"} on their own.</>, href: "/app/ai/activity", cta: "See activity" });
   if (needN) bullets.push({ icon: Zap, tone: highN ? "danger" : "warning", text: <><b>{needN}</b> proposal{needN === 1 ? " needs" : "s need"} your decision{highN ? <>, <b>{highN}</b> high risk</> : ""}.</>, href: "/app/ai/approvals", cta: "Review" });
-  if (late.total) bullets.push({ icon: CircleDollarSign, tone: thirtyPlus ? "danger" : "warning", text: <><b>{late.total}</b> household{late.total === 1 ? " owes" : "s owe"} <b>{usd(late.total_balance_cents)}</b> past due{largest ? <>; largest is {largest.resident} at {largest.property} #{largest.unit}, <b>{usd(largest.balance_cents)}</b>, {largest.days_late} days late</> : ""}.</>, href: "/app/receivables/delinquency", cta: "Delinquency" });
+  if (lateCents) bullets.push({ icon: CircleDollarSign, tone: over30 ? "danger" : "warning", text: <><b>{lateHouseholds}</b> household{lateHouseholds === 1 ? " owes" : "s owe"} <b>{usd(lateCents)}</b> past due, <b>{usd(over30)}</b> of it over 30 days{worst && late.length > 1 ? <>; most at {worst.name} ({usd(Number(worst.total))})</> : ""}.</>, href: "/app/receivables/delinquency", cta: "Delinquency" });
   if (w.late || w.urgent) bullets.push({ icon: Wrench, tone: w.late ? "danger" : "warning", text: <><b>{w.open}</b> open work orders: <b>{w.urgent}</b> emergency or urgent, <b>{w.late}</b> past SLA.</>, href: `/app/maintenance/work-orders?view=past-sla`, cta: "Work orders" });
   if (leases.length) bullets.push({ icon: CalendarClock, tone: soon30 ? "warning" : "info", text: <><b>{leases.length}</b> lease{leases.length === 1 ? " ends" : "s end"} in the next 60 days with no renewal offer, <b>{soon30}</b> within 30 days.</>, href: "/app/leases?view=expiring-60", cta: "Leases" });
   if (unreadN) bullets.push({ icon: MessageSquare, tone: "info", text: <><b>{unreadN}</b> unread conversation{unreadN === 1 ? "" : "s"} from residents, vendors and owners.</>, href: "/app/communications/inbox?unread=1", cta: "Inbox" });
   if (issueN) bullets.push({ icon: HeartPulse, tone: "warning", text: <><b>{issueN}</b> data issue{issueN === 1 ? "" : "s"} on residents and leases, such as {issues.slice(0, 2).map((i) => i.rule_id.split(".")[1].replace(/_/g, " ")).join(" and ")}. Each has a suggested fix.</>, href: "/app/data-health", cta: "Fix" });
   if (lapsed) bullets.push({ icon: ShieldAlert, tone: "warning", text: <><b>{lapsed}</b> renters insurance polic{lapsed === 1 ? "y has" : "ies have"} lapsed.</>, href: "/app/residents/insurance?f.status=Lapsed", cta: "Policies" });
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const kpi = (m: Awaited<typeof kColl>) => ({ value: m?.value ?? null, previous: m?.previous ?? null, spark: m?.spark });
 
   return (
     <main className="space-y-5 px-4 pt-5 pb-10 md:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[20px] font-semibold tracking-tight">{greeting}, {persona.name.split(" ")[0]}</h1>
+          <h1 className="text-[20px] font-semibold tracking-tight">{personaGreeting(persona)}</h1>
           <p className="text-[12.5px] text-muted-foreground">{formatDate(today, "always")} · {actor.scope.label}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -175,14 +173,14 @@ export async function TodayPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Past-due balance" format="money" goodWhen="down" value={late.total_balance_cents / 100} href="/app/receivables/delinquency" help="Unpaid charges past their due date, all aging buckets, as of today." footnote={`${late.total} household${late.total === 1 ? "" : "s"} · ${thirtyPlus} over 30 days`} />
+        <KpiCard label="Past-due balance" format="money" goodWhen="down" value={lateCents / 100} href="/app/receivables/delinquency" help="Unpaid charges past their due date, all aging buckets, as of today." footnote={`${lateHouseholds} household${lateHouseholds === 1 ? "" : "s"} · ${usd(over30)} over 30 days`} />
         <KpiCard label="Collections rate" format="pct" goodWhen="up" {...kpi(kColl)} href="/app/receivables/payments" help="Collected this month as a share of what was charged." />
         <KpiCard label="Leases ending in 60 days" format="count" goodWhen="down" value={kExp?.value ?? null} href="/app/leases?view=expiring-60" footnote={`${leases.length} without a renewal offer`} />
         <KpiCard label="Open work orders" format="count" goodWhen="down" value={Number(w.open)} href={`/app/maintenance/work-orders?${WO_OPEN_Q}`} footnote={`${w.late} past SLA · ${w.urgent} urgent`} />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <ChartCard title="Delinquency aging" description="Past-due balance by days late" kind="bar" data={late.total ? aging : []} x="bucket" series={[{ key: "amount", label: "Past due", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={220} help="Click a bucket for the charges in it." />
+        <ChartCard title="Delinquency aging" description="Past-due balance by days late" kind="bar" data={lateCents ? aging : []} x="bucket" series={[{ key: "amount", label: "Past due", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={220} help="Click a bucket for the charges in it." />
         <ChartCard title="Lease expirations by month" description="Active and on-notice leases, next 12 months" kind="bar" data={(exp?.points ?? []).map((x) => ({ ...x, label: new Date(`${x.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }) })) as never} x="label" series={[{ key: "count", label: "Leases ending", format: "count" }]} drill="/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice" height={220} />
         <ChartCard title="Open work orders by priority" description="Within SLA and past SLA" kind="stacked" data={(woPri?.points ?? []) as never} x="priority" series={[{ key: "within", label: "Within SLA", format: "count" }, { key: "past_sla", label: "Past SLA", format: "count" }]} drill={`/app/maintenance/work-orders?${WO_OPEN_Q}&f.priority={priority}`} height={220} />
       </div>
