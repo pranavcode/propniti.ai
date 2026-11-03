@@ -168,6 +168,11 @@ describe("money", { timeout: 60_000 }, () => {
     const input = { chargeId: ch!.id, amountCents: 50_000, method: "Check" as const, reference: "Check #2231", idempotencyKey: "rec-key-1" };
     expect(await recordPayment(c, input)).toMatchObject({ status: 200 });
     expect(await recordPayment(c, input)).toMatchObject({ status: 200, message: "Already recorded." });
+    // Rent already on its way by ACH counts against the open balance: staff can't record it again.
+    const other = await one<{ id: string; amount_cents: number }>(`SELECT c.id, c.amount_cents FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p03' AND c.gl_account_id = 'gl-4000' AND ${chargeStatusSql("c")} = 'Overdue' AND c.id <> ?2 LIMIT 1`, c.ws, ch!.id);
+    expect(await payRent(c, other!.id)).toMatchObject({ status: 200 });
+    expect(await chargeStatus(c.ws, other!.id)).toBe("Processing");
+    expect(await recordPayment(c, { ...input, chargeId: other!.id, amountCents: 100, idempotencyKey: "rec-pending" })).toMatchObject({ status: 409 });
     expect(await chargeStatus(c.ws, ch!.id)).toBe("Overdue");
     expect(await recordPayment(c, { ...input, amountCents: ch!.amount_cents, idempotencyKey: "rec-key-2" })).toMatchObject({ status: 409, error: expect.stringContaining("Only") });
     expect(await recordPayment(c, { ...input, amountCents: ch!.amount_cents - 50_000, idempotencyKey: "rec-key-3" })).toMatchObject({ status: 200 });

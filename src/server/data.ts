@@ -69,16 +69,18 @@ export async function get<T = Row>(ctx: DataCtx, table: string, id: string): Pro
 // Derived money state (status is computed, never stored on base rows)
 // ---------------------------------------------------------------------------------------------
 
-// Amount still owed on a charge: amount − cleared payments − credits.
+// Amount still owed on a charge: amount − payments − credits − rent already on its way (a pending
+// rent:<charge> ACH). Counting the pending ACH keeps every pay-down path from paying it twice.
 export const chargeOpenSql = (c = "c", ws = "?1") =>
   `(${c}.amount_cents
     - coalesce((SELECT sum(p.amount_cents) FROM ${effective("payments", ws)} AS p WHERE p.charge_id = ${c}.id AND p.nsf = 0), 0)
-    - coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits", ws)} AS x WHERE x.charge_id = ${c}.id), 0))`;
+    - coalesce((SELECT sum(x.amount_cents) FROM ${effective("credits", ws)} AS x WHERE x.charge_id = ${c}.id), 0)
+    - coalesce((SELECT sum(tr.amount_cents) FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending'), 0))`;
 
-// Paid | Processing (a live rent:<id> transfer is pending) | Partial | Overdue | Due.
+// Processing (a live rent:<id> transfer is pending) | Paid | Partial | Overdue | Due.
 export const chargeStatusSql = (c = "c", ws = "?1") => `(CASE
-    WHEN ${chargeOpenSql(c, ws)} <= 0 THEN 'Paid'
     WHEN EXISTS (SELECT 1 FROM transfers AS tr WHERE tr.workspace_id = ${ws} AND tr.key = 'rent:' || ${c}.id AND tr.status = 'Pending') THEN 'Processing'
+    WHEN ${chargeOpenSql(c, ws)} <= 0 THEN 'Paid'
     WHEN julianday('${AS_OF}') - julianday(${c}.due_on) >= 3 THEN 'Overdue'
     WHEN ${chargeOpenSql(c, ws)} < ${c}.amount_cents THEN 'Partial'
     ELSE 'Due' END)`;
