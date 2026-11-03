@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment -- see the next line */
-// @ts-nocheck -- @playwright/test is not a dependency yet (requested from the lead); remove once it is.
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 // Leasing flows: the leasing agent's day, the pipeline board (a move and a refused move), the
 // listing editor's AI draft with the fair-housing check, the renewal offer from AI price to sent
@@ -13,6 +11,28 @@ const TOURS = ["app-basics", "leasing-agent", "broker"];
 async function as(context: BrowserContext, persona: string) {
   await context.addCookies([{ name: "pn_as", value: persona, url: BASE }]);
   await context.addInitScript((ids: string[]) => localStorage.setItem("pn_tours", JSON.stringify(Object.fromEntries(ids.map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: "2026-11-04T00:00:00Z" }])))), TOURS);
+}
+
+// The pipeline board: columns are list items named "<Column>: <count>"; cards are list items inside.
+class Board {
+  readonly root: Locator;
+  constructor(readonly page: Page) {
+    this.root = page.getByRole("list", { name: "Leasing pipeline" });
+  }
+  column(name: string) {
+    return this.root.getByRole("listitem", { name: new RegExp(`^${name}:`) });
+  }
+  // Any card will do: the board is live data, so the test takes the newest one in the column.
+  async firstCard(column: string) {
+    const card = this.column(column).getByRole("listitem").first();
+    const name = (await card.getByRole("link").first().innerText()).trim();
+    return { card, name };
+  }
+  async openMoveMenu(column: string) {
+    const { card, name } = await this.firstCard(column);
+    await card.getByRole("button", { name: `Move ${name}` }).click();
+    return name;
+  }
 }
 
 function watch(page: Page) {
@@ -32,19 +52,14 @@ test("leasing agent: day, board move and the broker-only column", async ({ page,
   await expect(page.getByText("Follow-ups due")).toBeVisible();
 
   await page.goto(`${BASE}/app/leasing/pipeline`);
-  const board = page.getByRole("list", { name: "Leasing pipeline" });
-  await expect(board).toBeVisible();
-  const lead = board.getByRole("listitem", { name: /^Lead:/ });
-  const first = lead.locator("li").first();
-  const name = (await first.locator("a").first().innerText()).trim();
-  await first.getByRole("button", { name: `Move ${name}` }).click();
+  const board = new Board(page);
+  await expect(board.root).toBeVisible();
+  const name = await board.openMoveMenu("Lead");
   await page.getByRole("menuitem", { name: "Tour" }).click();
   await expect(page.getByText(`${name} moved to Tour`)).toBeVisible();
 
   // Approval belongs to the broker: the menu item is disabled for a leasing agent.
-  const screening = board.getByRole("listitem", { name: /^Screening:/ }).locator("li").first();
-  const sName = (await screening.locator("a").first().innerText()).trim();
-  await screening.getByRole("button", { name: `Move ${sName}` }).click();
+  await board.openMoveMenu("Screening");
   await expect(page.getByRole("menuitem", { name: "Approved" })).toBeDisabled();
   await page.keyboard.press("Escape");
 
@@ -97,9 +112,10 @@ test("broker: scores an application with reasons and decides it on the record", 
   await page.goto(`${BASE}/app/leasing/broker`);
   await expect(page.getByRole("heading", { name: /Broker desk/ })).toBeVisible();
   await expect(page.getByText("Fair-housing language", { exact: true })).toBeVisible();
+  // Oldest waiting application first; each test gets a fresh workspace, so it is always still open.
   await page.getByRole("link", { name: "Review" }).first().click();
-
-  await expect(page.getByRole("heading", { name: "Leasing agent score" })).toBeVisible();
+  await page.waitForURL(/\/app\/leasing\/applications\/[^/?]+$/);
+  await expect(page.getByRole("heading", { name: "Leasing agent score" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Fair-housing safe scoring")).toBeVisible();
   await page.getByRole("button", { name: /Score with AI|Re-score/ }).click();
   await expect(page.getByRole("img", { name: /Score \d+ out of 100/ })).toBeVisible({ timeout: 60_000 });
