@@ -74,7 +74,7 @@ export type NavSection = (typeof NAV_SECTIONS)[number];
 // Named AI agents. Each produces ai_proposals rows; a person approves anything that moves money.
 export const AGENT_KEYS = [
   "collections", "leasing", "renewals", "maintenance_triage", "ap", "reconciliation",
-  "document_classifier", "photo_check", "screening", "compliance", "data_health", "copilot",
+  "document_classifier", "photo_check", "screening", "compliance", "data_health", "copilot", "owner_reporting",
 ] as const;
 export type AgentKey = (typeof AGENT_KEYS)[number];
 
