@@ -15,7 +15,7 @@ export function AuditDiff({ row }: TabProps) {
   const after = asObj(row.after_json);
   const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])].filter((k) => !["seq", "workspace_id", "deleted"].includes(k));
   const target = typeof row.entity_type === "string" ? getEntity(row.entity_type) : undefined;
-  const label = (k: string) => Object.entries(target?.fields ?? {}).find(([key, f]) => (f.column ?? key) === k)?.[1].label ?? k.replace(/_/g, " ");
+  const label = (k: string) => Object.entries(target?.fields ?? {}).find(([key, f]) => (f.column ?? key) === k)?.[1].label ?? k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const money = (k: string) => k.endsWith("_cents");
   const fmt = (k: string, v: unknown) => (money(k) && typeof v === "number" ? `$${(v / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : show(v));
   return (
@@ -39,7 +39,7 @@ export function AuditDiff({ row }: TabProps) {
                 const changed = show(b) !== show(a);
                 return (
                   <tr key={k} className="border-t align-top">
-                    <th scope="row" className="px-3 py-1.5 text-left font-medium capitalize">{label(k)}</th>
+                    <th scope="row" className="px-3 py-1.5 text-left font-medium">{label(k)}</th>
                     <td className={`px-3 py-1.5 font-mono text-[12px] break-all ${changed && before ? "bg-tone-danger/5 text-tone-danger line-through decoration-tone-danger/40" : "text-muted-foreground"}`}>{before ? fmt(k, b) : "—"}</td>
                     <td className={`px-3 py-1.5 font-mono text-[12px] break-all ${changed ? "bg-tone-success/5 text-tone-success" : ""}`}>{after ? fmt(k, a) : "—"}</td>
                   </tr>
