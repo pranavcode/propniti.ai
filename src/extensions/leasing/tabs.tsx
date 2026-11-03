@@ -30,6 +30,8 @@ registerTab({
   key: "leasing.scoring",
   label: "AI scoring",
   entity: "applications",
+  // Shows the screening summary, so the same need-to-know roles as the Screening tab.
+  roles: ["principal", "regional_manager", "property_manager", "leasing_agent", "broker", "platform_admin"],
   component: async ({ id, row, actor }) => {
     const { db, ws } = await ctx();
     const E = (t: string) => effective(t, ws);

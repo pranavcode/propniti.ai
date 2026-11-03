@@ -95,6 +95,7 @@ registerAction({
   when: (r) => ["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(r.stage)),
   input: z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough(),
   async handler(ctx, row, input) {
+    if (!["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(row.stage))) return fail(409, `${row.name ?? "This lead"} is ${String(row.stage ?? "closed").toLowerCase()}; no follow-up sent`);
     const first = String(row.name ?? "there").split(" ")[0];
     const body = input.body ?? `Hi ${first}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${ctx.actor.name}`;
     const flags = checkFairHousing(body);
@@ -124,7 +125,9 @@ registerAction({
   when: (r) => r.status === "Scheduled",
   input: z.object({ feedback: z.string().trim().max(1000).default("") }),
   async handler(ctx, row, input) {
-    const prospect = await readRow(ctx, "prospects", String(row.prospect_id));
+    const found = await readRow(ctx, "prospects", String(row.prospect_id));
+    // Only a lead at the tour's own property (the tour row is in scope; its prospect id is just a reference).
+    const prospect = found && found.property_id === row.property_id ? found : null;
     const changes: Change[] = [{ table: "showings", id: String(row.id), changes: { status: "Completed", feedback: input.feedback } }];
     if (prospect && ["Inquiry", "Contacted", "Tour scheduled"].includes(String(prospect.stage))) changes.push({ table: "prospects", id: String(prospect.id), changes: { stage: "Toured", last_contact_at: now(ctx) } });
     await commit(ctx, { entity: "showings", id: String(row.id), propertyId: row.property_id, verb: "completed", summary: `Tour completed${input.feedback ? `: ${input.feedback}` : ""}` }, changes);
@@ -317,6 +320,8 @@ registerAction({
   icon: Check,
   when: (r) => r.status === "Proposed",
   async handler(ctx, row) {
+    // Re-checked here: an approved AI proposal runs the handler without the `when` above.
+    if (row.status !== "Proposed") return fail(409, `This concession is already ${String(row.status ?? "decided").toLowerCase()}`);
     await commit(ctx, { entity: "concessions", id: String(row.id), propertyId: row.property_id, verb: "approved", summary: `Approved by ${ctx.actor.name}` }, [{ table: "concessions", id: String(row.id), changes: { status: "Active", approved_by: ctx.actor.personaId } }]);
     await closeProposals(ctx, "concessions", String(row.id), "Approved", `Approved by ${ctx.actor.name}`);
     return ok("Concession approved");
@@ -396,7 +401,7 @@ registerAction({
     if (row.status !== "Draft") return fail(409, `This offer was already ${String(row.status).toLowerCase()}`);
     const rent = cents(row, "rent");
     const { effective } = await import("@/server/query");
-    const lease = await ctx.db.prepare(`SELECT l.end_on, p.name AS property, u.number AS unit, r.id AS resident_id, r.first_name FROM ${effective("leases", ctx.ws)} l JOIN ${effective("properties", ctx.ws)} p ON p.id = l.property_id JOIN ${effective("units", ctx.ws)} u ON u.id = l.unit_id LEFT JOIN ${effective("residents", ctx.ws)} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ?`).bind(row.lease_id).first<Row>();
+    const lease = await ctx.db.prepare(`SELECT l.end_on, p.name AS property, u.number AS unit, r.id AS resident_id, r.first_name FROM ${effective("leases", ctx.ws)} l JOIN ${effective("properties", ctx.ws)} p ON p.id = l.property_id JOIN ${effective("units", ctx.ws)} u ON u.id = l.unit_id LEFT JOIN ${effective("residents", ctx.ws)} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ? AND l.property_id = ?`).bind(row.lease_id, row.property_id).first<Row>();
     if (!lease?.resident_id) return fail(409, "No primary resident on this lease to send the offer to");
     // Approved from the inbox without an edited message: the standard wording, with the offer's own figures.
     const subject = input.subject ?? `Your renewal offer at ${lease.property}`;

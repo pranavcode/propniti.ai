@@ -5,7 +5,12 @@ import { actorFor } from "@/server/permissions";
 import { seed, WS } from "@/server/query.fixture";
 import { inputSchema, resolveAction, runAction as run } from "@/app/api/e/_lib/actions";
 import type { ActionDef } from "@/entities/types";
+import { createRecord as create, getDef, writeSchema } from "@/server/query";
+
 import "@/entities";
+
+// The route validates the body with the def's write schema before createRecord; do the same.
+const createRecord = async (ctx: Parameters<typeof create>[0], entity: string, body: Record<string, unknown>) => create(ctx, entity, writeSchema(getDef(entity), ctx.actor.role, "create").parse(body));
 
 // Leasing actions on the shared query fixture: the broker's decision and the renewal send each
 // run once under a double click, the board refuses a leasing agent's approval, and every run
@@ -78,5 +83,27 @@ describe("leasing actions", () => {
     const ctx = await ctxFor("lena");
     const r = await runAction(ctx, resolveAction("renewal_offers", "send"), "ro-2", { subject: "Offer", body: "Hi, we can renew at $1,200 a month and waive the late fees." });
     expect(r).toMatchObject({ status: 409 });
+  });
+
+  it("won't let a creator skip the workflow: no pre-approved listings, concessions or applications", async () => {
+    const ctx = await ctxFor("lena");
+    await expect(createRecord(ctx, "listings", { headline: "New", property_id: "p01", unit_id: "p01-u3", rent: 1500, status: "Active", listed_on: "2026-11-04" })).rejects.toThrow();
+    await expect(createRecord(ctx, "concessions", { label: "3 months free", property_id: "p01", amount: 5000, status: "Active" })).rejects.toThrow();
+    await expect(createRecord(ctx, "applications", { property_id: "p01", unit_id: "p01-u3", applicant_id: "apl-1", stage: "Approved" })).rejects.toThrow();
+    const ok = await createRecord(ctx, "concessions", { label: "Waived admin fee", property_id: "p01", amount: 250, status: "Proposed" });
+    expect(ok.status).toBe("Proposed");
+  });
+
+  it("only touches records at the row's own property", async () => {
+    const db = getPlatform().db;
+    await db.prepare("INSERT INTO prospects (workspace_id, id, property_id, name, stage, created_at) VALUES ('base', 'pr-far', 'p06', 'Far Away', 'Tour scheduled', '2026-10-25T15:00:00Z')").run();
+    await db.prepare("INSERT INTO showings (workspace_id, id, property_id, prospect_id, scheduled_at, status) VALUES ('base', 'sh-x', 'p01', 'pr-far', '2026-11-04T17:00:00Z', 'Scheduled')").run();
+    await db.prepare("INSERT INTO renewal_offers (workspace_id, id, lease_id, property_id, term_months, rent_cents, current_rent_cents, status) VALUES ('base', 'ro-x', 'l-p06-u1', 'p01', 12, 150000, 145000, 'Draft')").run();
+    const ctx = await ctxFor("lena");
+    expect((await runAction(ctx, resolveAction("showings", "complete"), "sh-x", {})).status).toBe(200);
+    const far = await db.prepare("SELECT count(*) AS n FROM prospects WHERE workspace_id = ? AND id = 'pr-far'").bind(WS).first<{ n: number }>();
+    expect(far?.n).toBe(0);
+    const sent = await runAction(ctx, resolveAction("renewal_offers", "send"), "ro-x", { subject: "Offer", body: "Hi, we can renew for 12 months at $1,500 a month. Reply to accept." });
+    expect(sent).toMatchObject({ status: 409 });
   });
 });

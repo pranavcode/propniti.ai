@@ -12,6 +12,11 @@ const DECIDERS: Role[] = [...OPS, "broker"];
 // Screening summaries are need-to-know: leasing staff and the people who decide.
 const SCREENING_READERS: Role[] = ["principal", "regional_manager", "property_manager", "leasing_agent", "broker", "platform_admin"];
 const OPEN_STAGES = ["Inquiry", "Contacted", "Tour scheduled", "Toured", "Applied"];
+// Workflow fields: a new record may only start in its first state, and fields only the named
+// actions set (decisions, approvals, sending) can't be supplied at create. editable: [] alone
+// would let any creator set them once (src/server/query.ts editable()).
+const startsAs = <T extends string>(...values: [T, ...T[]]) => z.enum(values, { error: `New records start as ${values.join(" or ")}; later stages are set by actions` });
+const actionOnly = z.null({ error: "Set by an action, not on create" });
 const firstPhoto = (photos: unknown) => (Array.isArray(photos) && typeof photos[0] === "string" ? thumb(photos[0]) : undefined);
 
 registerEntity({
@@ -28,7 +33,7 @@ registerEntity({
   scopePath: "listings.property_id",
   fields: {
     headline: { type: "text", label: "Listing", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], enum: [
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], required: true, zod: startsAs("Draft"), enum: [
       { value: "Active", tone: "success" }, { value: "Draft", tone: "neutral" }, { value: "Paused", tone: "warning" }, { value: "Leased", tone: "info" },
     ] },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
@@ -51,7 +56,7 @@ registerEntity({
       help: { summary: "A listing site rejected or failed to publish this listing.", article: "list-unit-syndication" } },
     no_description: { type: "bool", label: "Needs description", facet: true, list: { default: false }, sql: "(trim(listings.description) = '')" },
     description: { type: "text", label: "Description", search: true, editable: [...LEASING] },
-    syndication: { type: "json", label: "Syndication", editable: [...LEASING], zod: z.record(z.string().max(40), z.enum(["Live", "Pending", "Error", "Paused", "Off", "Removed"])) },
+    syndication: { type: "json", label: "Syndication", editable: [], zod: z.record(z.string().max(40), z.enum(["Live", "Pending", "Error", "Paused", "Off", "Removed"])) },
     // Only the app's own photo library: no outside URLs end up in an <img> on the public site.
     photos: { type: "json", label: "Photos", editable: [...LEASING], zod: z.array(z.string().regex(/^\/img\/[\w/.-]+\.webp$/)).max(24) },
   },
@@ -114,7 +119,7 @@ registerEntity({
   scopePath: "prospects.property_id",
   fields: {
     name: { type: "text", label: "Name", required: true, search: true, sortable: true, list: { default: true, width: 200 } },
-    stage: { type: "enum", label: "Stage", facet: true, sortable: true, list: { default: true }, editable: [], enum: [
+    stage: { type: "enum", label: "Stage", facet: true, sortable: true, list: { default: true }, editable: [], zod: startsAs("Inquiry", "Contacted"), enum: [
       { value: "Inquiry", tone: "neutral" }, { value: "Contacted", tone: "info" }, { value: "Tour scheduled", tone: "info" }, { value: "Toured", tone: "info" },
       { value: "Applied", tone: "warning" }, { value: "Leased", tone: "success" }, { value: "Lost", tone: "neutral" },
     ] },
@@ -197,7 +202,7 @@ registerEntity({
     label: { type: "text", label: "Tour", sortable: true, list: { default: true, width: 240 },
       sql: "coalesce((SELECT pr.name FROM {prospects} pr WHERE pr.id = showings.prospect_id), showings.id) || coalesce(' · #' || (SELECT u.number FROM {units} u WHERE u.id = showings.unit_id), '')" },
     scheduled_at: { type: "datetime", label: "When", required: true, sortable: true, list: { default: true } },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], enum: [
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], zod: startsAs("Scheduled"), enum: [
       { value: "Scheduled", tone: "info" }, { value: "Completed", tone: "success" }, { value: "No-show", tone: "danger" }, { value: "Cancelled", tone: "neutral" },
     ] },
     kind: { type: "enum", label: "Kind", facet: true, list: { default: true }, enum: [{ value: "In person", tone: "neutral" }, { value: "Self-guided", tone: "neutral" }, { value: "Virtual", tone: "neutral" }] },
@@ -294,7 +299,7 @@ registerEntity({
   fields: {
     label: { type: "text", label: "Applicant", sortable: true, list: { default: true, width: 220 },
       sql: "coalesce((SELECT ap.first_name || ' ' || ap.last_name FROM {applicants} ap WHERE ap.id = applications.applicant_id), applications.id)" },
-    stage: { type: "enum", label: "Stage", facet: true, sortable: true, list: { default: true }, editable: [], enum: [
+    stage: { type: "enum", label: "Stage", facet: true, sortable: true, list: { default: true }, editable: [], zod: startsAs("Started", "Submitted"), enum: [
       { value: "Started", tone: "neutral" }, { value: "Submitted", tone: "info" }, { value: "Screening", tone: "info" }, { value: "Review", tone: "warning" },
       { value: "Approved", tone: "success" }, { value: "Conditional", tone: "warning" }, { value: "Denied", tone: "danger" }, { value: "Withdrawn", tone: "neutral" }, { value: "Leased", tone: "success" },
     ] },
@@ -305,21 +310,23 @@ registerEntity({
     rent: { type: "money", label: "Rent", column: "rent_cents", sortable: true, list: { default: true, align: "right" }, editable: [...DECIDERS] },
     income_to_rent: { type: "number", label: "Income ÷ rent", sortable: true, list: { default: true, align: "right" }, editable: [],
       help: { summary: "Gross monthly income of all applicants divided by the rent. The guideline is 3×.", article: "fair-housing-applicant-scoring" } },
-    screening: { type: "enum", label: "Screening", facet: true, list: { default: true },
+    screening: { type: "enum", label: "Screening", facet: true, list: { default: true }, hiddenFor: ["admin"],
       sql: "(SELECT s.decision FROM {screening_results} s WHERE s.application_id = applications.id ORDER BY s.completed_at DESC LIMIT 1)",
       enum: [{ value: "Pass", tone: "success" }, { value: "Conditional", tone: "warning" }, { value: "Fail", tone: "danger" }] },
-    score: { type: "number", label: "AI score", sortable: true, list: { default: true, align: "right" }, editable: [],
+    score: { type: "number", label: "AI score", sortable: true, list: { default: true, align: "right" }, editable: [], zod: actionOnly, hiddenFor: ["admin"],
       help: { summary: "0–100 from income, credit band, rental history and verification only. Never from protected characteristics.", article: "fair-housing-applicant-scoring" } },
-    recommendation: { type: "enum", label: "AI recommends", facet: true, list: { default: false }, editable: [], enum: [{ value: "Approve", tone: "ai" }, { value: "Conditional", tone: "ai" }, { value: "Deny", tone: "ai" }] },
+    recommendation: { type: "enum", label: "AI recommends", facet: true, list: { default: false }, editable: [], zod: actionOnly, hiddenFor: ["admin"], enum: [{ value: "Approve", tone: "ai" }, { value: "Conditional", tone: "ai" }, { value: "Deny", tone: "ai" }] },
     waiting_days: { type: "number", label: "Waiting (days)", sortable: true, list: { default: true, align: "right" },
       sql: `CASE WHEN applications.stage IN ('Submitted', 'Screening', 'Review') THEN CAST(julianday(${AS_OF}) - julianday(applications.submitted_at) AS INTEGER) END` },
     desired_move_in: { type: "date", label: "Move-in", sortable: true, list: { default: false } },
     submitted_at: { type: "datetime", label: "Submitted", sortable: true, list: { default: true }, editable: [] },
-    decided_by: { type: "ref", ref: "staff", label: "Decided by", facet: true, editable: [] },
-    decided_at: { type: "datetime", label: "Decided", sortable: true, editable: [] },
-    fee_paid: { type: "bool", label: "Fee paid", facet: true, editable: [] },
-    scoring_factors: { type: "json", label: "Score factors", editable: [] },
-    co_applicants: { type: "json", label: "Co-applicants", editable: [] },
+    decided_by: { type: "ref", ref: "staff", label: "Decided by", facet: true, editable: [], zod: actionOnly },
+    decided_at: { type: "datetime", label: "Decided", sortable: true, editable: [], zod: actionOnly },
+    fee_paid: { type: "bool", label: "Fee paid", facet: true, editable: [], zod: z.literal(false, { error: "The fee is marked paid by the payment, not on create" }) },
+    scoring_factors: { type: "json", label: "Score factors", editable: [], zod: actionOnly, hiddenFor: ["admin"] },
+    // Co-applicants join through the applicant portal; a free list of ids here could pull in
+    // applicants from other properties.
+    co_applicants: { type: "json", label: "Co-applicants", editable: [], zod: z.array(z.string()).max(0) },
   },
   relations: [
     { name: "applicant", entity: "applicants", fk: "applicant_id", kind: "one" },
@@ -356,7 +363,9 @@ registerEntity({
   charts: [
     { key: "stages", title: "Applications by stage", kind: "bar", metric: "leasing.applications_by_stage", x: "stage", series: [{ key: "count", label: "Applications", format: "count" }], drill: "/app/leasing/applications?f.stage={stage}" },
   ],
-  permissions: { read: [...STAFF.filter((r) => r !== "maintenance_supervisor" && r !== "accountant"), "applicant"], create: [...LEASING, "applicant"], update: [...DECIDERS, "leasing_agent"], delete: [...LEADERS] },
+  // Applicants create their own application (scope "self" ties it to them); staff never create one
+  // for an arbitrary applicant id.
+  permissions: { read: [...STAFF.filter((r) => r !== "maintenance_supervisor" && r !== "accountant"), "applicant"], create: ["applicant"], update: [...DECIDERS, "leasing_agent"], delete: [...LEADERS] },
   writes: "generic",
   actions: ["applications.score", "applications.decide"],
   help: { summary: "Rental applications from submission through screening to the broker's decision. Scores use financial and rental-history facts only.", article: "screening-applicant-scores" },
@@ -412,7 +421,7 @@ registerEntity({
   scopePath: "concessions.property_id",
   fields: {
     label: { type: "text", label: "Concession", required: true, search: true, sortable: true, list: { default: true, width: 260 } },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], enum: [
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], required: true, zod: startsAs("Proposed"), enum: [
       { value: "Proposed", tone: "warning" }, { value: "Active", tone: "success" }, { value: "Expired", tone: "neutral" }, { value: "Rejected", tone: "neutral" },
     ] },
     scope: { type: "enum", label: "Applies to", facet: true, list: { default: true }, sql: "CASE WHEN concessions.lease_id IS NULL THEN 'Property special' ELSE 'One lease' END",
@@ -421,7 +430,7 @@ registerEntity({
     lease_id: { type: "ref", ref: "leases", label: "Lease", list: { default: false } },
     amount: { type: "money", label: "Value", column: "amount_cents", required: true, sortable: true, list: { default: true, align: "right" }, editable: [...LEASING] },
     months: { type: "json", label: "Months" },
-    approved_by: { type: "ref", ref: "staff", label: "Approved by", list: { default: true }, editable: [] },
+    approved_by: { type: "ref", ref: "staff", label: "Approved by", list: { default: true }, editable: [], zod: actionOnly },
   },
   relations: [
     { name: "property", entity: "properties", fk: "property_id", kind: "one" },
@@ -459,11 +468,11 @@ registerEntity({
   fields: {
     label: { type: "text", label: "Lease", sortable: true, list: { default: true, width: 240 },
       sql: "coalesce((SELECT h.name FROM {leases} l JOIN {households} h ON h.id = l.household_id WHERE l.id = renewal_offers.lease_id), renewal_offers.lease_id) || ' · #' || coalesce((SELECT u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE l.id = renewal_offers.lease_id), '?')" },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], enum: [
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, editable: [], zod: startsAs("Draft"), enum: [
       { value: "Draft", tone: "neutral" }, { value: "Sent", tone: "info" }, { value: "Countered", tone: "warning" }, { value: "Accepted", tone: "success" }, { value: "Declined", tone: "danger" }, { value: "Expired", tone: "neutral" },
     ] },
-    lease_id: { type: "ref", ref: "leases", label: "Lease", required: true, list: { default: false } },
-    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true } },
+    lease_id: { type: "ref", ref: "leases", label: "Lease", required: true, list: { default: false }, editable: [] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
     version: { type: "number", label: "Version", list: { default: false, align: "right" } },
     term_months: { type: "number", label: "Term (months)", required: true, list: { default: true, align: "right" }, editable: [...LEASING] },
     rent: { type: "money", label: "Offered rent", column: "rent_cents", required: true, sortable: true, list: { default: true, align: "right" }, editable: [...LEASING] },
@@ -471,8 +480,8 @@ registerEntity({
     market_rent: { type: "money", label: "Market rent", column: "market_rent_cents", list: { default: false, align: "right" } },
     change_pct: { type: "number", label: "Change", format: "pct", sortable: true, list: { default: true, align: "right" },
       sql: "CASE WHEN renewal_offers.current_rent_cents > 0 THEN 1.0 * (renewal_offers.rent_cents - renewal_offers.current_rent_cents) / renewal_offers.current_rent_cents END" },
-    sent_at: { type: "datetime", label: "Sent", sortable: true, list: { default: true }, editable: [] },
-    responded_at: { type: "datetime", label: "Responded", sortable: true, editable: [] },
+    sent_at: { type: "datetime", label: "Sent", sortable: true, list: { default: true }, editable: [], zod: actionOnly },
+    responded_at: { type: "datetime", label: "Responded", sortable: true, editable: [], zod: actionOnly },
     expires_on: { type: "date", label: "Expires", sortable: true, list: { default: false } },
   },
   relations: [
