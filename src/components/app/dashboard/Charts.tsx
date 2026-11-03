@@ -60,18 +60,18 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
     const pieConfig: ChartConfig = Object.fromEntries(data.map((d, i) => [String(d[x]), { label: String(d[x]), color: seriesColor(i, d.color as string | undefined) }]));
     const total = data.reduce((a, d) => a + (Number(d[s.key]) || 0), 0);
     return (
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <ChartContainer config={pieConfig} className={cn("aspect-square shrink-0", cursor)} style={{ height, width: height }}>
           <PieChart>
             <ChartTooltip content={<Tip series={[{ ...s, label: s.label }]} x={x} />} />
-            <Pie data={data} dataKey={s.key} nameKey={x} innerRadius="62%" outerRadius="92%" paddingAngle={1.5} strokeWidth={0} onClick={click} isAnimationActive={false}>
+            <Pie data={data} dataKey={s.key} nameKey={x} innerRadius="62%" outerRadius="92%" paddingAngle={0} stroke="var(--card)" strokeWidth={2} onClick={click} isAnimationActive={false}>
               {data.map((d, i) => <Cell key={String(d[x])} fill={seriesColor(i, d.color as string | undefined)} />)}
             </Pie>
             <text x="50%" y="47%" textAnchor="middle" className="fill-foreground text-[15px] font-semibold tabular-nums">{formatValue(total, s.format, true)}</text>
             <text x="50%" y="59%" textAnchor="middle" className="fill-muted-foreground text-[10.5px]">{s.label}</text>
           </PieChart>
         </ChartContainer>
-        <ul className="min-w-0 flex-1 space-y-1.5 text-[12.5px]">
+        <ul className="flex min-w-52 flex-1 flex-col gap-1.5 text-[12.5px]">
           {data.map((d, i) => (
             <li key={String(d[x])}>
               <button type="button" disabled={!onPoint} onClick={() => onPoint?.(d)} className="flex w-full items-center gap-2 rounded text-left enabled:hover:text-primary">
@@ -95,7 +95,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
           <XAxis type="number" tick={tick} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatValue(v, fmt, true)} />
           <YAxis type="category" dataKey={x} tick={tick} tickLine={false} axisLine={false} width={132} interval={0} />
           {tooltip}
-          {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={`var(--color-${s.key})`} radius={[0, 3, 3, 0]} isAnimationActive={false} />)}
+          {series.map((s) => <Bar key={s.key} dataKey={s.key} fill={`var(--color-${s.key})`} radius={[0, 4, 4, 0]} isAnimationActive={false} />)}
         </BarChart>
       </ChartContainer>
     );
@@ -107,7 +107,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
       <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
         <BarChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click} barCategoryGap={stacked ? "28%" : "20%"}>
           {grid}{xAxis}{yAxis}{tooltip}
-          {series.map((s, i) => <Bar key={s.key} dataKey={s.key} stackId={stacked ? "a" : undefined} fill={`var(--color-${s.key})`} radius={stacked ? (i === series.length - 1 ? [3, 3, 0, 0] : 0) : [3, 3, 0, 0]} isAnimationActive={false} />)}
+          {series.map((s, i) => <Bar key={s.key} dataKey={s.key} stackId={stacked ? "a" : undefined} fill={`var(--color-${s.key})`} radius={stacked ? (i === series.length - 1 ? [4, 4, 0, 0] : 0) : [4, 4, 0, 0]} stroke={stacked ? "var(--card)" : undefined} strokeWidth={stacked ? 2 : 0} isAnimationActive={false} />)}
         </BarChart>
       </ChartContainer>
     );
@@ -119,7 +119,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
         <AreaChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
           <defs>{series.map((s) => <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={`var(--color-${s.key})`} stopOpacity={0.22} /><stop offset="100%" stopColor={`var(--color-${s.key})`} stopOpacity={0.02} /></linearGradient>)}</defs>
           {grid}{xAxis}{yAxis}{tooltip}
-          {series.map((s) => <Area key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} fill={`url(#fill-${s.key})`} isAnimationActive={false} activeDot={{ r: 3.5 }} />)}
+          {series.map((s) => <Area key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} fill={`url(#fill-${s.key})`} isAnimationActive={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} />)}
         </AreaChart>
       </ChartContainer>
     );
@@ -128,8 +128,9 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
   return (
     <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
       <LineChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
-        {grid}{xAxis}{yAxis}{tooltip}
-        {series.map((s) => <Line key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} strokeDasharray={s.dashed ? "4 4" : undefined} dot={false} activeDot={{ r: 3.5 }} isAnimationActive={false} />)}
+        {/* Lines encode change, not magnitude, so the scale fits the data instead of starting at zero. */}
+        {grid}{xAxis}<YAxis tick={tick} tickLine={false} axisLine={false} width={52} domain={["auto", "auto"]} tickFormatter={(v: number) => formatValue(v, fmt, true)} />{tooltip}
+        {series.map((s) => <Line key={s.key} dataKey={s.key} type="monotone" stroke={`var(--color-${s.key})`} strokeWidth={2} strokeDasharray={s.dashed ? "4 4" : undefined} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }} isAnimationActive={false} />)}
       </LineChart>
     </ChartContainer>
   );

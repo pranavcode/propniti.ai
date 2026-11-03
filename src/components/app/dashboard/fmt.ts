@@ -14,4 +14,5 @@ export function formatValue(v: number | null | undefined, format: ValueFormat = 
 
 // Series colours follow the chart tokens, so light/dark and the brand accent stay consistent.
 export const SERIES_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
-export const seriesColor = (i: number, override?: string) => override ?? SERIES_COLORS[i % SERIES_COLORS.length]!;
+// Fixed order, never cycled: a sixth series and beyond share the neutral "Other" ink.
+export const seriesColor = (i: number, override?: string) => override ?? SERIES_COLORS[i] ?? "var(--muted-foreground)";

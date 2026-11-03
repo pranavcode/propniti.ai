@@ -146,7 +146,7 @@ function Heatmap({ data, row, col, value, format, onPoint }: { data: ChartPoint[
                       title={`${r} · ${c}: ${formatValue(v, format)}`}
                       aria-label={`${r} ${c}: ${formatValue(v, format)}`}
                       className="block h-6 w-full min-w-6 rounded-[3px] ring-inset enabled:hover:ring-2 enabled:hover:ring-foreground/30"
-                      style={{ background: v ? `color-mix(in oklch, var(--chart-1) ${Math.round(12 + (v / max) * 88)}%, var(--card))` : "var(--muted)" }}
+                      style={{ background: v ? `color-mix(in oklab, var(--chart-1) ${Math.round(12 + (v / max) * 88)}%, var(--card))` : "var(--muted)" }}
                     />
                   </td>
                 );
@@ -157,7 +157,7 @@ function Heatmap({ data, row, col, value, format, onPoint }: { data: ChartPoint[
       </table>
       <div className="mt-2 flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
         Fewer
-        {[12, 34, 56, 78, 100].map((p) => <span key={p} className="size-2.5 rounded-[2px]" style={{ background: `color-mix(in oklch, var(--chart-1) ${p}%, var(--card))` }} />)}
+        {[12, 34, 56, 78, 100].map((p) => <span key={p} className="size-2.5 rounded-[2px]" style={{ background: `color-mix(in oklab, var(--chart-1) ${p}%, var(--card))` }} />)}
         More
       </div>
     </div>
