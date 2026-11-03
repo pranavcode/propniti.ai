@@ -5,3 +5,4 @@ import "./tabs";
 import "./widgets";
 import "./nav";
 import "./vendor/tab";
+import "./tours";

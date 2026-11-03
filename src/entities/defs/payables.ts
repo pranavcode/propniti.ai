@@ -76,7 +76,7 @@ registerEntity({
     footer: [{ field: "amount", fn: "sum", label: "Total" }],
   },
   detail: {
-    facts: ["status", "amount", "vendor_id", "property_id", "due_on", "bill_date", "gl_account_id", "source"],
+    facts: ["status", "amount", "vendor_id", "property_id", "invoice_number", "due_on", "bill_date", "gl_account_id", "source"],
     tabs: [
       { custom: "payables.review" },
       { custom: "payables.lines" },
