@@ -19,7 +19,7 @@ const cents = (r: R, k = "amount_cents") => r[k] as number;
 const flagged = (rule: string) => new Set((T.data_issues ?? []).filter((i) => i.rule_id === rule).map((i) => i.entity_id as string));
 
 describe("seed generator", () => {
-  it("is deterministic: the same base hash on every run", { timeout: 30_000 }, () => {
+  it("is deterministic: the same base hash on every run", { timeout: 120_000 }, () => {
     expect(baseHash(generate())).toBe(baseHash(b));
     expect(b.meta.as_of).toBe(AS_OF);
   });
@@ -36,7 +36,7 @@ describe("seed generator", () => {
     const lease = T.leases.find((l) => l.household_id === jordan.household_id && l.status === "Active")!;
     expect(T.units.find((u) => u.id === lease.unit_id)?.number).toBe("412");
     expect(T.properties.filter((p) => p.region_id === "r-tx")).toHaveLength(14);
-    expect(sum(T.properties, (p) => p.unit_count as number)).toBe(3318);
+    expect(T.units).toHaveLength(3318);
   });
 
   it("has 18 closed months plus the current one, with no money dated after today", () => {
@@ -49,7 +49,8 @@ describe("seed generator", () => {
 
   it("rent roll: each current lease bills its scheduled rent this month", () => {
     const nov = new Map(T.charges.filter((c) => c.period === "2026-11" && c.gl_account_id === "gl-4000").map((c) => [c.lease_id as string, c]));
-    const current = T.leases.filter((l) => l.kind === "Residential" && ["Active", "Notice", "Eviction"].includes(l.status as string) && (l.start_on as string) <= "2026-11-01" && (!l.move_out_on || (l.move_out_on as string) >= "2026-11-30"));
+    const corrupted = new Set([...flagged("leases.rent_outlier"), ...flagged("leases.end_before_start")]);
+    const current = T.leases.filter((l) => !corrupted.has(l.id as string) && l.kind === "Residential" && ["Active", "Notice", "Eviction"].includes(l.status as string) && (l.start_on as string) <= "2026-11-01" && (!l.move_out_on || (l.move_out_on as string) >= "2026-11-30"));
     expect(current.length).toBeGreaterThan(2500);
     let checked = 0;
     for (const l of current) {

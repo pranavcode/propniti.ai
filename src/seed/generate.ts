@@ -51,6 +51,10 @@ export type Ctx = {
   staffName: Record<string, string>; vendorName: Record<string, string>; vendorTrade: Record<string, string>;
   je: (prop: string, glNo: string, period: string, dr: number, cr: number) => void; next: (k: string) => number;
   workOrders: R[]; bills: R[]; transfers: R[]; propById: Record<string, Prop>; unitById: Record<string, Unit>; leaseById: Record<string, Lease>;
+  // Corrupted cases planted inside the ledger (rule → record ids), so data_issues can point at them.
+  planted: Record<string, string[]>; woN: number;
+  // Set once the ledger is closed; later work orders (extras) never create bills or payouts.
+  sealed: boolean;
 };
 
 const COMMERCIAL = new Set(["Retail strip", "Office", "Industrial flex"]);
@@ -73,7 +77,7 @@ export function generate(): Base {
   };
   const ctx: Ctx = {
     t, add, props: [], units: [], leases: [], households: [], staffName: {}, vendorName: {}, vendorTrade: {}, je, next,
-    workOrders: [], bills: [], transfers: [], propById: {}, unitById: {}, leaseById: {},
+    workOrders: [], bills: [], transfers: [], propById: {}, unitById: {}, leaseById: {}, planted: {}, woN: 10000, sealed: false,
   };
 
   org(ctx);
@@ -92,6 +96,7 @@ export function generate(): Base {
     add("journal_entries", { id: `je-${prop}-${glNo}-${period}`, property_id: prop, owner_entity_id: entityOf[prop], gl_account_id: gl(glNo), period, debit_cents: dr, credit_cents: cr, memo: `${period} summary` });
   }
   budgetsAndMetrics(ctx, jeMap);
+  ctx.sealed = true;
   generateExtras(ctx);
 
   // Transfers go in chronological order so seq order is time order (owner statements close by seq).
@@ -977,7 +982,7 @@ function operations(c: Ctx) {
   }
 
   // Work orders. Volume ~0.13 per occupied unit-month plus common-area jobs.
-  let woN = 10000;
+  let woN = c.woN;
   for (const p of c.props) {
     const pr = rng(`wo:${p.id}`);
     for (const period of PERIODS) {
@@ -997,7 +1002,7 @@ function operations(c: Ctx) {
       }
     }
   }
-  (c as Ctx & { woN: number }).woN = woN;
+  c.woN = woN;
 
   // Turnovers for move-outs in the window; make-ready cost billed by the turn vendor.
   for (const u of c.units) {
@@ -1038,7 +1043,7 @@ export function createWorkOrder(c: Ctx, p: Prop, u: Unit | null, spec: (typeof W
     const age = ASOF - opened;
     status = age === 0 ? pr.weighted([["New", 55], ["Triaged", 30], ["Assigned", 15]] as const) : pr.weighted([["Assigned", 20], ["Scheduled", 30], ["In progress", 28], ["On hold", 10], ["Submitted", vendor ? 12 : 0]] as const);
   } else if (pr.chance(0.015)) status = "Cancelled";
-  else if (vendor && doneDay + 30 < ASOF) status = "Paid";
+  else if (vendor && doneDay + 30 < ASOF && !c.sealed) status = "Paid";
   const completedDay = status === "Completed" || status === "Paid" ? doneDay : null;
   const unitNo = u ? ` · #${u.number}` : "";
   const row = add("work_orders", {
@@ -1078,7 +1083,12 @@ export function createWorkOrder(c: Ctx, p: Prop, u: Unit | null, spec: (typeof W
   if (spec[5] && recent && (open || pr.chance(0.35))) {
     add("photos", { id: `ph-${id}`, entity_type: "work_orders", entity_id: id, property_id: p.id, url: `/img/wo/wo-${spec[5]}.webp`, caption: spec[1], stage: "Before", taken_at: ts(opened, openedMin + 2), check_result: pr.chance(0.9) ? "Matches" : "Unclear", check_confidence: Math.round((0.7 + pr() * 0.28) * 100) / 100, check_note: null });
   }
-  if (completedDay && vendor) bill(p, vendor, [["6000", `${spec[1]}${unitNo} (${id})`, cost]], completedDay + pr.int(1, 3), { wo: id });
+  if (completedDay && vendor && !c.sealed) {
+    // Corrupted case: a plumbing repair coded to Landscaping (posted that way, so the books agree).
+    const miscode = spec[0] === "Plumbing" && pr.chance(0.02);
+    const b = bill(p, vendor, [[miscode ? "6100" : "6000", `${spec[1]}${unitNo} (${id})`, cost]], completedDay + pr.int(1, 3), { wo: id });
+    if (miscode && b) (c.planted["bill_lines.gl_miscoded"] ??= []).push(b.id as string);
+  }
   return row;
 }
 
@@ -1123,12 +1133,15 @@ function ownerPayouts(c: Ctx) {
         byProp.set(x.property_id as string, (byProp.get(x.property_id as string) ?? 0) + sign * a);
       }
       const net = income - expense - fee;
-      const amount = reserveHeld + net - R0;
+      // Corrupted case: one statement paid a cent short (rounding); the cent stays in trust.
+      const shortCent = oe === "oe05" && period === "2026-08" ? 1 : 0;
+      const amount = reserveHeld + net - R0 - shortCent;
       if (amount <= 0) continue;
+      if (shortCent) (c.planted["owner_distributions.rounding_cent"] ??= []).push(`od-${oe}-${period}`);
       const id = `tr-own-${oe}-${period}`;
       const ownerName = OWNERS.find(([id]) => id === owner[1])![1];
       add("transfers", { id, key: `owner:${oe}:${period}`, kind: "Owner payout", bank_account_id: `ba-${oe}-trust`, owner_entity_id: oe, from_kind: "trust", from_id: `ba-${oe}-trust`, from_name: "Operating trust", to_kind: "owner", to_id: owner[1], to_name: ownerName, amount_cents: amount, property_id: [...byProp.keys()].sort()[0], ref: `Statement ${period}`, status: "Cleared", created: close, settles_at: null, cleared: ts(monthEnd(period) + 2, 10 * 60) });
-      add("owner_distributions", { id: `od-${oe}-${period}`, owner_entity_id: oe, transfer_id: id, period, income_cents: income, expense_cents: expense, fee_cents: fee, reserve_cents: net - amount, amount_cents: amount, paid_on: iso(monthEnd(period)) });
+      add("owner_distributions", { id: `od-${oe}-${period}`, owner_entity_id: oe, transfer_id: id, period, income_cents: income, expense_cents: expense, fee_cents: fee, reserve_cents: net - amount - shortCent, amount_cents: amount, paid_on: iso(monthEnd(period)) });
       // Allocate the payout to properties by their share of the period's net.
       const props = [...byProp].filter(([, v]) => v > 0).sort();
       const pos = props.reduce((s, [, v]) => s + v, 0);
