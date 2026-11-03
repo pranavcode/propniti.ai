@@ -36,7 +36,8 @@ export function seed(db: Db) {
         sql.push(`INSERT INTO households (workspace_id, id, property_id, name) VALUES ('base', 'h-${unit}', '${id}', 'Household ${unit}')`);
         sql.push(`INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-${unit}', 'h-${unit}', '${id}', 'Res', '${unit}', 'r@x.example')`);
         sql.push(`INSERT INTO leases (workspace_id, id, property_id, unit_id, household_id, status, start_on, end_on, rent_cents) VALUES ('base', 'l-${unit}', '${id}', '${unit}', 'h-${unit}', 'Active', '2026-01-01', '2026-12-31', 145000)`);
-        sql.push(`INSERT INTO charges (workspace_id, id, lease_id, household_id, property_id, unit_id, gl_account_id, description, period, due_on, amount_cents) VALUES ('base', 'c-${unit}', 'l-${unit}', 'h-${unit}', '${id}', '${unit}', 'gl-4000', 'Rent', '2026-10', '2026-10-01', 145000)`);
+        // paid_cents is the stored settlement (migration 0006): unit 1 is paid in full.
+        sql.push(`INSERT INTO charges (workspace_id, id, lease_id, household_id, property_id, unit_id, gl_account_id, description, period, due_on, amount_cents, paid_cents) VALUES ('base', 'c-${unit}', 'l-${unit}', 'h-${unit}', '${id}', '${unit}', 'gl-4000', 'Rent', '2026-10', '2026-10-01', 145000, ${n === 1 ? 145000 : 0})`);
         if (n === 1) sql.push(`INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, charge_id, method, received_on, amount_cents) VALUES ('base', 'pay-${unit}', 'l-${unit}', 'h-${unit}', '${id}', 'c-${unit}', 'ACH', '2026-10-02', 145000)`);
       }
     }

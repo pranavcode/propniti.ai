@@ -48,7 +48,9 @@ export function effective(table: string, ws: Ws): string {
   assertTable(table);
   // Fast path: the visitor has no overlay rows in this table, so its effective rows are the base
   // rows. Skips the anti-join, which costs ~350 ms per scan on the 130k-row ledger tables.
-  if (typeof ws === "object" && ws && !ws.overlay.has(table)) return table === "metrics_monthly" || APPEND_ONLY.has(table) ? `(SELECT * FROM ${table} WHERE workspace_id = 'base')` : `(SELECT * FROM ${table} WHERE workspace_id = 'base' AND deleted = 0)`;
+  // Base rows are never tombstoned (tombstones live in overlays), so no deleted = 0 here: that
+  // keeps counts on the (workspace_id, …) indexes instead of reading every row.
+  if (typeof ws === "object" && ws && !ws.overlay.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id = 'base')`;
   const id = typeof ws === "object" && ws ? ws.id : ws;
   const w = `'${id && WS_ID.test(id) ? id : NO_WORKSPACE}'`;
   if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}))`;
@@ -59,7 +61,6 @@ export function effective(table: string, ws: Ws): string {
 // Tables the visitor's overlay touches: one indexed probe per table in one query, cached per
 // request (keyed by the request's actor) and dropped after any write through this module.
 const overlayCache = new WeakMap<Actor, Promise<Set<string>>>();
-const OVERLAY_TABLES = TABLES.filter((t) => t !== "metrics_monthly");
 export const forgetOverlay = (actor: Actor) => overlayCache.delete(actor);
 
 export async function readWs(ctx: QueryCtx): Promise<Ws> {
@@ -67,7 +68,7 @@ export async function readWs(ctx: QueryCtx): Promise<Ws> {
   if (!id) return { id: "", overlay: new Set() };
   let p = overlayCache.get(ctx.actor);
   if (!p) {
-    const sql = [...OVERLAY_TABLES, "metrics_monthly"].map((t) => `SELECT '${t}' AS t WHERE EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1)`).join(" UNION ALL ");
+    const sql = TABLES.map((t) => `SELECT '${t}' AS t WHERE EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1)`).join(" UNION ALL ");
     p = ctx.db.prepare(sql).bind(id).all<{ t: string }>().then((r) => new Set(r.results.map((x) => x.t)));
     overlayCache.set(ctx.actor, p);
   }
@@ -283,9 +284,10 @@ export function getDef(key: string): EntityDef {
 
 export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOptions = {}): Promise<ListOut> {
   const def = getDef(entity);
-  const { db, ws, actor } = ctx;
+  const { db, actor } = ctx;
   const role = actor.role;
   assertRead(def, role);
+  const ws = await readWs(ctx);
   const size = Math.max(1, Math.min(PAGE_SIZE_CAP, Math.floor(Number(q.size) || DEFAULT_PAGE_SIZE)));
   const page = Math.max(1, Math.floor(Number(q.page) || 1));
   const [sortKey, sortDir] = q.sort ?? def.list.defaultSort;
@@ -354,9 +356,10 @@ export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOpt
 export async function getRow(ctx: QueryCtx, entity: EntityKey | string, id: string): Promise<Row | null> {
   const def = getDef(entity);
   assertRead(def, ctx.actor.role);
-  const scope = scopeWhere(def, ctx.actor, ctx.ws);
+  const ws = await readWs(ctx);
+  const scope = scopeWhere(def, ctx.actor, ws);
   const w = merge({ sql: [`${def.table}.id = ?`], params: [id] }, scope);
-  const raw = await ctx.db.prepare(`SELECT ${selectList(def, ctx.actor.role, ctx.ws)} FROM ${effective(def.table, ctx.ws)} AS ${def.table}${whereSql(w)}`).bind(...w.params).first();
+  const raw = await ctx.db.prepare(`SELECT ${selectList(def, ctx.actor.role, ws)} FROM ${effective(def.table, ws)} AS ${def.table}${whereSql(w)}`).bind(...w.params).first();
   return raw ? present(def, ctx.actor.role, raw) : null;
 }
 
@@ -367,7 +370,7 @@ export type Related = Record<string, { entity: EntityKey; label: string; kind: "
 // column of this row. Relations the role can't read, or to unregistered entities, are left out.
 export async function relations(ctx: QueryCtx, def: EntityDef, row: Row, names?: string[], size = 10): Promise<Related> {
   const out: Related = {};
-  const raw = await ctx.db.prepare(`SELECT * FROM ${effective(def.table, ctx.ws)} WHERE id = ?`).bind(row.id).first();
+  const raw = await ctx.db.prepare(`SELECT * FROM ${effective(def.table, await readWs(ctx))} WHERE id = ?`).bind(row.id).first();
   await Promise.all(def.relations.filter((r) => !names || names.includes(r.name)).map(async (r) => {
     const rel = getEntity(r.entity);
     if (!rel || !can(ctx.actor.role, "read", r.entity)) return;
@@ -608,6 +611,7 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
   const row: Row = { workspace_id: ctx.ws, id, ...systemDefaults(def), ...changesToColumns(def, body) };
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, row), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "created", pidOf(def, row), null, row, `Created ${def.label.one.toLowerCase()}`)]);
+    forgetOverlay(ctx.actor);
   } catch (e) {
     if (outOfScope(e)) throw new QueryError(403, "That record would be outside your scope");
     throw constraintError(e);
@@ -631,6 +635,7 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   const summary = `Updated ${changed.map((c) => Object.entries(def.fields).find(([k, f]) => (f.column ?? k) === c)?.[1].label ?? c).join(", ") || "nothing"}`;
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, after), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
+    forgetOverlay(ctx.actor);
   } catch (e) {
     if (outOfScope(e)) throw new QueryError(403, "That change would move the record outside your scope");
     throw constraintError(e);
@@ -648,6 +653,7 @@ export async function deleteRecord(ctx: WriteCtx, entity: string, id: string): P
   assertUnlocked(def, current);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
   const pid = await propertyOf(ctx, def, id);
+  forgetOverlay(ctx.actor);
   await ctx.db.batch([upsert(ctx.db, def.table, { ...before, workspace_id: ctx.ws, deleted: 1 }), ...trail(ctx, def, id, "deleted", pid, before, null, `Deleted ${def.label.one.toLowerCase()} ${String(before[def.fields[def.titleField]?.column ?? def.titleField] ?? id)}`)]);
 }
 
@@ -664,7 +670,8 @@ export async function collab(ctx: QueryCtx, kind: Collab, entity: string, id: st
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const s = Math.max(1, Math.min(PAGE_SIZE_CAP, size));
   const p = Math.max(1, page);
-  const from = ` FROM ${effective(COLLAB_TABLE[kind], ctx.ws)} WHERE entity_type = ? AND entity_id = ?`;
+  const rws = await readWs(ctx);
+  const from = ` FROM ${effective(COLLAB_TABLE[kind], rws)} WHERE entity_type = ? AND entity_id = ?`;
   const [rows, count] = await Promise.all([
     ctx.db.prepare(`SELECT *${from} ORDER BY ${COLLAB_ORDER[kind]} LIMIT ? OFFSET ?`).bind(def.key, id, s, (p - 1) * s).all(),
     ctx.db.prepare(`SELECT count(*) AS n${from}`).bind(def.key, id).first<{ n: number }>(),
@@ -678,7 +685,7 @@ export async function collab(ctx: QueryCtx, kind: Collab, entity: string, id: st
   });
   // The audit trail is part of a record's activity: field-level before/after on every change.
   if (kind === "activity" && p === 1) {
-    const audit = await ctx.db.prepare(`SELECT id, at, actor, role, agent, model, action, detail, before_json, after_json FROM ${effective("audit", ctx.ws)} WHERE entity_type = ? AND entity_id = ? ORDER BY at DESC LIMIT 50`).bind(def.key, id).all();
+    const audit = await ctx.db.prepare(`SELECT id, at, actor, role, agent, model, action, detail, before_json, after_json FROM ${effective("audit", rws)} WHERE entity_type = ? AND entity_id = ? ORDER BY at DESC LIMIT 50`).bind(def.key, id).all();
     const seen = new Set(out.map((r) => `${r.at}|${r.summary}`));
     // Audit rows hold raw columns: drop the ones this role can't see (e.g. vendor bank details).
     const hidden = new Set(Object.entries(def.fields).filter(([, f]) => f.hiddenFor?.includes(ctx.actor.role)).map(([k, f]) => f.column ?? k));
@@ -730,6 +737,7 @@ export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: 
       .bind(ws, rid, b.title, b.detail ?? "", def.key, id, pid == null ? null : String(pid), b.assignee_id ?? null, actor.personaId, b.due_on ?? null, b.priority ?? "Normal", b.status ?? "Open", at);
     summary = `${actor.name} added task "${b.title}"`;
   }
+  forgetOverlay(ctx.actor);
   await db.batch([
     insert,
     db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?, ?, ?, ?, ?, ?, 'staff', ?, ?, ?, '{}')")
@@ -758,7 +766,7 @@ export const viewSchema = z.strictObject({
 export async function listViews(ctx: QueryCtx, entity: string) {
   const def = getDef(entity);
   assertRead(def, ctx.actor.role);
-  const res = await ctx.db.prepare(`SELECT id, name, owner_id, state, position FROM ${effective("saved_views", ctx.ws)} WHERE entity_type = ? AND (owner_id IS NULL OR owner_id = ?) ORDER BY position, name LIMIT 100`).bind(def.key, ctx.actor.personaId).all();
+  const res = await ctx.db.prepare(`SELECT id, name, owner_id, state, position FROM ${effective("saved_views", await readWs(ctx))} WHERE entity_type = ? AND (owner_id IS NULL OR owner_id = ?) ORDER BY position, name LIMIT 100`).bind(def.key, ctx.actor.personaId).all();
   // Built-in views come from the def (EntityDef.list.savedViews); these are the stored ones.
   return res.results.map((r) => ({ key: String(r.id), label: String(r.name), shared: r.owner_id == null, mine: r.owner_id === ctx.actor.personaId, ...JSON.parse(String(r.state)) }));
 }
@@ -772,6 +780,7 @@ export async function saveView(ctx: WriteCtx, body: z.infer<typeof viewSchema>) 
   const id = `view-${crypto.randomUUID().slice(0, 12)}`;
   await ctx.db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state, position) VALUES (?, ?, ?, ?, ?, ?, 100)")
     .bind(ctx.ws, id, def.key, body.name, body.shared ? null : ctx.actor.personaId, JSON.stringify(body.state)).run();
+  forgetOverlay(ctx.actor);
   return { key: id, label: body.name, shared: !!body.shared, mine: !body.shared, ...body.state };
 }
 
@@ -780,6 +789,7 @@ export async function deleteView(ctx: WriteCtx, id: string) {
   if (!v) throw new QueryError(404, "View not found");
   if (v.owner_id != null && v.owner_id !== ctx.actor.personaId) throw new QueryError(403, "That view belongs to someone else");
   await upsert(ctx.db, "saved_views", { ...v, workspace_id: ctx.ws, deleted: 1 }).run();
+  forgetOverlay(ctx.actor);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -850,8 +860,9 @@ const FACET_LIMIT = 60;
 
 export async function facetOptions(ctx: QueryCtx, entity: string, q: ListQuery = {}): Promise<FacetOptions> {
   const def = getDef(entity);
-  const { ws, actor } = ctx;
+  const { actor } = ctx;
   assertRead(def, actor.role);
+  const ws = await readWs(ctx);
   const keys = visibleFields(def, actor.role).filter(([k, f]) => f.facet && ["enum", "ref", "text", "bool"].includes(f.type) && k !== def.list.statusTabs);
   const from = ` FROM ${effective(def.table, ws)} AS ${def.table}`;
   const scope = scopeWhere(def, actor, ws);

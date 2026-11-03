@@ -112,6 +112,42 @@ describe("scope", () => {
   });
 });
 
+describe("overlay fast path", () => {
+  it("returns the same lists, totals, tabs and footers whether or not the visitor has overlay rows", async () => {
+    const snap = async (wsId: string | null) => {
+      const c = await ctx("daniel", wsId);
+      const out: unknown[] = [];
+      for (const e of ["units", "charges", "properties", "leases"]) {
+        const r = await list(c, e, { size: 100 });
+        out.push(r.total, r.counts, r.footer, r.rows.map((x) => JSON.stringify(x)));
+        out.push(await getRow(c, e, r.rows[0]?.id as string));
+      }
+      return out;
+    };
+    // An empty overlay (fast path everywhere) matches no workspace at all.
+    expect(await snap(WS)).toEqual(await snap(null));
+    // Overlay rows in one table switch only that table to the full path; edits show through it.
+    await updateRecord(await wctx("daniel"), "units", "p01-u3", { sqft: 999 });
+    const c = await ctx("daniel", WS);
+    expect((await getRow(c, "units", "p01-u3"))!.sqft).toBe(999);
+    expect((await getRow(c, "properties", "p01"))!.units).toBe(3);
+    // Tables the overlay doesn't touch read exactly as base.
+    expect(await list(c, "charges", { size: 100 })).toEqual(await list(await ctx("daniel", null), "charges", { size: 100 }));
+    // A tombstone in the overlay hides the base row (and its label on rows that point at it).
+    await deleteRecord(await wctx("daniel"), "properties", "p06");
+    const after = await ctx("daniel", WS);
+    expect((await list(after, "properties", {})).total).toBe(5);
+    expect((await getRow(after, "charges", "c-p06-u1"))!.property_id__label).toBeNull();
+  });
+
+  it("drops the per-request overlay cache after a write in the same request", async () => {
+    const w = await wctx("marcus");
+    expect((await getRow(w, "units", "p01-u2"))!.sqft).toBe(800); // caches "no overlay rows"
+    await updateRecord(w, "units", "p01-u2", { sqft: 812 });
+    expect((await getRow(w, "units", "p01-u2"))!.sqft).toBe(812);
+  });
+});
+
 describe("pagination", () => {
   it("returns the total under the same filters and caps page size at 100", async () => {
     const c = await ctx("daniel");

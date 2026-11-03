@@ -4,7 +4,7 @@ import { can } from "@/entities";
 import type { ActionDef, ActionResult } from "@/entities/types";
 import { getAction } from "@/extensions/actions";
 import { rateLimit } from "@/lib/guard";
-import { getDef, getRow, QueryError, type WriteCtx } from "@/server/query";
+import { forgetOverlay, getDef, getRow, QueryError, type WriteCtx } from "@/server/query";
 
 // Runs a named action on one record: the action must belong to the entity, the role must be
 // allowed (action roles and module access), the row must be in scope and pass `when`. Each run
@@ -31,6 +31,7 @@ export async function runAction(ctx: WriteCtx, a: ActionDef, id: string, input: 
   if (!row) throw new QueryError(404, `${def.label.one} not found`);
   if (a.when && !a.when(row)) return { status: 409, error: `${a.label} isn't available for this ${def.label.one.toLowerCase()} right now` };
   const result = await a.handler({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, nowMs: ctx.nowMs }, row, input);
+  forgetOverlay(ctx.actor);
   if (result.status === 200) {
     await ctx.db.prepare("INSERT INTO audit (workspace_id, id, at, actor, actor_id, role, action, entity_type, entity_id, property_id, detail, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(ctx.ws, crypto.randomUUID(), demoNowIso(ctx.nowMs), ctx.actor.name, ctx.actor.personaId, ctx.actor.role, a.key, def.key, id, typeof row.property_id === "string" ? row.property_id : null, result.message ?? a.label, JSON.stringify(input ?? {}).slice(0, 4000))
