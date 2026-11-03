@@ -1,2 +1,5 @@
-// Actions, tabs, widgets and agents for the leasing module (registerAction/registerTab/registerWidget/registerAgent).
-export {};
+// Actions, tabs, widgets, metrics, pages and tours for the leasing module.
+import "./actions";
+import "./metrics";
+import "./nav";
+import "./tabs";
