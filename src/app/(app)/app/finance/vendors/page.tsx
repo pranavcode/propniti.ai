@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ShieldAlert, Users } from "lucide-react";
 import "@/entities";
 import { currentSession } from "@/auth/session";
+import { formatDate } from "@/lib/format";
 import { getPlatform } from "@/lib/platform";
 import { effective } from "@/server/query";
 import { PageBody, PageHeader } from "@/components/app/page";
@@ -73,7 +74,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
                     <td className="px-3 py-1.5">{!v.is_1099 ? <span className="text-muted-foreground">—</span> : v.w9_on_file ? <span className="text-muted-foreground">On file</span> : <StatusBadge value="Missing" tone="danger" />}</td>
                     <td className="px-3 py-1.5">
                       {held(v)
-                        ? <span className="inline-flex items-center gap-1 text-tone-danger"><ShieldAlert className="size-3.5" />Changed {v.bank_changed_at!.slice(0, 10)} · payments held</span>
+                        ? <span className="inline-flex items-center gap-1 text-tone-danger"><ShieldAlert className="size-3.5" />Changed {formatDate(v.bank_changed_at!, "always")} · payments held</span>
                         : <span className="text-muted-foreground tabular-nums">••{v.bank_last4 || "—"}</span>}
                     </td>
                   </tr>

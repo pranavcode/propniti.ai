@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { currentSession } from "@/auth/session";
 import { can } from "@/entities/registry";
+import { formatDate } from "@/lib/format";
 import { getPlatform } from "@/lib/platform";
 import { effective } from "@/server/query";
 import { Money, RelativeDate, StatusBadge } from "@/components/app/display";
@@ -33,8 +34,8 @@ async function VendorFinance({ id, row, actor }: TabProps) {
         <h3 className="flex items-center gap-2 text-[13px] font-semibold">{held && <ShieldAlert className="size-4 text-tone-danger" />}Bank account {row.bank_last4 ? <span className="font-normal tabular-nums text-muted-foreground">ending {String(row.bank_last4)}</span> : null}</h3>
         <p className="mt-1 text-[12.5px] text-muted-foreground">
           {held
-            ? <>Changed {changedAt?.slice(0, 10)}{evidence?.received_via ? ` by ${evidence.received_via.toLowerCase()}` : ""}{evidence?.requested_by ? ` (requested by ${evidence.requested_by})` : ""}{evidence?.old_last4 ? `; previously ending ${evidence.old_last4}` : ""}. Payments are on hold until someone verifies the change by callback.</>
-            : changedAt ? <>Last changed {changedAt.slice(0, 10)}, verified.</> : "No changes on record."}
+            ? <>Changed {formatDate(changedAt, "always")}{evidence?.received_via ? ` by ${evidence.received_via.toLowerCase()}` : ""}{evidence?.requested_by ? ` (requested by ${evidence.requested_by})` : ""}{evidence?.old_last4 ? `; previously ending ${evidence.old_last4}` : ""}. Payments are on hold until someone verifies the change by callback.</>
+            : changedAt ? <>Last changed {formatDate(changedAt, "always")}, verified.</> : "No changes on record."}
         </p>
         <div className="mt-3">
           <BankForms vendor={id} company={String(row.company ?? id)} held={held} canChange={can(actor.role, "vendors.change_bank_account", "vendors")} canVerify={can(actor.role, "vendors.confirm_bank_change", "vendors")} changedByMe={evidence?.changed_by === actor.personaId} />

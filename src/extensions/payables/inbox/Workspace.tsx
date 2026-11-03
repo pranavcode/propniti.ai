@@ -236,10 +236,10 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
           </header>
 
           {uploadState === "reading" && (
-            <div className="flex items-center gap-2 border-b bg-tone-ai/[0.05] px-3.5 py-2 text-[12.5px]"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Reading the invoice: vendor, invoice number, dates and lines. This can take up to 30 seconds.</div>
+            <div role="status" className="flex items-center gap-2 border-b bg-tone-ai/[0.05] px-3.5 py-2 text-[12.5px]"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Reading the invoice: vendor, invoice number, dates and lines. This can take up to 30 seconds.</div>
           )}
           {uploadNote && (
-            <div className="flex items-start gap-2 border-b bg-tone-warning/[0.07] px-3.5 py-2 text-[12.5px]"><TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-tone-warning" /><span>{uploadNote}{uploadState === "manual" ? " Enter the fields from the document on the left." : ""}</span></div>
+            <div role="status" className="flex items-start gap-2 border-b bg-tone-warning/[0.07] px-3.5 py-2 text-[12.5px]"><TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-tone-warning" /><span>{uploadNote}{uploadState === "manual" ? " Enter the fields from the document on the left." : ""}</span></div>
           )}
 
           {item.kind === "upload" && uploadState === "idle" ? (
@@ -332,7 +332,7 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
             {!stage ? (
               <>
                 <Button onClick={() => void submit()} disabled={!!invalid || !!busy}>{busy === "submit" ? <Loader2 className="animate-spin" /> : <Send />}Save and submit for approval</Button>
-                <span className="text-[12px] text-muted-foreground">{invalid ?? (warnings ? `${warnings} check${warnings > 1 ? "s" : ""} to review before approving` : "All checks pass")}</span>
+                <span aria-live="polite" className="text-[12px] text-muted-foreground">{invalid ?? (warnings ? `${warnings} check${warnings > 1 ? "s" : ""} to review before approving` : "All checks pass")}</span>
               </>
             ) : stage.status === "Pending approval" ? (
               <>

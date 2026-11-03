@@ -58,7 +58,7 @@ export function BankForms({ vendor, company, held, canChange, canVerify, changed
                 <div className="grid grid-cols-2 gap-3">
                   <Field>
                     <FieldLabel htmlFor="bank_last4">New account, last 4 digits</FieldLabel>
-                    <Input id="bank_last4" inputMode="numeric" maxLength={4} pattern="\d{4}" required value={f.bank_last4} onChange={set("bank_last4")} autoComplete="off" spellCheck={false} />
+                    <Input id="bank_last4" name="bank_last4" inputMode="numeric" maxLength={4} pattern="\d{4}" required value={f.bank_last4} onChange={set("bank_last4")} autoComplete="off" spellCheck={false} />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="received_via">Request received by</FieldLabel>
@@ -70,11 +70,11 @@ export function BankForms({ vendor, company, held, canChange, canVerify, changed
                 </div>
                 <Field>
                   <FieldLabel htmlFor="requested_by">Requested by</FieldLabel>
-                  <Input id="requested_by" required minLength={2} value={f.requested_by} onChange={set("requested_by")} placeholder="Name and role at the vendor…" autoComplete="off" />
+                  <Input id="requested_by" name="requested_by" required minLength={2} value={f.requested_by} onChange={set("requested_by")} placeholder="Name and role at the vendor…" autoComplete="off" />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="note">Note (optional)</FieldLabel>
-                  <Textarea id="note" rows={2} value={f.note} onChange={set("note")} />
+                  <Textarea id="note" name="note" rows={2} value={f.note} onChange={set("note")} />
                 </Field>
               </>
             ) : (
@@ -82,7 +82,7 @@ export function BankForms({ vendor, company, held, canChange, canVerify, changed
                 <FieldDescription>Call {company} on the number already on file, not one from the change request, and confirm the last 4 digits of the new account.</FieldDescription>
                 <Field>
                   <FieldLabel htmlFor="spoke_with">Spoke with</FieldLabel>
-                  <Input id="spoke_with" required minLength={2} value={f.spoke_with} onChange={set("spoke_with")} placeholder="Name of the person you reached…" autoComplete="off" />
+                  <Input id="spoke_with" name="spoke_with" required minLength={2} value={f.spoke_with} onChange={set("spoke_with")} placeholder="Name of the person you reached…" autoComplete="off" />
                 </Field>
                 <Field orientation="horizontal">
                   <Checkbox id="phone_on_file" checked={f.phone_on_file} onCheckedChange={(v) => setF({ ...f, phone_on_file: v === true })} />
