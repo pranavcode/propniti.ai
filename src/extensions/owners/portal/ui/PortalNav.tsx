@@ -56,7 +56,7 @@ export function PortalNav({ role, badges = {} }: { role: PortalRole; badges?: Re
             <Link key={i.href} href={i.href} aria-current={on ? "page" : undefined}
               className={cn("relative inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none", on && "bg-primary/[0.08] text-primary hover:bg-primary/[0.1] hover:text-primary")}>
               {i.label}
-              {!!badges[i.href] && <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold text-primary-foreground tabular-nums">{badges[i.href]}</span>}
+              {!!badges[i.href] && <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold text-primary-foreground tabular-nums">{badges[i.href]}<span className="sr-only"> new</span></span>}
             </Link>
           );
         })}
@@ -71,7 +71,7 @@ export function PortalNav({ role, badges = {} }: { role: PortalRole; badges?: Re
                 <Link href={i.href} aria-current={on ? "page" : undefined} className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium text-muted-foreground", on && "text-primary")}>
                   <i.icon className="size-5" aria-hidden />
                   {i.label}
-                  {!!badges[i.href] && <span className="absolute top-1.5 left-1/2 ml-2 size-2 rounded-full bg-primary" aria-label={`${badges[i.href]} new`} />}
+                  {!!badges[i.href] && <><span className="absolute top-1.5 left-1/2 ml-2 size-2 rounded-full bg-primary" aria-hidden /><span className="sr-only">, {badges[i.href]} new</span></>}
                 </Link>
               </li>
             );

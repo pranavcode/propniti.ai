@@ -47,7 +47,7 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
   const href = (e: string, p?: string) => `/app/owner-statements?entity=${e}${p ? `&period=${p}` : ""}`;
 
   return (
-    <main>
+    <>
       <PageHeader
         icon={<FileSpreadsheet />}
         title="Owner statements"
@@ -63,8 +63,8 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
         </div>
 
         <div className="grid gap-3 lg:grid-cols-3">
-          <ChartCard className="lg:col-span-2" title="Rent collected to distribution, trailing 12 months" kind="stacked" data={waterfall.points as never} x="month"
-            series={[{ key: "amount", label: "Distributed", format: "money" }, { key: "expense", label: "Vendor payments", format: "money" }, { key: "fee", label: "Management fee", format: "money" }]}
+          <ChartCard className="lg:col-span-2" title="Rent collected to distribution, trailing 12 months" kind="stacked" data={waterfall.points.map((p) => ({ ...p, label: new Date(`${p.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) })) as never} x="label"
+            series={[{ key: "amount", label: "Distributed", format: "money" }, { key: "expense", label: "Vendor payments", format: "money" }, { key: "fee", label: "Management fee", format: "money" }, { key: "reserve", label: "Kept in reserve", format: "money" }]}
             drill="/app/owner-distributions?f.period={month}" help="Each bar is one month's cleared income, split into what was paid out, spent on vendors and kept as fees." />
           <ChartCard title={`Distribution by entity, ${byEntity.asOf ? monthLabel(byEntity.asOf) : ""}`} kind="hbar" data={byEntity.points as never} x="name"
             series={[{ key: "amount", label: "Distributed", format: "money" }]} drill="/app/owner-statements?entity={owner_entity_id}" />
@@ -88,15 +88,15 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
           </Section>
 
           <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-1.5" role="list" aria-label="Statement months">
+            <ul className="flex flex-wrap items-center gap-1.5" aria-label="Statement months">
               {periods.slice(0, 13).map((p) => (
-                <Link key={p.period} role="listitem" href={href(entityId, p.period)} aria-current={p.period === period ? "page" : undefined}
+                <li key={p.period}><Link href={href(entityId, p.period)} aria-current={p.period === period ? "page" : undefined}
                   className={cn("inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] tabular-nums transition-colors hover:bg-muted", p.period === period ? "border-primary/40 bg-primary/[0.07] font-medium text-primary" : "bg-card")}>
                   {p.closed ? new Date(`${p.period}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) : "Open"}
-                  {p.gap_cents !== 0 && <span className="size-1.5 rounded-full bg-tone-danger" aria-label="has an unreconciled difference" />}
-                </Link>
+                  {p.gap_cents !== 0 && <><span className="size-1.5 rounded-full bg-tone-danger" aria-hidden /><span className="sr-only">, unreconciled</span></>}
+                </Link></li>
               ))}
-            </div>
+            </ul>
             {st ? (
               <StatementView st={st} explainUrl="/app/owner-statements/explain" mode="staff"
                 canDistribute={can(role, "owner_entities.distribute", "owner_entities")} canFix={can(role, "owner_distributions.pay_rounding_cent", "owner_distributions")} />
@@ -125,6 +125,6 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
           </div>
         </div>
       </PageBody>
-    </main>
+    </>
   );
 }

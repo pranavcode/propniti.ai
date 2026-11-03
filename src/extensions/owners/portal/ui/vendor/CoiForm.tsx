@@ -25,7 +25,7 @@ export function CoiForm({ me, today }: { me: string; today: string }) {
       if (r.ok) { setFile(null); setCarrier(""); setExpires(""); }
     }}>
       <h2 className="text-[14px] font-semibold">Upload a new certificate</h2>
-      <label htmlFor="coi-file" className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 hover:border-primary/40">
+      <label htmlFor="coi-file" className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 hover:border-primary/40 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring/60">
         <Upload className="size-4 text-muted-foreground" />
         <span className="text-[13px]">{file ? file.name : "Choose the certificate (PDF or photo)"}</span>
         <input id="coi-file" type="file" accept="application/pdf,image/*" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -36,7 +36,7 @@ export function CoiForm({ me, today }: { me: string; today: string }) {
         <div className="space-y-1.5"><Label htmlFor="coi-exp">Expires on</Label><Input id="coi-exp" type="date" min={today} value={expires} onChange={(e) => setExpires(e.target.value)} /></div>
         <div className="flex items-center gap-2 pt-6"><Switch id="coi-wc" checked={wc} onCheckedChange={setWc} /><Label htmlFor="coi-wc">Includes workers&apos; compensation</Label></div>
       </div>
-      <Button type="submit" disabled={!valid || !!busy}>{busy ? "Saving…" : "Save certificate"}</Button>
+      <Button type="submit" disabled={!valid || !!busy} className="max-md:h-11">{busy ? "Saving…" : "Save certificate"}</Button>
     </form>
   );
 }

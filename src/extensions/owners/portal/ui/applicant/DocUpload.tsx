@@ -27,7 +27,7 @@ export function DocUpload({ me, type, received, hint }: { me: string; type: stri
       </div>
       <div className="flex items-center gap-2 pl-8 sm:justify-end sm:pl-0">
         <span className={received ? "inline-flex h-5 items-center rounded-full bg-tone-success/10 px-2 text-[11.5px] font-medium text-tone-success" : "inline-flex h-5 items-center rounded-full bg-tone-warning/10 px-2 text-[11.5px] font-medium text-tone-warning"}>{received ? "Received" : "Needed"}</span>
-        <input ref={input} id={id} type="file" accept="application/pdf,image/*" className="sr-only" aria-label={`Choose a file for ${type}`} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <input ref={input} id={id} type="file" accept="application/pdf,image/*" className="hidden" aria-label={`Choose a file for ${type}`} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {file ? (
           <>
             <Button size="sm" variant="ghost" onClick={() => { setFile(null); if (input.current) input.current.value = ""; }}>Cancel</Button>

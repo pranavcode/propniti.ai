@@ -87,7 +87,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
                     <div className="flex items-start gap-1.5">
                       {expandable ? (
                         <button type="button" onClick={() => setOpen(isOpen ? null : l.key)} aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} detail for ${l.label}`}
-                          className="mt-0.5 rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none print:hidden">
+                          className="-m-3 grid size-10 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground md:m-0 md:mt-0.5 md:size-auto focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none print:hidden">
                           <ChevronRight className={cn("size-3.5 transition-transform", isOpen && "rotate-90")} />
                         </button>
                       ) : <span className="w-3.5 shrink-0 print:hidden" />}
@@ -152,7 +152,7 @@ function ExplainButton({ url, label, onAsk, tour }: { url: string; label: string
   return (
     <Popover onOpenChange={(o) => o && load()}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs" className="text-tone-ai hover:text-tone-ai" aria-label={`Explain ${label}`} data-tour={tour ? "explain-line" : undefined}>
+        <Button variant="ghost" size="xs" className="text-tone-ai hover:text-tone-ai max-md:size-10" aria-label={`Explain ${label}`} data-tour={tour ? "explain-line" : undefined}>
           <Sparkles /><span className="max-sm:sr-only">Explain</span>
         </Button>
       </PopoverTrigger>

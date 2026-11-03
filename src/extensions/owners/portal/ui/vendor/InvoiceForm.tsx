@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AIBadge, Confidence } from "@/components/app/ai";
 import { usePortalAction } from "../usePortalAction";
 
@@ -73,11 +74,12 @@ export function InvoiceForm({ me, jobs, initialJob }: { me: string; jobs: Job[];
       <div className="space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor="inv-job">Job</Label>
-          <select id="inv-job" value={jobId} onChange={(e) => setJobId(e.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-[13px]">
-            {jobs.map((j) => <option key={j.id} value={j.id}>{j.id} · {j.title} · {j.property}</option>)}
-          </select>
+          <Select value={jobId} onValueChange={setJobId}>
+            <SelectTrigger id="inv-job" className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>{jobs.map((j) => <SelectItem key={j.id} value={j.id}>{j.id} · {j.title} · {j.property}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-        <label htmlFor="inv-file" className="flex min-h-48 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-muted/30 p-4 text-center hover:border-primary/40 hover:bg-primary/[0.03]">
+        <label htmlFor="inv-file" className="flex min-h-48 cursor-pointer flex-col has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ring/60 items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-muted/30 p-4 text-center hover:border-primary/40 hover:bg-primary/[0.03]">
           {/* eslint-disable-next-line @next/next/no-img-element -- local preview of the chosen file */}
           {preview ? <img src={preview} alt="Invoice preview" className="max-h-80 rounded object-contain" /> : file ? <><FileText className="size-8 text-muted-foreground" /><span className="text-[13px] font-medium">{file.name}</span></> : (
             <><Upload className="size-6 text-muted-foreground" /><span className="text-[13px] font-medium">Upload your invoice</span><span className="text-[12px] text-muted-foreground">Photo or PDF, up to 4 MB. AI reads the lines for you.</span></>
@@ -111,7 +113,7 @@ export function InvoiceForm({ me, jobs, initialJob }: { me: string; jobs: Job[];
         </fieldset>
         <div className="flex items-center justify-between border-t pt-3">
           <p className="text-[13px]">Total <span className="ml-1 text-[17px] font-semibold tabular-nums">{formatMoney(total / 100)}</span>{job?.estimate_cents ? <span className="ml-2 text-[12px] text-muted-foreground">estimate {formatMoney(job.estimate_cents / 100)}</span> : null}</p>
-          <Button onClick={submit} disabled={!valid || !!busy}>{busy ? "Sending…" : "Send invoice"}</Button>
+          <Button onClick={submit} disabled={!valid || !!busy} className="max-md:h-11">{busy ? "Sending…" : "Send invoice"}</Button>
         </div>
       </div>
     </div>

@@ -34,8 +34,8 @@ export function RenewalOffers({ me, offers }: { me: string; offers: Offer[] }) {
               </p>
               {o.market_rent_cents != null && <p className="text-[12.5px] text-muted-foreground tabular-nums">New residents pay about {usd(o.market_rent_cents)} for this floor plan.</p>}
               <div className="mt-4 flex gap-2">
-                <Button className="flex-1" disabled={!!busy} onClick={() => setPending({ offer: o, decision: "Accepted" })}>Accept</Button>
-                <Button variant="outline" disabled={!!busy} onClick={() => setPending({ offer: o, decision: "Declined" })}>Decline</Button>
+                <Button className="flex-1 max-md:h-11" disabled={!!busy} onClick={() => setPending({ offer: o, decision: "Accepted" })}>Accept</Button>
+                <Button variant="outline" className="max-md:h-11" disabled={!!busy} onClick={() => setPending({ offer: o, decision: "Declined" })}>Decline</Button>
               </div>
             </div>
           );

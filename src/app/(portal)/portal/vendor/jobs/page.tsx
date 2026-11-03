@@ -75,13 +75,13 @@ export default async function VendorJobs({ searchParams }: Props) {
   return (
     <>
       <PortalTitle title="Jobs" description="Accept new assignments, see what's scheduled and invoice finished work." />
-      <div role="tablist" aria-label="Job status" className="mb-3 flex gap-1 overflow-x-auto">
+      <nav aria-label="Job status" className="mb-3 flex gap-1 overflow-x-auto">
         {(Object.keys(JOB_TABS) as JobTab[]).map((t) => (
-          <Link key={t} role="tab" aria-selected={t === tab} href={`/portal/vendor/jobs?tab=${t}`} className={cn("inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-[13px]", t === tab ? "border-primary/40 bg-primary/[0.07] font-medium text-primary" : "bg-card hover:bg-muted")}>
+          <Link key={t} aria-current={t === tab ? "page" : undefined} href={`/portal/vendor/jobs?tab=${t}`} className={cn("inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-[13px] max-md:h-11", t === tab ? "border-primary/40 bg-primary/[0.07] font-medium text-primary" : "bg-card hover:bg-muted")}>
             {JOB_TABS[t].label}<span className="text-[11.5px] text-muted-foreground tabular-nums">{counts[t]}</span>
           </Link>
         ))}
-      </div>
+      </nav>
       <section className="overflow-hidden rounded-xl border bg-card">
         {list.rows.length ? <ul className="divide-y">{list.rows.map((j) => <JobRow key={j.id} j={j} me={c.me} />)}</ul>
           : <div className="p-4"><EmptyState kind="tasks" title={tab === "new" ? "No new assignments" : tab === "invoice" ? "Nothing left to invoice" : "No jobs here"} description={tab === "new" ? "New assignments from the maintenance team show up here." : "Jobs move here as their status changes."} compact /></div>}
