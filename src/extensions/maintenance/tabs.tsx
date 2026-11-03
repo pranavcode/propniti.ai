@@ -118,7 +118,7 @@ registerTab({
                 </li>
               ))}
             </ul>
-            <p className="flex items-center gap-1.5 border-t px-3 py-2 text-[11.5px] text-muted-foreground"><AIBadge source="rules" size="xs" />The photo check compares what each photo shows with the job&apos;s trade and title ({String(row.category)}). Anything below a match goes to a person.</p>
+            <p className="flex items-center gap-1.5 border-t px-3 py-2 text-[11.5px] text-muted-foreground"><AIBadge source="rules" size="xs" />Only photos on file before the vendor&apos;s invoice count toward its photo requirement. The photo check compares what each photo shows with the job&apos;s trade and title ({String(row.category)}). Anything below a match goes to a person.</p>
           </>
         ) : (
           <EmptyState compact kind="table" title="No photos yet" description="Add a before photo so the vendor knows what they're walking into. Each photo is checked against the job." />

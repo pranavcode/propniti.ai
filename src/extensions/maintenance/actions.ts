@@ -6,6 +6,7 @@ import { effective as effectiveSql } from "@/server/effective";
 import { approveAndPayWorkOrder } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { AS_OF } from "@/seed/constants";
+import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
 import { registerAction } from "../actions";
 import { checkPhoto, nextDue, PHOTO_TAGS, policyCheck, usd, validateInvoice } from "./rules";
 import { insertStmt, newId, OPEN_STATUSES, parse, row as readRow, update, updateStmt } from "./store";
@@ -78,10 +79,10 @@ registerAction({
     if (!input.vendor_id && !input.assignee_id) return { status: 400, error: "Pick a vendor or an in-house technician." };
     let vendorName = "";
     if (input.vendor_id) {
-      const v = await c.db.prepare(`SELECT v.company, v.status, (SELECT max(k.expires_on) FROM ${effectiveSql("vendor_cois")} k WHERE k.vendor_id = v.id AND k.status <> 'Missing') AS coi FROM ${effectiveSql("vendors")} v WHERE v.id = ?2`).bind(c.ws, input.vendor_id).first<{ company: string; status: string; coi: string | null }>();
+      const v = await c.db.prepare(`SELECT v.company, v.status, ${verifiedCoiExpirySql(effectiveSql("vendor_cois"), "v.id")} AS coi FROM ${effectiveSql("vendors")} v WHERE v.id = ?2`).bind(c.ws, input.vendor_id).first<{ company: string; status: string; coi: string | null }>();
       if (!v) return { status: 404, error: "Vendor not found" };
       if (v.status !== "Active") return conflict(`${v.company} is marked "${v.status}" and can't be dispatched.`);
-      if (!v.coi || v.coi < AS_OF) return conflict(`${v.company}'s insurance certificate ${v.coi ? `expired on ${v.coi}` : "is missing"}. Request a current COI before dispatching.`);
+      if (!v.coi || v.coi < AS_OF) return conflict(`${v.company}'s verified insurance certificate ${v.coi ? `expired on ${v.coi}` : "is missing, or still waiting for verification"}. Verify or request a current COI before dispatching.`);
       vendorName = v.company;
     }
     if (input.assignee_id && !(await techCovers(c.db, c.ws, input.assignee_id, String(r.property_id)))) return { status: 403, error: "That technician doesn't work at this property. Pick one assigned to it." };
@@ -228,6 +229,9 @@ registerAction({
   icon: ImagePlus,
   input: z.strictObject({ url: z.enum(SAMPLE_PHOTOS as [string, ...string[]]), stage: z.enum(["Before", "After", "Evidence"]), caption: z.string().trim().max(200).optional() }),
   handler: async (c, r, input) => {
+    // Once the invoice is in, vendors can't add evidence to it. Staff still can, but photos added
+    // after the invoice don't count toward its photo requirement.
+    if (c.actor.role === "vendor" && ["Submitted", "Completed", "Paid"].includes(String(r.status))) return conflict("The invoice for this job is already in. Photos can't be added to it now.");
     const chk = checkPhoto(input.url, String(r.category), String(r.title));
     await (await insertStmt(c.db, c.ws, "photos", {
       id: newId("ph"), entity_type: "work_orders", entity_id: r.id, property_id: r.property_id, url: input.url, caption: input.caption || PHOTO_TAGS[input.url.match(/wo-(.+)\.webp$/)![1]].label,

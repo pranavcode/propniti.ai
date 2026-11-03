@@ -2,6 +2,7 @@ import type { Actor, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { effective as wsEffective } from "@/server/effective";
 import { AS_OF } from "@/seed/constants";
+import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
 import { vendorScore, type Line, type Policy } from "./rules";
 import { all, effective, OPEN_SQL, parse, scoped } from "./store";
 
@@ -15,13 +16,15 @@ export async function invoiceInputs(db: Db, ws: string | null, woId: string) {
     db.prepare(`SELECT p.id, p.number, p.total_cents, p.status FROM ${wsEffective("purchase_orders")} p WHERE p.work_order_id = ?2 ORDER BY p.issued_on DESC LIMIT 1`).bind(w, woId).first<{ id: string; number: string; total_cents: number; status: string }>(),
     all<Line & { po_id: string }>(db, `SELECT l.po_id, l.description, l.amount_cents FROM ${wsEffective("po_lines")} l WHERE l.po_id IN (SELECT p.id FROM ${wsEffective("purchase_orders")} p WHERE p.work_order_id = ?2) ORDER BY l.id`, [w, woId]),
     db.prepare(`SELECT e.detail, e.at, e.actor_kind FROM ${wsEffective("wo_events")} e WHERE e.work_order_id = ?2 AND e.kind = 'Submission' ORDER BY json_extract(e.detail, '$.lines') IS NULL, e.at DESC, e.seq DESC LIMIT 1`).bind(w, woId).first<{ detail: string; at: string; actor_kind: string }>(),
-    db.prepare(`SELECT count(*) AS n FROM ${wsEffective("photos")} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ?2`).bind(w, woId).first<{ n: number }>(),
+    all<{ taken_at: string | null }>(db, `SELECT p.taken_at FROM ${wsEffective("photos")} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ?2 LIMIT 200`, [w, woId]),
   ]);
   const d = sub ? parse<{ invoice_number?: string; lines?: Line[]; total_cents?: number; source?: string; read_confidence?: number | null }>(sub.detail, {}) : null;
   return {
     po: po ? { ...po, lines: lines.filter((l) => l.po_id === po.id).map(({ description, amount_cents }) => ({ description, amount_cents })) } : null,
     submission: d ? { invoice_number: d.invoice_number ?? "", lines: d.lines ?? [], total_cents: Number(d.total_cents ?? 0), source: d.source ?? (sub!.actor_kind === "vendor" ? "vendor portal" : "staff"), read_confidence: d.read_confidence ?? null, at: sub!.at } : null,
-    photos: Number(photos?.n ?? 0),
+    // Evidence counts only if it was on file before the invoice arrived, so photos can't be added
+    // afterwards to clear the check.
+    photos: photos.filter((p) => !sub || (p.taken_at != null && p.taken_at < sub.at)).length,
   };
 }
 
@@ -47,7 +50,7 @@ export async function rankVendors(db: Db, ws: string | null, trade: string, prop
     `SELECT v.id, v.company, v.trade, v.rating, v.status, v.metros,
        (SELECT count(*) FROM ${effective("work_orders", ws)} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs,
        (SELECT CASE WHEN count(*) THEN 1.0 * sum(w.completed_at <= w.sla_due_at) / count(*) END FROM ${effective("work_orders", ws)} w WHERE w.vendor_id = v.id AND w.completed_at IS NOT NULL AND w.sla_due_at IS NOT NULL${hist.sql}) AS on_time,
-       (SELECT max(c.expires_on) FROM ${effective("vendor_cois", ws)} c WHERE c.vendor_id = v.id AND c.status <> 'Missing') AS coi_expires
+       ${verifiedCoiExpirySql(effective("vendor_cois", ws), "v.id")} AS coi_expires
      FROM ${effective("vendors", ws)} v WHERE v.trade = ? AND v.status <> 'Do not use' LIMIT 40`, [...hist.binds, trade]);
   const costs = await all<{ vendor_id: string; cost: number }>(db,
     `SELECT w.vendor_id, w.cost_cents AS cost FROM ${effective("work_orders", ws)} w WHERE w.vendor_id IN (SELECT value FROM json_each(?)) AND w.cost_cents > 0${hist.sql} ORDER BY w.cost_cents LIMIT 2000`, [JSON.stringify(rows.map((r) => r.id)), ...hist.binds]);

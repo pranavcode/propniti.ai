@@ -18,7 +18,7 @@ describe("validateInvoice", () => {
     expect(v.issues.join("\n")).toMatch(/Labor: \$200 billed vs \$141 on PO/);
     expect(v.issues.join("\n")).toMatch(/Not on PO: Trip charge/);
     expect(v.issues.join("\n")).toMatch(/add up to \$384, not the stated total \$400/);
-    expect(v.issues.join("\n")).toMatch(/0 of 1 required photos/);
+    expect(v.issues.join("\n")).toMatch(/0 of 1 required photos were on file before the invoice/);
     expect(v.confidence).toBe(0.2);
   });
 

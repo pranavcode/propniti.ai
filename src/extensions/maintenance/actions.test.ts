@@ -97,3 +97,21 @@ describe("photos, turnovers, preventive schedules", () => {
     expect(s?.next_due_on).toBe("2027-02-01");
   });
 });
+
+describe("invoice photo requirement", () => {
+  it("counts only photos on file before the invoice, and vendors can't add photos after it", async () => {
+    await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-3", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" }, "vendor");
+    expect(await act("work_orders.add_photo", "WO-2", { url: "/img/wo/wo-toilet.webp", stage: "After" }, "vendor")).toMatchObject({ status: 409 });
+    // The seeded before photo has no timestamp, so nothing was on file before the invoice: payment needs a reason.
+    expect(await act("work_orders.approve_and_pay", "WO-2", {})).toMatchObject({ status: 409, error: expect.stringContaining("add a short note") });
+    // A staff photo added now is accepted but still doesn't satisfy the invoice's requirement.
+    expect(await act("work_orders.add_photo", "WO-2", { url: "/img/wo/wo-toilet.webp", stage: "After" })).toMatchObject({ status: 200 });
+    expect(await act("work_orders.approve_and_pay", "WO-2", {})).toMatchObject({ status: 409, error: expect.stringContaining("add a short note") });
+  });
+
+  it("passes when a photo was on file before the invoice", async () => {
+    await db.prepare("UPDATE photos SET taken_at = '2026-10-21T09:00:00Z' WHERE id = 'ph-2'").run();
+    await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-4", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" });
+    expect(await act("work_orders.approve_and_pay", "WO-2", { expected_cents: 30000 })).toMatchObject({ status: 200 });
+  });
+});

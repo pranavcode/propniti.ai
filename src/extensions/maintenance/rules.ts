@@ -46,8 +46,8 @@ export function validateInvoice(po: { lines: Line[]; total_cents: number } | nul
   if (inv.total_cents <= 0 || inv.lines.some((l) => l.amount_cents < 0)) issues.push("Invoice contains zero or negative amounts");
   const sum = inv.lines.reduce((a, l) => a + l.amount_cents, 0);
   if (inv.lines.length && sum !== inv.total_cents) issues.push(`Line items add up to ${usd(sum)}, not the stated total ${usd(inv.total_cents)}`);
-  if (inv.photos >= photosRequired) matched.push(`${inv.photos} photo${inv.photos === 1 ? "" : "s"} on file (${photosRequired} required)`);
-  else issues.push(`Only ${inv.photos} of ${photosRequired} required photos on file`);
+  if (inv.photos >= photosRequired) matched.push(`${inv.photos} photo${inv.photos === 1 ? "" : "s"} on file before the invoice (${photosRequired} required)`);
+  else issues.push(`Only ${inv.photos} of ${photosRequired} required photos were on file before the invoice`);
   // No issues = high confidence; each issue drops it 0.2, floor 0.2.
   const confidence = issues.length === 0 ? 0.97 : Math.max(0.2, Math.round((0.85 - 0.2 * issues.length) * 100) / 100);
   return {
