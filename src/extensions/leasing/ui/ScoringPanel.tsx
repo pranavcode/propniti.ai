@@ -146,7 +146,7 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
               {d.runId && <Link href={runHref(d.runId)!} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>}
               {d.canScore && d.open && (
                 <Button size="sm" variant={d.score == null ? "default" : "outline"} disabled={!!busy} onClick={() => void score()}>
-                  {busy === "score" ? <Loader2 className="animate-spin" /> : <Sparkles />}{busy === "score" ? "Scoring…" : d.score == null ? "Score with AI" : "Re-score"}
+                  {busy === "score" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}{busy === "score" ? "Scoring…" : d.score == null ? "Score with AI" : "Re-score"}
                 </Button>
               )}
             </div>
@@ -199,9 +199,9 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
                 <Textarea id="decision-note" name="decision-note" value={note} onChange={(e) => { setNote(e.target.value); setNoteError(false); }} placeholder="Reason or conditions, e.g. one extra month of deposit…" aria-label="Reason or conditions" aria-invalid={noteError || undefined} aria-describedby="decision-note-help" maxLength={500} className="min-h-16 text-[13px]" />
                 <p id="decision-note-help" className={cn("-mt-1.5 text-[12px]", noteError ? "text-tone-danger" : "text-muted-foreground")}>{noteError ? "Add a reason first. It goes in the adverse-action record." : "Required for a conditional approval or a denial."}</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" disabled={!!busy} onClick={() => void decide("Approved")}>{busy === "Approved" ? <Loader2 className="animate-spin" /> : <Check />}Approve</Button>
-                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void decide("Conditional")}>{busy === "Conditional" ? <Loader2 className="animate-spin" /> : <Check />}Approve with conditions</Button>
-                  <Button size="sm" variant={confirmDeny ? "destructive" : "outline"} className={cn(!confirmDeny && "text-tone-danger hover:text-tone-danger")} disabled={!!busy} onClick={() => void decide("Denied")}>{busy === "Denied" ? <Loader2 className="animate-spin" /> : <X />}{confirmDeny ? "Confirm denial" : "Deny"}</Button>
+                  <Button size="sm" disabled={!!busy} onClick={() => void decide("Approved")}>{busy === "Approved" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}Approve</Button>
+                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void decide("Conditional")}>{busy === "Conditional" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}Approve with conditions</Button>
+                  <Button size="sm" variant={confirmDeny ? "destructive" : "outline"} className={cn(!confirmDeny && "text-tone-danger hover:text-tone-danger")} disabled={!!busy} onClick={() => void decide("Denied")}>{busy === "Denied" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <X />}{confirmDeny ? "Confirm denial" : "Deny"}</Button>
                   {confirmDeny && <Button size="sm" variant="ghost" onClick={() => setConfirmDeny(false)}>Cancel</Button>}
                 </div>
               </div>

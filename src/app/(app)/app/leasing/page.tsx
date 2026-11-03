@@ -44,10 +44,10 @@ export default async function LeasingOverview() {
         meta={<span>{c.actor.scope.label}</span>}
         actions={
           <>
-            <Button asChild size="sm" variant="outline"><Link href="/app/leasing/listings"><Megaphone />Listings</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href="/app/leasing/renewals"><RefreshCw />Renewals</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href={c.actor.role === "broker" ? "/app/leasing/broker" : "/app/leasing/today"}><CalendarDays />{c.actor.role === "broker" ? "Broker desk" : "My day"}</Link></Button>
-            <Button asChild size="sm"><Link href="/app/leasing/pipeline"><KanbanSquare />Pipeline board</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href="/app/leasing/listings"><Megaphone data-icon="inline-start" />Listings</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href="/app/leasing/renewals"><RefreshCw data-icon="inline-start" />Renewals</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={c.actor.role === "broker" ? "/app/leasing/broker" : "/app/leasing/today"}><CalendarDays data-icon="inline-start" />{c.actor.role === "broker" ? "Broker desk" : "My day"}</Link></Button>
+            <Button asChild size="sm"><Link href="/app/leasing/pipeline"><KanbanSquare data-icon="inline-start" />Pipeline board</Link></Button>
           </>
         }
       />

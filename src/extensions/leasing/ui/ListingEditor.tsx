@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Check, ImagePlus, Loader2, Save, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AIBadge } from "@/components/app/ai";
@@ -99,7 +101,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
                   <li key={p} className={cn("group relative overflow-hidden rounded-md border bg-muted", i === 0 && "ring-2 ring-primary ring-offset-1 ring-offset-background")}>
                     {/* eslint-disable-next-line @next/next/no-img-element -- static webp thumbs */}
                     <img src={thumb(p)} alt={`Listing photo ${i + 1}`} width={400} height={300} className="aspect-[4/3] w-full object-cover" loading="lazy" />
-                    {i === 0 && <span className="absolute top-1.5 left-1.5 rounded bg-primary px-1.5 py-px text-[10.5px] font-medium text-primary-foreground">Cover</span>}
+                    {i === 0 && <Badge className="absolute top-1.5 left-1.5">Cover</Badge>}
                     {data.canEdit && (
                       <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                         <span className="flex gap-1">
@@ -142,7 +144,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
             {fromAi && <Link href={runHref(fromAi.runId)!} className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>}
             {data.canEdit && (
               <Button size="sm" variant="outline" className="ml-auto" disabled={!!busy} onClick={() => void runDraft()}>
-                {busy === "draft" ? <Loader2 className="animate-spin" /> : <Sparkles className="text-tone-ai" />}Draft with AI
+                {busy === "draft" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles className="text-tone-ai" data-icon="inline-start" />}Draft with AI
               </Button>
             )}
           </header>
@@ -160,23 +162,27 @@ export function ListingEditor({ data }: { data: EditorData }) {
                 <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap text-muted-foreground">{draft.description}</p>
                 <p className="mt-2 text-[11.5px] text-muted-foreground">Written from the unit, building and amenity facts only. Review it before saving.</p>
                 <div className="mt-2 flex gap-2">
-                  <Button size="sm" onClick={() => { setHeadline(draft.headline); setDescription(draft.description); setFromAi(draft); setDraft(null); }}><Check />Use draft, then edit</Button>
+                  <Button size="sm" onClick={() => { setHeadline(draft.headline); setDescription(draft.description); setFromAi(draft); setDraft(null); }}><Check data-icon="inline-start" />Use draft, then edit</Button>
                   <Button size="sm" variant="ghost" onClick={() => setDraft(null)}><X />Discard</Button>
                 </div>
               </div>
             )}
-            <label className="flex flex-col gap-1 text-[12px] font-medium">Headline
-              <Input name="headline" autoComplete="off" value={headline} onChange={(e) => { setHeadline(e.target.value); setHeadlineError(false); }} maxLength={120} disabled={!data.canEdit} aria-invalid={headlineError || undefined} className="text-[13px] font-normal" />
-            </label>
-            {headlineError && <p className="-mt-2 text-[12px] text-tone-danger">Add a headline before saving.</p>}
-            <label className="flex flex-col gap-1 text-[12px] font-medium">Description
-              <Textarea name="description" autoComplete="off" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} disabled={!data.canEdit} aria-describedby="desc-count" className="min-h-36 text-[13px] leading-relaxed font-normal" placeholder="Describe the home, the building and what’s nearby, or let the AI draft it…" />
-            </label>
-            <span id="desc-count" className="-mt-2 self-end text-[11px] text-muted-foreground tabular-nums">{description.length} / 2,000 characters</span>
+            <FieldGroup className="gap-3">
+            <Field data-invalid={headlineError || undefined}>
+              <FieldLabel htmlFor="listing-headline">Headline</FieldLabel>
+              <Input id="listing-headline" name="headline" autoComplete="off" value={headline} onChange={(e) => { setHeadline(e.target.value); setHeadlineError(false); }} maxLength={120} disabled={!data.canEdit} aria-invalid={headlineError || undefined} className="text-[13px]" />
+              {headlineError && <FieldError>Add a headline before saving.</FieldError>}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="listing-description">Description</FieldLabel>
+              <Textarea id="listing-description" name="description" autoComplete="off" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} disabled={!data.canEdit} aria-describedby="desc-count" className="min-h-36 text-[13px] leading-relaxed" placeholder="Describe the home, the building and what’s nearby, or let the AI draft it…" />
+              <FieldDescription id="desc-count" className="self-end tabular-nums">{description.length} / 2,000 characters</FieldDescription>
+            </Field>
+            </FieldGroup>
             {data.canEdit && (
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" disabled={!dirty || !!busy} onClick={() => void save()}>{busy === "save" ? <Loader2 className="animate-spin" /> : <Save />}Save</Button>
-                {(data.status === "Draft" || data.status === "Paused") && <Button size="sm" variant="outline" aria-describedby="publish-help" disabled={!!busy || flags.length > 0 || !description.trim()} onClick={() => void publish()}>{busy === "publish" ? <Loader2 className="animate-spin" /> : <Upload />}Save and publish</Button>}
+                <Button size="sm" disabled={!dirty || !!busy} onClick={() => void save()}>{busy === "save" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}Save</Button>
+                {(data.status === "Draft" || data.status === "Paused") && <Button size="sm" variant="outline" aria-describedby="publish-help" disabled={!!busy || flags.length > 0 || !description.trim()} onClick={() => void publish()}>{busy === "publish" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Upload data-icon="inline-start" />}Save and publish</Button>}
                 {dirty && <span className="text-[12px] text-muted-foreground">Unsaved changes</span>}
                 {(data.status === "Draft" || data.status === "Paused") && (flags.length > 0 || !description.trim()) && <span id="publish-help" className="w-full text-[12px] text-muted-foreground">{flags.length ? "Fix the fair-housing wording to publish." : "Add a description to publish."}</span>}
               </div>

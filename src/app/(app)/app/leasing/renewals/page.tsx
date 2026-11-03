@@ -103,8 +103,8 @@ export default async function RenewalsPage({ searchParams }: Props) {
               <footer className="flex items-center justify-between border-t px-3 py-2 text-[12px] text-muted-foreground">
                 <span className="tabular-nums">{(page - 1) * SIZE + 1}–{Math.min(page * SIZE, total)} of {total}</span>
                 <span className="flex gap-1">
-                  <Button asChild={page > 1} size="icon-sm" variant="ghost" disabled={page <= 1} aria-label="Previous page">{page > 1 ? <Link href={href({ page: page - 1, lease: undefined })}><ChevronLeft /></Link> : <ChevronLeft />}</Button>
-                  <Button asChild={page < pages} size="icon-sm" variant="ghost" disabled={page >= pages} aria-label="Next page">{page < pages ? <Link href={href({ page: page + 1, lease: undefined })}><ChevronRight /></Link> : <ChevronRight />}</Button>
+                  <Button asChild={page > 1} size="icon-sm" variant="ghost" disabled={page <= 1} aria-label="Previous page">{page > 1 ? <Link href={href({ page: page - 1, lease: undefined })}><ChevronLeft data-icon="inline-start" /></Link> : <ChevronLeft data-icon="inline-start" />}</Button>
+                  <Button asChild={page < pages} size="icon-sm" variant="ghost" disabled={page >= pages} aria-label="Next page">{page < pages ? <Link href={href({ page: page + 1, lease: undefined })}><ChevronRight data-icon="inline-start" /></Link> : <ChevronRight data-icon="inline-start" />}</Button>
                 </span>
               </footer>
             </div>

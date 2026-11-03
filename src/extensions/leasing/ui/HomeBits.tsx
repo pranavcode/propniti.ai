@@ -89,8 +89,8 @@ export function TourList({ tours, canAct }: { tours: TourView[]; canAct: boolean
             </div>
             {t.status !== "Scheduled" ? <StatusBadge value={t.status} /> : canAct && (
               <div className="flex shrink-0 gap-1">
-                <Button size="sm" variant="outline" disabled={busy === t.id} aria-expanded={open === t.id} aria-controls={`fb-${t.id}`} onClick={() => setOpen(open === t.id ? null : t.id)}><CalendarCheck />Toured</Button>
-                <Button size="sm" variant="ghost" disabled={busy === t.id} onClick={() => void act(t.id, "no_show")} aria-label={`Mark ${t.prospect} as a no-show`}><CalendarX /><span className="sr-only sm:not-sr-only">No-show</span></Button>
+                <Button size="sm" variant="outline" disabled={busy === t.id} aria-expanded={open === t.id} aria-controls={`fb-${t.id}`} onClick={() => setOpen(open === t.id ? null : t.id)}><CalendarCheck data-icon="inline-start" />Toured</Button>
+                <Button size="sm" variant="ghost" disabled={busy === t.id} onClick={() => void act(t.id, "no_show")} aria-label={`Mark ${t.prospect} as a no-show`}><CalendarX data-icon="inline-start" /><span className="sr-only sm:not-sr-only">No-show</span></Button>
               </div>
             )}
           </div>
@@ -120,7 +120,7 @@ export function FollowUpList({ rows }: { rows: FollowUpView[] }) {
             <Link href={`/app/leasing/prospects/${r.id}`} className="font-medium hover:text-primary hover:underline">{r.name}</Link>
             <p className="truncate text-[12px] text-muted-foreground">{r.stage} · {r.property} · {r.source}{r.beds != null ? ` · ${r.beds === 0 ? "studio" : `${r.beds} bed`}` : ""}</p>
           </div>
-          {shell && <Button size="sm" variant="ghost" aria-label={`Draft a follow-up to ${r.name}`} onClick={() => shell.assistant.ask(`Draft a short follow-up message to ${r.name}, a ${r.stage.toLowerCase()} lead at ${r.property}`, { entity: "prospects", id: r.id, title: r.name })}><MessageSquareText className="text-tone-ai" />Draft</Button>}
+          {shell && <Button size="sm" variant="ghost" aria-label={`Draft a follow-up to ${r.name}`} onClick={() => shell.assistant.ask(`Draft a short follow-up message to ${r.name}, a ${r.stage.toLowerCase()} lead at ${r.property}`, { entity: "prospects", id: r.id, title: r.name })}><MessageSquareText className="text-tone-ai" data-icon="inline-start" />Draft</Button>}
         </li>
       ))}
     </ul>

@@ -56,7 +56,7 @@ export default async function LeasingToday() {
           <>
             <Button asChild size="sm" variant="outline"><Link href="/app/leasing/prospects?new=1">Add prospect</Link></Button>
             <Button asChild size="sm" variant="outline"><Link href="/app/units?f.status=Vacant">Available units</Link></Button>
-            <Button asChild size="sm"><Link href="/app/leasing/pipeline"><KanbanSquare />Pipeline board</Link></Button>
+            <Button asChild size="sm"><Link href="/app/leasing/pipeline"><KanbanSquare data-icon="inline-start" />Pipeline board</Link></Button>
           </>
         }
       />

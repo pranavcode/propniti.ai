@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { CalendarClock, ChevronDown, Clock3, GripVertical, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Money } from "@/components/app/display";
 import { cn } from "@/lib/utils";
 import { COLUMNS, COLUMN_KEYS, planMove, type Column } from "../pipeline";
@@ -90,6 +90,7 @@ export function PipelineBoard({ cards: initial, role }: { cards: Card[]; role: R
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Move to</DropdownMenuLabel>
                           <DropdownMenuSeparator />
+                          <DropdownMenuGroup>
                           {COLUMNS.filter((x) => x.key !== c.column).map((x) => {
                             const p = check(c, x.key);
                             return (
@@ -99,6 +100,7 @@ export function PipelineBoard({ cards: initial, role }: { cards: Card[]; role: R
                               </DropdownMenuItem>
                             );
                           })}
+                          </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}

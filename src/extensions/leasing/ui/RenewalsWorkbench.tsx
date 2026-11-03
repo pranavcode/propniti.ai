@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, CornerDownRight, Loader2, Minus, Pencil, Plus, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { AIBadge, Confidence, type AISource } from "@/components/app/ai";
 import { Money, StatusBadge } from "@/components/app/display";
@@ -140,7 +142,7 @@ export function RenewalPanel({ s }: { s: Selected }) {
               )}
               {s.canEdit && (
                 <div className="flex gap-2">
-                  <Button size="sm" variant={suggestion ? "outline" : "default"} disabled={!!busy} onClick={() => void propose()}>{busy === "propose" ? <Loader2 className="animate-spin" /> : <Sparkles />}{suggestion ? "Price again" : "Ask the Renewals agent"}</Button>
+                  <Button size="sm" variant={suggestion ? "outline" : "default"} disabled={!!busy} onClick={() => void propose()}>{busy === "propose" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}{suggestion ? "Price again" : "Ask the Renewals agent"}</Button>
                 </div>
               )}
             </div>
@@ -149,19 +151,21 @@ export function RenewalPanel({ s }: { s: Selected }) {
           {s.canEdit && (
             <section className="rounded-lg border p-3" aria-labelledby="ren-offer">
               <h3 id="ren-offer" className="mb-2 text-[13px] font-semibold">1 · Accept or edit the offer</h3>
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1 text-[12px]">Monthly rent
-                  <Input name="offer-rent" autoComplete="off" type="number" inputMode="decimal" min={0} step={5} value={rent} onChange={(e) => { setRent(e.target.value); setAccepted(false); setRentError(false); }} aria-invalid={rentError || undefined} className="h-8 w-32 tabular-nums" />
-                </label>
-                <label className="flex flex-col gap-1 text-[12px]">Term
-                  <select name="offer-term" value={term} onChange={(e) => { setTerm(e.target.value); setAccepted(false); }} className="h-8 rounded-md border bg-background px-2 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                    {[6, 12, 13, 15, 18].map((m) => <option key={m} value={m}>{m} months</option>)}
-                  </select>
-                </label>
-                <Button size="sm" disabled={!!busy || accepted} onClick={() => void save()}>{busy === "save" ? <Loader2 className="animate-spin" /> : accepted ? <Check /> : suggestion && rentNum === suggestion.rent ? <Check /> : <Pencil />}{accepted ? "Saved" : suggestion && rentNum === suggestion.rent ? "Accept" : "Save edit"}</Button>
-                {rentError && <span className="w-full text-[12px] text-tone-danger">Enter the monthly rent to offer.</span>}
+              <FieldGroup className="flex-row flex-wrap items-end gap-2">
+                <Field data-invalid={rentError || undefined} className="w-32">
+                  <FieldLabel htmlFor="offer-rent" className="text-[12px]">Monthly rent</FieldLabel>
+                  <Input id="offer-rent" name="offer-rent" autoComplete="off" type="number" inputMode="decimal" min={0} step={5} value={rent} onChange={(e) => { setRent(e.target.value); setAccepted(false); setRentError(false); }} aria-invalid={rentError || undefined} className="h-8 tabular-nums" />
+                </Field>
+                <Field className="w-auto">
+                  <FieldLabel id="offer-term-label" className="text-[12px]">Term (months)</FieldLabel>
+                  <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={term} onValueChange={(v) => { if (v) { setTerm(v); setAccepted(false); } }} aria-labelledby="offer-term-label">
+                    {[6, 12, 13, 15, 18].map((m) => <ToggleGroupItem key={m} value={String(m)} aria-label={`${m} months`} className="tabular-nums">{m}</ToggleGroupItem>)}
+                  </ToggleGroup>
+                </Field>
+                <Button size="sm" disabled={!!busy || accepted} onClick={() => void save()}>{busy === "save" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : accepted ? <Check data-icon="inline-start" /> : suggestion && rentNum === suggestion.rent ? <Check data-icon="inline-start" /> : <Pencil data-icon="inline-start" />}{accepted ? "Saved" : suggestion && rentNum === suggestion.rent ? "Accept" : "Save edit"}</Button>
+                {rentError && <FieldError className="w-full">Enter the monthly rent to offer.</FieldError>}
                 <span className={cn("pb-1.5 text-[12px] tabular-nums", change > 5 ? "text-tone-warning" : "text-muted-foreground")}>{rentNum > 0 ? `${change >= 0 ? "+" : ""}${change.toFixed(1)}% vs today` : ""}</span>
-              </div>
+              </FieldGroup>
             </section>
           )}
 
@@ -171,7 +175,7 @@ export function RenewalPanel({ s }: { s: Selected }) {
                 <h3 id="ren-msg" className="text-[13px] font-semibold">2 · Message the resident</h3>
                 {draft && <AIBadge source={draft.source} model={draft.source === "live" ? draft.model : undefined} size="xs" />}
                 {draft && <Link href={runHref(draft.runId)!} className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>}
-                <Button size="sm" variant="outline" className="ml-auto" disabled={!accepted || !!busy} onClick={() => void draftMessage()}>{busy === "draft" ? <Loader2 className="animate-spin" /> : <Sparkles className="text-tone-ai" />}{draft ? "Draft again" : "Draft with AI"}</Button>
+                <Button size="sm" variant="outline" className="ml-auto" disabled={!accepted || !!busy} onClick={() => void draftMessage()}>{busy === "draft" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles className="text-tone-ai" data-icon="inline-start" />}{draft ? "Draft again" : "Draft with AI"}</Button>
               </div>
               {!accepted && <p className="text-[12px] text-muted-foreground">Accept or save the rent first; the draft uses it.</p>}
               {accepted && (
@@ -181,7 +185,7 @@ export function RenewalPanel({ s }: { s: Selected }) {
                   {flags.length > 0 && <p role="status" className="text-[12px] text-tone-danger">Fair-housing: “{flags[0].phrase}” ({flags[0].category}). {flags[0].suggestion}.</p>}
                   <p id="send-help" className="text-[11.5px] text-muted-foreground">Subject of 3+ characters and a message of 20+. Sending is checked: amounts must match the offer and no waivers can be promised.</p>
                   <div className="flex gap-2">
-                    <Button size="sm" disabled={!!busy || subject.trim().length < 3 || body.trim().length < 20 || flags.length > 0} onClick={() => void send()}>{busy === "send" ? <Loader2 className="animate-spin" /> : <Send />}Send offer</Button>
+                    <Button size="sm" disabled={!!busy || subject.trim().length < 3 || body.trim().length < 20 || flags.length > 0} onClick={() => void send()}>{busy === "send" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Send data-icon="inline-start" />}Send offer</Button>
                   </div>
                 </div>
               )}

@@ -31,7 +31,7 @@ export default async function PipelinePage({ searchParams }: Props) {
         title="Pipeline board"
         description="Every open lead from first inquiry to a signed lease. Drag a card one column, or use its Move menu; approval stays with the broker."
         meta={<><span>{cards.length} on the board</span>{stale > 0 && <Link href="/app/leasing/prospects?view=follow-up" className="text-tone-warning hover:underline">{stale} with no contact in 3+ days</Link>}<span>{c.actor.scope.label}</span></>}
-        actions={<Button asChild size="sm" variant="outline"><Link href="/app/leasing/prospects?view=open"><List />List view</Link></Button>}
+        actions={<Button asChild size="sm" variant="outline"><Link href="/app/leasing/prospects?view=open"><List data-icon="inline-start" />List view</Link></Button>}
       >
         {props.length > 1 && <div className="flex gap-1.5 overflow-x-auto pb-1">{[chip("/app/leasing/pipeline", "All properties", !pick), ...props.map((p) => chip(`/app/leasing/pipeline?property=${p.id}`, p.name, pick === p.id))]}</div>}
       </PageHeader>
