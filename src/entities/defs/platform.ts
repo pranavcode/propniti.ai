@@ -27,7 +27,7 @@ registerEntity({
       sql: "(SELECT count(*) FROM {staff} s WHERE s.org_id = orgs.id AND s.active = 1)",
       help: { summary: "Active users on file for the organization, compared with the seats it pays for." } },
     units_managed: { type: "number", label: "Units managed", format: "compact", sortable: true, list: { default: true, align: "right" }, editable: [] },
-    created_at: { type: "datetime", label: "Customer since", sortable: true, list: { default: true }, editable: [] },
+    created_at: { type: "date", label: "Customer since", sortable: true, list: { default: true }, editable: [] },
   },
   relations: [{ name: "staff", label: "Users", entity: "staff", fk: "org_id", kind: "many" }],
   list: {
