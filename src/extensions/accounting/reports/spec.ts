@@ -5,7 +5,6 @@ import { z } from "zod";
 // registry in run.ts, never from model text. Pure: no database, no server imports.
 
 export const FIRST_MONTH = "2025-05";
-export const LAST_CLOSED = "2026-10";
 export const METROS = ["Austin", "Dallas", "Atlanta", "Phoenix"] as const;
 
 export type GroupBy = "property" | "metro" | "gl" | "month" | "vendor";
@@ -86,7 +85,8 @@ export function describeSpec(s: QuerySpec, props: ScopeProperty[] = []): string 
 }
 
 // Keeps only what the registry and the person's scope allow; returns the spec and what was dropped.
-export function validateSpec(raw: RawSpec, scope: ScopeProperty[]): { spec: QuerySpec; dropped: string[] } {
+// lastClosed: the last closed month (the month before meta.as_of), passed in by the caller.
+export function validateSpec(raw: RawSpec, scope: ScopeProperty[], lastClosed: string): { spec: QuerySpec; dropped: string[] } {
   const dropped: string[] = [];
   let m = measureOf(raw.measure);
   if (!m) {
@@ -103,11 +103,11 @@ export function validateSpec(raw: RawSpec, scope: ScopeProperty[]): { spec: Quer
     dropped.push(`${m.label} has no ${String(raw.compareTo).replace("_", " ")} to compare with`);
     compareTo = "none";
   }
-  let to = raw.to && YM.test(raw.to) ? raw.to : LAST_CLOSED;
+  let to = raw.to && YM.test(raw.to) ? raw.to : lastClosed;
   let from = raw.from && YM.test(raw.from) ? raw.from : addMonths(to, -11);
   if ((raw.from && !YM.test(raw.from)) || (raw.to && !YM.test(raw.to))) dropped.push("A date wasn't a month (YYYY-MM); used the last 12 closed months");
   if (from > to) [from, to] = [to, from];
-  if (to > LAST_CLOSED) { to = LAST_CLOSED; dropped.push(`Books are closed through ${monthLabel(LAST_CLOSED)}`); }
+  if (to > lastClosed) { to = lastClosed; dropped.push(`Books are closed through ${monthLabel(lastClosed)}`); }
   if (from < FIRST_MONTH) { from = FIRST_MONTH; dropped.push(`History starts ${monthLabel(FIRST_MONTH)}`); }
   if (from > to) from = to;
   if (monthsBetween(from, to) > 24) { from = addMonths(to, -23); dropped.push("Limited to 24 months"); }
@@ -125,7 +125,7 @@ export function validateSpec(raw: RawSpec, scope: ScopeProperty[]): { spec: Quer
 }
 
 // Rules fallback: keywords for the measure, grouping, period, comparison, metros and property names.
-export function rulesSpec(text: string, scope: ScopeProperty[], lastClosed = LAST_CLOSED): RawSpec {
+export function rulesSpec(text: string, scope: ScopeProperty[], lastClosed: string): RawSpec {
   const t = text.toLowerCase();
   const measure = MEASURES.find((m) => m.keywords.test(text))?.key ?? "expense";
   const groupBy: GroupBy | null =

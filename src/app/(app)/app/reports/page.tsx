@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { askReport } from "@/extensions/accounting/reports/ask";
 import { scopeProperties, type Ctx } from "@/extensions/accounting/reports/run";
-import { addMonths, FIRST_MONTH, LAST_CLOSED, periodLabel } from "@/extensions/accounting/reports/spec";
+import { addMonths, FIRST_MONTH, periodLabel } from "@/extensions/accounting/reports/spec";
 import { ArAgingReport, AskReport, CashForecastReport, NoiReport, PnlReport, RentRollReport } from "@/extensions/accounting/reports/views";
 
 export const metadata: Metadata = { title: "Reports · Propniti" };
@@ -38,6 +38,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const db = getPlatform().db;
   const ctx: Ctx = { db, ws: session.ws, actor: session.actor };
   const scope = await scopeProperties(ctx);
+  // The month before meta.as_of (the demo's today) is the last closed month.
+  const LAST_CLOSED = addMonths(await asOfMonth(db), -1);
   const report = REPORTS.find((r) => r.key === sp.r);
   const ask = sp.ask?.trim().slice(0, 300) || null;
   const property = sp.property && scope.some((p) => p.id === sp.property) ? sp.property : undefined;
@@ -49,7 +51,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const page = Math.max(1, Math.floor(Number(sp.page)) || 1);
 
   // Errors inside a report fall through to the app's error boundary (src/app/(app)/app/error.tsx).
-  const a = ask ? await askReport(ask, scope) : null;
+  const a = ask ? await askReport(ask, scope, LAST_CLOSED) : null;
   const asOf = report?.key === "cash_forecast" ? await asOfMonth(db) : "";
   const body = a ? <AskReport ctx={ctx} ask={a} scope={scope} />
     : report?.key === "pnl" ? <PnlReport ctx={ctx} from={from} to={to} property={property} />
