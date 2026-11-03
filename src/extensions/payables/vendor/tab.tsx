@@ -60,6 +60,9 @@ async function VendorFinance({ id, row, actor }: TabProps) {
         <h3 className="border-b px-3 py-2 text-[13px] font-semibold">Latest payments</h3>
         {payments.results.length ? (
           <table className="w-full text-[13px]">
+            <thead className="text-[12px] text-muted-foreground">
+              <tr className="border-b"><th className="px-3 py-1.5 text-left font-medium">Bill</th><th className="px-3 py-1.5 text-left font-medium">Sent</th><th className="px-3 py-1.5 text-left font-medium">Status</th><th className="px-3 py-1.5 text-right font-medium">Amount</th></tr>
+            </thead>
             <tbody>
               {payments.results.map((p) => (
                 <tr key={p.id} className="border-b last:border-0">

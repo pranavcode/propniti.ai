@@ -80,8 +80,9 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
               {data.months.map((m) => <th key={m} scope="col" className={cn("border-b px-2 py-1.5 text-right font-medium", !data.closed.includes(m) && "text-muted-foreground/60")}>{MONTH(m)}</th>)}
               <th scope="col" className="border-b border-l px-2 py-1.5 text-right font-medium">YTD actual</th>
               <th scope="col" className="border-b px-2 py-1.5 text-right font-medium">YTD budget</th>
-              <th scope="col" className="border-b px-2 py-1.5 text-right font-medium">Variance</th>
               <th scope="col" className="border-b px-2 py-1.5 text-right font-medium">FY budget</th>
+              {/* Pinned right so the YTD variance stays visible while months scroll. */}
+              <th scope="col" className="sticky right-0 z-10 border-b border-l bg-muted/95 px-2 py-1.5 text-right font-medium">YTD variance</th>
             </tr>
           </thead>
           <tbody>
@@ -120,10 +121,10 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
                   })}
                   <td className={cn("border-b border-l px-2 py-1 text-right", isTotal && "border-t-2")}>{formatMoney(r.ytdActual, "whole")}</td>
                   <td className={cn("border-b px-2 py-1 text-right text-muted-foreground", isTotal && "border-t-2")}>{formatMoney(r.ytdBudget, "whole")}</td>
-                  <td className={cn("border-b px-2 py-1 text-right whitespace-nowrap", isTotal && "border-t-2", Math.abs(p ?? 0) >= 0.02 && (good ? "text-tone-success" : "text-tone-danger"))}>
+                  <td className={cn("border-b px-2 py-1 text-right text-muted-foreground", isTotal && "border-t-2")}>{formatMoney(r.fyBudget, "whole")}</td>
+                  <td className={cn("sticky right-0 z-[1] border-b border-l bg-card px-2 py-1 text-right whitespace-nowrap group-hover:bg-muted", isTotal && "border-t-2", Math.abs(p ?? 0) >= 0.02 && (good ? "text-tone-success" : "text-tone-danger"))}>
                     {formatMoney(v, "whole")}<span className="ml-1 text-[11px] opacity-80">{p == null ? "" : `${p >= 0 ? "+" : "−"}${Math.abs(p * 100).toFixed(1)}%`}</span>
                   </td>
-                  <td className={cn("border-b px-2 py-1 text-right text-muted-foreground", isTotal && "border-t-2")}>{formatMoney(r.fyBudget, "whole")}</td>
                 </tr>
               );
             })}

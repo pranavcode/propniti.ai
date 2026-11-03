@@ -94,7 +94,7 @@ export function Prep1099({ rows, year }: { rows: PrepRow[]; year: number }) {
               return (
                 <tr key={k} className="border-b last:border-0 hover:bg-muted/40">
                   <td className="px-3 py-1.5">{can && <Checkbox checked={picked.has(k)} onCheckedChange={() => toggle(k)} aria-label={`Select ${r.company}, ${r.payer}`} />}</td>
-                  <td className="px-3 py-1.5"><Link href={`/app/maintenance/vendors/${r.vendor_id}?tab=bills`} className="font-medium hover:text-primary hover:underline">{r.company}</Link></td>
+                  <td className="max-w-[220px] px-3 py-1.5"><Link href={`/app/maintenance/vendors/${r.vendor_id}?tab=vendor_finance`} className="block truncate font-medium hover:text-primary hover:underline" title={r.company}>{r.company}</Link></td>
                   <td className="max-w-[260px] truncate px-3 py-1.5 text-muted-foreground" title={r.payer}>{r.payer}</td>
                   <td className="px-3 py-1.5 text-right"><Money value={r.paid} /></td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{r.payments}</td>
@@ -102,7 +102,7 @@ export function Prep1099({ rows, year }: { rows: PrepRow[]; year: number }) {
                   <td className="px-3 py-1.5">{r.w9 ? <span className="text-muted-foreground">On file</span> : <StatusBadge value="Missing" tone="danger" />}</td>
                   <td className="px-3 py-1.5">{r.form_id ? <Link href={`/app/payables/1099s/${r.form_id}`} className="hover:underline"><StatusBadge value={r.form_status} /></Link> : <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-3 py-1.5 text-[12.5px]">
-                    {r.flags.length ? <span className="flex items-start gap-1.5 text-tone-warning"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{r.flags[0]}{r.flags.length > 1 && ` (+${r.flags.length - 1})`}</span> : <span className="text-muted-foreground">—</span>}
+                    {r.flags.length ? <span className="flex max-w-[320px] items-center gap-1.5 text-tone-warning" title={r.flags.join("\n")}><TriangleAlert className="size-3.5 shrink-0" /><span className="truncate">{r.flags[0]}</span>{r.flags.length > 1 && <span className="shrink-0">+{r.flags.length - 1}</span>}</span> : <span className="text-muted-foreground">—</span>}
                   </td>
                 </tr>
               );
