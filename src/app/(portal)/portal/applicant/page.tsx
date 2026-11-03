@@ -96,7 +96,7 @@ export default async function ApplicantHome() {
             <li className="flex items-center gap-2.5 border-t pt-2 text-[13px]">
               <CircleDollarSign className={app.fee_paid ? "size-4 text-tone-success" : "size-4 text-muted-foreground"} aria-hidden />
               <span className={app.fee_paid ? "text-muted-foreground" : "font-medium"}>Application fee</span>
-              <span className="ml-auto text-[12px] text-muted-foreground">{app.fee_paid ? "Paid" : "Due when you submit"}</span>
+              {app.fee_paid ? <span className="ml-auto text-[12px] text-muted-foreground">Paid</span> : <Link href="/portal/applicant/pay" className="ml-auto text-[12px] font-medium text-primary hover:underline">Pay now</Link>}
             </li>
           </ul>
         </section>

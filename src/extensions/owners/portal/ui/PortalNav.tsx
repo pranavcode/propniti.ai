@@ -36,6 +36,7 @@ export const PORTAL_NAV: Record<PortalRole, Item[]> = {
   applicant: [
     { href: "/portal/applicant", label: "Status", icon: Home },
     { href: "/portal/applicant/documents", label: "Documents", icon: Inbox },
+    { href: "/portal/applicant/pay", label: "Fee", icon: CreditCard },
     { href: "/portal/applicant/messages", label: "Messages", icon: MessageSquare },
   ],
 };

@@ -27,7 +27,7 @@ export async function answerApplicant(c: PortalCtx, q: string): Promise<Answer> 
     return { answer: missing.length ? `We still need ${missing.length} document${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}. You can upload them on the Documents page.` : "We have every document we need. Nothing else to upload right now.", facts, trace, links };
   }
   if (/fee|pay|cost|charge/i.test(q)) {
-    return { answer: app.fee_paid ? "Your application fee is paid. There's nothing else to pay until your lease is signed." : "Your application fee hasn't been paid yet. The leasing office collects it when you submit your application; message them if you'd like to pay now.", facts, trace, links };
+    return { answer: app.fee_paid ? "Your application fee is paid. There's nothing else to pay until your lease is signed." : "Your application fee hasn't been paid yet. You can pay it by card on the Pay page; screening starts once it's paid.", facts, trace, links: app.fee_paid ? links : [{ label: "Pay the fee", href: "/portal/applicant/pay" }, ...links] };
   }
   if (/when|hear|long|decision|status|approved|next/i.test(q)) {
     const since = app.submitted_at ? ` You submitted it on ${day(app.submitted_at)}.` : "";
