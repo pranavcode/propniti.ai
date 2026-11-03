@@ -29,7 +29,7 @@ export function AskBox({ onAsk, suggestions = [], placeholder = "Ask or tell Pro
       <div
         onClick={() => ref.current?.focus()}
         className={cn(
-          "group/ask relative rounded-xl border bg-card shadow-[0_1px_2px_oklch(0_0_0/0.04),0_8px_24px_-12px_oklch(0.47_0.085_195/0.25)] transition-[border-color,box-shadow] focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_color-mix(in_oklch,var(--primary)_14%,transparent),0_8px_24px_-12px_oklch(0.47_0.085_195/0.3)]",
+          "group/ask relative rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 focus-within:border-primary/50 focus-within:ring-3 focus-within:ring-primary/15",
           size === "lg" ? "p-3" : "p-2",
         )}
       >

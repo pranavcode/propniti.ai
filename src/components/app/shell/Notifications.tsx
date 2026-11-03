@@ -20,13 +20,17 @@ export function NotificationsMenu() {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<NotificationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await fetch("/api/notifications", { cache: "no-store" });
+      // 404 = the endpoint isn't deployed yet: treat as empty. Anything else is a real failure.
+      setFailed(!r.ok && r.status !== 404);
       setData(r.ok ? await r.json() : { rows: [], unread: 0 });
     } catch {
+      setFailed(true);
       setData({ rows: [], unread: 0 });
     } finally {
       setLoading(false);
@@ -61,6 +65,12 @@ export function NotificationsMenu() {
         <div className="max-h-[420px] overflow-y-auto">
           {loading && !data ? (
             <div className="flex flex-col gap-3 p-3">{[0, 1, 2].map((i) => <div key={i} className="flex gap-2"><Skeleton className="size-2 rounded-full" /><div className="flex-1 flex flex-col gap-1.5"><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/2" /></div></div>)}</div>
+          ) : failed ? (
+            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+              <div className="font-medium">Couldn&apos;t load notifications</div>
+              <p className="text-[12px] text-muted-foreground">Check your connection and try again.</p>
+              <Button size="sm" variant="outline" onClick={() => void load()}>Try again</Button>
+            </div>
           ) : !data?.rows.length ? (
             <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
               <span className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground"><BellOff className="size-4" /></span>

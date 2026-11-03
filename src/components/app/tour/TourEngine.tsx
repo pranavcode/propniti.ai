@@ -128,7 +128,7 @@ export function TourOverlay({ active, go, dismiss }: Pick<ReturnType<typeof useT
       )}
       <div style={{ ...pos, width: W }} className="fixed rounded-xl border bg-popover p-4 text-popover-foreground shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200 motion-reduce:animate-none">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-medium tracking-wide text-primary uppercase">{active.tour.title}</span>
+          <span className="text-[12px] font-medium text-primary">{active.tour.title}</span>
           <button onClick={dismiss} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Skip tour"><X className="size-3.5" /></button>
         </div>
         <h3 className="text-[15px] font-semibold tracking-tight">{step.title}</h3>

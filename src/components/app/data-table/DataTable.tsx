@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useShellMaybe } from "../shell/context";
+import { ConfirmDialog } from "../forms/ConfirmDialog";
 import { EmptyState, ErrorBanner } from "../states";
 import { TONE_DOT } from "../status";
 import { Cell, isRight } from "./cells";
@@ -187,8 +188,9 @@ export function DataTable(props: DataTableProps) {
   const to = Math.min(total, page * size);
   const footerCells = footer && Object.keys(footer).length ? footer : null;
 
-  const doBulk = async (a: BulkAction) => {
-    if (a.confirm && !window.confirm(a.confirm.replace("{n}", String(selectedIds.length)))) return;
+  const [confirming, setConfirming] = useState<BulkAction | null>(null);
+  const doBulk = async (a: BulkAction, confirmed = false) => {
+    if (a.confirm && !confirmed) { setConfirming(a); return; }
     const ids = selectedIds;
     const run = Promise.resolve(onBulkAction?.(a.key, ids));
     toast.promise(run, { loading: `${a.label}: ${ids.length} ${ids.length === 1 ? label.one : label.many}…`, success: `${a.label}: done for ${ids.length}`, error: (e) => (e instanceof Error ? e.message : `${a.label} failed`) });
@@ -358,13 +360,25 @@ export function DataTable(props: DataTableProps) {
       )}
 
       {selectedIds.length > 0 && (
-        <div role="toolbar" aria-label="Bulk actions" className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-[0_12px_40px_-12px_oklch(0_0_0/0.35)] animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none">
+        <div role="toolbar" aria-label="Bulk actions" className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none">
           <span className="mr-2 font-medium tabular-nums">{selectedIds.length} selected</span>
           {bulkActions.map((a) => (
             <Button key={a.key} size="sm" variant={a.tone === "danger" ? "destructive" : "outline"} onClick={() => void doBulk(a)}>{a.tone === "danger" && <Trash2 />}{a.label}</Button>
           ))}
           <Button size="icon-sm" variant="ghost" onClick={() => setRowSelection({})} aria-label="Clear selection"><X /></Button>
         </div>
+      )}
+
+      {confirming && (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => !o && setConfirming(null)}
+          title={`${confirming.label}: ${selectedIds.length} ${selectedIds.length === 1 ? label.one.toLowerCase() : label.many.toLowerCase()}?`}
+          description={confirming.confirm?.replace("{n}", String(selectedIds.length))}
+          confirmLabel={confirming.label}
+          tone={confirming.tone === "danger" ? "danger" : "default"}
+          onConfirm={() => { const a = confirming; setConfirming(null); return doBulk(a, true); }}
+        />
       )}
 
       <SaveViewDialog open={saveOpen} onOpenChange={setSaveOpen} onSave={async (name, shared) => {

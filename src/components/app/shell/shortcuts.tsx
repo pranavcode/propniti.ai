@@ -65,7 +65,7 @@ export function ShortcutsDialog({ open, onOpenChange, nav }: { open: boolean; on
 function Group({ title, rows }: { title: string; rows: [string[], string][] }) {
   return (
     <section>
-      <h3 className="mb-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{title}</h3>
+      <h3 className="mb-1.5 text-[12px] font-medium text-muted-foreground">{title}</h3>
       <ul className="divide-y">
         {rows.map(([keys, label]) => (
           <li key={label} className="flex h-8 items-center justify-between gap-3">

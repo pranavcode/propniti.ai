@@ -70,10 +70,9 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         onClick={assistant.toggle}
         aria-pressed={assistant.open}
         className={cn(
-          "group/ask relative inline-flex h-8 items-center gap-2 overflow-hidden rounded-md pr-2 pl-2.5 text-[13px] font-medium transition-[filter,background-color,box-shadow] outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
-          assistant.open
-            ? "bg-primary text-primary-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.15)_inset,0_1px_2px_oklch(0_0_0/0.15)]"
-            : "bg-[linear-gradient(180deg,color-mix(in_oklch,var(--primary)_92%,white),var(--primary))] text-primary-foreground shadow-[0_1px_0_0_oklch(1_0_0/0.18)_inset,0_1px_2px_oklch(0_0_0/0.18),0_0_0_1px_color-mix(in_oklch,var(--primary)_80%,black)] hover:brightness-110",
+          "group/ask relative inline-flex h-8 items-center gap-2 overflow-hidden rounded-md pr-2 pl-2.5 text-[13px] font-medium transition-[background-color,box-shadow,transform] duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
+          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 active:translate-y-px motion-reduce:active:translate-y-0",
+          assistant.open && "ring-2 ring-primary/30 ring-offset-1 ring-offset-background",
         )}
       >
         <Sparkles className="size-4 transition-transform group-hover/ask:rotate-12 motion-reduce:transition-none" />

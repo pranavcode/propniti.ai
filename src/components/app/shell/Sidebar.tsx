@@ -69,7 +69,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
               {collapsed ? (
                 <div className="mx-auto mb-1 h-px w-5 bg-sidebar-border first:hidden" />
               ) : section.section !== "home" && (
-                <button onClick={() => toggleSection(section.section)} className="group/sec mb-0.5 flex h-6 w-full items-center gap-1 rounded px-2 text-[11px] font-medium tracking-wide text-muted-foreground/80 uppercase hover:text-foreground">
+                <button onClick={() => toggleSection(section.section)} className="group/sec mb-0.5 flex h-6 w-full items-center gap-1 rounded px-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">
                   {section.label}
                   <ChevronDown className={cn("size-3 opacity-0 transition-transform group-hover/sec:opacity-100", isClosed && "-rotate-90 opacity-100")} />
                 </button>
