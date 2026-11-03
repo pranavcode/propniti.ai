@@ -42,7 +42,8 @@ async function distribution(c: PortalCtx, trace: Lookup[]): Promise<Answer> {
   const facts: Record<string, unknown> = { this_month: usd(now.amount_cents), last_month: usd(before.amount_cents), change: usd(delta) };
   let text = `Your ${monthLabel(now.period)} distribution was ${usd(now.amount_cents)}, ${usd(delta)} ${delta < 0 ? "less" : "more"} than ${monthLabel(before.period)} (${usd(before.amount_cents)}).`;
   if (drivers.length) {
-    text += " " + drivers.slice(0, 3).map((x, i) => `${i === 0 ? "The main reason was" : "Also,"} ${x.label}: ${x.d < 0 ? "it lowered" : "it raised"} the payout by ${usd(x.d)}.`).join(" ");
+    const parts = drivers.slice(0, 3).map((x) => `${x.label} ${x.d < 0 ? "lowered" : "raised"} it by ${usd(x.d)}`);
+    text += ` ${parts[0][0].toUpperCase()}${parts[0].slice(1)}${parts.length > 1 ? `; ${parts.slice(1).join("; ")}` : ""}.`;
     drivers.slice(0, 3).forEach((x) => (facts[x.label] = usd(x.d)));
   }
   if (a && b) {

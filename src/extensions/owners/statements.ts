@@ -139,13 +139,14 @@ export async function statementOf(c: Ctx, entityId: string, period: string): Pro
   } else {
     lines.push({ key: "distribution", label: "Available to distribute", amount_cents: Math.max(net, 0), sign: -1, detail: totals.pending_in_cents ? "Pending deposits are added once they clear" : "Cleared items since the last payout" });
   }
-  return {
+  // A plain copy: rows from node:sqlite have a null prototype, and this goes to client components.
+  return structuredClone({
     entity, period, closed, distributionId: d?.id ?? null,
     range: { fromSeq: r.fromSeq, toSeq: r.toSeq, fromId: r.fromId, toId: r.toId },
     totals,
     distribution: d ? { id: d.id, amount_cents: d.amount_cents, reserve_cents: d.reserve_cents, income_cents: d.income_cents, expense_cents: d.expense_cents, fee_cents: d.fee_cents, paid_on: d.paid_on, transfer_id: d.transfer_id, status: d.t_status } : null,
     net_cents: net, gap_cents: gap, properties: agg.properties, payees: agg.payees, lines, issue: issue ?? null,
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------------------------

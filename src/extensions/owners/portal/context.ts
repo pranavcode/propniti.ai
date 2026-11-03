@@ -26,8 +26,10 @@ export async function portalCtx(role: PortalRole): Promise<PortalCtx | null> {
 
 // SQL helpers over effective rows. `{t}` in the SQL expands to the table's effective rows.
 export async function rows<T = Row>(c: PortalCtx, sql: string, ...binds: unknown[]): Promise<T[]> {
-  return (await c.db.prepare(expand(sql, c.ws)).bind(...binds).all<T>()).results;
+  // Spread into plain objects: node:sqlite rows have a null prototype, which client props reject.
+  return (await c.db.prepare(expand(sql, c.ws)).bind(...binds).all<T>()).results.map((r) => ({ ...r }));
 }
 export async function row<T = Row>(c: PortalCtx, sql: string, ...binds: unknown[]): Promise<T | null> {
-  return c.db.prepare(expand(sql, c.ws)).bind(...binds).first<T>();
+  const r = await c.db.prepare(expand(sql, c.ws)).bind(...binds).first<T>();
+  return r ? { ...r } : null;
 }

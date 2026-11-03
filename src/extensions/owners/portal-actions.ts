@@ -235,8 +235,9 @@ registerAction({
     if (!w) return no(404, "Job not found");
     const at = nowIso(ctx.nowMs);
     const accept = input.decision === "accept";
-    const set: Record<string, string> = accept ? { status: "'Scheduled'", scheduled_at: "coalesce(?3, e.scheduled_at)" } : { status: "'Triaged'", vendor_id: "NULL", scheduled_at: "NULL" };
-    const [r] = await ctx.db.batch([ctx.db.prepare(overlayUpsertSql("work_orders", WO_COLS, set, "e.status = 'Assigned'")).bind(ctx.ws, w.id, accept ? input.visitAt ?? null : null)]);
+    // The set expressions also run in ON CONFLICT DO UPDATE, so they can't reference the source row.
+    const set: Record<string, string> = accept ? { status: "'Scheduled'", ...(input.visitAt ? { scheduled_at: "?3" } : {}) } : { status: "'Triaged'", vendor_id: "NULL", scheduled_at: "NULL" };
+    const [r] = await ctx.db.batch([ctx.db.prepare(overlayUpsertSql("work_orders", WO_COLS, set, "e.status = 'Assigned'")).bind(ctx.ws, w.id, ...(accept && input.visitAt ? [input.visitAt] : []))]);
     if (!r.meta.changes) return no(409, `${w.id} is ${w.status.toLowerCase()}; only new assignments can be accepted or declined.`);
     await ctx.db.batch([
       ctx.db.prepare("INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) VALUES (?1, ?2, ?3, ?4, ?5, 'vendor', ?6, 'Status', ?7, ?8)")
