@@ -86,8 +86,14 @@ registerEntity({
       sql: "coalesce((SELECT v.company FROM {vendors} v WHERE v.id = vendor_cois.vendor_id), vendor_cois.vendor_id) || ' · ' || vendor_cois.carrier" },
     vendor_id: { type: "ref", ref: "vendors", label: "Vendor", required: true, facet: true, sortable: true, list: { default: true }, editable: [] },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, sql: COI_STATUS_SQL, enum: [
-      { value: "Valid", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Expired", tone: "danger" }, { value: "Missing", tone: "danger" },
-    ], help: { summary: "Expiring means the certificate ends within 30 days. Vendors with an expired or missing certificate shouldn't be dispatched.", article: "vendor-insurance-certificates" } },
+      { value: "Pending verification", tone: "info" }, { value: "Valid", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Expired", tone: "danger" }, { value: "Missing", tone: "danger" }, { value: "Rejected", tone: "danger" },
+    ], help: { summary: "A new certificate is Pending verification until staff check it against the carrier's document. Only verified certificates count for dispatch. Expiring means it ends within 30 days.", article: "vendor-insurance-certificates" } },
+    // The stored review state. New certificates (from anyone, including the vendor) start pending;
+    // only vendor_cois.verify and vendor_cois.reject change it.
+    review: { type: "enum", label: "Review", column: "status", system: true, initial: ["Pending verification"], list: { default: false }, enum: [
+      { value: "Pending verification", tone: "info" }, { value: "Verified", tone: "success" }, { value: "Rejected", tone: "danger" },
+      { value: "Valid", tone: "success", label: "Verified" }, { value: "Expiring", tone: "success", label: "Verified" }, { value: "Expired", tone: "success", label: "Verified" }, { value: "Missing", tone: "danger" },
+    ] },
     is_current: { type: "bool", label: "Current certificate", facet: true, list: { default: false },
       sql: "(vendor_cois.expires_on = (SELECT max(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = vendor_cois.vendor_id))",
       help: { summary: "The latest certificate on file for the vendor. Older ones are kept as history." } },
@@ -110,12 +116,13 @@ registerEntity({
     statusTabs: "status",
     savedViews: [
       { key: "current", label: "Current", filters: { is_current: "true" }, sort: ["expires_on", "asc"] },
+      { key: "to-verify", label: "To verify", filters: { status: "Pending verification" }, sort: ["expires_on", "asc"] },
       { key: "action", label: "Needs action", filters: { is_current: "true", status: ["Expiring", "Expired", "Missing"] }, sort: ["expires_on", "asc"] },
       { key: "exposed", label: "Expired with open jobs", filters: { is_current: "true", status: ["Expired", "Missing"], "open_jobs.min": "1" }, sort: ["open_jobs", "desc"] },
     ],
   },
   detail: {
-    facts: ["status", "vendor_id", "carrier", "gl_limit", "workers_comp", "expires_on", "open_jobs"],
+    facts: ["status", "review", "vendor_id", "carrier", "gl_limit", "workers_comp", "expires_on", "open_jobs"],
     tabs: [
       { key: "overview", label: "Overview", fields: ["vendor_id", "carrier", "gl_limit", "workers_comp", "expires_on", "days_to_expiry", "is_current", "open_jobs", "document_id"] },
     ],
@@ -127,9 +134,11 @@ registerEntity({
     summaryPrompt: "Summarise this vendor's insurance certificate for the maintenance supervisor in 2 sentences: whether it's current, and whether open jobs are exposed. Use only the facts.",
     agents: ["compliance"],
   },
-  permissions: { read: [...STAFF, "vendor"], create: [...RISK_WRITE, "vendor"], update: [...RISK_WRITE, "vendor"], delete: [...LEADERS] },
+  // Vendors may submit a certificate (it stays pending) but never edit one, so a verified
+  // certificate's expiry or limits can't be changed from the vendor side.
+  permissions: { read: [...STAFF, "vendor"], create: [...RISK_WRITE, "vendor"], update: RISK_WRITE, delete: [...LEADERS] },
   writes: "generic",
-  actions: ["vendor_cois.request_certificate"],
+  actions: ["vendor_cois.verify", "vendor_cois.reject", "vendor_cois.request_certificate"],
   help: { summary: "Certificates of insurance from the vendors you dispatch: carrier, liability limit, workers' comp and expiry.", article: "vendor-insurance-certificates" },
 });
 

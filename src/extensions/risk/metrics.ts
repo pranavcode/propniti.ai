@@ -71,7 +71,7 @@ registerMetric({
   roles: READERS,
   run: async (ctx, params) => {
     const w = scoped(ctx, "w.property_id", params.property);
-    const n = await one(ctx, `${withCoi(ctx)}SELECT count(DISTINCT vendor_cois.vendor_id) AS n FROM ${cois(ctx)} WHERE ${CURRENT_COI} AND ${COI_STATUS_SQL} IN ('Expired', 'Missing')
+    const n = await one(ctx, `${withCoi(ctx)}SELECT count(DISTINCT vendor_cois.vendor_id) AS n FROM ${cois(ctx)} WHERE ${CURRENT_COI} AND ${COI_STATUS_SQL} NOT IN ('Valid', 'Expiring')
       AND EXISTS (SELECT 1 FROM ${effective("work_orders", ctx.ws)} w WHERE w.vendor_id = vendor_cois.vendor_id AND w.status NOT IN ('Completed', 'Paid', 'Cancelled')${w.sql})`, w.binds);
     return { value: n, points: [], source: SOURCE };
   },
@@ -155,7 +155,7 @@ registerMetric({
   roles: READERS,
   run: async (ctx) => {
     const res = await ctx.db.prepare(`${withCoi(ctx)}SELECT ${COI_STATUS_SQL} AS st, count(*) AS n FROM ${cois(ctx)} WHERE ${CURRENT_COI} GROUP BY 1`).all<{ st: string; n: number }>();
-    const order = ["Valid", "Expiring", "Expired", "Missing"];
+    const order = ["Valid", "Expiring", "Pending verification", "Expired", "Rejected", "Missing"];
     const points = order.map((status) => ({ status, count: Number(res.results.find((r) => r.st === status)?.n ?? 0) })).filter((p) => p.count > 0);
     return { value: points.find((p) => p.status === "Valid")?.count ?? 0, points, source: SOURCE };
   },

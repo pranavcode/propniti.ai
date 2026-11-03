@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BellRing, CircleCheck } from "lucide-react";
+import { BadgeCheck, BadgeX, BellRing, CircleCheck } from "lucide-react";
 import type { Role, Row } from "@/entities/types";
 import { overlayUpsertSql } from "@/server/effective";
 import { registerAction } from "../actions";
@@ -19,7 +19,7 @@ registerAction({
   entity: "vendor_cois",
   roles: RISK_WRITE,
   icon: BellRing,
-  when: (r: Row) => ["Expiring", "Expired", "Missing"].includes(String(r.status)),
+  when: (r: Row) => ["Expiring", "Expired", "Missing", "Rejected"].includes(String(r.status)),
   confirm: { title: "Ask the vendor for a current certificate?", body: "They get a notification in the vendor portal asking them to upload a renewed certificate of insurance." },
   handler: async (ctx, row) => {
     const at = new Date(ctx.nowMs).toISOString();
@@ -36,6 +36,64 @@ registerAction({
     return { status: 200, message: `Asked ${company} for a current certificate` };
   },
   help: { summary: "Sends the vendor a portal notification asking for a renewed certificate of insurance.", article: "vendor-insurance-certificates" },
+});
+
+// Certificates a vendor submits stay "Pending verification" until compliance, accounting or admin
+// staff check them against the carrier's document. Verifying records the values the reviewer
+// confirmed, so what counts for dispatch is never the vendor's own entry.
+const COI_COLS = ["id", "deleted", "vendor_id", "document_id", "carrier", "gl_limit_cents", "workers_comp", "expires_on", "status"] as const;
+const COI_REVIEWERS: Role[] = [...RISK_WRITE, "accountant", "admin"];
+const PENDING = "e.status = 'Pending verification'";
+
+registerAction({
+  key: "vendor_cois.verify",
+  label: "Verify certificate",
+  entity: "vendor_cois",
+  roles: COI_REVIEWERS,
+  icon: BadgeCheck,
+  when: (r: Row) => r.review === "Pending verification",
+  input: z.strictObject({
+    expires_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+    gl_limit: z.number().finite().min(100_000, "General liability under $100,000 doesn't meet the vendor requirement").max(100_000_000),
+    workers_comp: z.boolean(),
+  }),
+  handler: async (ctx, row, input) => {
+    const at = new Date(ctx.nowMs).toISOString();
+    if (input.expires_on <= at.slice(0, 10)) return { status: 400, error: "That certificate has already expired. Reject it and ask the vendor for a current one." };
+    const res = await ctx.db.prepare(overlayUpsertSql("vendor_cois", COI_COLS, { status: "'Verified'", expires_on: "?3", gl_limit_cents: "?4", workers_comp: "?5" }, PENDING))
+      .bind(ctx.ws, String(row.id), input.expires_on, Math.round(input.gl_limit * 100), input.workers_comp ? 1 : 0).run();
+    if (!res.meta.changes) return { status: 409, error: "This certificate was already reviewed" };
+    const company = String(row.vendor_id__label ?? row.vendor_id);
+    const a = activity(ctx.ws, "vendor_cois", String(row.id), null, at, ctx.actor.personaId, "verified", `${ctx.actor.name} verified the certificate: ${String(row.carrier)}, valid to ${input.expires_on}`);
+    const b = activity(ctx.ws, "vendors", String(row.vendor_id), null, at, ctx.actor.personaId, "verified", `${ctx.actor.name} verified a certificate of insurance valid to ${input.expires_on}`);
+    await ctx.db.batch([a, b].map((x) => ctx.db.prepare(x.sql).bind(...x.binds)));
+    return { status: 200, message: `Verified ${company}'s certificate, valid to ${input.expires_on}` };
+  },
+  help: { summary: "Confirms the certificate against the carrier's document. Only verified certificates count when dispatching or ranking vendors.", article: "vendor-insurance-certificates" },
+});
+
+registerAction({
+  key: "vendor_cois.reject",
+  label: "Reject certificate",
+  entity: "vendor_cois",
+  roles: COI_REVIEWERS,
+  icon: BadgeX,
+  when: (r: Row) => r.review === "Pending verification",
+  input: z.strictObject({ reason: z.string().trim().min(5, "Tell the vendor what to fix").max(500) }),
+  handler: async (ctx, row, input) => {
+    const at = new Date(ctx.nowMs).toISOString();
+    const res = await ctx.db.prepare(overlayUpsertSql("vendor_cois", COI_COLS, { status: "'Rejected'" }, PENDING)).bind(ctx.ws, String(row.id)).run();
+    if (!res.meta.changes) return { status: 409, error: "This certificate was already reviewed" };
+    const vendor = String(row.vendor_id);
+    const stmts = [
+      { sql: "INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, href, entity_type, entity_id, at) VALUES (?, ?, ?, 'In-app', ?, ?, '/portal/vendor', 'vendor_cois', ?, ?)",
+        binds: [ctx.ws, rid(), vendor, "Your insurance certificate needs changes", input.reason, String(row.id), at] },
+      activity(ctx.ws, "vendor_cois", String(row.id), null, at, ctx.actor.personaId, "rejected", `${ctx.actor.name} rejected the certificate: ${input.reason}`),
+    ];
+    await ctx.db.batch(stmts.map((x) => ctx.db.prepare(x.sql).bind(...x.binds)));
+    return { status: 200, message: "Rejected; the vendor was told what to fix" };
+  },
+  help: { summary: "Sends the certificate back to the vendor with the reason. It never counts as insurance.", article: "vendor-insurance-certificates" },
 });
 
 const COMPLIANCE_COLS = ["id", "deleted", "property_id", "staff_id", "kind", "title", "due_on", "completed_on", "status", "document_id"] as const;

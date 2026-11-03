@@ -37,7 +37,7 @@ const KPIS: (KpiDef & { needs: EntityKey })[] = [
 // colour follows the status, not its position, so an absent status never repaints the rest.
 const TONE = { success: "var(--tone-success)", warning: "var(--tone-warning)", danger: "var(--tone-danger)", neutral: "var(--tone-neutral)", info: "var(--tone-info)" };
 const SERIES_TONE: Record<string, Record<string, string>> = { by_kind: { overdue: TONE.danger, due_soon: TONE.warning, open: TONE.info, done: TONE.success } };
-const POINT_TONE: Record<string, Record<string, string>> = { coi: { Valid: TONE.success, Expiring: TONE.warning, Expired: TONE.danger, Missing: TONE.neutral } };
+const POINT_TONE: Record<string, Record<string, string>> = { coi: { Valid: TONE.success, Expiring: TONE.warning, "Pending verification": TONE.info, Expired: TONE.danger, Rejected: TONE.danger, Missing: TONE.neutral } };
 
 const CHARTS: (ChartDef & { needs: EntityKey })[] = [
   { key: "by_month", title: "Upcoming expiries, next 12 months", kind: "stacked", metric: "risk.expiries_by_month", x: "month", needs: "compliance_items",

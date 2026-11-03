@@ -306,11 +306,11 @@ registerAction({
       ctx.db.prepare("INSERT INTO documents (workspace_id, id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, uploaded_by, uploaded_at) VALUES (?1, ?2, 'vendors', ?3, ?4, ?5, 'application/pdf', 'COI', ?6, ?3, ?3, ?7)")
         .bind(ctx.ws, docId, row.id, input.fileName, `/app/maintenance/vendors/${row.id}`, `Vendor ${String(row.company)} › Insurance`, at),
       ctx.db.prepare("INSERT INTO vendor_cois (workspace_id, id, vendor_id, document_id, carrier, gl_limit_cents, workers_comp, expires_on, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
-        .bind(ctx.ws, uid("coi"), row.id, docId, input.carrier, input.glLimitCents, input.workersComp ? 1 : 0, input.expiresOn, soon ? "Expiring" : "Valid"),
+        .bind(ctx.ws, uid("coi"), row.id, docId, input.carrier, input.glLimitCents, input.workersComp ? 1 : 0, input.expiresOn, "Pending verification"),
       eventStmt(ctx.db, ctx.ws, at, "coi.uploaded", "vendors", String(row.id), null, { expires_on: input.expiresOn }),
-      notifyStmt(ctx.db, ctx.ws, at, "tom", "New insurance certificate", `${String(row.company)} uploaded a COI from ${input.carrier}, valid to ${input.expiresOn}.`, `/app/maintenance/vendors/${row.id}`, ["vendors", String(row.id)]),
+      notifyStmt(ctx.db, ctx.ws, at, "tom", "New insurance certificate", `${String(row.company)} uploaded a COI from ${input.carrier} (stated valid to ${input.expiresOn}). Verify it before it counts for dispatch.`, `/app/maintenance/vendors/${row.id}`, ["vendors", String(row.id)]),
     ]);
-    return ok(soon ? `Saved. This certificate expires within 30 days, so upload the renewal when you have it.` : `Saved. Your insurance is current until ${input.expiresOn}.`);
+    return ok(`Received. We check it against your carrier's document before it counts for new jobs.${soon ? " It expires within 30 days, so send the renewal when you have it." : ""}`);
   },
 });
 

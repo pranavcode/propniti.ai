@@ -3,6 +3,7 @@
 // Work orders and vendors started as lane C's reference pattern; the maintenance lane extends them.
 import { ClipboardCheck, KeyRound, Package, PaintRoller, Receipt, RefreshCcw, HardHat, Wrench } from "lucide-react";
 import { AS_OF, issuesField, LEADERS, OPS, STAFF } from "../common";
+import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
 import { registerEntity } from "../registry";
 import type { Role } from "../types";
 
@@ -158,7 +159,7 @@ registerEntity({
     on_time_pct: { type: "number", label: "On time (12 mo)", format: "pct", sortable: true, list: { default: true, align: "right" },
       sql: `(SELECT CASE WHEN count(*) THEN 1.0 * sum(w.completed_at <= w.sla_due_at) / count(*) END FROM {work_orders} w WHERE w.vendor_id = vendors.id AND w.completed_at IS NOT NULL AND w.sla_due_at IS NOT NULL AND w.completed_at >= date(${AS_OF}, '-12 months'))`,
       help: { summary: "Share of this vendor's jobs in the last 12 months completed before their SLA due time.", article: "maintenance-triage-agent" } },
-    coi_expires: { type: "date", label: "COI expires", sortable: true, list: { default: true }, sql: "(SELECT max(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = vendors.id)",
+    coi_expires: { type: "date", label: "COI expires", sortable: true, list: { default: true }, sql: verifiedCoiExpirySql("{vendor_cois}", "vendors.id"),
       help: { summary: "Latest certificate of insurance on file. Vendors with an expired COI shouldn't be dispatched.", article: "vendor-insurance-certificates" } },
     contact_name: { type: "text", label: "Contact", search: true, list: { default: false } },
     email: { type: "text", label: "Email", search: true },
