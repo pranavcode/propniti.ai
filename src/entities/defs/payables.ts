@@ -104,6 +104,8 @@ registerEntity({
   // later change, and all money, goes through the named actions.
   permissions: { read: [...AP_READ, "owner", "vendor"], create: AP, update: [], delete: [] },
   writes: "generic",
+  // Past approval or once sent, only named actions change it (generic edits and deletes refused).
+  lockedWhen: { field: "status", in: ["Approved", "Scheduled", "Paid", "Void"] },
   actions: ["bills.submit", "bills.approve", "bills.pay", "bills.approve_and_pay", "bills.recode", "bills.void", "bills.confirm_vendor_bank"],
   // INTEGRATE: scenarios.md names this rule bill_lines.gl_miscoded, but bill_lines isn't an EntityKey (logged in lane-requests.md).
   dataRules: ["bill_lines.gl_miscoded" as RuleKey],
