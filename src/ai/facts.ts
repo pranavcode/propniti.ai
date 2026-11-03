@@ -1,5 +1,6 @@
 import { AS_OF } from "@/seed/constants";
 import type { Row } from "@/entities/types";
+import { chargeOwedSql } from "@/server/data";
 import { daysBetween, sql, type DataCtx } from "./data";
 
 // Computed facts the agents and the assistant state as figures. The model never computes money:
@@ -16,72 +17,67 @@ export type Delinquent = {
 const METROS = ["Austin", "Dallas", "Atlanta", "Phoenix"];
 export const matchMetro = (text: string) => METROS.find((m) => new RegExp(`\\b${m}\\b`, "i").test(text) || (m === "Dallas" && /\bDFW\b/i.test(text)));
 
-// Balances per lease from charges due by today, minus good payments and credits; days late is the
-// age of the oldest charge the payments haven't covered (first in, first out).
+// Balances per lease from the charges still owed and due by today, read from the stored allocation
+// (charges.paid_cents: each lease's payments and credits applied oldest first, kept current by every
+// money action) instead of summing the whole ledger. Rent on its way by ACH isn't paid yet, so it
+// still counts as owed, as on the ledger. Days late is the age of the oldest charge still owed.
 export async function delinquency(ctx: DataCtx, today: string, f: { minDays?: number; metro?: string; propertyIds?: string[]; leaseIds?: string[]; limit?: number } = {}): Promise<{ rows: Delinquent[]; total: number; total_balance_cents: number }> {
   const filters: string[] = [];
-  const params: unknown[] = [today, today];
+  const params: unknown[] = [today];
   if (f.metro) {
     filters.push("p.metro = ?");
     params.push(f.metro);
   }
   if (f.propertyIds?.length) {
-    filters.push("l.property_id IN (SELECT value FROM json_each(?))");
+    filters.push("c.property_id IN (SELECT value FROM json_each(?))");
     params.push(JSON.stringify(f.propertyIds));
   }
   if (f.leaseIds?.length) {
-    filters.push("l.id IN (SELECT value FROM json_each(?))");
+    filters.push("c.lease_id IN (SELECT value FROM json_each(?))");
     params.push(JSON.stringify(f.leaseIds));
   }
-  const owing = await sql<{ lease_id: string; property_id: string; household_id: string; unit_id: string; status: string; property: string; metro: string; manager: string | null; charged: number; paid: number }>(
+  const owed = await sql<{ lease_id: string; due_on: string; owed: number; property: string; metro: string }>(
     ctx,
-    `WITH ch AS (SELECT lease_id, sum(amount_cents) AS s FROM {charges} WHERE due_on <= ? GROUP BY lease_id),
-          pa AS (SELECT lease_id, sum(amount_cents) AS s FROM {payments} WHERE nsf = 0 AND received_on <= ? GROUP BY lease_id),
-          cr AS (SELECT lease_id, sum(amount_cents) AS s FROM {credits} GROUP BY lease_id)
-     SELECT l.id AS lease_id, l.property_id, l.household_id, l.unit_id, l.status, p.name AS property, p.metro, (SELECT s.name FROM {staff} s WHERE s.id = p.manager_id) AS manager,
-            ch.s AS charged, coalesce(pa.s, 0) + coalesce(cr.s, 0) AS paid
-     FROM ch JOIN {leases} l ON l.id = ch.lease_id JOIN {properties} p ON p.id = l.property_id
-     LEFT JOIN pa ON pa.lease_id = ch.lease_id LEFT JOIN cr ON cr.lease_id = ch.lease_id
-     WHERE ch.s - coalesce(pa.s, 0) - coalesce(cr.s, 0) > 0 ${filters.length ? "AND " + filters.join(" AND ") : ""}`,
+    `SELECT c.lease_id, c.due_on, ${chargeOwedSql("c")} AS owed, p.name AS property, p.metro
+     FROM {charges} c JOIN {properties} p ON p.id = c.property_id
+     WHERE c.paid_cents < c.amount_cents AND c.due_on <= ? ${filters.length ? "AND " + filters.join(" AND ") : ""}
+     ORDER BY c.lease_id, c.due_on`,
     params,
   );
-  if (!owing.length) return { rows: [], total: 0, total_balance_cents: 0 };
-  const ids = owing.map((o) => o.lease_id);
-  const [charges, people, units, plans] = await Promise.all([
-    sql<{ lease_id: string; due_on: string; amount_cents: number }>(ctx, "SELECT lease_id, due_on, amount_cents FROM {charges} WHERE due_on <= ? AND lease_id IN (SELECT value FROM json_each(?)) ORDER BY lease_id, due_on", [today, JSON.stringify(ids)]),
+  if (!owed.length) return { rows: [], total: 0, total_balance_cents: 0 };
+  const byLease = new Map<string, typeof owed>();
+  for (const c of owed) (byLease.get(c.lease_id) ?? byLease.set(c.lease_id, []).get(c.lease_id)!).push(c);
+  const ids = [...byLease.keys()];
+  const leases = await sql<{ id: string; property_id: string; household_id: string; unit_id: string; status: string; manager: string | null }>(ctx,
+    "SELECT l.id, l.property_id, l.household_id, l.unit_id, l.status, (SELECT s.name FROM {staff} s JOIN {properties} p ON s.id = p.manager_id WHERE p.id = l.property_id) AS manager FROM {leases} l WHERE l.id IN (SELECT value FROM json_each(?))", [JSON.stringify(ids)]);
+  const [people, units, plans] = await Promise.all([
     sql<{ household_id: string; id: string; first_name: string; last_name: string; phone: string; email: string; language: string; risk_score: number | null }>(
-      ctx, "SELECT household_id, id, first_name, last_name, phone, email, language, risk_score FROM {residents} WHERE is_primary = 1 AND household_id IN (SELECT value FROM json_each(?))", [JSON.stringify(owing.map((o) => o.household_id))],
+      ctx, "SELECT household_id, id, first_name, last_name, phone, email, language, risk_score FROM {residents} WHERE is_primary = 1 AND household_id IN (SELECT value FROM json_each(?))", [JSON.stringify(leases.map((l) => l.household_id))],
     ),
-    sql<{ id: string; number: string }>(ctx, "SELECT id, number FROM {units} WHERE id IN (SELECT value FROM json_each(?))", [JSON.stringify(owing.map((o) => o.unit_id))]),
+    sql<{ id: string; number: string }>(ctx, "SELECT id, number FROM {units} WHERE id IN (SELECT value FROM json_each(?))", [JSON.stringify(leases.map((l) => l.unit_id))]),
     sql<{ entity_id: string }>(ctx, "SELECT entity_id FROM {tasks} WHERE entity_type = 'leases' AND title LIKE '%payment plan%' AND status <> 'Cancelled' AND entity_id IN (SELECT value FROM json_each(?))", [JSON.stringify(ids)]).catch(() => []),
   ]);
-  const byLease = new Map<string, { due_on: string; amount_cents: number }[]>();
-  for (const c of charges) (byLease.get(c.lease_id) ?? byLease.set(c.lease_id, []).get(c.lease_id)!).push(c);
   const person = new Map(people.map((p) => [p.household_id, p]));
   const unit = new Map(units.map((u) => [u.id, u.number]));
   const planned = new Set(plans.map((p) => p.entity_id));
 
-  let rows: Delinquent[] = owing.map((o) => {
-    let covered = o.paid;
+  let rows: Delinquent[] = leases.map((l) => {
+    const charges = byLease.get(l.id)!;
     const aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
-    let oldest = today;
-    for (const c of byLease.get(o.lease_id) ?? []) {
-      const open = Math.max(0, c.amount_cents - Math.max(0, covered));
-      covered -= c.amount_cents;
-      if (!open) continue;
-      if (oldest === today) oldest = c.due_on;
+    for (const c of charges) {
       const age = daysBetween(c.due_on, today);
-      if (age <= 30) aging.d0_30 += open;
-      else if (age <= 60) aging.d31_60 += open;
-      else if (age <= 90) aging.d61_90 += open;
-      else aging.d90p += open;
+      if (age <= 30) aging.d0_30 += c.owed;
+      else if (age <= 60) aging.d31_60 += c.owed;
+      else if (age <= 90) aging.d61_90 += c.owed;
+      else aging.d90p += c.owed;
     }
-    const p = person.get(o.household_id);
+    const p = person.get(l.household_id);
+    const oldest = charges[0].due_on;
     return {
-      lease_id: o.lease_id, property_id: o.property_id, property: o.property, metro: o.metro, manager: o.manager ?? null, unit: unit.get(o.unit_id) ?? o.unit_id, household_id: o.household_id,
-      resident: p ? `${p.first_name} ${p.last_name}` : o.household_id, resident_id: p?.id ?? null, phone: p?.phone ?? "", email: p?.email ?? "", language: p?.language ?? "en",
-      balance_cents: o.charged - o.paid, days_late: daysBetween(oldest, today), oldest_due_on: oldest, aging, lease_status: o.status,
-      risk_score: p?.risk_score ?? null, open_plan: planned.has(o.lease_id),
+      lease_id: l.id, property_id: l.property_id, property: charges[0].property, metro: charges[0].metro, manager: l.manager ?? null, unit: unit.get(l.unit_id) ?? l.unit_id, household_id: l.household_id,
+      resident: p ? `${p.first_name} ${p.last_name}` : l.household_id, resident_id: p?.id ?? null, phone: p?.phone ?? "", email: p?.email ?? "", language: p?.language ?? "en",
+      balance_cents: charges.reduce((s, c) => s + c.owed, 0), days_late: daysBetween(oldest, today), oldest_due_on: oldest, aging, lease_status: l.status,
+      risk_score: p?.risk_score ?? null, open_plan: planned.has(l.id),
     };
   });
   if (f.minDays) rows = rows.filter((r) => r.days_late >= f.minDays!);

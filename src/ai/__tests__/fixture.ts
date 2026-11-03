@@ -57,6 +57,8 @@ export function openFixture() {
     { id: "pay2", lease_id: "l2", household_id: "h2", property_id: "p01", method: "ACH", received_on: "2026-09-03", amount_cents: 120000 },
     { id: "pay3", lease_id: "l2", household_id: "h2", property_id: "p01", method: "ACH", received_on: "2026-10-03", amount_cents: 120000, nsf: 1 },
   ]);
+  // Stored allocation, as the generator writes it: the good payments settled the oldest charges.
+  raw.exec("UPDATE charges SET paid_cents = amount_cents WHERE id IN ('c1-2026-08', 'c2-2026-09')");
   ins(raw, "approval_policies", [
     { id: "ap1", category: "Maintenance spend", limit_cents: 50000, approver_role: "maintenance_supervisor", owner_approval_over_cents: 250000 },
     { id: "ap2", category: "Bill payment", limit_cents: 100000, approver_role: "accountant" },
