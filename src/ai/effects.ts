@@ -101,6 +101,49 @@ function withEdits(payload: Record<string, unknown>, edited: unknown) {
   return { ...payload, effects };
 }
 
+// Proposals written before effects existed (the seeded history) carry only a few params. Their
+// effects are rebuilt here from the record, using the same kinds as live proposals.
+async function deriveEffects(data: DataCtx, p: Row, payload: Record<string, unknown>): Promise<Effect[]> {
+  const action = String(p.action);
+  const id = String(p.entity_id);
+  const verb = action.split(".")[1] ?? "";
+  const pid = (p.property_id as string) ?? null;
+  const first = (s: string) => s.split(" ")[0];
+  if (action === "data_issues.apply_fix" && typeof payload.issue_id === "string") {
+    const issue = await get(data, "data_issues", payload.issue_id);
+    if (!issue || issue.status !== "open") throw new Error(issue ? `This issue is already ${issue.status}` : "Issue not found");
+    const { fixProposal } = await import("./tools/write");
+    return Payload.parse(fixProposal(issue).payload).effects;
+  }
+  if (p.entity_type === "households" && /reminder|payment_plan/.test(verb)) {
+    const r = await data.db.prepare(`SELECT t.id, t.first_name FROM ${eff("residents", data.ws).sql} t WHERE t.household_id = ? ORDER BY t.is_primary DESC LIMIT 1`).bind(...eff("residents", data.ws).params, id).first<Row>();
+    if (!r) throw new Error("No resident on this household");
+    const amount = p.amount_cents != null ? `$${(Number(p.amount_cents) / 100).toLocaleString("en-US")}` : "your balance";
+    const body = verb.includes("plan")
+      ? `Hi ${first(String(r.first_name))}, your balance is ${amount}. We can split it into three monthly payments. Reply to set it up, or pay in the resident portal.`
+      : `Hi ${first(String(r.first_name))}, your account shows ${amount} past due. You can pay in the resident portal. If you've already paid, please ignore this.`;
+    return [{ kind: "message", party_kind: "resident", party_id: String(r.id), property_id: pid, channel: payload.channel === "SMS" ? "SMS" : "Email", subject: verb.includes("plan") ? "A payment plan for your balance" : "Rent reminder", body, entity_type: "households", entity_id: id }];
+  }
+  if (action === "work_orders.assign_vendor") return [{ kind: "update", table: "work_orders", id, changes: { status: "Assigned" } }];
+  if (action === "bills.approve") return [{ kind: "update", table: "bills", id, changes: { status: "Approved", approved_by: "$by", approved_at: new Date().toISOString() } }];
+  if (action === "bills.hold") return [{ kind: "task", title: `Review bill ${id}`, detail: parseJson<string[]>(p.why, []).join(" "), assignee_role: "accountant", priority: "High" }];
+  if (action === "renewal_offers.send" && p.entity_type === "leases") {
+    const lease = await get(data, "leases", id);
+    if (!lease) throw new Error("Lease not found");
+    return [{ kind: "insert", table: "renewal_offers", row: { lease_id: id, property_id: lease.property_id, version: 1, term_months: Number(payload.term_months ?? 12), rent_cents: Number(payload.rent_cents ?? p.amount_cents ?? lease.rent_cents), current_rent_cents: lease.rent_cents, status: "Sent", sent_at: new Date().toISOString() } }];
+  }
+  if (action === "applications.approve" || action === "applications.deny") {
+    return [{ kind: "update", table: "applications", id, changes: { stage: action.endsWith("approve") ? "Approved" : "Denied", decided_by: "$by", decided_at: new Date().toISOString() } }];
+  }
+  const party = p.entity_type === "vendors" ? "vendor" : p.entity_type === "prospects" ? "prospect" : p.entity_type === "owner_entities" ? "owner" : null;
+  if (party && /request|follow_up|send/.test(verb)) {
+    let partyId = id;
+    if (party === "owner") partyId = String((await get(data, "owner_entities", id))?.owner_id ?? id);
+    return [{ kind: "message", party_kind: party, party_id: partyId, property_id: pid, channel: "Email", subject: String(p.title).slice(0, 200), body: parseJson<string[]>(p.why, []).join("\n"), entity_type: String(p.entity_type), entity_id: id }];
+  }
+  return [];
+}
+
 // Runs an approved proposal once. The decision row is inserted first with a guarded insert, so a
 // double click or two approvers can't run it twice; a failed run removes the decision again.
 export async function executeProposal(data: DataCtx, proposal: Row, by: By, edited?: unknown, note = ""): Promise<ExecResult> {
@@ -126,7 +169,8 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
       const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);
       result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: r.error };
     } else {
-      const { effects } = Payload.parse(payload);
+      let { effects } = Payload.parse(payload);
+      if (!effects.length) effects = await deriveEffects(data, proposal, payload as Record<string, unknown>);
       if (!effects.length) throw new Error(`No handler for ${action} yet`);
       const notes: string[] = [];
       for (const e of effects) notes.push(await runEffect(data, e, by, proposal));

@@ -12,7 +12,8 @@ import { currentModel, RULES } from "./providers";
 
 export type Summary = { entity_type: string; entity_id: string; summary: string; facts: Facts; model: string; generated_at: string; source: "precomputed" | "live" | "rules" };
 
-const summaryId = (entity: string, id: string) => `sum:${entity}:${id}`;
+// Same ids as the seed's rule-written summaries, so precomputed and regenerated ones replace them.
+const summaryId = (entity: string, id: string) => `sum-${entity}-${id}`;
 
 export async function cachedSummary(data: DataCtx, entity: string, id: string): Promise<Summary | null> {
   // The record must be readable in this persona's scope before its summary is.

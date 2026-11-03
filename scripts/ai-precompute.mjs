@@ -28,12 +28,12 @@ const call = async (method, body) => {
 };
 const q = (v) => (v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`);
 const insert = (r) =>
-  `INSERT INTO ai_summaries (workspace_id, id, entity_type, entity_id, summary, facts, model, generated_at) VALUES ('base', ${q(`sum:${r.entity_type}:${r.entity_id}`)}, ${q(r.entity_type)}, ${q(r.entity_id)}, ${q(r.summary)}, ${q(JSON.stringify(r.facts))}, ${q(r.model)}, ${q(r.generated_at)}) ON CONFLICT (workspace_id, id) DO UPDATE SET summary = excluded.summary, facts = excluded.facts, model = excluded.model, generated_at = excluded.generated_at;`;
+  `INSERT INTO ai_summaries (workspace_id, id, entity_type, entity_id, summary, facts, model, generated_at) VALUES ('base', ${q(`sum-${r.entity_type}-${r.entity_id}`)}, ${q(r.entity_type)}, ${q(r.entity_id)}, ${q(r.summary)}, ${q(JSON.stringify(r.facts))}, ${q(r.model)}, ${q(r.generated_at)}) ON CONFLICT (workspace_id, id) DO UPDATE SET summary = excluded.summary, facts = excluded.facts, model = excluded.model, generated_at = excluded.generated_at;`;
 
 const lines = existsSync(OUT) ? readFileSync(OUT, "utf8").split("\n").filter((l) => l.startsWith("INSERT")) : [];
-const done = new Set(lines.map((l) => l.match(/'(sum:[^']+)'/)?.[1]));
+const done = new Set(lines.map((l) => l.match(/'(sum-[^']+)'/)?.[1]));
 const { targets } = await call("GET");
-const todo = targets.slice(0, LIMIT).filter((t) => !done.has(`sum:${t.entity}:${t.id}`));
+const todo = targets.slice(0, LIMIT).filter((t) => !done.has(`sum-${t.entity}-${t.id}`));
 console.log(`${targets.length} targets, ${done.size} already done, ${todo.length} to go against ${BASE_URL}`);
 
 const save = () => {

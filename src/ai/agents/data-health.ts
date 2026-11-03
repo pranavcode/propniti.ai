@@ -1,4 +1,5 @@
 import type { Row } from "@/entities/types";
+import { effective } from "@/server/query";
 import { fixProposal } from "../tools/write";
 import { defineAgent, type Candidate } from "./framework";
 
@@ -79,7 +80,9 @@ export default defineAgent({
       const q = String(r.check_sql ?? "").trim();
       if (r.check_kind !== "sql" || !/^select\b/i.test(q) || q.includes(";")) continue;
       try {
-        const { results } = await ctx.db.prepare(`SELECT count(*) AS n FROM (${q})`).all<{ n: number }>();
+        // Rules name tables as {{table}}: the visitor's effective rows (overlay over base).
+        const expanded = q.replace(/\{\{([a-z_]+)\}\}/g, (_, t: string) => effective(t, ctx.ws === "base" ? null : ctx.ws));
+        const { results } = await ctx.db.prepare(`SELECT count(*) AS n FROM (${expanded})`).all<{ n: number }>();
         counts[String(r.id)] = results[0]?.n ?? 0;
       } catch {
         counts[String(r.id)] = "check failed";
