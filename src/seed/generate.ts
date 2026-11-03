@@ -114,7 +114,8 @@ export function generate(): Base {
     const sign = INFLOW.has(x.kind as string) ? 1 : -1;
     balances.set(x.bank_account_id as string, (balances.get(x.bank_account_id as string) ?? 0) + sign * (x.amount_cents as number));
   }
-  const meta = { base_version: BASE_VERSION, as_of: AS_OF, first_period: FIRST_PERIOD, generated_at: `${AS_OF}T06:00:00Z` };
+  // Planted lease-document mismatches, so lease abstraction can be tested against a known list.
+  const meta = { base_version: BASE_VERSION, as_of: AS_OF, first_period: FIRST_PERIOD, generated_at: `${AS_OF}T06:00:00Z`, lease_doc_mismatches: JSON.stringify(ctx.planted["leases.abstract_mismatch"] ?? []) };
   return { tables: t, balances: [...balances].sort().map(([account_id, cleared_cents]) => ({ account_id, cleared_cents })), meta };
 }
 

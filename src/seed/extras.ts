@@ -3,6 +3,7 @@ import { AS_OF } from "./constants";
 import { ASOF, PERIODS, WO_TYPES, createWorkOrder, type Ctx, type Household, type Lease, type Prop, type R, type Unit } from "./generate";
 import { RENTER_HELP } from "../components/public/renter-help";
 import { HELP_ARTICLES } from "./help";
+import { leaseDocTerms } from "./leaseDoc";
 import { MORE_HELP_ARTICLES } from "./help-more";
 import { addMonths, addMonthsDay, day, iso, monthStart, rng, round, ts, type Rng } from "./rng";
 
@@ -448,7 +449,10 @@ class Extras {
     const doc = (d: R) => add("documents", { id: `doc-${++n}`, mime: "application/pdf", classify_confidence: null, filed_to: null, classified_by: null, extracted: null, uploaded_by: null, ...d });
     for (const l of c.leases) {
       if (l.status === "Expired" && l.start < ASOF - 200) continue;
-      const d = doc({ property_id: l.u.p.id, entity_type: "leases", entity_id: l.id, name: `${l.commercial ? "Commercial lease" : "Lease agreement"} ${l.id} — ${l.hh.name}.pdf`, url: `/docs/leases/${l.id}.pdf`, doc_type: "Lease", classify_confidence: 0.97, filed_to: `Lease ${l.id} › Documents`, classified_by: "document_classifier", extracted: JSON.stringify({ rent_cents: l.rent, start_on: iso(l.start), end_on: l.end === null ? null : iso(l.end), deposit_cents: l.deposit }), uploaded_by: l.u.p.agent, uploaded_at: ts(l.start - 5, 700) });
+      // The signed document's terms (rendered on demand at /docs/leases/<id>); ~3% differ from the record.
+      const { mismatch, ...terms } = leaseDocTerms(l);
+      if (mismatch) (c.planted["leases.abstract_mismatch"] ??= []).push(l.id);
+      const d = doc({ property_id: l.u.p.id, entity_type: "leases", entity_id: l.id, name: `${l.commercial ? "Commercial lease" : "Lease agreement"} ${l.id} — ${l.hh.name}`, url: `/docs/leases/${l.id}`, mime: "text/html", doc_type: "Lease", classify_confidence: 0.97, filed_to: `Lease ${l.id} › Documents`, classified_by: "document_classifier", extracted: JSON.stringify(terms), uploaded_by: l.u.p.agent, uploaded_at: ts(l.start - 5, 700) });
       l.row.document_id = d.id as string;
     }
     // Scanned invoices for recent bills. The four sample images in public/samples/invoices back the
@@ -976,6 +980,7 @@ class Extras {
       ["compliance_items.overdue", "compliance_items", "Compliance item overdue", "warn", "A permit, inspection, certificate or training is past its due date and not done.", "SELECT id FROM {{compliance_items}} WHERE completed_on IS NULL AND due_on < '2026-11-04'"],
       ["bills.possible_duplicate", "bills", "Possible duplicate invoice", "critical", "Same vendor and invoice number as another bill.", "SELECT b.id FROM {{bills}} b JOIN {{bills}} o ON o.vendor_id = b.vendor_id AND o.invoice_number = b.invoice_number AND o.id <> b.id AND o.status = 'Paid' WHERE b.status <> 'Paid'"],
       ["bills.amount_outlier", "bills", "Invoice far above the vendor's usual", "warn", "An unpaid bill is more than 2.4× the vendor's median paid bill.", null],
+      ["leases.abstract_mismatch", "leases", "Lease record differs from the signed document", "warn", "Lease abstraction found a term (rent, dates or deposit) that differs between the record and the signed lease.", null],
       ["vendors.missing_w9", "vendors", "1099 vendor without a W-9", "warn", "A vendor that gets a 1099 has no W-9 on file.", "SELECT id FROM {{vendors}} WHERE is_1099 = 1 AND w9_on_file = 0"],
     ];
     for (const [id, entity, nm, severity, description, sql] of RULES) add("data_rules", { id, entity_type: entity, name: nm, severity, description, check_kind: sql ? "sql" : "computed", check_sql: sql, help_slug: "data-health-fix-issues", enabled: 1 });
