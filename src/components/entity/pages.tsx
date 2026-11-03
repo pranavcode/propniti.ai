@@ -26,6 +26,8 @@ import { columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets 
 
 const ctxOf = (s: Session): QueryCtx => ({ db: getPlatform().db, ws: s.ws, actor: s.actor });
 const errMsg = (e: unknown) => (e instanceof QueryError ? e.message : "This list couldn't load. Try again, or clear the filters.");
+// Links from stored data: same-site paths and http(s) only, never javascript: or data: URLs.
+const safeHref = (u: unknown) => (typeof u === "string" && /^(\/(?!\/)|https?:\/\/)/i.test(u) ? u : undefined);
 const attempt = <T,>(p: Promise<T>) => p.then((res) => ({ res, error: null as string | null }), (e) => ({ res: null, error: errMsg(e) }));
 
 // A built-in view key in the URL (?view=expiring-60, used by persona quick links) applies that
@@ -201,7 +203,7 @@ function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "do
             {kind === "notes" && <p className="whitespace-pre-wrap text-[13px]">{String(r.body).replace(/@\[([^\]]+)\]\(staff:[\w-]+\)/g, "@$1")}</p>}
             {kind === "tasks" && <p className="text-[13px] font-medium">{String(r.title)} <StatusBadge value={r.status} className="ml-1" /></p>}
             {kind === "activity" && <p className="text-[13px]">{String(r.summary)}{r.actor_kind === "agent" && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-tone-ai"><Sparkles className="size-3" />AI</span>}</p>}
-            {kind === "documents" && <a href={String(r.url)} target="_blank" rel="noreferrer" className="text-[13px] font-medium hover:text-primary hover:underline">{String(r.name)}</a>}
+            {kind === "documents" && <a href={safeHref(r.url)} target="_blank" rel="noreferrer" className="text-[13px] font-medium hover:text-primary hover:underline">{String(r.name)}</a>}
             <p className="mt-0.5 text-[11.5px] text-muted-foreground">
               {kind === "notes" && <>{String(r.author_id)} · </>}
               {kind === "tasks" && r.due_on != null && <>Due {String(r.due_on)} · {String(r.priority)} · </>}

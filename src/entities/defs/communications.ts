@@ -3,6 +3,7 @@
 // Documents is written by lane C as the reference pattern; the communications lane adds threads,
 // templates and announcements.
 import { FileText } from "lucide-react";
+import { z } from "zod";
 import { OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 
@@ -33,7 +34,8 @@ registerEntity({
     uploaded_at: { type: "datetime", label: "Uploaded", sortable: true, list: { default: true }, editable: [] },
     uploaded_by: { type: "text", label: "Uploaded by", editable: [] },
     mime: { type: "text", label: "File type" },
-    url: { type: "text", label: "File", required: true, editable: [] },
+    // Only same-site paths or https links: the URL is rendered as a link.
+    url: { type: "text", label: "File", required: true, editable: [], zod: z.string().max(500).regex(/^(\/(?!\/)|https:\/\/)/, "Use a /path or an https:// link") },
     entity_type: { type: "text", label: "Record type", facet: true },
     entity_id: { type: "text", label: "Record" },
     extracted: { type: "json", label: "Extracted fields" },

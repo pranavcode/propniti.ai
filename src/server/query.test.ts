@@ -194,6 +194,10 @@ describe("writes", () => {
     expect(units.safeParse({ number: "101", property_id: "p01", market_rent: "abc" }).success).toBe(false);
     expect(units.safeParse({ number: "101", property_id: "p01", market_rent: 1725.5 }).success).toBe(true);
     expect(units.safeParse({ property_id: "p01" }).success).toBe(false); // number is required
+    const docs = writeSchema(allEntities().find((d) => d.key === "documents")!, "property_manager", "create");
+    expect(docs.safeParse({ name: "x", url: "javascript:alert(1)" }).success).toBe(false);
+    expect(docs.safeParse({ name: "x", url: "//evil.example/x" }).success).toBe(false);
+    expect(docs.safeParse({ name: "x", url: "/docs/lease.pdf" }).success).toBe(true);
     const vendors = allEntities().find((d) => d.key === "vendors")!;
     expect(writeSchema(vendors, "property_manager", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(false); // accountant only
     expect(writeSchema(vendors, "accountant", "create").safeParse({ company: "X", trade: "HVAC", bank_last4: "1234" }).success).toBe(true);
