@@ -68,17 +68,6 @@ registerMetric({
 });
 
 registerMetric({
-  key: "maintenance.sla_live",
-  label: "Open work orders within SLA",
-  run: async (ctx, params) => {
-    const s = scope(ctx, params, "w.property_id");
-    const [r] = await all<{ open: number; breached: number }>(ctx.db,
-      `SELECT count(*) AS open, coalesce(sum(w.sla_due_at IS NOT NULL AND substr(w.sla_due_at, 1, 10) < ${AS_OF}), 0) AS breached FROM ${effective("work_orders", ctx.ws)} AS w WHERE w.status IN ${OPEN_SQL}${s.sql}`, s.binds);
-    return { value: r.open ? 1 - r.breached / r.open : null, points: [r], source: "work_orders (live)" };
-  },
-});
-
-registerMetric({
   key: "maintenance.make_ready",
   label: "Units not rent-ready",
   run: async (ctx, params) => {

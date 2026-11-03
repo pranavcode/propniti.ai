@@ -105,7 +105,7 @@ registerEntity({
   capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
   kpis: [
     { key: "open", label: "Open work orders", metric: "maintenance.wo_open", format: "count", delta: "mom", goodWhen: "down", drill: "/app/maintenance/work-orders?view=open" },
-    { key: "sla", label: "Within SLA", metric: "maintenance.sla", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/maintenance/work-orders?view=past-sla", help: { summary: "Share of open work orders that are not past their SLA due time.", article: "maintenance-triage-agent" } },
+    { key: "sla", label: "SLA met", metric: "maintenance.sla", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/maintenance/work-orders?view=past-sla", help: { summary: "Work orders completed by their SLA due time, over work orders due this month. Open jobs past due count as missed.", article: "maintenance-triage-agent" } },
     { key: "make_ready", label: "Units not rent-ready", metric: "maintenance.make_ready", format: "count", goodWhen: "down", drill: "/app/maintenance/turnovers?view=open" },
     { key: "pm_due", label: "Preventive due in 14 days", metric: "maintenance.pm_due", format: "count", goodWhen: "down", drill: "/app/maintenance/preventive?view=due-14" },
   ],

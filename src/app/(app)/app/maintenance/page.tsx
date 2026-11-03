@@ -46,9 +46,9 @@ export default async function MaintenanceHome() {
   const db = getPlatform().db;
   const q = { db, ws, actor };
   const m = (key: string) => safe(metrics(q, key));
-  const [home, props, sla, slaTrend, open, ageP, trade, spend, techs] = await Promise.all([
+  const [home, props, sla, open, ageP, trade, spend, techs] = await Promise.all([
     safe(homeData(db, ws, actor)), safe(maintenanceProposals(db, ws, actor, 7)),
-    m("maintenance.sla_live"), m("maintenance.sla"), m("maintenance.wo_open"), m("maintenance.by_age_priority"), m("maintenance.sla_by_trade"),
+    m("maintenance.sla"), m("maintenance.wo_open"), m("maintenance.by_age_priority"), m("maintenance.sla_by_trade"),
     m("maintenance.vendor_spend"), m("maintenance.tech_workload"),
   ]);
   const h = home.v;
@@ -90,7 +90,7 @@ export default async function MaintenanceHome() {
             <div className="grid flex-1 md:grid-cols-3 md:divide-x">
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">What happened</h3>
-                <p className="text-[13px] leading-relaxed"><b className="font-semibold tabular-nums">{Number(c.open ?? 0)}</b> work orders open, <b className={cn("font-semibold tabular-nums", sla.v?.value != null && sla.v.value < 0.9 && "text-tone-danger")}>{formatPct(sla.v?.value ?? null, 1)}</b> within SLA.</p>
+                <p className="text-[13px] leading-relaxed"><b className="font-semibold tabular-nums">{Number(c.open ?? 0)}</b> work orders open. <b className={cn("font-semibold tabular-nums", sla.v?.value != null && sla.v.value < 0.9 && "text-tone-danger")}>{formatPct(sla.v?.value ?? null, 1)}</b> of jobs due this month met their SLA{sla.v?.previous != null ? `, against ${formatPct(sla.v.previous, 1)} last month` : ""}.</p>
                 <p className="text-[12.5px] text-muted-foreground"><Bot className="mr-1 inline size-3.5" />{h?.overnight.runs ? `${h.overnight.runs} triage and compliance runs in the last day, ${h.overnight.proposals} proposals.` : "No agent runs in the last day in this workspace yet."}</p>
               </div>
               <div className="flex flex-col gap-2 px-4 py-3">
@@ -122,7 +122,7 @@ export default async function MaintenanceHome() {
         </div>
 
         <KpiRow className="xl:grid-cols-6">
-          <KpiCard label="Within SLA" format="pct" value={sla.v?.value ?? null} previous={slaTrend.v?.previous ?? null} spark={slaTrend.v?.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote={`${Number(c.past_sla ?? 0)} past due now`} help="Open work orders not yet past their SLA due time. Emergency 4 h, urgent 24 h, normal 72 h." />
+          <KpiCard label="SLA met" format="pct" value={sla.v?.value ?? null} previous={sla.v?.previous ?? null} spark={sla.v?.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote={`${Number(c.past_sla ?? 0)} open past due now`} help="Work orders completed by their SLA due time, over work orders due this month. Open jobs past due count as missed. Emergency 4 h, urgent 24 h, normal 72 h." />
           <KpiCard label="Open work orders" format="count" value={Number(c.open ?? 0)} previous={open.v?.previous ?? null} spark={open.v?.spark} goodWhen="down" href="/app/maintenance/work-orders?view=open" footnote={`${Number(c.on_hold ?? 0)} on hold`} />
           <KpiCard label="Waiting to dispatch" format="count" value={Number(c.untriaged ?? 0)} goodWhen="down" href="/app/maintenance/work-orders?f.status=New,Triaged" footnote="New and triaged" />
           <KpiCard label="Invoices to approve" format="money" value={invoiceTotal / 100} goodWhen="down" href="/app/maintenance/work-orders?view=awaiting-approval" footnote={`${h?.invoices.length ?? 0} submitted`} />
