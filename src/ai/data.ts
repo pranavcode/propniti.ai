@@ -183,6 +183,35 @@ export async function upsertOverlay(ctx: DataCtx, table: Table, id: string, chan
   return { before: pick(current, Object.keys(changes)), after: pick(next, Object.keys(changes)), row: next };
 }
 
+// Writes that must happen only together with a decision row (an approved proposal's effects): each
+// statement runs only if the decision exists, so batched after the guarded decision insert, either
+// all of them land or none do.
+export type Gate = { decisionId: string };
+const gateSql = "WHERE EXISTS (SELECT 1 FROM ai_decisions WHERE workspace_id = ? AND id = ?)";
+
+export async function insertGated(db: Db, ws: string, table: Table | "audit", row: Row, gate: Gate) {
+  const cols = await columns(db, table as Table);
+  const full: Row = { ...row, workspace_id: ws };
+  const keys = Object.keys(full).filter((k) => cols.has(k) && full[k] !== undefined);
+  return db.prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map(() => "?").join(", ")} ${gateSql}`).bind(...keys.map((k) => toSql(full[k])), ws, gate.decisionId);
+}
+
+// upsertOverlay as a gated statement (the current row is read now; the write happens in the batch).
+export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string, changes: Row, gate: Gate, opts: { tombstone?: boolean } = {}) {
+  const cols = await columns(ctx.db, table);
+  for (const k of Object.keys(changes)) if (!cols.has(k) || k === "seq" || k === "workspace_id" || k === "id") throw new Error(`Field ${table}.${k} can't be changed`);
+  const e = eff(table, ctx.ws);
+  const current = await ctx.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ?`).bind(...e.params, id).first<Row>();
+  if (!current) throw new Error(`${table} ${id} not found`);
+  const next: Row = { ...current, ...changes, workspace_id: ctx.ws, id, deleted: opts.tombstone ? 1 : 0 };
+  delete next.seq;
+  const keys = Object.keys(next).filter((k) => cols.has(k));
+  const stmt = ctx.db
+    .prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map(() => "?").join(", ")} ${gateSql} ON CONFLICT (workspace_id, id) DO UPDATE SET ${keys.filter((k) => k !== "workspace_id" && k !== "id").map((k) => `${k} = excluded.${k}`).join(", ")}`)
+    .bind(...keys.map((k) => toSql(next[k] ?? null)), ctx.ws, gate.decisionId);
+  return { stmt, before: pick(current, Object.keys(changes)), after: pick(next, Object.keys(changes)) };
+}
+
 // Inserts a new row into the visitor's overlay (or base when ws is base, used by the cron sweep).
 export async function insert(db: Db, ws: string, table: Table | "audit", row: Row) {
   const cols = await columns(db, table as Table);

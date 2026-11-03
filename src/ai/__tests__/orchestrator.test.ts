@@ -198,6 +198,24 @@ describe("sweep and events", () => {
   });
 });
 
+describe("approving runs all of a proposal's effects or none", () => {
+  it("writes nothing when one effect is invalid, and nothing twice when approved twice", async () => {
+    setModelForTests(null);
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "manual" } })).done;
+    const p = proposals(raw, r.runId).find((x) => x.entity_id === "l1")!;
+    const payload = JSON.parse(String(p.payload));
+    const broken = { ...p, payload: JSON.stringify({ ...payload, effects: [...payload.effects, { kind: "update", table: "leases", id: "l1", changes: { rent_cents: 1 } }] }) };
+    const count = (t: string) => raw.prepare(`SELECT count(*) AS n FROM ${t} WHERE workspace_id = ?`).get(WS)!.n;
+    expect(await executeProposal({ db, ws: WS, actor: MARCUS }, broken, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: false, status: 400 });
+    expect([count("messages"), count("tasks"), count("ai_decisions"), count("audit")]).toEqual([0, 0, 0, 0]);
+    const ok = await executeProposal({ db, ws: WS, actor: MARCUS }, p, { id: "marcus", name: "Marcus Bell" });
+    expect(ok.ok).toBe(true);
+    expect(await executeProposal({ db, ws: WS, actor: MARCUS }, p, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ status: 409 });
+    expect([count("messages"), count("tasks"), count("ai_decisions")]).toEqual([1, 1, 1]);
+  });
+});
+
 describe("fail closed", () => {
   it("applies nothing on its own when the approval policies can't be read", async () => {
     setModelForTests(null);

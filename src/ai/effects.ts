@@ -5,7 +5,8 @@ import { isAiAction } from "./action-keys";
 import { can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
 import { INTERNAL_ROLES, type ActionKey, type AgentKey, type Row } from "@/entities/types";
-import { eff, get, getRaw, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx, type Table } from "./data";
+import { eff, get, getRaw, insert, insertGated, isTable, newId, parseJson, upsertOverlayGated, type DataCtx, type Gate, type Table } from "./data";
+import type { DbStatement } from "@/lib/platform/types";
 
 // What approving a proposal does. A registered named action (src/extensions, money through
 // src/server/money.ts) always wins. Otherwise the proposal's own `effects` run: messages, tasks and
@@ -54,28 +55,30 @@ export const Payload = z.object({ effects: z.array(Effect).max(10).default([]) }
 export type By = { id: string; name: string; agent?: AgentKey; role?: string };
 export type ExecResult = { ok: boolean; message: string; href?: string; status?: number };
 
-async function runEffect(data: DataCtx, e: Effect, by: By, proposal: Row): Promise<string> {
+// Turns one effect into gated statements (validated and read now, written in the decision batch).
+async function planEffect(data: DataCtx, e: Effect, by: By, proposal: Row, gate: Gate): Promise<{ stmts: DbStatement[]; note: string }> {
   const now = demoNowIso();
   const { db, ws } = data;
   if (e.kind === "message") {
     const threadId = newId("thr");
-    await db.batch([
-      await insert(db, ws, "message_threads", { id: threadId, property_id: e.property_id ?? null, party_kind: e.party_kind, party_id: e.party_id, subject: e.subject, entity_type: e.entity_type ?? proposal.entity_type, entity_id: e.entity_id ?? proposal.entity_id, status: "Waiting", last_message_at: now, unread: 0 }),
-      await insert(db, ws, "messages", { id: newId("msg"), thread_id: threadId, channel: e.channel, direction: "out", sender_kind: by.agent ? "agent" : "staff", sender_id: by.id, body: e.body, drafted_by_agent: proposal.agent ?? null, sent_at: now }),
-    ]);
-    return `${e.channel} sent: "${e.subject}"`;
+    return {
+      stmts: [
+        await insertGated(db, ws, "message_threads", { id: threadId, property_id: e.property_id ?? null, party_kind: e.party_kind, party_id: e.party_id, subject: e.subject, entity_type: e.entity_type ?? proposal.entity_type, entity_id: e.entity_id ?? proposal.entity_id, status: "Waiting", last_message_at: now, unread: 0 }, gate),
+        await insertGated(db, ws, "messages", { id: newId("msg"), thread_id: threadId, channel: e.channel, direction: "out", sender_kind: by.agent ? "agent" : "staff", sender_id: by.id, body: e.body, drafted_by_agent: proposal.agent ?? null, sent_at: now }, gate),
+      ],
+      note: `${e.channel} sent: "${e.subject}"`,
+    };
   }
   if (e.kind === "task") {
-    await (await insert(db, ws, "tasks", {
-      id: newId("task"), title: e.title, detail: e.detail, entity_type: e.entity_type ?? proposal.entity_type, entity_id: e.entity_id ?? proposal.entity_id, property_id: e.property_id ?? proposal.property_id ?? null,
-      assignee_role: e.assignee_role ?? null, created_by: by.id, due_on: e.due_on ?? null, priority: e.priority, status: "Open", queue_state: "needs_you", source: "Agent", created_at: now,
-    })).run();
-    return `Task created: ${e.title}`;
+    return {
+      stmts: [await insertGated(db, ws, "tasks", {
+        id: newId("task"), title: e.title, detail: e.detail, entity_type: e.entity_type ?? proposal.entity_type, entity_id: e.entity_id ?? proposal.entity_id, property_id: e.property_id ?? proposal.property_id ?? null,
+        assignee_role: e.assignee_role ?? null, created_by: by.id, due_on: e.due_on ?? null, priority: e.priority, status: "Open", queue_state: "needs_you", source: "Agent", created_at: now,
+      }, gate)],
+      note: `Task created: ${e.title}`,
+    };
   }
-  if (e.kind === "insert") {
-    await (await insert(db, ws, e.table, { id: newId("ro"), ...e.row })).run();
-    return "Renewal offer recorded";
-  }
+  if (e.kind === "insert") return { stmts: [await insertGated(db, ws, e.table, { id: newId("ro"), ...e.row }, gate)], note: "Renewal offer recorded" };
   if (!isTable(e.table) || LEDGER.has(e.table)) throw new Error(`${e.table} can't be changed from a proposal`);
   if (!e.fix) {
     const allowed = UPDATABLE[e.table] ?? [];
@@ -84,14 +87,13 @@ async function runEffect(data: DataCtx, e: Effect, by: By, proposal: Row): Promi
   }
   // "$by" stands for whoever approved (approved_by and similar).
   const changes = Object.fromEntries(Object.entries(e.changes).map(([k, v]) => [k, v === "$by" ? by.id : v]));
-  const { before, after } = await upsertOverlay(data, e.table, e.id, changes, { tombstone: e.tombstone });
+  const { stmt, before, after } = await upsertOverlayGated(data, e.table, e.id, changes, gate, { tombstone: e.tombstone });
+  const stmts = [stmt];
   if (e.fix && e.issue_id) {
-    await db.batch([
-      await insert(db, ws, "data_fix_log", { id: newId("fix"), issue_id: e.issue_id, entity_type: e.table, entity_id: e.id, before_json: JSON.stringify(before), after_json: JSON.stringify(e.tombstone ? { merged: true } : after), fixed_by: by.id, agent: proposal.agent ?? null, at: now }),
-    ]);
-    await upsertOverlay(data, "data_issues", e.issue_id, { status: by.agent ? "auto-fixed" : "fixed", fixed_by: by.id, fixed_at: now });
+    stmts.push(await insertGated(db, ws, "data_fix_log", { id: newId("fix"), issue_id: e.issue_id, entity_type: e.table, entity_id: e.id, before_json: JSON.stringify(before), after_json: JSON.stringify(e.tombstone ? { merged: true } : after), fixed_by: by.id, agent: proposal.agent ?? null, at: now }, gate));
+    stmts.push((await upsertOverlayGated(data, "data_issues", e.issue_id, { status: by.agent ? "auto-fixed" : "fixed", fixed_by: by.id, fixed_at: now }, gate)).stmt);
   }
-  return e.tombstone ? `Merged ${e.table} ${e.id}` : `Updated ${e.table} ${e.id}: ${Object.entries(after).map(([k, v]) => `${k} → ${v}`).join(", ")}`;
+  return { stmts, note: e.tombstone ? `Merged ${e.table} ${e.id}` : `Updated ${e.table} ${e.id}: ${Object.entries(after).map(([k, v]) => `${k} → ${v}`).join(", ")}` };
 }
 
 // A person may edit only the wording of a proposal's message before approving. Everything else
@@ -187,54 +189,67 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
   }
   const stale = await stillValid(data, proposal, parseJson<Record<string, unknown>>(proposal.payload, {}));
   if (stale) return stale;
-  const d = eff("ai_decisions", ws);
-  const claimed = await db
-    .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)`)
-    .bind(ws, decisionId, proposal.id, edited === undefined ? "Approved" : "Edited", by.id, note, edited === undefined ? null : JSON.stringify(edited), now, ...d.params, proposal.id)
-    .run();
-  if (!claimed.meta.changes) return { ok: false, status: 409, message: "Already decided" };
-
   const payload = withEdits(parseJson<Record<string, unknown>>(proposal.payload, {}), edited);
   const action = String(proposal.action) as ActionKey;
-  let result: ExecResult;
-  try {
-    const registered = isAiAction(action) ? undefined : getAction(action);
-    if (registered) {
-      if (!can(data.actor.role, action, registered.entity)) throw new Error(`${data.actor.role.replace(/_/g, " ")} can't ${registered.label.toLowerCase()}`);
-      // Registered handlers get the record as the entity API presents it (labels, derived status).
-      const row = getEntity(String(proposal.entity_type))
-        ? await getRow({ db, ws: ws === "base" ? null : ws, actor: data.actor }, String(proposal.entity_type), String(proposal.entity_id))
-        : isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
-      const input = registered.input ? registered.input.parse((payload as { input?: unknown }).input ?? payload) : undefined;
-      const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);
-      result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: r.error };
-    } else {
+  const d = eff("ai_decisions", ws);
+  const decide = db
+    .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)`)
+    .bind(ws, decisionId, proposal.id, edited === undefined ? "Approved" : "Edited", by.id, note, edited === undefined ? null : JSON.stringify(edited), now, ...d.params, proposal.id);
+  const gate = { decisionId };
+  const record = async (message: string) => [
+    await insertGated(db, ws, "audit", {
+      id: newId("aud"), at: now, actor: by.name, actor_id: by.id, role: by.role ?? data.actor.role, agent: proposal.agent ?? null, model: proposal.model ?? null,
+      action: `${action} (${edited === undefined ? "approved" : "edited and approved"})`, entity_type: proposal.entity_type, entity_id: proposal.entity_id, property_id: proposal.property_id ?? null,
+      detail: `${proposal.title} — ${message}`.slice(0, 1000), before_json: null, after_json: JSON.stringify(payload).slice(0, 4000),
+    }, gate),
+    await insertGated(db, ws, "activity_events", {
+      id: newId("act"), entity_type: proposal.entity_type, entity_id: proposal.entity_id, property_id: proposal.property_id ?? null, at: now,
+      actor_kind: by.agent ? "agent" : "staff", actor_id: by.id, verb: "approved", summary: `${proposal.title} (${by.name})`, data: JSON.stringify({ proposal_id: proposal.id, result: message }),
+    }, gate),
+  ];
+
+  const registered = isAiAction(action) ? undefined : getAction(action);
+  if (!registered) {
+    // The proposal's own effects: planned first (nothing is written if one is invalid), then the
+    // decision and every effect land in one batch, or none of them do.
+    let plans: { stmts: DbStatement[]; note: string }[];
+    try {
       let { effects } = Payload.parse(payload);
       if (!effects.length) effects = await deriveEffects(data, proposal, payload as Record<string, unknown>);
       if (!effects.length) throw new Error(`No handler for ${action} yet`);
-      const notes: string[] = [];
-      for (const e of effects) notes.push(await runEffect(data, e, by, proposal));
-      result = { ok: true, message: notes.join(" · ") };
+      plans = [];
+      for (const e of effects) plans.push(await planEffect(data, e, by, proposal, gate));
+    } catch (err) {
+      return { ok: false, status: 400, message: err instanceof Error ? err.message : String(err) };
     }
+    const message = plans.map((p) => p.note).join(" · ");
+    const results = await db.batch([decide, ...plans.flatMap((p) => p.stmts), ...(await record(message))]);
+    if (!results[0].meta.changes) return { ok: false, status: 409, message: "Already decided" };
+    return { ok: true, message };
+  }
+
+  // A registered action does its own writes (money through money.ts, idempotent by key), so the
+  // decision is claimed first and released if the action refuses.
+  const claimed = await decide.run();
+  if (!claimed.meta.changes) return { ok: false, status: 409, message: "Already decided" };
+  let result: ExecResult;
+  try {
+    if (!can(data.actor.role, action, registered.entity)) throw new Error(`${data.actor.role.replace(/_/g, " ")} can't ${registered.label.toLowerCase()}`);
+    // Registered handlers get the record as the entity API presents it (labels, derived status).
+    const row = getEntity(String(proposal.entity_type))
+      ? await getRow({ db, ws: ws === "base" ? null : ws, actor: data.actor }, String(proposal.entity_type), String(proposal.entity_id))
+      : isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
+    const input = registered.input ? registered.input.parse((payload as { input?: unknown }).input ?? payload) : undefined;
+    const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);
+    result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: r.error };
   } catch (err) {
     result = { ok: false, status: 400, message: err instanceof Error ? err.message : String(err) };
   }
-
   if (!result.ok) {
     await db.prepare("DELETE FROM ai_decisions WHERE workspace_id = ? AND id = ?").bind(ws, decisionId).run();
     return result;
   }
-  await db.batch([
-    await insert(db, ws, "audit", {
-      id: newId("aud"), at: now, actor: by.name, actor_id: by.id, role: by.role ?? data.actor.role, agent: proposal.agent ?? null, model: proposal.model ?? null,
-      action: `${action} (${edited === undefined ? "approved" : "edited and approved"})`, entity_type: proposal.entity_type, entity_id: proposal.entity_id, property_id: proposal.property_id ?? null,
-      detail: `${proposal.title} — ${result.message}`.slice(0, 1000), before_json: null, after_json: JSON.stringify(payload).slice(0, 4000),
-    }),
-    await insert(db, ws, "activity_events", {
-      id: newId("act"), entity_type: proposal.entity_type, entity_id: proposal.entity_id, property_id: proposal.property_id ?? null, at: now,
-      actor_kind: by.agent ? "agent" : "staff", actor_id: by.id, verb: "approved", summary: `${proposal.title} (${by.name})`, data: JSON.stringify({ proposal_id: proposal.id, result: result.message }),
-    }),
-  ]);
+  await db.batch(await record(result.message));
   return result;
 }
 
