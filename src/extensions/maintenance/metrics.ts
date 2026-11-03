@@ -11,6 +11,8 @@ const scope = (ctx: MetricCtx, params: MetricParams, col: string) => {
   const s = scoped(ctx.propertyIds, col);
   return params.property ? { sql: `${s.sql} AND ${col} = ?`, binds: [...s.binds, params.property] } : s;
 };
+// Vendors paid from operating budgets that aren't maintenance work (taxes, payroll, utilities…).
+const NON_MAINTENANCE = "('Insurance', 'Marketing', 'Payroll', 'Property tax', 'Supplies', 'Trash', 'Utilities')";
 const BOUNDS = [[0, 2], [3, 7], [8, 14], [15, 30], [31, 9999]] as const;
 
 registerMetric({
@@ -28,13 +30,13 @@ registerMetric({
 
 registerMetric({
   key: "maintenance.vendor_spend",
-  label: "Vendor spend, trailing 12 months",
+  label: "Maintenance vendor spend, trailing 12 months",
   run: async (ctx, params) => {
     const s = scope(ctx, params, "b.property_id");
     const points = await all(ctx.db,
       `SELECT b.vendor_id, v.company AS vendor, v.trade, round(sum(b.amount_cents) / 100.0, 2) AS spend, count(*) AS bills
        FROM ${effective("bills", ctx.ws)} AS b JOIN ${effective("vendors", ctx.ws)} AS v ON v.id = b.vendor_id
-       WHERE b.status <> 'Void' AND b.bill_date >= date(${AS_OF}, '-12 months')${s.sql}
+       WHERE b.status <> 'Void' AND b.bill_date >= date(${AS_OF}, '-12 months') AND v.trade NOT IN ${NON_MAINTENANCE}${s.sql}
        GROUP BY b.vendor_id ORDER BY spend DESC LIMIT 10`, s.binds);
     return { value: points.reduce((a, p) => a + Number(p.spend), 0), points, source: "bills (live)" };
   },
