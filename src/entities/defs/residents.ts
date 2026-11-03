@@ -91,7 +91,7 @@ registerEntity({
   },
   capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
   kpis: [
-    { key: "delinquent", label: "Delinquent", metric: "receivables.delinquency", format: "money", delta: "mom", goodWhen: "down", drill: "/app/receivables/delinquency" },
+    { key: "delinquent", label: "Past due today", metric: "receivables.aging_live", format: "money", goodWhen: "down", drill: "/app/receivables/delinquency", help: { summary: "Unpaid charges past their due date as of today, the same figure the receivables pages show.", article: "resident-ledger" } },
     { key: "collections", label: "Collections rate", metric: "receivables.collections_rate", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/receivables/payments" },
     { key: "high_risk", label: "High delinquency risk", metric: "residents.high_risk", format: "count", goodWhen: "down", drill: "/app/residents?view=high-risk", help: { summary: "Current residents scoring 70 or more on delinquency risk.", article: "delinquency-risk" } },
     { key: "insurance_gaps", label: "Insurance lapsed or expiring", metric: "residents.insurance_gaps", format: "count", goodWhen: "down", drill: "/app/residents/insurance?f.status=Lapsed,Expiring", help: { summary: "Active leases whose renters insurance has lapsed or expires within 30 days.", article: "renters-insurance" } },
