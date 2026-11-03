@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="466" viewBox="0 0 600 466" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#1f2328">
+<rect width="100%" height="100%" fill="#fff"/><text x="40" y="60" font-size="22" font-weight="700">Lone Star Plumbing</text>
+<text x="560" y="60" text-anchor="end" font-size="20" fill="#57606a">INVOICE</text>
+<text x="40" y="110">Bill to: Frisco Station Townhomes</text><text x="40" y="130">9150 Frisco Station Blvd, Frisco, TX 75034</text>
+<text x="560" y="110" text-anchor="end">Invoice # LSP-38330</text><text x="560" y="130" text-anchor="end">Date 2026-10-31</text><text x="560" y="150" text-anchor="end">Due 2026-11-30</text>
+<line x1="40" y1="270" x2="560" y2="270" stroke="#d0d7de"/><text x="40" y="260" font-weight="700">Description</text><text x="560" y="260" text-anchor="end" font-weight="700">Amount</text>
+<text x="40" y="300">Ceiling stain from unit above · #I3 (WO-13606)</text><text x="560" y="300" text-anchor="end">$910.00</text><line x1="40" y1="336" x2="560" y2="336" stroke="#d0d7de"/><text x="560" y="362" text-anchor="end" font-size="16" font-weight="700">Total $910.00</text>
+<text x="40" y="426" fill="#57606a" font-size="11">Sample document generated for the Propniti demo. Remit by ACH to the account on file.</text></svg>

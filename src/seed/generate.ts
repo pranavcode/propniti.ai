@@ -44,6 +44,7 @@ export type Lease = {
   status: string; renewalOf: Lease | null; term: number | null; commercial: boolean; mtm: boolean; cam: number; tax: number; ins: number;
   concession: { label: string; monthly: number; months: string[] } | null; row: R; terminated?: boolean;
 };
+type BillOpts = { wo?: string; recurring?: string; po?: string; termsDays?: number; status?: string; doc?: string; invoice?: string; unpaid?: boolean };
 type Open = { id: string; rem: number; due: number; lease: Lease; gl: string; amount: number };
 
 export type Ctx = {
@@ -53,7 +54,7 @@ export type Ctx = {
   workOrders: R[]; bills: R[]; transfers: R[]; propById: Record<string, Prop>; unitById: Record<string, Unit>; leaseById: Record<string, Lease>;
   // Corrupted cases planted inside the ledger (rule → record ids), so data_issues can point at them.
   planted: Record<string, string[]>; woN: number;
-  bill: (p: Prop, vendor: string, lines: [glNo: string, description: string, amount: number][], billDate: number, opts?: { wo?: string; recurring?: string; po?: string; termsDays?: number; status?: string; doc?: string }) => R | null;
+  bill: (p: Prop, vendor: string, lines: [glNo: string, description: string, amount: number][], billDate: number, opts?: BillOpts) => R | null;
   // Set once the ledger is closed; later work orders (extras) never create bills or payouts.
   sealed: boolean;
 };
@@ -967,18 +968,20 @@ function operations(c: Ctx) {
   const { add, je } = c;
   const billIds = { n: 0 };
   // Creates a bill and, when its due date has passed, pays it from trust.
-  const bill = (p: Prop, vendor: string, lines: [glNo: string, description: string, amount: number][], billDate: number, opts: { wo?: string; recurring?: string; po?: string; termsDays?: number; status?: string; doc?: string } = {}) => {
+  const bill = (p: Prop, vendor: string, lines: [glNo: string, description: string, amount: number][], billDate: number, opts: BillOpts = {}) => {
     const amount = lines.reduce((s, l) => s + l[2], 0);
     if (amount <= 0 || billDate >= ASOF) return null;
     const id = `BILL-${String(++billIds.n + 20000)}`;
     const due = billDate + (opts.termsDays ?? 30);
     const br = rng(`bill:${id}`);
     const paidOn = Math.min(due - br.int(0, 6), due);
-    const paid = paidOn < ASOF - 1 && (ASOF - billDate > 21 || opts.termsDays === 10);
-    const status = paid ? "Paid" : opts.status ?? (ASOF - billDate < 6 ? br.weighted([["Pending approval", 55], ["Draft", 20], ["Approved", 25]] as const) : br.weighted([["Approved", 50], ["Scheduled", 25], ["Pending approval", 25]] as const));
+    // About a quarter of bills that came due in the last six weeks are still unpaid (AP aging).
+    const lateUnpaid = !opts.invoice && due < ASOF - 1 && due > ASOF - 45 && opts.termsDays !== 10 && br.chance(0.25);
+    const paid = !opts.unpaid && !lateUnpaid && paidOn < ASOF - 1 && (ASOF - billDate > 21 || opts.termsDays === 10);
+    const status = paid ? "Paid" : opts.status ?? (lateUnpaid ? br.weighted([["Approved", 55], ["Pending approval", 45]] as const) : ASOF - billDate < 6 ? br.weighted([["Pending approval", 55], ["Draft", 20], ["Approved", 25]] as const) : br.weighted([["Approved", 50], ["Scheduled", 25], ["Pending approval", 25]] as const));
     const row = add("bills", {
       id, property_id: p.id, owner_entity_id: p.entity, vendor_id: vendor, work_order_id: opts.wo ?? null, po_id: opts.po ?? null, recurring_bill_id: opts.recurring ?? null, document_id: opts.doc ?? null,
-      invoice_number: `${c.vendorName[vendor].replace(/[^A-Z]/g, "").slice(0, 3) || "INV"}-${br.int(10000, 99999)}`, bill_date: iso(billDate), due_on: iso(due), amount_cents: amount, status,
+      invoice_number: opts.invoice ?? `${c.vendorName[vendor].replace(/[^A-Z]/g, "").slice(0, 3) || "INV"}-${br.int(10000, 99999)}`, bill_date: iso(billDate), due_on: iso(due), amount_cents: amount, status,
       approved_by: status === "Paid" || status === "Approved" || status === "Scheduled" ? (amount > 500_000 ? "grace" : "s-lucy") : null, approved_at: status === "Paid" || status === "Approved" || status === "Scheduled" ? ts(billDate + 2, 600 + br.int(0, 300)) : null,
     });
     c.bills.push(row);
@@ -1078,6 +1081,22 @@ function operations(c: Ctx) {
     }
   }
   c.woN = woN;
+
+  // AP anomaly cases for the Payables agent, matching the sample invoice images where possible:
+  // an invoice 4.3× the vendor's median, a duplicate of a paid invoice, and bank-change hard stops.
+  const median = (vendor: string) => {
+    const xs = c.bills.filter((b) => b.vendor_id === vendor && b.status === "Paid").map((b) => b.amount_cents as number).sort((a, b) => a - b);
+    return xs[Math.floor(xs.length / 2)] ?? 50_000;
+  };
+  const p02 = c.propById.p02, p16 = c.propById.p16, p22 = c.propById.p22, p01 = c.propById.p01, p09 = c.propById.p09;
+  const plant = (key: string, b: R | null) => b && (c.planted[key] ??= []).push(b.id as string);
+  plant("ap.outlier", bill(p02, "v01", [["6000", "Repipe kitchen and laundry lines, building 4", round(median("v01") * 4.3, 100)]], ASOF - 3, { status: "Pending approval", invoice: "LSP-31208", unpaid: true }));
+  const first = bill(p16, "v10", [["6000", "Main line hydro-jetting and camera inspection", 184_500]], ASOF - 40, { invoice: "PPD-18272" });
+  plant("ap.duplicate", bill(p16, "v10", [["6000", "Main line hydro-jetting and camera inspection", 184_500]], ASOF - 2, { status: "Pending approval", invoice: "PPD-18272", unpaid: true }));
+  plant("ap.paid_original", first);
+  plant("ap.bank_change", bill(p22, "v16", [["6000", "Condenser fan motor replacement, unit 2114", 96_800]], ASOF - 4, { status: "Pending approval", invoice: "DCA-51190", unpaid: true }));
+  plant("ap.bank_change", bill(p09, "v26", [["6000", "Rekey 6 units after turnover", 54_000]], ASOF - 3, { status: "Pending approval", unpaid: true }));
+  plant("ap.normal", bill(p01, "v02", [["6000", "Compressor capacitor and refrigerant recharge, unit 412", 48_500]], ASOF - 1, { status: "Pending approval", invoice: "HCH-70214", unpaid: true }));
 
   // Turnovers for move-outs in the window; make-ready cost billed by the turn vendor.
   for (const u of c.units) {

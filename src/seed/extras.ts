@@ -1,8 +1,10 @@
 import { FIRST, LAST, RENTERS_CARRIERS, VENDORS } from "./catalog";
 import { AS_OF } from "./constants";
 import { ASOF, PERIODS, WO_TYPES, createWorkOrder, type Ctx, type Household, type Lease, type Prop, type R, type Unit } from "./generate";
+import { RENTER_HELP } from "../components/public/renter-help";
 import { HELP_ARTICLES } from "./help";
-import { addMonths, day, iso, monthStart, rng, round, ts, type Rng } from "./rng";
+import { MORE_HELP_ARTICLES } from "./help-more";
+import { addMonths, addMonthsDay, day, iso, monthStart, rng, round, ts, type Rng } from "./rng";
 
 // Everything around the ledger that makes the product feel lived-in: policies and state rules,
 // the leasing funnel, operations depth, communications, risk and compliance, AI agent history,
@@ -12,6 +14,7 @@ import { addMonths, day, iso, monthStart, rng, round, ts, type Rng } from "./rng
 
 const regional = (p: Prop) => (p.region === "r-tx" ? "priya" : p.region === "r-se" ? "s-wanjiru" : "s-colton");
 const CURRENT = new Set(["Active", "Notice", "Month-to-month", "Eviction"]);
+const hashish = (s: string) => Array.from(s).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 const pick = <T>(r: Rng, xs: readonly T[]) => xs[r.int(0, xs.length - 1)];
 const name = (h: Household) => (h.residents[0] ? `${h.residents[0].first_name} ${h.residents[0].last_name}` : h.name);
 const mention = (c: Ctx, id: string) => `@[${c.staffName[id]}](staff:${id})`;
@@ -182,6 +185,19 @@ class Extras {
         }
       }
     }
+    // About 10% of listings have no description yet (the AI draft fills them), and four carry
+    // phrases that raise fair-housing concerns (familial status, age, religion, disability).
+    for (const l of this.t.listings ?? []) if (rng(`nodesc:${l.id}`).chance(0.1)) l.description = "";
+    const RISKY: [string, string][] = [
+      ["p03", " Perfect for young professionals — a quiet, adult-only building."],
+      ["p09", " Ideal for a single person or couple; not suited to children."],
+      ["p16", " Walking distance to St. Mark's — great for Christian families."],
+      ["p24", " Must be able to climb three flights of stairs; no wheelchairs."],
+    ];
+    for (const [pid, phrase] of RISKY) {
+      const l = (this.t.listings ?? []).find((x) => x.property_id === pid && x.description);
+      if (l) l.description = `${l.description}${phrase}`;
+    }
     // Recent new leases link to an application (the funnel ends in a lease).
     for (const l of c.leases) {
       if (l.renewalOf || l.commercial || l.start < ASOF - 120 || l.status === "Expired") continue;
@@ -193,6 +209,14 @@ class Extras {
       add("applicants", { id: aid, prospect_id: null, first_name: primary.first_name, last_name: primary.last_name, email: primary.email, phone: primary.phone, monthly_income_cents: income, employer: pick(r, ["Apple", "Tesla Giga Texas", "Oracle", "Southwest Airlines", "Piedmont Healthcare", "Honor Health", "UT Austin", "Freelance designer"]), created_at: ts(l.start - 20, 700) });
       const app = this.application(l.u.p, l.u, aid, income, "Leased", l.start - 20, r);
       l.row.application_id = app;
+      // Other households applied for the same home and were denied or withdrew first.
+      for (let k = 0; k < (r.chance(0.75) ? r.int(1, 2) : 0); k++) {
+        const did = `apl-${String(++apl).padStart(4, "0")}`;
+        const [first, last] = [pick(r, FIRST), pick(r, LAST)];
+        const low = round(l.rent * (1.6 + r() * 1.2), 1000);
+        add("applicants", { id: did, prospect_id: null, first_name: first, last_name: last, email: `${first}.${last}`.toLowerCase() + "@mail.example", phone: `(512) 555-${r.int(1000, 9999)}`, monthly_income_cents: low, employer: pick(r, ["Retail", "Rideshare driver", "Restaurant server", "Contract work", "Call center"]), created_at: ts(l.start - 30, 700) });
+        this.application(l.u.p, l.u, did, low, r.chance(0.8) ? "Denied" : "Withdrawn", l.start - r.int(24, 35), r);
+      }
     }
     // Renewal offers: history for renewed leases this year, open offers for leases ending soon.
     const renewedBy = new Map(c.leases.filter((x) => x.renewalOf).map((x) => [x.renewalOf!, x]));
@@ -229,18 +253,24 @@ class Extras {
   }
 
   application(p: Prop, unit: Unit, applicantId: string, income: number, stage: string, submitted: number, r: Rng) {
+    // Denials follow the written criteria (income under 3× rent, poor screening), so the stored
+    // score and recommendation always agree with the decision.
     const id = `app-${String(this.n("app") + 1).padStart(4, "0")}`;
+    if (stage === "Denied") income = Math.min(income, round(unit.market * 2.3, 1000));
     const itr = Math.round((income / unit.market) * 100) / 100;
-    const credit = r.weighted([["Excellent", 25], ["Good", 40], ["Fair", 22], ["Thin file", 8], ["Poor", 5]] as const);
-    const eviction = r.chance(0.03);
+    const credit = stage === "Denied" ? r.pick(["Poor", "Thin file", "Fair"] as const) : stage === "Approved" || stage === "Leased" ? r.weighted([["Excellent", 35], ["Good", 50], ["Fair", 15]] as const) : r.weighted([["Excellent", 25], ["Good", 40], ["Fair", 22], ["Thin file", 8], ["Poor", 5]] as const);
+    const eviction = stage === "Denied" ? r.chance(0.25) : stage === "Approved" || stage === "Leased" ? false : r.chance(0.03);
     const factors = [
       { factor: "Income to rent", direction: itr >= 3 ? "+" : "-", weight: 0.4, detail: `Income is ${itr}× the monthly rent (policy: 3×)` },
       { factor: "Credit band", direction: credit === "Excellent" || credit === "Good" ? "+" : "-", weight: 0.3, detail: `Screening credit band: ${credit}` },
       { factor: "Rental history", direction: eviction ? "-" : "+", weight: 0.3, detail: eviction ? "Prior eviction filing found (2021)" : "No evictions; prior landlord reference verified" },
     ];
     const score = Math.max(5, Math.min(98, Math.round(40 + (itr - 3) * 18 + (credit === "Excellent" ? 25 : credit === "Good" ? 15 : credit === "Fair" ? 0 : -15) - (eviction ? 30 : 0) + r.int(-5, 5))));
-    const rec = score >= 70 ? "Approve" : score >= 50 ? "Conditional" : "Deny";
+    const rec = stage === "Denied" ? "Deny" : stage === "Approved" || stage === "Leased" ? (score >= 70 ? "Approve" : "Conditional") : score >= 70 ? "Approve" : score >= 50 ? "Conditional" : "Deny";
     const decided = ["Approved", "Conditional", "Denied", "Leased"].includes(stage);
+    // Applications waiting on a decision are recent; a couple have gone stale.
+    if (stage === "Review") submitted = ASOF - (r.chance(0.92) ? r.int(1, 10) : r.int(20, 30));
+    if (stage === "Screening" || stage === "Submitted") submitted = Math.max(submitted, ASOF - r.int(0, 5));
     this.add("applications", {
       id, property_id: p.id, unit_id: unit.id, listing_id: this.t.listings?.some((l) => l.unit_id === unit.id) ? `lst-${unit.id}` : null, applicant_id: applicantId, co_applicants: "[]", stage,
       desired_move_in: iso(submitted + r.int(10, 40)), rent_cents: unit.market, income_to_rent: itr, score: stage === "Submitted" ? null : score, scoring_factors: stage === "Submitted" ? "[]" : JSON.stringify(factors),
@@ -421,8 +451,19 @@ class Extras {
       const d = doc({ property_id: l.u.p.id, entity_type: "leases", entity_id: l.id, name: `${l.commercial ? "Commercial lease" : "Lease agreement"} ${l.id} — ${l.hh.name}.pdf`, url: `/docs/leases/${l.id}.pdf`, doc_type: "Lease", classify_confidence: 0.97, filed_to: `Lease ${l.id} › Documents`, classified_by: "document_classifier", extracted: JSON.stringify({ rent_cents: l.rent, start_on: iso(l.start), end_on: l.end === null ? null : iso(l.end), deposit_cents: l.deposit }), uploaded_by: l.u.p.agent, uploaded_at: ts(l.start - 5, 700) });
       l.row.document_id = d.id as string;
     }
+    // Scanned invoices for recent bills. The four sample images in public/samples/invoices back the
+    // AP anomaly cases; every other bill gets a generated SVG (scripts/seed-docs.mjs writes them).
+    const SAMPLES: Record<string, string> = { "LSP-31208": "lone-star-plumbing-31208", "PPD-18272": "peachtree-plumbing-18272", "DCA-51190": "desert-cool-air-51190", "HCH-70214": "hill-country-hvac-70214" };
+    const linesBy = new Map<string, R[]>();
+    for (const l of c.t.bill_lines) (linesBy.get(l.bill_id as string) ?? linesBy.set(l.bill_id as string, []).get(l.bill_id as string)!).push(l);
     for (const b of c.bills.filter((b) => (b.bill_date as string) >= iso(ASOF - 45))) {
-      const d = doc({ property_id: b.property_id, entity_type: "bills", entity_id: b.id, name: `${c.vendorName[b.vendor_id as string]} invoice ${b.invoice_number}.pdf`, url: `/docs/invoices/${b.id}.pdf`, doc_type: "Invoice", classify_confidence: 0.95, filed_to: `Bill ${b.id}`, classified_by: "ap", extracted: JSON.stringify({ vendor: c.vendorName[b.vendor_id as string], invoice_number: b.invoice_number, total_cents: b.amount_cents, invoice_date: b.bill_date }), uploaded_by: "s-lucy", uploaded_at: ts(day(b.bill_date as string) + 1, 600) });
+      const sample = SAMPLES[b.invoice_number as string];
+      const d = doc({
+        property_id: b.property_id, entity_type: "bills", entity_id: b.id, name: `${c.vendorName[b.vendor_id as string]} invoice ${b.invoice_number}.${sample ? "png" : "svg"}`,
+        url: sample ? `/samples/invoices/${sample}.png` : `/docs/invoices/${b.id}.svg`, mime: sample ? "image/png" : "image/svg+xml", doc_type: "Invoice", classify_confidence: 0.95, filed_to: `Bill ${b.id}`, classified_by: "ap",
+        extracted: JSON.stringify({ vendor: c.vendorName[b.vendor_id as string], invoice_number: b.invoice_number, date: b.bill_date, due_date: b.due_on, total: (b.amount_cents as number) / 100, lines: (linesBy.get(b.id as string) ?? []).map((l) => ({ description: l.description, amount: (l.amount_cents as number) / 100 })) }),
+        uploaded_by: "s-lucy", uploaded_at: ts(day(b.bill_date as string) + 1, 600),
+      });
       b.document_id = d.id as string;
     }
     for (const [id, company, , , , is1099] of VENDORS) if (is1099) doc({ property_id: null, entity_type: "vendors", entity_id: id, name: `${company} W-9.pdf`, url: `/docs/vendors/${id}-w9.pdf`, doc_type: "W-9", classify_confidence: 0.99, filed_to: `${company} › Tax forms`, classified_by: "document_classifier", uploaded_by: "s-lucy", uploaded_at: "2026-01-12T16:00:00Z" });
@@ -526,20 +567,43 @@ class Extras {
       add("documents", { id: docId, property_id: null, entity_type: "vendors", entity_id: id, name: `${company} certificate of insurance.pdf`, url: `/docs/vendors/${id}-coi.pdf`, mime: "application/pdf", doc_type: "COI", classify_confidence: 0.96, filed_to: `${company} › Insurance`, classified_by: "document_classifier", extracted: JSON.stringify({ carrier: "Hartwell Mutual", expires_on: iso(expires) }), uploaded_by: "s-lucy", uploaded_at: ts(expires - 365, 600) });
       add("vendor_cois", { id: `coi-${id}`, vendor_id: id, document_id: docId, carrier: r.pick(["Hartwell Mutual", "Contractors Shield", "Lone Pine Casualty", "Summit Specialty"]), gl_limit_cents: r.pick([100_000_000, 200_000_000]), workers_comp: trade === "Pest control" || r.chance(0.85) ? 1 : 0, expires_on: iso(expires), status });
     }
-    const ITEMS: [string, string, number][] = [["Fire inspection", "Annual fire marshal inspection", 365], ["Permit", "Certificate of occupancy on file", 0], ["Pool license", "Public pool operating permit", 365], ["Elevator cert", "Elevator certificate of operation", 365], ["Backflow", "Backflow test report filed with city", 365], ["Boiler", "Boiler inspection certificate", 365]];
+    // Compliance: one row per recurring obligation for the current cycle, plus last cycle's completed
+    // row as history. About 12% of current items are overdue, 15% due within 30 days.
+    const ITEMS: [kind: string, title: string, months: number, applies: (p: Prop) => boolean][] = [
+      ["Fire inspection", "Annual fire marshal inspection", 12, () => true],
+      ["Fire alarm test", "Fire alarm and sprinkler system test", 6, (p) => p.stories >= 3 || p.kind === "com"],
+      ["Elevator cert", "Elevator certificate of operation", 12, (p) => p.stories >= 4],
+      ["Pool license", "Public pool operating permit", 12, (p) => p.pool],
+      ["Backflow", "Backflow preventer test filed with the city", 12, () => true],
+      ["Boiler", "Boiler inspection certificate", 12, (p) => p.metro === "Atlanta" && p.kind !== "small"],
+      ["Permit", "Certificate of occupancy on file", 0, () => true],
+      ["Lead disclosure", "Lead-based paint disclosures on file (pre-1978 buildings)", 0, (p) => p.year < 1978],
+    ];
     let ci = 0;
+    const comp = (row: R) => add("compliance_items", { id: `cmp-${++ci}`, document_id: null, ...row });
+    const current = (r: Rng) => r.weighted([["overdue", 12], ["soon", 15], ["open", 73]] as const);
     for (const p of c.props) {
       const r = rng(`comp:${p.id}`);
-      for (const [kind, title, every] of ITEMS) {
-        if ((kind === "Pool license" && !p.pool) || (kind === "Elevator cert" && p.stories < 4) || (kind === "Boiler" && p.metro !== "Atlanta")) continue;
-        const due = every ? ASOF + r.int(-25, 300) : day("2027-06-30");
-        const doneOn = due < ASOF && r.chance(0.6) ? due - r.int(1, 10) : null;
-        add("compliance_items", { id: `cmp-${++ci}`, property_id: p.id, staff_id: null, kind, title: `${title} — ${p.name}`, due_on: iso(due), completed_on: doneOn ? iso(doneOn) : null, status: doneOn ? "Done" : due < ASOF ? "Overdue" : due - ASOF <= 30 ? "Due soon" : "Open", document_id: null });
+      for (const [kind, title, months, applies] of ITEMS) {
+        if (!applies(p)) continue;
+        if (!months) {
+          comp({ property_id: p.id, staff_id: null, kind, title: `${title} — ${p.name}`, due_on: iso(day("2026-01-31")), completed_on: iso(day("2025-12-15") + r.int(0, 40)), status: "Done" });
+          continue;
+        }
+        const state = current(r);
+        const due = state === "overdue" ? ASOF - r.int(3, 55) : state === "soon" ? ASOF + r.int(0, 30) : ASOF + r.int(31, months * 30);
+        comp({ property_id: p.id, staff_id: null, kind, title: `${title} — ${p.name}`, due_on: iso(due), completed_on: null, status: state === "overdue" ? "Overdue" : state === "soon" ? "Due soon" : "Open" });
+        const prev = addMonthsDay(due, -months);
+        if (prev < ASOF) comp({ property_id: p.id, staff_id: null, kind, title: `${title} — ${p.name}`, due_on: iso(prev), completed_on: iso(Math.min(ASOF - 1, prev - r.int(0, 12))), status: "Done" });
       }
     }
-    for (const sid of ["marcus", "lena", "s-maria", "s-tyrone", "s-hailey", "s-yusuf", "rachel", "priya"]) {
-      const due = ASOF + rng(`fh:${sid}`).int(-10, 120);
-      add("compliance_items", { id: `cmp-${++ci}`, property_id: null, staff_id: sid, kind: "Fair housing training", title: `Annual fair housing training — ${c.staffName[sid]}`, due_on: iso(due), completed_on: null, status: due < ASOF ? "Overdue" : due - ASOF <= 30 ? "Due soon" : "Open", document_id: null });
+    // Annual fair housing training for every active staff member who touches residents or applicants.
+    for (const st of c.t.staff.filter((x) => x.active && !["nadia"].includes(x.id as string))) {
+      const r = rng(`fh:${st.id}`);
+      const state = current(r);
+      const due = state === "overdue" ? ASOF - r.int(2, 40) : state === "soon" ? ASOF + r.int(0, 30) : ASOF + r.int(31, 330);
+      comp({ property_id: null, staff_id: st.id, kind: "Fair housing training", title: `Annual fair housing training — ${st.name}`, due_on: iso(due), completed_on: null, status: state === "overdue" ? "Overdue" : state === "soon" ? "Due soon" : "Open" });
+      comp({ property_id: null, staff_id: st.id, kind: "Fair housing training", title: `Annual fair housing training — ${st.name}`, due_on: iso(due - 365), completed_on: iso(due - 365 - r.int(0, 20)), status: "Done" });
     }
     // Legal: the eviction (Barton Creek), a small-claims case and a fair-housing inquiry.
     const ev = c.households.find((h) => h.evict)!;
@@ -583,6 +647,10 @@ class Extras {
     // Bank feed and reconciliations: Oct–Nov feed lines per trust account, matched to transfers.
     let bt = 0;
     const recon = new Map<string, R>();
+    // 3–6 deposits per trust account and month arrive with a bank description that doesn't name the
+    // batch, so they sit unmatched with an AI-suggested match (same amount, a day or two apart).
+    const vague = new Map<string, number>();
+    const vagueTarget = (rk: string) => 3 + rng(`vague:${rk}`).int(0, 3);
     for (const t of c.t.transfers) {
       if (!String(t.bank_account_id).endsWith("-trust") || t.status !== "Cleared" || (t.created as string) < "2026-10-01") continue;
       const id = `bt-${++bt}`;
@@ -593,6 +661,16 @@ class Extras {
       const period = posted.slice(0, 7);
       const rk = `${t.bank_account_id}|${period}`;
       if (!recon.has(rk)) recon.set(rk, { id: `rec-${String(t.bank_account_id).slice(3)}-${period}`, bank_account_id: t.bank_account_id, period });
+      const unexplained = sign > 0 && t.from_kind === "batch" && (vague.get(rk) ?? 0) < vagueTarget(rk) && rng(`vg:${t.id}`).chance(0.35);
+      if (unexplained) {
+        vague.set(rk, (vague.get(rk) ?? 0) + 1);
+        const row = c.t.bank_transactions.at(-1)!;
+        row.transfer_id = null;
+        row.description = `DEPOSIT ${String(hashish(String(t.id))).slice(0, 6)} BR ${String(t.property_id).slice(1)}`;
+        add("reconciliation_items", { id: `ri-${id}`, reconciliation_id: recon.get(rk)!.id, bank_transaction_id: id, transfer_id: t.id, status: "Suggested", confidence: 0.86, note: `Same amount as ${t.ref}, posted ${posted}` });
+        (c.planted["bank_transactions.unmatched_deposit"] ??= []).push(id);
+        continue;
+      }
       add("reconciliation_items", { id: `ri-${id}`, reconciliation_id: recon.get(rk)!.id, bank_transaction_id: id, transfer_id: t.id, status: "Matched", confidence: null, note: "" });
     }
     // Corrupted: a deposit with no matching transfer batch (bank shows it, books don't link it).
@@ -615,12 +693,12 @@ class Extras {
     for (const acct of [...new Set(c.t.transfers.map((t) => t.bank_account_id as string))].filter((a) => a.endsWith("-trust")).sort()) {
       let bal = 0;
       for (const t of c.t.transfers) if (t.bank_account_id === acct && t.status === "Cleared" && (t.cleared as string) < `${PERIODS[0]}-01`) bal += (t.kind === "Rent" || t.kind === "Other receipt" ? 1 : -1) * (t.amount_cents as number);
-      for (const period of PERIODS.slice(0, -1)) {
+      for (const period of PERIODS) {
         const rk = `${acct}|${period}`;
         const r = recon.get(rk) ?? { id: `rec-${acct.slice(3)}-${period}`, bank_account_id: acct, period };
         bal += monthly.get(rk) ?? 0;
-        const open = period === "2026-10";
-        add("bank_reconciliations", { ...r, statement_balance_cents: bal + (open && acct === "ba-oe01-trust" ? 284_300 : 0), book_balance_cents: bal, status: open ? (acct === "ba-oe01-trust" || acct === "ba-oe06-trust" ? "Open" : "Balanced") : "Approved", completed_by: open ? null : "grace", completed_at: open ? null : ts(day(`${period}-01`) + 40, 900) });
+        const open = period === "2026-10" && (vague.get(rk) ?? 0) > 0;
+        add("bank_reconciliations", { ...r, statement_balance_cents: bal + (open && acct === "ba-oe01-trust" ? 284_300 : 0), book_balance_cents: bal, status: open || period === "2026-11" ? "Open" : period === "2026-10" ? "Balanced" : "Approved", completed_by: open || period === "2026-11" ? null : "grace", completed_at: open || period === "2026-11" ? null : ts(day(`${period}-01`) + 40, 900) });
       }
     }
   }
@@ -819,10 +897,29 @@ class Extras {
       }
     }
     // Vendor bank details changed without a verification task (fraud flag): hold payments.
+    const v16 = c.t.vendors.find((v) => v.id === "v16")!;
+    const v16prev = v16.bank_last4;
+    v16.bank_last4 = "4402";
+    v16.bank_changed_at = ts(ASOF - 6, 980);
+    issue("vendors.unverified_bank_change", "vendors", "v16", null, "critical", { bank_last4: "4402", previous_last4: v16prev, changed_at: v16.bank_changed_at, requested_by: "phone call; no callback to the number on file" }, { action: "vendors.hold_payments", params: { create_task: true }, why: ["Bank details changed 6 days ago", "No callback verification on file", "A $968 invoice is waiting to be paid to the new account"], confidence: 0.93, source: "ap" });
+    const billById2 = new Map(c.bills.map((b) => [b.id as string, b]));
+    for (const id of c.planted["ap.duplicate"] ?? []) {
+      const b = billById2.get(id)!;
+      const orig = billById2.get(c.planted["ap.paid_original"]![0])!;
+      issue("bills.possible_duplicate", "bills", id, b.property_id as string, "critical", { invoice_number: b.invoice_number, vendor: c.vendorName[b.vendor_id as string], amount_cents: b.amount_cents, paid_bill: orig.id, paid_on: orig.due_on }, { action: "bills.void", params: {}, why: [`Same vendor and invoice number as ${orig.id}, already paid`, "Same amount and description"], confidence: 0.96, source: "ap" });
+    }
+    for (const id of c.planted["ap.outlier"] ?? []) {
+      const b = billById2.get(id)!;
+      issue("bills.amount_outlier", "bills", id, b.property_id as string, "warn", { amount_cents: b.amount_cents, vendor_median_cents: Math.round((b.amount_cents as number) / 4.3), ratio: 4.3 }, { action: "bills.hold", params: { request: "itemized quote and photos" }, why: ["4.3× this vendor's median invoice", "No purchase order or work order attached"], confidence: 0.84, source: "ap" });
+    }
     const v26 = c.t.vendors.find((v) => v.id === "v26")!;
     v26.bank_last4 = "0917";
     v26.bank_changed_at = ts(ASOF - 3, 1310);
     issue("vendors.unverified_bank_change", "vendors", "v26", null, "critical", { bank_last4: "0917", previous_last4: "5521", changed_at: v26.bank_changed_at, requested_by: "email from keyright-locksmiths.co (lookalike domain)" }, { action: "vendors.hold_payments", params: { create_task: true }, why: ["Bank details changed 3 days ago", "No verification task or callback on file", "Request came from a lookalike email domain"], confidence: 0.95, source: "ap" });
+    for (const item of c.t.compliance_items.filter((x) => x.status === "Overdue")) {
+      const lifeSafety = ["Fire inspection", "Fire alarm test", "Elevator cert", "Boiler"].includes(item.kind as string);
+      issue("compliance_items.overdue", "compliance_items", item.id as string, item.property_id as string | null, lifeSafety ? "critical" : "warn", { kind: item.kind, due_on: item.due_on, days_overdue: ASOF - day(item.due_on as string) }, { action: "compliance_items.schedule", params: { create_task: true }, why: [`${item.kind} was due ${item.due_on}`, lifeSafety ? "Life-safety item: a person schedules it" : "Book the inspection or training and attach the certificate"], confidence: 0.99, source: "compliance" });
+    }
     for (const v of c.t.vendors.filter((v) => v.id === "v19" || v.id === "v42")) v.w9_on_file = 0;
     for (const v of c.t.vendors.filter((v) => v.is_1099 && !v.w9_on_file)) issue("vendors.missing_w9", "vendors", v.id as string, null, "warn", { w9_on_file: 0, is_1099: 1 }, { action: "vendors.request_w9", params: {}, why: ["1099 vendor with no W-9 on file", "Payments this year need a TIN for 1099 filing"], confidence: 0.97, source: "rule" });
     // Work orders (~4%): completed vendor jobs with no cost, and completion stamped before opening.
@@ -876,6 +973,9 @@ class Extras {
       ["prospects.invalid_email", "prospects", "Invalid prospect email", "info", "Email has a typo in the domain.", "SELECT id FROM {{prospects}} WHERE email NOT LIKE '%@%.%' OR email LIKE '%,%'"],
       ["work_orders.completed_without_cost", "work_orders", "Completed vendor job without cost", "info", "A vendor work order is completed with no cost recorded.", "SELECT id FROM {{work_orders}} WHERE status IN ('Completed', 'Paid') AND vendor_id IS NOT NULL AND cost_cents IS NULL"],
       ["work_orders.closed_before_opened", "work_orders", "Completed before it was opened", "warn", "completed_at is earlier than opened_at.", "SELECT id FROM {{work_orders}} WHERE completed_at < opened_at"],
+      ["compliance_items.overdue", "compliance_items", "Compliance item overdue", "warn", "A permit, inspection, certificate or training is past its due date and not done.", "SELECT id FROM {{compliance_items}} WHERE completed_on IS NULL AND due_on < '2026-11-04'"],
+      ["bills.possible_duplicate", "bills", "Possible duplicate invoice", "critical", "Same vendor and invoice number as another bill.", "SELECT b.id FROM {{bills}} b JOIN {{bills}} o ON o.vendor_id = b.vendor_id AND o.invoice_number = b.invoice_number AND o.id <> b.id AND o.status = 'Paid' WHERE b.status <> 'Paid'"],
+      ["bills.amount_outlier", "bills", "Invoice far above the vendor's usual", "warn", "An unpaid bill is more than 2.4× the vendor's median paid bill.", null],
       ["vendors.missing_w9", "vendors", "1099 vendor without a W-9", "warn", "A vendor that gets a 1099 has no W-9 on file.", "SELECT id FROM {{vendors}} WHERE is_1099 = 1 AND w9_on_file = 0"],
     ];
     for (const [id, entity, nm, severity, description, sql] of RULES) add("data_rules", { id, entity_type: entity, name: nm, severity, description, check_kind: sql ? "sql" : "computed", check_sql: sql, help_slug: "data-health-fix-issues", enabled: 1 });
@@ -930,6 +1030,29 @@ class Extras {
       const tin = r.int(1800, 9000), tout = r.int(200, 1400);
       add("agent_runs", { id, agent_key: agent, trigger_kind: trigger, event_id: eventId, started_by: trigger === "manual" ? "marcus" : null, status: props.some((p) => p.queue === "needs_you") && d >= ASOF - 3 ? "waiting_approval" : "done", started_at: ts(d, minute), ended_at: ts(d, Math.min(1439, at)), model, tokens_in: model === "rules" ? 0 : tin, tokens_out: model === "rules" ? 0 : tout, cost_cents: model === MODELS[1] ? Math.round((tin * 3 + tout * 15) / 10000) : 0, summary, error: null });
     };
+    // History since the agents went live (Sep 2025): one run per agent a week, growing as the team
+    // turned more agents on and raised autonomy. Targets are real records from that week.
+    const live = c.households.filter((h) => h.leases.some((l) => CURRENT.has(l.status)));
+    const weeks = Math.floor((ASOF - 31 - day("2025-09-01")) / 7);
+    for (let w = 0; w <= weeks; w++) {
+      const d0 = day("2025-09-01") + w * 7;
+      const ramp = w / weeks;
+      const inWeek = (v: unknown) => typeof v === "string" && v >= iso(d0) && v < iso(d0 + 7);
+      const wos = c.workOrders.filter((x) => inWeek(x.opened_at) && x.source === "Resident");
+      const bills = c.bills.filter((x) => inWeek(x.bill_date));
+      const leases = c.leases.filter((l) => !l.commercial && l.end !== null && l.end - d0 > 60 && l.end - d0 < 120);
+      const r = rng(`hist:${w}`);
+      const n = (max: number) => Math.max(1, Math.round(max * (0.25 + 0.75 * ramp) * (0.8 + r() * 0.4)));
+      const queue = () => (r.chance(0.35 + 0.35 * ramp) ? "auto_handled" : "needs_you");
+      const take = <T>(xs: T[], k: number) => Array.from({ length: Math.min(k, xs.length) }, () => xs[r.int(0, xs.length - 1)]).filter((x, i, a) => a.indexOf(x) === i);
+      doRun("collections", d0 + 1, 14 * 60, "schedule", [], take(live, n(14)).map((h) => ({ entity: "households", id: h.id, pid: h.p.id, action: "households.send_reminder", title: `Send a past-due reminder to ${name(h)}`, why: ["Balance past due after the grace period"], conf: 0.9, queue: queue(), role: "property_manager" })), "Weekly past-due follow-up.");
+      doRun("maintenance_triage", d0 + 2, 9 * 60, "event", [], take(wos, n(40)).map((x) => ({ entity: "work_orders", id: x.id as string, pid: x.property_id as string, action: "work_orders.assign_vendor", title: `Triage ${x.id}: ${x.category}, ${String(x.priority).toLowerCase()}`, why: [`Classified as ${x.category}`], conf: 0.86, queue: queue(), role: "maintenance_supervisor" })), "Triaged new requests.", "wo.created");
+      doRun("ap", d0 + 3, 12 * 60, "event", [], take(bills, n(30)).map((x) => ({ entity: "bills", id: x.id as string, pid: x.property_id as string, action: "bills.approve", title: `Code and approve ${x.id} from ${c.vendorName[x.vendor_id as string]}`, why: ["Matches contract or work order", "Coded to the vendor's usual GL account"], conf: 0.94, amount: x.amount_cents as number, queue: queue(), role: "accountant" })), "Read, coded and matched invoices.", "invoice.received");
+      if (w >= 6) doRun("renewals", d0 + 1, 15 * 60, "schedule", [], take(leases, n(10)).map((l) => ({ entity: "leases", id: l.id, pid: l.u.p.id, action: "renewal_offers.send", title: `Send ${l.hh.name} a renewal offer`, why: ["Lease ends within 120 days"], conf: 0.74, queue: "needs_you", role: "property_manager" })), "Priced renewals.");
+      if (w >= 10) doRun("data_health", d0 + 4, 2 * 60, "schedule", [], take(c.units, n(6)).map((u) => ({ entity: "units", id: u.id, pid: u.p.id, action: "data_issues.apply_fix", title: `Normalize contact and record details at ${u.p.name}`, why: ["Rule check found a fixable issue"], conf: 0.9, queue: "auto_handled", role: "admin" })), "Ran data rules.");
+      if (w >= 14 && w % 4 === 0) doRun("owner_reporting", d0 + 2, 13 * 60, "schedule", [], ["oe01", "oe02", "oe03", "oe04", "oe05", "oe06", "oe07", "oe08"].map((oe) => ({ entity: "owner_entities", id: oe, pid: c.props.find((p) => p.entity === oe)!.id, action: "messages.send", title: `Send ${oe.toUpperCase()} its monthly statement notes`, why: ["Statement closed"], conf: 0.82, queue: "needs_you", role: "accountant" })), "Drafted owner statement notes.");
+    }
+
     // Collections: one sweep a day per region; proposals for households 30+ days late.
     const late = c.households.filter((h) => h.open.some((o) => o.rem > 0 && ASOF - o.due > 20) && h.leases.some((l) => CURRENT.has(l.status)));
     for (let d = ASOF - 29; d <= ASOF; d++) {
@@ -973,10 +1096,16 @@ class Extras {
       doRun("data_health", d, h * 60, "schedule", ["data_rules.run", "data_issues.list"], fresh ? crit.slice(0, 40).map((i) => ({ entity: i.entity_type as string, id: i.entity_id as string, pid: i.property_id as string | null, action: "data_issues.apply_fix", title: `Fix: ${String(i.rule_id).split(".")[1].replace(/_/g, " ")} (${i.entity_id})`, why: JSON.parse(i.suggested_fix as string).why, conf: JSON.parse(i.suggested_fix as string).confidence, risk: i.rule_id === "vendors.unverified_bank_change" || String(i.rule_id).startsWith("payments") || String(i.rule_id).startsWith("owner_distributions") ? "High" : "Low", queue: i.severity === "info" ? "auto_handled" : "needs_you", role: "admin", payload: { issue_id: i.id } })) : [], fresh ? `Ran 21 rules; ${crit.length} open issues, ${crit.filter((i) => i.severity === "critical").length} critical.` : "Ran 21 rules; no new issues.");
     }
     // Compliance and owner reporting.
+    const overdue = c.t.compliance_items.filter((x) => x.status === "Overdue" || x.status === "Due soon");
+    doRun("compliance", ASOF, 11 * 60 + 5, "schedule", ["compliance_items.list", "tasks.create"], overdue.slice(0, 30).map((x) => {
+      const late = x.status === "Overdue";
+      const life = ["Fire inspection", "Fire alarm test", "Elevator cert", "Boiler"].includes(x.kind as string);
+      return { entity: "compliance_items", id: x.id as string, pid: x.property_id as string | null, action: x.staff_id ? "compliance_items.assign_training" : "compliance_items.schedule", title: `${late ? "Overdue" : "Due soon"}: ${x.title}`, why: [`Due ${x.due_on}${late ? `, ${ASOF - day(x.due_on as string)} days ago` : ""}`, life ? "Life-safety item: a person must schedule it" : x.staff_id ? "Required annually for anyone who talks to applicants or residents" : "Certificate needed for insurance and the city"], conf: 0.97, risk: life ? "High" : "Low", queue: late || life ? "needs_you" : "auto_handled", role: "maintenance_supervisor" };
+    }), `Checked ${c.t.compliance_items.length} compliance items: ${overdue.filter((x) => x.status === "Overdue").length} overdue, ${overdue.filter((x) => x.status === "Due soon").length} due within 30 days.`);
     doRun("compliance", ASOF, 11 * 60, "schedule", ["vendor_cois.list_expiring", "compliance_items.list"], (this.t.vendor_cois ?? []).filter((x) => x.status !== "Valid").map((x) => ({ entity: "vendors", id: x.vendor_id as string, pid: null, action: "vendors.request_coi", title: `Request a current COI from ${c.vendorName[x.vendor_id as string]} (${x.status === "Expired" ? "expired" : "expires"} ${x.expires_on})`, why: [`Certificate ${x.status === "Expired" ? "expired" : "expires"} on ${x.expires_on}`, "Vendor has open or scheduled jobs"], conf: 0.97, risk: x.status === "Expired" ? "Medium" : "Low", queue: x.status === "Expired" ? "needs_you" : "auto_handled", role: "maintenance_supervisor" })), "Checked 34 certificates and 120 compliance items.");
     doRun("owner_reporting", ASOF - 2, 13 * 60, "schedule", ["owner_statements.get", "metrics.variance"], [{ entity: "owner_entities", id: "oe01", pid: null, action: "messages.send", title: "Send Helen Carter the October variance explanation", why: ["Distribution down 9% vs September", "Roof progress payment $48,500 at Barton Creek", "Higher HVAC spend after August heat"], conf: 0.82, risk: "Low", queue: "needs_you", role: "accountant" }], "Drafted October statement notes for 8 owner entities.");
     doRun("leasing", ASOF, 9 * 60, "schedule", ["prospects.list", "messages.draft"], (this.t.prospects ?? []).filter((p) => p.stage === "Contacted" && p.last_contact_at && (p.last_contact_at as string) < iso(ASOF - 3)).slice(0, 12).map((p) => ({ entity: "prospects", id: p.id as string, pid: p.property_id as string, action: "prospects.send_follow_up", title: `Follow up with ${p.name}: no contact in ${Math.max(3, ASOF - day(p.last_contact_at as string))} days`, why: ["Interested lead gone quiet", `Desired move-in ${p.desired_move_in}`], conf: 0.88, risk: "Low", queue: "needs_you", role: "leasing_agent" })), "Found prospects waiting on a reply.");
-    for (const app of (this.t.applications ?? []).filter((a) => a.stage === "Review")) doRun("leasing", ASOF - 1, 16 * 60 + rng(String(app.id)).int(0, 300), "event", ["applications.score"], [{ entity: "applications", id: app.id as string, pid: app.property_id as string, action: app.recommendation === "Deny" ? "applications.deny" : "applications.approve", title: `${app.recommendation} application ${app.id} (score ${app.score})`, why: JSON.parse(app.scoring_factors as string).map((f: { detail: string; direction: string }) => `${f.direction === "+" ? "For" : "Against"}: ${f.detail}`), conf: 0.8, risk: "Medium", queue: "needs_you", role: "broker" }], "Scored the application from income, credit band and rental history.", "application.submitted");
+    for (const app of (this.t.applications ?? []).filter((a) => a.stage === "Review")) doRun("leasing", ASOF - 1, 16 * 60 + rng(String(app.id)).int(0, 300), "event", ["applications.score"], [{ entity: "applications", id: app.id as string, pid: app.property_id as string, action: app.recommendation === "Deny" ? "applications.deny" : "applications.approve", title: `${app.recommendation} application ${app.id} (score ${app.score})`, payload: { application_id: app.id, score: app.score, recommendation: app.recommendation, income_to_rent: app.income_to_rent }, why: JSON.parse(app.scoring_factors as string).map((f: { detail: string; direction: string }) => `${f.direction === "+" ? "For" : "Against"}: ${f.detail}`), conf: 0.8, risk: "Medium", queue: "needs_you", role: "broker" }], "Scored the application from income, credit band and rental history.", "application.submitted");
 
     // Decisions on older proposals (history), and their audit rows.
     for (const p of proposals) {
@@ -1027,7 +1156,14 @@ class Extras {
   // -------------------------------------------------------------------------------------------
   settings() {
     const { add, c } = this;
-    for (const a of HELP_ARTICLES) add("help_articles", { id: a.id, title: a.title, body: a.body, tags: JSON.stringify(a.tags), entity_type: a.entity_type, route: a.route, updated_at: "2026-10-30T16:00:00Z" });
+    const seen = new Set<string>();
+    for (const a of [...HELP_ARTICLES, ...MORE_HELP_ARTICLES]) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      add("help_articles", { id: a.id, title: a.title, body: a.body, tags: JSON.stringify(a.tags), entity_type: a.entity_type, route: a.route, updated_at: "2026-10-30T16:00:00Z" });
+    }
+    // Renter-facing articles for the public listing Q&A (ids renter-*, tag renter).
+    for (const a of RENTER_HELP) add("help_articles", { id: a.id, title: a.title, body: a.body, tags: JSON.stringify(["renter"]), entity_type: null, route: "/listings", updated_at: "2026-10-30T16:00:00Z" });
     // Automation rules with run logs.
     const RULES: [string, string, object, object[], object, string | null, string][] = [
       ["Remind residents 3 days before rent is due", "Rule", { schedule: "0 15 28 * *", event: "charge.upcoming" }, [{ field: "autopay", op: "=", value: 0 }], { action: "households.send_reminder", params: { template_id: "tpl-rent-reminder" } }, null, "marcus"],
@@ -1102,14 +1238,27 @@ class Extras {
     const leads = count(this.t.prospects, (r) => `${r.property_id}|${(r.created_at as string).slice(0, 7)}`);
     const tours = count(this.t.showings, (r) => (r.status === "Completed" ? `${r.property_id}|${(r.scheduled_at as string).slice(0, 7)}` : null));
     const apps = count(this.t.applications, (r) => (r.submitted_at ? `${r.property_id}|${(r.submitted_at as string).slice(0, 7)}` : null));
-    const ai = count(this.t.ai_proposals, (r) => (r.property_id ? `${r.property_id}|${(r.created_at as string).slice(0, 7)}` : null));
+    // Minutes a person would have spent on each kind of action; rejected proposals save nothing.
+    const MINUTES: Record<string, number> = {
+      "households.send_reminder": 4, "households.offer_payment_plan": 15, "work_orders.assign_vendor": 8, "bills.approve": 6, "bills.hold": 12,
+      "renewal_offers.send": 12, "data_issues.apply_fix": 5, "vendors.request_coi": 6, "prospects.send_follow_up": 4, "applications.approve": 20,
+      "applications.deny": 20, "messages.send": 25, "compliance_items.schedule": 10, "compliance_items.assign_training": 5,
+    };
+    const rejected = new Set((this.t.ai_decisions ?? []).filter((d) => d.decision === "Rejected").map((d) => d.proposal_id as string));
+    const ai = new Map<string, number>(), minutes = new Map<string, number>();
+    for (const p of this.t.ai_proposals ?? []) {
+      if (!p.property_id || rejected.has(p.id as string)) continue;
+      const k = `${p.property_id}|${(p.created_at as string).slice(0, 7)}`;
+      ai.set(k, (ai.get(k) ?? 0) + 1);
+      minutes.set(k, (minutes.get(k) ?? 0) + (MINUTES[p.action as string] ?? 5));
+    }
     for (const m of c.t.metrics_monthly) {
       const k = `${m.property_id}|${m.month}`;
       m.leads = leads.get(k) ?? 0;
       m.tours = tours.get(k) ?? 0;
       m.applications = apps.get(k) ?? 0;
       m.ai_actions = ai.get(k) ?? 0;
-      m.ai_minutes_saved = (ai.get(k) ?? 0) * 6;
+      m.ai_minutes_saved = minutes.get(k) ?? 0;
     }
     // Recompute wo_opened/wo_open for work orders added here (preventive, inspection, persona).
     const opened = count(c.workOrders, (w) => `${w.property_id}|${(w.opened_at as string).slice(0, 7)}`);
