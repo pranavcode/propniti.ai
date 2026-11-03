@@ -79,6 +79,21 @@ describe("scope", () => {
     expect((await list(r2, "charges", {})).rows.map((c) => c.id)).toEqual(["c-p01-u1"]);
   });
 
+  it("gives portal users only their own rows, never everything at their property", async () => {
+    await db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')").run();
+    // Rows a persona gets from the generic list; an entity its role can't read counts as none.
+    const ids = async (c: QueryCtx, e: string) => list(c, e, { size: 100 }).then((r) => r.rows.map((x) => x.id), (err) => (err.status === 403 ? [] : Promise.reject(err)));
+    const r = await ctx("resident");
+    expect(await ids(r, "charges")).toEqual(["c-p01-u1"]);
+    expect((await ids(r, "leases")).every((id) => id === "l-p01-u1")).toBe(true);
+    expect(await ids(r, "units")).toEqual([]);
+    // Owner: their entities' properties, but not every lease and charge at those properties.
+    const o = await ctx("owner");
+    expect((await ids(o, "properties")).length).toBe(4);
+    expect(await ids(o, "leases")).toEqual([]);
+    expect(await ids(o, "charges")).toEqual([]);
+  });
+
   it("denies entities the role can't read", async () => {
     await expect(list(await ctx("lena"), "charges", {})).rejects.toMatchObject({ status: 403 });
   });

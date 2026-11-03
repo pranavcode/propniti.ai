@@ -131,8 +131,10 @@ function inValue(f: FieldDef, v: unknown) {
 // Scope
 // ---------------------------------------------------------------------------------------------
 
-// Portal users (scope "self") see only rows tied to their own record.
-function selfClause(def: EntityDef, actor: Actor, ws: string | null): { sql: string; params: unknown[] } | null {
+// Portal users (scope "self") see only rows tied to their own record: their household, their
+// owner entities, their vendor or applicant id. An entity without such a column returns nothing
+// for them; property scope never widens it to everything at a property.
+function selfClause(def: EntityDef, actor: Actor, ws: string | null): { sql: string; params: unknown[] } {
   const rec = getPersona(actor.personaId)?.record;
   if (!rec) return { sql: "0", params: [] };
   if (def.key === rec.entity) return { sql: `${def.table}.id = ?`, params: [rec.id] };
@@ -141,8 +143,7 @@ function selfClause(def: EntityDef, actor: Actor, ws: string | null): { sql: str
   if (rec.entity === "vendors" && has("vendor_id")) return { sql: `${def.table}.vendor_id = ?`, params: [rec.id] };
   if (rec.entity === "applicants" && has("applicant_id")) return { sql: `${def.table}.applicant_id = ?`, params: [rec.id] };
   if (rec.entity === "owners" && has("owner_id")) return { sql: `${def.table}.owner_id = ?`, params: [rec.id] };
-  // Owners also see everything on the properties their entities hold (property scope below).
-  if (rec.entity === "owners" && def.scopePath) return null;
+  if (rec.entity === "owners" && has("owner_entity_id")) return { sql: `${def.table}.owner_entity_id IN (SELECT id FROM ${effective("owner_entities", ws)} WHERE owner_id = ?)`, params: [rec.id] };
   return { sql: "0", params: [] };
 }
 
@@ -151,10 +152,8 @@ function scopeWhere(def: EntityDef, actor: Actor, ws: string | null): { sql: str
   const params: unknown[] = [];
   if (actor.scope.kind === "self") {
     const s = selfClause(def, actor, ws);
-    if (s) {
-      sql.push(s.sql);
-      params.push(...s.params);
-    }
+    sql.push(s.sql);
+    params.push(...s.params);
   }
   if (actor.propertyIds !== "all" && def.scopePath) {
     sql.push(`(${expand(def.scopePath, ws)}) IN (SELECT value FROM json_each(?))`);
