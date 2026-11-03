@@ -110,7 +110,7 @@ export async function Resident360({ id, actor }: TabProps) {
       }
     })();
     const other = ids.find((x) => x !== id);
-    const o = other ? await one(ctx, "SELECT * FROM {residents} WHERE id = ?", [other]) : null;
+    const o = other ? await one(ctx, "SELECT * FROM {residents} WHERE id = ? AND household_id = ?", [other, r.household_id]) : null;
     if (o) {
       // Keep the older record (lower seq in the base is older; ids sort the same way).
       const [keep, dup] = String(r.id) < String(o.id) ? [r, o] : [o, r];

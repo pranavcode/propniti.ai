@@ -22,7 +22,8 @@ export async function ThreadPane({ id, actor }: { id: string; actor: Actor }) {
   const ctx = await pageCtx();
   const c = await threadContext(ctx, id);
   // threadContext reads without scope; the thread's property must be in the persona's scope.
-  if (!c || (actor.propertyIds !== "all" && c.thread.property_id != null && !actor.propertyIds.includes(String(c.thread.property_id)))) {
+  // A thread with no property is org-level: only org-wide personas see it.
+  if (!c || (actor.propertyIds !== "all" && (c.thread.property_id == null || !actor.propertyIds.includes(String(c.thread.property_id))))) {
     return <EmptyState compact title="Conversation not found" description="It may have been closed or moved, or it belongs to a property outside your scope." />;
   }
   const t = c.thread;

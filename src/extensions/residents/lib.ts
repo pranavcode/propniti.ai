@@ -251,6 +251,7 @@ export function abstractByRules(pages: string[]): Extracted[] {
 
 // Fields the record stores, compared with what the document says. Text fields (tenant, late fee,
 // renewal option) are shown but not compared: the record doesn't hold them in the same form.
+const DATE_KEYS = new Set<AbstractKey>(["start_on", "end_on"]);
 export type Comparison = { key: AbstractKey; label: string; document: string | number | null; record: string | number | null; column?: string; match: boolean | null; page: number; quote: string };
 
 export function compareAbstract(ex: Extracted[], l: LeaseRecord): Comparison[] {
@@ -268,7 +269,10 @@ export function compareAbstract(ex: Extracted[], l: LeaseRecord): Comparison[] {
   return ex.map((e) => {
     const r = rec[e.key];
     const same = (a: unknown, b: unknown) => (typeof a === "number" || typeof b === "number" ? Math.abs(Number(a) - Number(b)) < 0.005 : String(a ?? "") === String(b ?? ""));
-    return { key: e.key, label: ABSTRACT_FIELDS[e.key], document: e.value, record: r ? r[0] : null, column: r?.[1], match: r ? e.value != null && same(e.value, r[0]) : null, page: e.page, quote: e.quote };
+    // A value of the wrong shape (text for rent, a non-date for a date) is shown, never compared:
+    // its "fix" would write it into the record.
+    const ok = !r ? false : DATE_KEYS.has(e.key) ? typeof e.value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.value) : typeof e.value === "number" && Number.isFinite(e.value) && e.value >= 0;
+    return { key: e.key, label: ABSTRACT_FIELDS[e.key], document: e.value, record: r ? r[0] : null, column: ok ? r?.[1] : undefined, match: r && ok ? same(e.value, r[0]) : null, page: e.page, quote: e.quote };
   });
 }
 

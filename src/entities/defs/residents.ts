@@ -462,8 +462,10 @@ registerEntity({
     ] },
     send_at: { type: "datetime", label: "Send at", sortable: true, list: { default: true } },
     recipients: { type: "number", label: "Recipients", sortable: true, list: { default: true, align: "right" }, editable: [] },
-    channels: { type: "json", label: "Channels" },
-    audience: { type: "json", label: "Audience" },
+    // Set by the composer's actions only: a generic edit could point the audience at a property
+    // outside the editor's scope.
+    channels: { type: "json", label: "Channels", editable: [] },
+    audience: { type: "json", label: "Audience", editable: [] },
     body: { type: "text", label: "Message", required: true, search: true },
     created_by: { type: "ref", ref: "staff", label: "Created by", editable: [] },
   },

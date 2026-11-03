@@ -107,7 +107,9 @@ registerAction({
     if (input.duplicate_id === keep.id) return fail(400, "Pick a different record to merge");
     const dup = await one(ctx, "SELECT * FROM {residents} WHERE id = ?", [input.duplicate_id]);
     if (!dup) return fail(404, "Duplicate not found");
-    if (dup.property_id !== keep.property_id) return fail(409, "Only residents at the same property can be merged");
+    // Same household only: merging moves conversations and requests, and must never pull a
+    // record (or its history) across households or properties.
+    if (dup.property_id !== keep.property_id || dup.household_id !== keep.household_id) return fail(409, "Only residents in the same household can be merged");
     const changes: Row = {};
     for (const f of MERGE_FIELDS) if (input.choice[f] === "duplicate") changes[f] = dup[f];
     const at = nowIso(ctx);
@@ -246,7 +248,8 @@ registerAction({
     const at = nowIso(ctx);
     const priority = (sr.urgency as string) ?? "Normal";
     const hours = { Emergency: 4, Urgent: 24, Normal: 72, Low: 168 }[priority] ?? 72;
-    const wo = `WO-${Math.floor(ctx.nowMs / 1000) % 1_000_000}`;
+    // Never reuse a base id: an overlay row with a base id would replace that work order.
+    const wo = newId("WO");
     await (await insertRow(ctx.db, ctx.ws, "work_orders", {
       id: wo, property_id: sr.property_id, unit_id: sr.unit_id ?? null, title: String(sr.body).split(/[.!?\n]/)[0].slice(0, 80), description: sr.body,
       category: (sr.category as string) ?? "General", priority, status: "New", source: "Resident", opened_at: at, sla_due_at: new Date(ctx.nowMs + hours * 3_600_000).toISOString(),

@@ -78,3 +78,10 @@ describe("fillTemplate", () => {
     expect(fillTemplate("Hi {{first_name}}, {{balance}} due {{ due_date }} {{x}}", { first_name: "Ana", balance: "$12.50", due_date: "Nov 1" })).toBe("Hi Ana, $12.50 due Nov 1 {{x}}");
   });
 });
+
+describe("abstraction input shapes", () => {
+  it("never proposes a fix from a value of the wrong type", () => {
+    const cmp = compareAbstract([{ key: "rent_cents", value: "free rent forever", page: 1, quote: "x" }, { key: "end_on", value: "never", page: 1, quote: "y" }, { key: "deposit_cents", value: -5, page: 1, quote: "z" }], lease);
+    expect(cmp.every((c) => c.match === null && c.column === undefined)).toBe(true);
+  });
+});
