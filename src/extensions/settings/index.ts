@@ -4,6 +4,7 @@ import { FilePenLine } from "lucide-react";
 import { registerAction } from "../actions";
 import { registerTab } from "../tabs";
 import { AuditDiff } from "./AuditDiff";
+import "./briefing/widget";
 
 registerTab({ key: "settings.audit_diff", label: "Changes", entity: "audit", component: AuditDiff });
 

@@ -65,7 +65,7 @@ function Pick({ id, value, options, onChange, disabled }: { id?: string; value: 
 // ---------------------------------------------------------------------------------------------
 
 export type CompanyProfile = { legal_name: string; ein: string; address: string; phone: string; support_email: string; timezone: string; fiscal_year_start: string; license_number: string };
-const TZ = ["America/Chicago", "America/New_York", "America/Phoenix", "America/Denver", "America/Los_Angeles"];
+const TZ: Record<string, string> = { "America/Chicago": "Central (Chicago)", "America/New_York": "Eastern (New York)", "America/Phoenix": "Arizona (Phoenix, no daylight saving)", "America/Denver": "Mountain (Denver)", "America/Los_Angeles": "Pacific (Los Angeles)" };
 
 export function CompanyForm({ initial, canEdit }: { initial: CompanyProfile; canEdit: boolean }) {
   const [v, setV] = useState(initial);
@@ -87,7 +87,7 @@ export function CompanyForm({ initial, canEdit }: { initial: CompanyProfile; can
       {field("phone", "Main phone", undefined, "tel", "tel")}
       {field("support_email", "Resident support email", "Replies to resident and owner email go here.", "email", "email")}
       <Row label="Time zone" hint="Due dates, SLAs and agent schedules use it." htmlFor="co-tz">
-        <Pick id="co-tz" value={v.timezone} onChange={(x) => setV((p) => ({ ...p, timezone: x }))} options={TZ.map((t) => ({ value: t, label: t.replace("America/", "").replace("_", " ") + " time" }))} disabled={!canEdit} />
+        <Pick id="co-tz" value={v.timezone} onChange={(x) => setV((p) => ({ ...p, timezone: x }))} options={Object.entries(TZ).map(([value, label]) => ({ value, label }))} disabled={!canEdit} />
       </Row>
       <Row label="Fiscal year starts" htmlFor="co-fy">
         <Pick id="co-fy" value={v.fiscal_year_start} onChange={(x) => setV((p) => ({ ...p, fiscal_year_start: x }))} options={["January", "April", "July", "October"].map((m) => ({ value: m, label: m }))} disabled={!canEdit} />

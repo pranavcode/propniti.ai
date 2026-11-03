@@ -194,7 +194,8 @@ registerEntity({
   titleField: "summary",
   scopePath: "automation_runs.property_id",
   fields: {
-    summary: { type: "text", label: "What happened", sql: "coalesce(json_extract(automation_runs.detail, '$.summary'), automation_runs.status)", search: true, list: { default: true, width: 360 } },
+    summary: { type: "text", label: "What happened", search: true, list: { default: true, width: 360 },
+      sql: "coalesce(json_extract(automation_runs.detail, '$.summary'), CASE WHEN json_extract(automation_runs.detail, '$.matched') IS NOT NULL THEN 'Matched ' || json_extract(automation_runs.detail, '$.matched') || ' records' || coalesce(' at ' || (SELECT p.name FROM {properties} p WHERE p.id = automation_runs.property_id), '') END, automation_runs.status)" },
     rule_id: { type: "ref", ref: "automation_rules", label: "Automation", facet: true, list: { default: true } },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
       { value: "Succeeded", tone: "success" }, { value: "Needs approval", tone: "warning" }, { value: "Skipped", tone: "neutral" }, { value: "Failed", tone: "danger" },

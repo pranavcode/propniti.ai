@@ -4,6 +4,7 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { list } from "@/server/query";
+import { AGENT_LABEL } from "@/ai/ui/client";
 import { NoAccess, settingsSession } from "@/extensions/settings/pages";
 import { canEditSettings, canSettings } from "@/extensions/settings/nav";
 import { AutomationSwitch } from "@/extensions/settings/ui/forms";
@@ -50,7 +51,7 @@ export default async function AutomationsPage() {
                       <Link href={`/app/settings/automations/${encodeURIComponent(a.id)}`} className="font-medium text-foreground hover:text-primary hover:underline">{a.name}</Link>
                       <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
                         <span>{a.kind}</span>
-                        {a.agent && <span className="inline-flex items-center gap-0.5 text-tone-ai"><Sparkles className="size-3" />{a.agent.replace(/_/g, " ")} agent</span>}
+                        {a.agent && <span className="inline-flex items-center gap-0.5 text-tone-ai"><Sparkles className="size-3" />{AGENT_LABEL[a.agent] ?? a.agent.replace(/_/g, " ")}</span>}
                         {a.action?.action && <span className="font-mono text-[11px]">{a.action.action}</span>}
                       </div>
                     </td>

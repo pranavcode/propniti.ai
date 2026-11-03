@@ -54,7 +54,7 @@ async function risks(ctx: QueryCtx, role: Role): Promise<Risk[]> {
   return out.filter((r) => r.n > 0).map(({ key, label, detail, n, href, tone }) => ({ key, label, detail, n, href, tone }));
 }
 
-export async function Briefing({ session, data }: { session: Session; data: DataCtx }) {
+export async function Briefing({ session, data, embedded }: { session: Session; data: DataCtx; embedded?: boolean }) {
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const { persona, actor } = session;
   const role = actor.role;
@@ -78,7 +78,8 @@ export async function Briefing({ session, data }: { session: Session; data: Data
   const byAgent = new Map<string, Run[]>();
   for (const r of runs) byAgent.set(r.agent_key, [...(byAgent.get(r.agent_key) ?? []), r]);
   const failed = runs.filter((r) => r.status === "failed").length;
-  const widgets = widgetsFor(role);
+  // Embedded in a home that already renders the role's widgets: don't render them (or itself) again.
+  const widgets = embedded ? [] : widgetsFor(role).filter((w) => w.key !== "settings.briefing");
 
   const sentence = [
     runs.length ? `Since yesterday ${byAgent.size} ${byAgent.size === 1 ? "agent" : "agents"} ran ${runs.length} ${runs.length === 1 ? "time" : "times"} and handled ${autoNight} ${autoNight === 1 ? "item" : "items"} within policy.` : "No agent runs since yesterday.",

@@ -38,9 +38,9 @@ function Rule({ p, canEdit }: { p: P; canEdit: boolean }) {
 function Table({ items, canEdit }: { items: P[]; canEdit: boolean }) {
   return (
     <div className="overflow-x-auto rounded-lg border bg-card">
-      <table className="w-full text-[13px]">
+      <table className="w-full min-w-[640px] table-fixed text-[13px]">
         <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
-          <tr><th className="px-3 py-2 font-medium">Decision</th><th className="px-3 py-2 text-right font-medium">Acts alone up to</th><th className="px-3 py-2 font-medium">Approver above that</th><th className="px-3 py-2 text-right font-medium">Owner approves above</th><th className="w-10" /></tr>
+          <tr><th className="w-[28%] px-3 py-2 font-medium">Decision</th><th className="w-[20%] px-3 py-2 text-right font-medium">Acts alone up to</th><th className="w-[28%] px-3 py-2 font-medium">Approver above that</th><th className="px-3 py-2 text-right font-medium">Owner approves above</th><th className="w-12" /></tr>
         </thead>
         <tbody>{items.sort((a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category)).map((p) => <Rule key={p.id} p={p} canEdit={canEdit} />)}</tbody>
       </table>
