@@ -137,10 +137,9 @@ export function NotificationMatrix({ types, channels, initial, digest }: { types
     }
   };
   const toggle = (t: string, c: string, on: boolean) => {
-    const prev = state;
-    const next = { ...state, [t]: { ...state[t], [c]: on } };
-    setState(next);
-    void post({ types: { [t]: next[t] } }, () => setState(prev));
+    const row = { ...state[t], [c]: on };
+    setState((cur) => ({ ...cur, [t]: { ...cur[t], [c]: on } }));
+    void post({ types: { [t]: row } }, () => setState((cur) => ({ ...cur, [t]: { ...cur[t], [c]: !on } })));
   };
   return (
     <div className="flex flex-col gap-5">
@@ -250,7 +249,8 @@ const dollars = (s: string) => (s.trim() === "" ? null : Number(s.replace(/[$,]/
 
 export function EditPolicy({ p, roles }: { p: PolicyRow; roles: { value: string; label: string }[] }) {
   const [open, setOpen] = useState(false);
-  const [v, setV] = useState({ limit: p.limit == null ? "" : String(p.limit), owner: p.owner_approval_over == null ? "" : String(p.owner_approval_over), approver: p.approver_role, human: p.always_human });
+  const fromPolicy = () => ({ limit: p.limit == null ? "" : String(p.limit), owner: p.owner_approval_over == null ? "" : String(p.owner_approval_over), approver: p.approver_role, human: p.always_human });
+  const [v, setV] = useState(fromPolicy);
   const { busy, save } = useSave();
   const bad = [v.limit, v.owner].some((x) => x.trim() !== "" && !Number.isFinite(dollars(x)));
   const submit = async (e: React.FormEvent) => {
@@ -260,7 +260,7 @@ export function EditPolicy({ p, roles }: { p: PolicyRow; roles: { value: string;
   };
   return (
     <>
-      <Button size="icon-sm" variant="ghost" onClick={() => setOpen(true)} aria-label={`Edit ${p.name}`}><Pencil /></Button>
+      <Button size="icon-sm" variant="ghost" onClick={() => { setV(fromPolicy()); setOpen(true); }} aria-label={`Edit ${p.name}`}><Pencil /></Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <form onSubmit={submit} className="flex flex-col gap-4">
@@ -296,6 +296,7 @@ export function EditPolicy({ p, roles }: { p: PolicyRow; roles: { value: string;
 export function AmendRule({ id, title, value, unit, note, minDate }: { id: string; title: string; value: string; unit: string; note: string; minDate: string }) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState({ value, note, effective_from: "" });
+  const openFresh = () => { setV({ value, note, effective_from: "" }); setOpen(true); };
   const { busy, save } = useSave();
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -303,7 +304,7 @@ export function AmendRule({ id, title, value, unit, note, minDate }: { id: strin
   };
   return (
     <>
-      <Button size="xs" variant="ghost" onClick={() => setOpen(true)}>Amend</Button>
+      <Button size="xs" variant="ghost" onClick={openFresh}>Amend</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <form onSubmit={submit} className="flex flex-col gap-4">
