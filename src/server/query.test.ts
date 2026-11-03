@@ -256,6 +256,14 @@ describe("writes", () => {
     expect((await db.prepare("SELECT count(*) AS n FROM work_orders").first())!.n).toBe(0);
   });
 
+  it("refuses references to records outside the actor's scope, on create and update", async () => {
+    await expect(createRecord(await wctx("marcus"), "work_orders", { title: "Leak", category: "Plumbing", priority: "Normal", status: "New", property_id: "p01", unit_id: "p05-u1", opened_at: "2026-10-28T10:00:00Z" })).rejects.toMatchObject({ status: 400 });
+    await expect(updateRecord(await wctx("marcus"), "residents", "res-p01-u1", { household_id: "h-p05-u1" })).rejects.toMatchObject({ status: 400 });
+    await expect(createRecord(await wctx("marcus"), "units", { number: "77", property_id: "p02", sqft: 700, status: "Vacant", unit_type_id: "nope" })).rejects.toMatchObject({ status: 400 });
+    const ok = await createRecord(await wctx("marcus"), "work_orders", { title: "Leak", category: "Plumbing", priority: "Normal", status: "New", property_id: "p01", unit_id: "p01-u1", opened_at: "2026-10-28T10:00:00Z" });
+    expect(ok.unit_id).toBe("p01-u1");
+  });
+
   it("can't update or delete a record outside scope", async () => {
     await expect(updateRecord(await wctx("marcus"), "units", "p05-u1", { sqft: 1 })).rejects.toMatchObject({ status: 404 });
     await expect(deleteRecord(await wctx("priya"), "units", "p05-u1")).rejects.toMatchObject({ status: 404 });

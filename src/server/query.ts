@@ -487,6 +487,21 @@ async function propertyOf(ctx: QueryCtx, def: EntityDef, id: string) {
   return r?.p ?? null;
 }
 
+// Every reference set by a write must point at a record the actor can see under its scope, so a
+// record in scope can't be linked to (and show the name of) one at another property.
+async function assertRefs(ctx: QueryCtx, def: EntityDef, body: Record<string, unknown>) {
+  for (const [key, v] of Object.entries(body)) {
+    const f = def.fields[key];
+    if (f?.type !== "ref" || !f.ref || v == null || v === "") continue;
+    const ref = getEntity(f.ref);
+    const table = ref?.table ?? f.ref;
+    const scope = ref ? scopeWhere(ref, ctx.actor, ctx.ws) : { sql: [], params: [] };
+    const w = merge({ sql: [`${table}.id = ?`], params: [String(v)] }, scope);
+    const hit = await ctx.db.prepare(`SELECT 1 AS ok FROM ${effective(table, ctx.ws)} AS ${table}${whereSql(w)} LIMIT 1`).bind(...w.params).first();
+    if (!hit) throw new QueryError(400, `${f.label}: no such record in your scope`);
+  }
+}
+
 function assertWrite(def: EntityDef, role: Role, op: "create" | "update" | "delete") {
   if (def.writes !== "generic") throw new QueryError(405, `${def.label.many} change only through named actions`);
   if (!can(role, op, def.key)) throw new QueryError(403, `You can't ${op} ${def.label.many.toLowerCase()}`);
@@ -502,6 +517,7 @@ const constraintError = (e: unknown) => {
 export async function createRecord(ctx: WriteCtx, entity: string, body: Record<string, unknown>): Promise<Row> {
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "create");
+  await assertRefs(ctx, def, body);
   const id = newId(def);
   const row: Row = { workspace_id: ctx.ws, id, ...changesToColumns(def, body) };
   const statements = [upsert(ctx.db, def.table, row)];
@@ -526,6 +542,7 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "update");
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
+  await assertRefs(ctx, def, body);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
   const changes = changesToColumns(def, body);
   if (!Object.keys(changes).length) throw new QueryError(400, "Nothing to change");
