@@ -41,14 +41,14 @@ const STATUS: Record<AgentStatus, { label: string; dot: string; text: string }> 
   paused: { label: "Paused", dot: "bg-tone-neutral", text: "text-muted-foreground" },
 };
 
+// Two levels. A saved "suggest" shows as "Approve first", as in the Agents center.
 const AUTONOMY: { key: Autonomy; label: string; tip: string }[] = [
-  { key: "suggest", label: "Suggest", tip: "Only suggests. A person does everything." },
-  { key: "act_with_approval", label: "Approve", tip: "Prepares actions; a person approves each one." },
-  { key: "auto_within_policy", label: "Auto", tip: "Acts on its own below the approval-policy limits; anything above goes to a person." },
+  { key: "act_with_approval", label: "Approve first", tip: "Prepares actions; a person approves each one." },
+  { key: "auto_within_policy", label: "Auto within policy", tip: "Acts on its own below the approval-policy limits; anything above goes to a person." },
 ];
 
 export function AutonomyMeter({ value, className }: { value: Autonomy; className?: string }) {
-  const idx = AUTONOMY.findIndex((a) => a.key === value);
+  const idx = AUTONOMY.findIndex((a) => a.key === (value === "suggest" ? "act_with_approval" : value));
   return (
     <div className={cn("inline-flex rounded-md border bg-muted/40 p-0.5", className)} role="img" aria-label={`Autonomy: ${AUTONOMY[idx]?.label}`}>
       {AUTONOMY.map((a, i) => (
