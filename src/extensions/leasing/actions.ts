@@ -1,3 +1,4 @@
+import { demoIsoIn, demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { Ban, CalendarCheck, CalendarX, Check, Gavel, MoveRight, Pause, Send, Sparkles, TrendingDown, Upload, X } from "lucide-react";
 import { LEADERS, OPS } from "@/entities/common";
@@ -14,7 +15,7 @@ import { AlreadyDone, commit, newId, readRow, type Change } from "./store";
 const LEASING: Role[] = [...OPS, "leasing_agent", "broker"];
 const ok = (message: string, href?: string): ActionResult => ({ status: 200, message, href });
 const fail = (status: 400 | 403 | 404 | 409, error: string): ActionResult => ({ status, error });
-const now = (ctx: ActionContext) => new Date(ctx.nowMs).toISOString();
+const now = (ctx: ActionContext) => demoNowIso(ctx.nowMs);
 const ai = () => import("./ai");
 // AI steps run from their own panels (they return a draft or score), not as header buttons.
 const NO_INPUT = z.object({}).strict();
@@ -415,7 +416,7 @@ registerAction({
     const threadId = newId("thr");
     try {
       await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "sent", summary: `Offer of $${rent / 100} for ${row.term_months} months sent by ${input.channel}${input.ai_drafted ? " (AI-drafted, reviewed by a person)" : ""}` },
-      [{ table: "renewal_offers", id: String(row.id), changes: { status: "Sent", sent_at: at, expires_on: new Date(ctx.nowMs + 30 * 86_400_000).toISOString().slice(0, 10) } }],
+      [{ table: "renewal_offers", id: String(row.id), changes: { status: "Sent", sent_at: at, expires_on: demoIsoIn(30 * 86_400_000, ctx.nowMs).slice(0, 10) } }],
       [
         { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "resident", party_id: lease.resident_id, subject, entity_type: "renewal_offers", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
         { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: input.channel, direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: input.ai_drafted ? "renewals" : null, sent_at: at } },

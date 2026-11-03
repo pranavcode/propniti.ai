@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import Link from "next/link";
 import { Bot, Mail, MessageSquare, Phone, Smartphone } from "lucide-react";
 import type { Actor } from "@/entities/types";
@@ -42,7 +43,7 @@ export async function ThreadPane({ id, actor }: { id: string; actor: Actor }) {
   const f = c.facts;
   const vars = {
     first_name: (f.first_name as string) ?? null, unit: (f.unit as string) ?? null, property: (f.property as string) ?? null, balance: money(f.balance_cents),
-    lease_end: date(f.lease_end), rent: money(f.rent_cents), due_date: date(new Date().toISOString()),
+    lease_end: date(f.lease_end), rent: money(f.rent_cents), due_date: date(demoNowIso()),
   };
 
   return (

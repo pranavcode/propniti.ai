@@ -1,4 +1,5 @@
 import "server-only";
+import { AS_OF } from "@/seed/constants";
 import type { Db } from "@/lib/platform/types";
 import { effective } from "@/server/query";
 import type { Baseline } from "./whatif";
@@ -12,7 +13,7 @@ const addMonths = (ym: string, n: number) => {
 };
 
 export async function t12Window(db: Db): Promise<{ from: string; to: string }> {
-  const asOf = (await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? new Date().toISOString().slice(0, 10);
+  const asOf = (await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? AS_OF;
   const to = addMonths(asOf.slice(0, 7), -1);
   return { from: addMonths(to, -11), to };
 }

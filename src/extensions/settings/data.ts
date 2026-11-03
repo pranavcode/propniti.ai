@@ -1,5 +1,6 @@
 import "server-only";
 import { AS_OF as AS_OF_SQL } from "@/entities/common";
+import { AS_OF } from "@/seed/constants";
 import { effective, type QueryCtx } from "@/server/query";
 
 // Small read helpers for the settings pages. Tables are named as {table} and expand to the
@@ -40,5 +41,5 @@ export async function prefsData(ctx: QueryCtx, id: string): Promise<Record<strin
 }
 
 export async function asOf(ctx: QueryCtx): Promise<string> {
-  return (await one<{ d: string }>(ctx, "SELECT $AS_OF AS d"))?.d ?? new Date().toISOString().slice(0, 10);
+  return (await one<{ d: string }>(ctx, "SELECT $AS_OF AS d"))?.d ?? AS_OF;
 }

@@ -1,4 +1,5 @@
 "use client";
+import { demoNow } from "@/lib/clock";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -50,7 +51,7 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
     if (busy) return;
     const description = text.trim();
     setStep("saving");
-    const now = new Date();
+    const now = demoNow();
     const res = await fetch("/api/e/work_orders", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({

@@ -1,4 +1,5 @@
 import "server-only";
+import { AS_OF } from "@/seed/constants";
 import type { Actor, Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
@@ -28,7 +29,7 @@ export function scopeIn(actor: Actor, col: string): { sql: string; binds: unknow
 }
 
 export async function asOfDate(db: Db) {
-  return (await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? new Date().toISOString().slice(0, 10);
+  return (await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? AS_OF;
 }
 
 const parse = <T,>(v: unknown, fallback: T): T => {

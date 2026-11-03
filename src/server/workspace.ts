@@ -1,7 +1,7 @@
 import { clientKey } from "@/lib/guard";
 import type { Db } from "@/lib/platform/types";
 import { DEMO_RESET_TZ, DEMO_TODAY } from "@/lib/seed";
-import { AS_OF } from "@/seed/constants";
+import { demoNowIso, wallClock } from "@/lib/clock";
 import { randomId, type WorkspaceRow } from "./repo";
 
 // Each visitor gets a private overlay on the shared base data, found by a random id in an
@@ -12,16 +12,6 @@ const ID = /^[A-Za-z0-9_-]{22,64}$/;
 const CREATE_LIMIT = 30;
 const CREATE_WINDOW_MS = 3_600_000;
 const SWEEP_BATCH = 50;
-
-// Wall-clock time of `ms` in `tz`, expressed as a UTC timestamp.
-function wallClock(ms: number, tz: string) {
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })
-      .formatToParts(ms)
-      .map((x) => [x.type, Number(x.value)]),
-  );
-  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
-}
 
 // Demo workspaces are deleted at the first midnight in DEMO_RESET_TZ after they are created.
 // Finds that instant by converting local midnight to UTC, re-checking the offset once for DST.
@@ -36,7 +26,7 @@ export function nextMidnight(nowMs: number, tz = DEMO_RESET_TZ) {
 // Legacy (0001) timestamps: the old demo date with the current time of day.
 export const stamp = (nowMs: number) => `${DEMO_TODAY} ${new Date(wallClock(nowMs, DEMO_RESET_TZ)).toISOString().slice(11, 16)}`;
 // v2 timestamps: the demo's "today" (meta.as_of) with the current wall-clock time, ISO-8601.
-export const nowIso = (nowMs: number) => `${AS_OF}T${new Date(wallClock(nowMs, DEMO_RESET_TZ)).toISOString().slice(11, 19)}Z`;
+export const nowIso = (nowMs: number) => demoNowIso(nowMs);
 
 export function readCookie(request: Request) {
   const raw = request.headers.get("cookie")?.split(/;\s*/).find((c) => c.startsWith(`${COOKIE}=`));

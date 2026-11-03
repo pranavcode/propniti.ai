@@ -1,4 +1,5 @@
 "use client";
+import { demoNowIso } from "@/lib/clock";
 
 import Link from "next/link";
 import { useState } from "react";
@@ -97,7 +98,7 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
     setBusy("score");
     try {
       const r = await callAi<{ score: number; recommendation: string; factors: Factor[]; summary: string; confidence: number }>("applications", d.appId, "score");
-      setFresh({ score: r.score, recommendation: r.recommendation, factors: r.factors, summary: r.summary, confidence: r.confidence, runId: r.runId, model: r.model, source: r.source, scoredAt: new Date().toISOString() });
+      setFresh({ score: r.score, recommendation: r.recommendation, factors: r.factors, summary: r.summary, confidence: r.confidence, runId: r.runId, model: r.model, source: r.source, scoredAt: demoNowIso() });
       toast.success(`Scored ${r.score}: recommends ${r.recommendation.toLowerCase()}`, { action: { label: "View run", onClick: () => router.push(runHref(r.runId)!) } });
       router.refresh();
     } catch (e) {

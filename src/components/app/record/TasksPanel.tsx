@@ -1,4 +1,5 @@
 "use client";
+import { demoNowIso } from "@/lib/clock";
 
 import { useState } from "react";
 import { Check, Plus, Sparkles } from "lucide-react";
@@ -29,7 +30,7 @@ export function TasksPanel({ entity, id, people, initial }: { entity: string; id
   const add = async () => {
     const t = title.trim();
     if (!t) return;
-    const temp: TaskRow = { id: `tmp-${Date.now()}`, title: t, due_on: due || null, status: "Open", priority: "Normal", created_at: new Date().toISOString(), pending: true };
+    const temp: TaskRow = { id: `tmp-${Date.now()}`, title: t, due_on: due || null, status: "Open", priority: "Normal", created_at: demoNowIso(), pending: true };
     setRows((r) => [temp, ...r]);
     setTitle(""); setDue("");
     try {

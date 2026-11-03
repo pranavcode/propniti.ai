@@ -1,4 +1,5 @@
 import "server-only";
+import { AS_OF as AS_OF_DATE } from "@/seed/constants";
 import type { Db } from "@/lib/platform/types";
 import { effective } from "@/server/query";
 import type { GlOption, VendorFacts } from "./checks";
@@ -52,5 +53,5 @@ export async function duplicateOf(db: Db, ws: string | null, vendorId: string, i
 }
 
 export async function asOfDate(db: Db): Promise<string> {
-  return (await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? new Date().toISOString().slice(0, 10);
+  return (await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? AS_OF_DATE;
 }

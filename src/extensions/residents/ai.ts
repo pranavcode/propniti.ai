@@ -1,4 +1,5 @@
 import "server-only";
+import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import type { Actor, AgentKey, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
@@ -209,7 +210,7 @@ export async function abstractLease(data: Data, leaseId: string, upload?: { name
     return { summary: `Abstracted ${fields.length} terms from ${documentName}; ${comparisons.filter((c) => c.match === false).length} differ from the lease record.`, result: { fields, comparisons, source, dropped } };
   });
   if (!run.result) return { ok: false as const, error: run.summary, runId: run.runId };
-  const at = new Date().toISOString();
+  const at = demoNowIso();
   const model = (await one<{ model: string }>(data, "SELECT model FROM agent_runs WHERE workspace_id = ? AND id = ?", [data.ws, run.runId]))?.model ?? "rules";
   const result: AbstractResult = { ...run.result, model, runId: run.runId, at, documentName, pages: pages.length };
   await saveAbstract(data, lease.id, lease.kind, result, upload ? pages : null);

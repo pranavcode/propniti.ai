@@ -1,4 +1,5 @@
 import "server-only";
+import { AS_OF } from "@/seed/constants";
 import { effective } from "@/server/query";
 import type { Ctx } from "./run";
 
@@ -8,7 +9,7 @@ const scope = (ctx: Ctx, col: string) => (ctx.actor.propertyIds === "all" ? { sq
 const prop = (property: string | undefined, col: string) => (property ? { sql: ` AND ${col} = ?`, binds: [property] as unknown[] } : { sql: "", binds: [] as unknown[] });
 
 export async function today(ctx: Ctx) {
-  return (await ctx.db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? new Date().toISOString().slice(0, 10);
+  return (await ctx.db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? AS_OF;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 "use client";
+import { demoNow } from "@/lib/clock";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CirclePlus, Loader2, Search, Sparkles, Undo2, X, XCircle } from "lucide-react";
@@ -117,7 +118,7 @@ function OptionList({ options, selected, onChange, onClear }: { options: FacetOp
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function datePresets(): { label: string; min?: string; max?: string }[] {
-  const now = new Date();
+  const now = demoNow();
   const add = (days: number) => { const d = new Date(now); d.setDate(d.getDate() + days); return iso(d); };
   const monthStart = iso(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0));

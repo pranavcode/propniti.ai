@@ -1,4 +1,5 @@
 "use client";
+import { demoNow } from "@/lib/clock";
 
 import { useState } from "react";
 import { Archive, Copy, FileDown, Mail, Pencil, Plus, Trash2 } from "lucide-react";
@@ -12,8 +13,8 @@ import { Section } from "../../page";
 // Kit: RecordPage with realistic sample data for The Lofts at Riverside (p01), plus the form
 // sheet, confirm dialog and a standalone activity timeline.
 
-const day = (d: number, h = 15) => { const x = new Date(); x.setUTCDate(x.getUTCDate() - d); x.setUTCHours(h, 12, 0, 0); return x.toISOString(); };
-const ymd = (d: number) => { const x = new Date(); x.setUTCDate(x.getUTCDate() + d); return x.toISOString().slice(0, 10); };
+const day = (d: number, h = 15) => { const x = demoNow(); x.setUTCDate(x.getUTCDate() - d); x.setUTCHours(h, 12, 0, 0); return x.toISOString(); };
+const ymd = (d: number) => { const x = demoNow(); x.setUTCDate(x.getUTCDate() + d); return x.toISOString().slice(0, 10); };
 
 const PEOPLE = [
   { id: "marcus", name: "Marcus Bell", title: "Property manager" },

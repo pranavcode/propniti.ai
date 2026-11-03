@@ -1,4 +1,5 @@
 "use client";
+import { demoNow } from "@/lib/clock";
 
 import { Compass, Download, Keyboard, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -36,7 +37,7 @@ function Card({ title, children, className = "" }: { title: string; children: Re
 }
 
 // Sample dates are relative to page load; read once, outside render.
-const now = Date.now();
+const now = demoNow().getTime();
 
 export function FoundationsSection() {
   const shell = useShellMaybe();

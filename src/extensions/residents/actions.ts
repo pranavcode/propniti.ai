@@ -1,3 +1,4 @@
+import { demoIsoIn, demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { FileSearch, GitMerge, MailCheck, Megaphone, Send, Sparkles, Wand2, Wrench } from "lucide-react";
 import type { ActionContext, ActionResult, Row } from "@/entities/types";
@@ -13,7 +14,7 @@ const STAFF_MSG = ["principal", "regional_manager", "property_manager", "leasing
 const OPS = ["principal", "regional_manager", "property_manager"] as const;
 const ok = (message: string, href?: string): ActionResult => ({ status: 200, message, href });
 const fail = (status: 400 | 404 | 409, error: string): ActionResult => ({ status, error });
-const nowIso = (ctx: ActionContext) => new Date(ctx.nowMs).toISOString();
+const nowIso = (ctx: ActionContext) => demoNowIso(ctx.nowMs);
 
 async function activity(ctx: ActionContext, entity: string, id: string, propertyId: unknown, verb: string, summary: string, actorKind = "staff") {
   await (await insertRow(ctx.db, ctx.ws, "activity_events", { id: newId("act"), entity_type: entity, entity_id: id, property_id: propertyId ?? null, at: nowIso(ctx), actor_kind: actorKind, actor_id: ctx.actor.personaId, verb, summary, data: "{}" })).run();
@@ -255,7 +256,7 @@ registerAction({
     const wo = newId("WO");
     await (await insertRow(ctx.db, ctx.ws, "work_orders", {
       id: wo, property_id: sr.property_id, unit_id: sr.unit_id ?? null, title: String(sr.body).split(/[.!?\n]/)[0].slice(0, 80), description: sr.body,
-      category: (sr.category as string) ?? "General", priority, status: "New", source: "Resident", opened_at: at, sla_due_at: new Date(ctx.nowMs + hours * 3_600_000).toISOString(),
+      category: (sr.category as string) ?? "General", priority, status: "New", source: "Resident", opened_at: at, sla_due_at: demoIsoIn(hours * 3_600_000, ctx.nowMs),
     })).run();
     await overlayWrite(ctx.db, ctx.ws, "service_requests", String(row.id), { status: "Converted", work_order_id: wo, category: sr.category ?? "General", urgency: priority });
     return ok(`Work order ${wo} created`, `/app/maintenance/work-orders/${wo}`);

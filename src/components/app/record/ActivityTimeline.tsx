@@ -1,4 +1,5 @@
 "use client";
+import { demoNow } from "@/lib/clock";
 
 import { Fragment, useMemo, useState } from "react";
 import { ArrowRight, Bot, ChevronRight, CircleDollarSign, FilePlus2, MessageSquare, Pencil, Sparkles, UserRound } from "lucide-react";
@@ -96,7 +97,7 @@ export function ActivityTimeline({ events, people, loading, className }: { event
   const mounted = useMounted();
   const [openRuns, setOpenRuns] = useState<Set<string>>(new Set());
   const groups = useMemo(() => {
-    const now = new Date();
+    const now = demoNow();
     const sorted = [...events].sort((a, b) => String(b.at).localeCompare(String(a.at)));
     const out: { label: string; runs: ActivityEvent[][] }[] = [];
     for (const e of sorted) {

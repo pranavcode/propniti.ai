@@ -1,4 +1,5 @@
 "use client";
+import { demoNowIso } from "@/lib/clock";
 
 import { useMemo, useRef, useState } from "react";
 import { AtSign, Pin } from "lucide-react";
@@ -38,7 +39,7 @@ export function NotesPanel({ entity, id, people = [], initial }: { entity: strin
   const sorted = useMemo(() => [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || String(b.created_at).localeCompare(String(a.created_at))), [rows]);
 
   const add = async (body: string) => {
-    const temp: NoteRow = { id: `tmp-${Date.now()}`, body, author_id: me?.id ?? "you", author_name: me?.name ?? "You", created_at: new Date().toISOString(), pending: true };
+    const temp: NoteRow = { id: `tmp-${Date.now()}`, body, author_id: me?.id ?? "you", author_name: me?.name ?? "You", created_at: demoNowIso(), pending: true };
     setRows((r) => [temp, ...r]);
     try {
       const res = await fetch(collabUrl(entity, id, "notes"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ body }) });

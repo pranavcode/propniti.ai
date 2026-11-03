@@ -1,11 +1,13 @@
 import "server-only";
+import { demoNowIso } from "@/lib/clock";
+import { AS_OF } from "@/seed/constants";
 import { z, type ZodType } from "zod";
 import { can, getEntity } from "@/entities";
 import { getPersona } from "@/auth/personas";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type Role, type Row } from "@/entities/types";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
-import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE } from "./effective";
+import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
 // relation in one; every value is bound. Reads go through effective(): the visitor's overlay
@@ -31,6 +33,10 @@ function ident(name: string) {
   return name;
 }
 
+// A workspace for reads: its id plus the tables it has overlay rows in (see readWs). Writes and
+// guards pass the plain id and always get the full overlay form.
+export type Ws = string | null | { id: string; overlay: Set<string> };
+
 // Effective rows of a table for a workspace, as a parenthesised subquery: overlay rows replace
 // base rows with the same id and tombstones hide them (same rows as src/server/effective.ts).
 // It is a single flat SELECT rather than a UNION ALL so SQLite can flatten it into correlated
@@ -38,16 +44,38 @@ function ident(name: string) {
 // indexes; the compound form scans the whole base table once per outer row.
 // The workspace id is inlined as a literal so def SQL can use {table} anywhere without
 // threading parameters; that is safe because it must match the cookie regex.
-export function effective(table: string, ws: string | null): string {
+export function effective(table: string, ws: Ws): string {
   assertTable(table);
-  const w = `'${ws && WS_ID.test(ws) ? ws : NO_WORKSPACE}'`;
+  // Fast path: the visitor has no overlay rows in this table, so its effective rows are the base
+  // rows. Skips the anti-join, which costs ~350 ms per scan on the 130k-row ledger tables.
+  if (typeof ws === "object" && ws && !ws.overlay.has(table)) return table === "metrics_monthly" || APPEND_ONLY.has(table) ? `(SELECT * FROM ${table} WHERE workspace_id = 'base')` : `(SELECT * FROM ${table} WHERE workspace_id = 'base' AND deleted = 0)`;
+  const id = typeof ws === "object" && ws ? ws.id : ws;
+  const w = `'${id && WS_ID.test(id) ? id : NO_WORKSPACE}'`;
   if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}))`;
   if (table === "metrics_monthly") return baseEffective(table, w);
   return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}) AND deleted = 0 AND (workspace_id = ${w} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${w} AND o.id = ${table}.id)))`;
 }
 
+// Tables the visitor's overlay touches: one indexed probe per table in one query, cached per
+// request (keyed by the request's actor) and dropped after any write through this module.
+const overlayCache = new WeakMap<Actor, Promise<Set<string>>>();
+const OVERLAY_TABLES = TABLES.filter((t) => t !== "metrics_monthly");
+export const forgetOverlay = (actor: Actor) => overlayCache.delete(actor);
+
+export async function readWs(ctx: QueryCtx): Promise<Ws> {
+  const id = ctx.ws && WS_ID.test(ctx.ws) ? ctx.ws : null;
+  if (!id) return { id: "", overlay: new Set() };
+  let p = overlayCache.get(ctx.actor);
+  if (!p) {
+    const sql = [...OVERLAY_TABLES, "metrics_monthly"].map((t) => `SELECT '${t}' AS t WHERE EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1)`).join(" UNION ALL ");
+    p = ctx.db.prepare(sql).bind(id).all<{ t: string }>().then((r) => new Set(r.results.map((x) => x.t)));
+    overlayCache.set(ctx.actor, p);
+  }
+  return { id, overlay: await p };
+}
+
 // Def SQL may name another table as {table}; it expands to that table's effective rows.
-export function expand(sql: string, ws: string | null) {
+export function expand(sql: string, ws: Ws) {
   return sql.replace(/\{([a-z_][a-z0-9_]*)\}/g, (_, t: string) => effective(t, ws));
 }
 
@@ -64,12 +92,12 @@ function field(def: EntityDef, key: string, role: Role): FieldDef {
   return f;
 }
 
-function expr(def: EntityDef, key: string, f: FieldDef, ws: string | null) {
+function expr(def: EntityDef, key: string, f: FieldDef, ws: Ws) {
   return f.sql ? `(${expand(f.sql, ws)})` : `${def.table}.${ident(f.column ?? key)}`;
 }
 
 // Label of a referenced record: its def's titleField (computed or a column).
-function refLabel(def: EntityDef, key: string, f: FieldDef, ws: string | null) {
+function refLabel(def: EntityDef, key: string, f: FieldDef, ws: Ws) {
   const ref = f.ref && getEntity(f.ref);
   if (!ref) return null;
   const tf = ref.fields[ref.titleField];
@@ -77,7 +105,7 @@ function refLabel(def: EntityDef, key: string, f: FieldDef, ws: string | null) {
   return `(SELECT ${title} FROM ${effective(ref.table, ws)} AS ${ref.table} WHERE ${ref.table}.id = ${expr(def, key, f, ws)})`;
 }
 
-function selectList(def: EntityDef, role: Role, ws: string | null) {
+function selectList(def: EntityDef, role: Role, ws: Ws) {
   const cols = [`${def.table}.id AS id`];
   for (const [key, f] of visibleFields(def, role)) {
     if (key === "id") continue;
@@ -134,7 +162,7 @@ function inValue(f: FieldDef, v: unknown) {
 // Portal users (scope "self") see only rows tied to their own record: their household, their
 // owner entities, their vendor or applicant id. An entity without such a column returns nothing
 // for them; property scope never widens it to everything at a property.
-function selfClause(def: EntityDef, actor: Actor, ws: string | null): { sql: string; params: unknown[] } {
+function selfClause(def: EntityDef, actor: Actor, ws: Ws): { sql: string; params: unknown[] } {
   const rec = getPersona(actor.personaId)?.record;
   if (!rec) return { sql: "0", params: [] };
   if (def.key === rec.entity) return { sql: `${def.table}.id = ?`, params: [rec.id] };
@@ -147,7 +175,7 @@ function selfClause(def: EntityDef, actor: Actor, ws: string | null): { sql: str
   return { sql: "0", params: [] };
 }
 
-function scopeWhere(def: EntityDef, actor: Actor, ws: string | null): { sql: string[]; params: unknown[] } {
+function scopeWhere(def: EntityDef, actor: Actor, ws: Ws): { sql: string[]; params: unknown[] } {
   const sql: string[] = [];
   const params: unknown[] = [];
   if (actor.scope.kind === "self") {
@@ -174,7 +202,7 @@ const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);
 
 // Filter keys: "<field>" (equals; an array means any of), "<field>.min" / "<field>.max" (ranges
 // on numbers, money and dates), "<field>.null" ("1" = is empty, "0" = has a value).
-function filterWhere(def: EntityDef, role: Role, ws: string | null, filters: Record<string, string | string[]>, skip?: string): Where {
+function filterWhere(def: EntityDef, role: Role, ws: Ws, filters: Record<string, string | string[]>, skip?: string): Where {
   const w: Where = { sql: [], params: [] };
   for (const [rawKey, rawVal] of Object.entries(filters)) {
     const [key, op] = rawKey.split(".", 2) as [string, string | undefined];
@@ -203,7 +231,7 @@ function filterWhere(def: EntityDef, role: Role, ws: string | null, filters: Rec
   return w;
 }
 
-function searchWhere(def: EntityDef, role: Role, ws: string | null, q: string | undefined): Where {
+function searchWhere(def: EntityDef, role: Role, ws: Ws, q: string | undefined): Where {
   const term = q?.trim().slice(0, 100);
   if (!term) return { sql: [], params: [] };
   const fields = visibleFields(def, role).filter(([, f]) => f.search);
@@ -508,7 +536,7 @@ function upsert(db: Db, table: string, row: Row) {
 }
 
 function trail(ctx: WriteCtx, def: EntityDef, id: string, verb: "created" | "updated" | "deleted", propertyId: unknown, before: Row | null, after: Row | null, summary: string) {
-  const at = new Date(ctx.nowMs).toISOString();
+  const at = demoNowIso(ctx.nowMs);
   const rid = () => crypto.randomUUID();
   const { db, ws, actor } = ctx;
   const pid = propertyId == null ? null : String(propertyId);
@@ -684,7 +712,7 @@ export const taskSchema = z.strictObject({
 export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: string, id: string, body: z.infer<typeof noteSchema> | z.infer<typeof taskSchema>): Promise<Row> {
   const def = getDef(entity);
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
-  const at = new Date(ctx.nowMs).toISOString();
+  const at = demoNowIso(ctx.nowMs);
   const pid = await propertyOf(ctx, def, id);
   const rid = crypto.randomUUID();
   const { db, ws, actor } = ctx;
@@ -795,7 +823,7 @@ export async function asOfMonth(db: Db): Promise<string> {
   const meta = await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>();
   if (meta?.value) return meta.value.slice(0, 7);
   const m = await db.prepare("SELECT max(month) AS m FROM metrics_monthly WHERE workspace_id = 'base'").first<{ m: string | null }>();
-  return m?.m ?? new Date().toISOString().slice(0, 7);
+  return m?.m ?? AS_OF.slice(0, 7);
 }
 
 export async function metrics(ctx: QueryCtx, key: string, params: MetricParams = {}): Promise<MetricResult> {

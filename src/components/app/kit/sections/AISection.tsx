@@ -1,4 +1,5 @@
 "use client";
+import { demoNow } from "@/lib/clock";
 
 import { Banknote, Bot, HeartPulse, KeyRound, ReceiptText, ShieldCheck, Wrench } from "lucide-react";
 import { toast } from "sonner";
@@ -6,7 +7,7 @@ import { AIBadge, AISuggestion, AISummaryCard, AgentCard, ApprovalItem, AskBox, 
 import { Section } from "../../page";
 
 const wait = (ms = 600) => new Promise((r) => setTimeout(r, ms));
-const now = Date.now();
+const now = demoNow().getTime();
 const ago = (min: number) => new Date(now - min * 60_000).toISOString();
 const ahead = (min: number) => new Date(now + min * 60_000).toISOString();
 

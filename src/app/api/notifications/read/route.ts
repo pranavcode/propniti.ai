@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { effective } from "@/server/query";
 import { handle, json, writeCtx } from "../../e/_lib/http";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const w = await writeCtx(request, ReadBody);
     if (w instanceof Response) return w;
     const { ctx, body, setCookie } = w;
-    const at = new Date(ctx.nowMs).toISOString();
+    const at = demoNowIso(ctx.nowMs);
     const filter = body.ids ? " AND id IN (SELECT value FROM json_each(?))" : "";
     const binds: unknown[] = [ctx.ws, at, JSON.stringify(recipientIds(ctx.actor)), ...(body.ids ? [JSON.stringify(body.ids)] : [])];
     const res = await ctx.db.prepare(

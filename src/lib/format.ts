@@ -1,3 +1,5 @@
+import { demoNow } from "./clock";
+
 // One set of number, money and date formatters for the app (brief §5.1). Money is dollars in the
 // browser; the API converts cents. US English, USD, tabular numbers come from the app CSS.
 
@@ -68,7 +70,7 @@ const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digi
 const full = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
 // "Nov 4" within the current year, "Nov 4, 2025" otherwise. "always" forces the year (tables).
-export function formatDate(v: DateInput, year: "auto" | "always" = "auto", now = new Date()): string {
+export function formatDate(v: DateInput, year: "auto" | "always" = "auto", now = demoNow()): string {
   const d = toDate(v);
   if (!d) return "—";
   return year === "always" || d.getFullYear() !== now.getFullYear() ? mdy.format(d) : md.format(d);
@@ -81,7 +83,7 @@ export const formatDateTime = (v: DateInput) => { const d = toDate(v); return d 
 export const formatFull = (v: DateInput) => { const d = toDate(v); return d ? full.format(d) : "—"; };
 
 // "just now", "5m ago", "3h ago", "yesterday", "3 days ago", "in 2 days", then the date.
-export function formatRelative(v: DateInput, now = new Date()): string {
+export function formatRelative(v: DateInput, now = demoNow()): string {
   const d = toDate(v);
   if (!d) return "—";
   const diff = d.getTime() - now.getTime();
@@ -99,7 +101,7 @@ export function formatRelative(v: DateInput, now = new Date()): string {
 }
 
 // Due-date wording: "Due today", "Due in 3 days", "Late by 2 days" (red in the UI when late).
-export function formatDue(v: DateInput, now = new Date()): { text: string; late: boolean; soon: boolean } {
+export function formatDue(v: DateInput, now = demoNow()): { text: string; late: boolean; soon: boolean } {
   const d = toDate(v);
   if (!d) return { text: "—", late: false, soon: false };
   const days = calendarDays(d, now);
@@ -134,6 +136,7 @@ export function personaTimeZone(p: { scope: { label: string }; title?: string })
 }
 
 // "Good morning, Daniel" (before noon), "Good afternoon" (to 5 pm), "Good evening" after, in the given zone.
+// Only the time of day matters here, so this reads the real clock.
 export function greeting(name: string, timeZone: string, now = new Date()): string {
   const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone }).format(now));
   const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";

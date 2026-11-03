@@ -1,4 +1,5 @@
 import "server-only";
+import { AS_OF } from "@/seed/constants";
 import type { Actor, Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
@@ -27,7 +28,7 @@ export async function one<T = Row>(ctx: QueryCtx, sql: string, ...binds: unknown
 }
 
 export async function asOf(ctx: QueryCtx): Promise<string> {
-  return (await ctx.db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? new Date().toISOString().slice(0, 10);
+  return (await ctx.db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())?.value ?? AS_OF;
 }
 
 export const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);

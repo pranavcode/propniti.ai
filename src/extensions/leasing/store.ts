@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import type { ActionContext, Row } from "@/entities/types";
 import { effective } from "@/server/query";
 
@@ -20,7 +21,7 @@ function upsert(ctx: ActionContext, table: LeasingTable, row: Row) {
 }
 
 function trail(ctx: ActionContext, entity: string, entityId: string, propertyId: unknown, verb: string, summary: string, data: Row = {}, eventId = `evt-${id()}`) {
-  const at = new Date(ctx.nowMs).toISOString();
+  const at = demoNowIso(ctx.nowMs);
   const pid = propertyId == null ? null : String(propertyId);
   return [
     ctx.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?, ?, ?, ?, ?, ?, 'staff', ?, ?, ?, ?)")

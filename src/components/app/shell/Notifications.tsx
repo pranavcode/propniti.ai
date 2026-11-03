@@ -1,4 +1,5 @@
 "use client";
+import { demoNowIso } from "@/lib/clock";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -44,7 +45,7 @@ export function NotificationsMenu() {
   }, []);
 
   const markAll = async () => {
-    setData((d) => d && { unread: 0, rows: d.rows.map((r) => ({ ...r, read_at: r.read_at ?? new Date().toISOString() })) });
+    setData((d) => d && { unread: 0, rows: d.rows.map((r) => ({ ...r, read_at: r.read_at ?? demoNowIso() })) });
     await fetch("/api/notifications/read", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
   };
 

@@ -1,3 +1,4 @@
+import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { can } from "@/entities";
 import type { ActionDef, ActionResult } from "@/entities/types";
@@ -32,7 +33,7 @@ export async function runAction(ctx: WriteCtx, a: ActionDef, id: string, input: 
   const result = await a.handler({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, nowMs: ctx.nowMs }, row, input);
   if (result.status === 200) {
     await ctx.db.prepare("INSERT INTO audit (workspace_id, id, at, actor, actor_id, role, action, entity_type, entity_id, property_id, detail, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(ctx.ws, crypto.randomUUID(), new Date(ctx.nowMs).toISOString(), ctx.actor.name, ctx.actor.personaId, ctx.actor.role, a.key, def.key, id, typeof row.property_id === "string" ? row.property_id : null, result.message ?? a.label, JSON.stringify(input ?? {}).slice(0, 4000))
+      .bind(ctx.ws, crypto.randomUUID(), demoNowIso(ctx.nowMs), ctx.actor.name, ctx.actor.personaId, ctx.actor.role, a.key, def.key, id, typeof row.property_id === "string" ? row.property_id : null, result.message ?? a.label, JSON.stringify(input ?? {}).slice(0, 4000))
       .run();
   }
   return result;
