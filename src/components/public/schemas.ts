@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const name = z.string().trim().min(1, "Required").max(60);
 const email = z.email("Enter a valid email").max(120);
-const phone = z.string().trim().regex(/^[0-9()+.\-\s]{10,20}$/, "Enter a 10-digit phone number");
+const phone = z.string().trim().regex(/^[0-9()+.\-\s]{10,20}$/, "Enter a 10-digit phone number").refine((v) => v.replace(/\D/g, "").length >= 10, "Enter a 10-digit phone number");
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date");
 const state = z.string().trim().regex(/^[A-Za-z]{2}$/, "2-letter state");
 const zip = z.string().trim().regex(/^\d{5}$/, "5-digit ZIP");

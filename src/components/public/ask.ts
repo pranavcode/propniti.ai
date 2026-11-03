@@ -50,6 +50,10 @@ export function fairHousing(q: string): string | null {
   return null;
 }
 
+// Steering language in an answer: describing an area as safe or not, rating schools, or naming who lives there.
+const STEER = /\b(safe|unsafe|dangerous|crime|sketchy|family[- ]friendly|good for (families|kids|children)|ideal for|perfect for|great schools?|good schools?|top-rated schools?|demographic\w*|diverse|young professionals|quiet (neighbou?rs|crowd))\b/i;
+export const steering = (answer: string) => STEER.test(answer) || (GROUPS.test(answer) && (PEOPLE.test(answer) || MANY.test(answer)) && !/\bassistance animals?\b/i.test(answer));
+
 type Part = { text: string; help?: string };
 const INTENTS: [RegExp, (l: ListingDetail) => Part][] = [
   [/\b(rent|price|cost|how much|per month|monthly|expensive|cheap)\b/i, (l) => ({ text: `Rent for unit ${l.unit} is ${dollars(l.rent_cents)} a month${l.prev_rent_cents ? `, down from ${dollars(l.prev_rent_cents)}` : ""}.${l.specials.length ? ` Current special: ${l.specials[0].label}.` : ""}` })],
@@ -104,6 +108,8 @@ export async function askListing(l: ListingDetail, question: string, help: Rente
     known.add(l.rent_cents * l.terms.income_multiple);
     const bad = amountsIn(value.answer).filter((a) => !known.has(a));
     if (bad.length) return { ...rules, source: "rules", note: "The model's answer had a figure this listing doesn't contain, so this answer comes from rules." };
+    // The question can try to talk the model into steering language; screen the answer too.
+    if (steering(value.answer)) return { ...rules, source: "rules", note: "The model's answer described the area or its residents, which we don't do, so this answer comes from rules." };
     const used = help.filter((h) => value.help_ids.includes(h.id));
     return { answer: value.answer, covered: value.covered, source: "live", model: model.info.model, sources: [{ label: "This listing" }, ...used.map((h) => ({ label: h.title, href: `#help-${h.id}` }))] };
   } catch (err) {
