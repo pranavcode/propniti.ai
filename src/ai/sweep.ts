@@ -13,8 +13,9 @@ export function maybeSweep(db: Db, waitUntil: (p: Promise<unknown>) => void, now
       await reapStaleRuns(db, nowMs);
       const last = await lastSweep(db);
       if (last && nowMs - last < SWEEP_EVERY_MS) return;
-      // Visits only get ctx.waitUntil's 30 seconds after the response; the cron gets minutes.
-      await sweep(db, nowMs, waitUntil, { deadlineMs: 25_000 });
+      // Visits only get ctx.waitUntil's 30 seconds after the response (and the sweep's own reads
+      // come first); the cron gets minutes.
+      await sweep(db, nowMs, waitUntil, { deadlineMs: 15_000 });
     })().catch((err) => console.error("[ai] sweep on visit failed:", err)),
   );
 }
