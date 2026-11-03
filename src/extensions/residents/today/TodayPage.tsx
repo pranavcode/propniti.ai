@@ -181,8 +181,8 @@ export async function TodayPage() {
 
       <div className="grid gap-3 lg:grid-cols-3">
         <ChartCard title="Delinquency aging" description="Past-due balance by days late" kind="bar" data={lateCents ? aging : []} x="bucket" series={[{ key: "amount", label: "Past due", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={220} help="Click a bucket for the charges in it." />
-        <ChartCard title="Lease expirations by month" description="Active and on-notice leases, next 12 months" kind="bar" data={(exp?.points ?? []).map((x) => ({ ...x, label: new Date(`${x.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }) })) as never} x="label" series={[{ key: "count", label: "Leases ending", format: "count" }]} drill="/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice" height={220} />
-        <ChartCard title="Open work orders by priority" description="Within SLA and past SLA" kind="stacked" data={(woPri?.points ?? []) as never} x="priority" series={[{ key: "within", label: "Within SLA", format: "count" }, { key: "past_sla", label: "Past SLA", format: "count" }]} drill={`/app/maintenance/work-orders?${WO_OPEN_Q}&f.priority={priority}`} height={220} />
+        <ChartCard title="Lease expirations by month" description="Active and on-notice leases, next 12 months" kind="bar" data={(exp?.points ?? []) as never} x="label" series={[{ key: "count", label: "Leases ending", format: "count" }]} drill="/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice" height={220} />
+        <ChartCard title="Open work orders by priority" description="Within SLA and past SLA" kind="stacked" data={(woPri?.points ?? []) as never} x="priority" series={[{ key: "within", label: "Within SLA", format: "count", color: "var(--chart-1)" }, { key: "past_sla", label: "Past SLA", format: "count", color: "var(--tone-danger)" }]} drill={`/app/maintenance/work-orders?${WO_OPEN_Q}&f.priority={priority}`} height={220} />
       </div>
 
       <section data-tour="queue" aria-labelledby="queue-h" className="space-y-2">

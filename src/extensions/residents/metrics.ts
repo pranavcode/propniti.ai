@@ -35,6 +35,13 @@ const count = (key: MetricKey, label: string, table: string, where: string, col 
     },
   });
 
+// Status donuts use the status tones, not categorical hues: a state's colour means the same
+// thing everywhere (green current/active, amber notice/expiring, red eviction/lapsed).
+const STATUS_COLOR: Record<string, string> = {
+  Current: "var(--tone-success)", Active: "var(--tone-success)", Notice: "var(--tone-warning)", Expiring: "var(--tone-warning)", "Month-to-month": "var(--tone-warning)",
+  Future: "var(--tone-info)", Eviction: "var(--tone-danger)", Lapsed: "var(--tone-danger)", Past: "var(--tone-neutral)", Waived: "var(--tone-neutral)",
+};
+
 const groupBy = (key: MetricKey, label: string, table: string, groupExpr: string, where: string, order: string[]) =>
   registerMetric({
     key,
@@ -42,7 +49,7 @@ const groupBy = (key: MetricKey, label: string, table: string, groupExpr: string
     run: async (ctx, params) => {
       const s = scope(ctx, params, `${table}.property_id`);
       const res = await rows(ctx, `SELECT ${groupExpr} AS status, count(*) AS count FROM ${effective(table, ctx.ws)} AS ${table} WHERE ${where}${s.sql} GROUP BY 1`, s.binds);
-      const points = order.map((status) => ({ status, count: Number(res.find((r) => r.status === status)?.count ?? 0) })).filter((p) => p.count > 0);
+      const points = order.map((status) => ({ status, count: Number(res.find((r) => r.status === status)?.count ?? 0), color: STATUS_COLOR[status] ?? null })).filter((p) => p.count > 0);
       return { value: points.reduce((a, p) => a + p.count, 0), points, source: "live" };
     },
   });
@@ -90,7 +97,8 @@ registerMetric({
       const month = d.toISOString().slice(0, 7);
       const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
       const hit = res.find((r) => r.month === month);
-      return { month, from: `${month}-01`, to: last, count: Number(hit?.count ?? 0), notice: Number(hit?.notice ?? 0) };
+      const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+      return { month, label, from: `${month}-01`, to: last, count: Number(hit?.count ?? 0), notice: Number(hit?.notice ?? 0) };
     });
     return { value: points.slice(0, 2).reduce((a, p) => a + p.count, 0), points, source: "live" };
   },

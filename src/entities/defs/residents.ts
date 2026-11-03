@@ -199,7 +199,7 @@ registerEntity({
     { key: "mtm", label: "Month-to-month", metric: "residents.mtm", format: "count", goodWhen: "down", drill: "/app/leases?view=mtm" },
   ],
   charts: [
-    { key: "expirations", title: "Lease expirations, next 12 months", kind: "bar", metric: "residents.expirations", x: "month", series: [{ key: "count", label: "Leases ending", format: "count" }], drill: "/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice", help: { summary: "Active and on-notice leases by the month they end. Click a month for the leases.", article: "leases" } },
+    { key: "expirations", title: "Lease expirations, next 12 months", kind: "bar", metric: "residents.expirations", x: "label", series: [{ key: "count", label: "Leases ending", format: "count" }], drill: "/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice", help: { summary: "Active and on-notice leases by the month they end. Click a month for the leases.", article: "leases" } },
     { key: "lease_status", title: "Leases by status", kind: "donut", metric: "residents.lease_status", x: "status", series: [{ key: "count", label: "Leases", format: "count" }], drill: "/app/leases?f.status={status}" },
   ],
   ai: {
