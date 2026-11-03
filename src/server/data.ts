@@ -144,18 +144,19 @@ export async function trustBalances(ctx: DataCtx, ownerEntityId?: string) {
 export const OPEN_ITEMS_WHERE = (entity: string, ws = "?1") => `t.workspace_id IN ('base', ${ws}) AND t.owner_entity_id = ${entity} AND t.status <> 'Returned'
   AND t.bank_account_id = 'ba-' || ${entity} || '-trust' AND t.kind <> 'Owner payout'
   AND t.seq > coalesce((SELECT max(seq) FROM transfers WHERE workspace_id IN ('base', ${ws}) AND owner_entity_id = ${entity} AND kind = 'Owner payout' AND status <> 'Returned' AND key NOT LIKE 'owner-adj:%'), 0)`;
-// Net owed to the owner from open items: cleared receipts − fees − vendor payouts (pending ones too).
+// Net owed to the owner from open items: cleared receipts − bounced payments − fees − vendor payouts
+// (pending ones too).
 export const OPEN_NET_SQL = (entity: string, ws = "?1") => `(SELECT coalesce(sum(CASE
     WHEN t.kind IN ('Rent', 'Other receipt') THEN CASE WHEN t.status = 'Cleared' THEN t.amount_cents ELSE 0 END
     WHEN t.kind = 'Management fee' THEN CASE WHEN t.status = 'Cleared' THEN -t.amount_cents ELSE 0 END
-    WHEN t.kind = 'Vendor payout' THEN -t.amount_cents ELSE 0 END), 0) FROM transfers AS t WHERE ${OPEN_ITEMS_WHERE(entity, ws)})`;
+    WHEN t.kind IN ('Vendor payout', 'Returned payment') THEN -t.amount_cents ELSE 0 END), 0) FROM transfers AS t WHERE ${OPEN_ITEMS_WHERE(entity, ws)})`;
 
 export async function ownerStatement(ctx: DataCtx, ownerEntityId: string) {
   const ws = wsOf(ctx);
   const sums = await ctx.db
     .prepare(
       `SELECT
-        coalesce(sum(CASE WHEN t.kind IN ('Rent', 'Other receipt') AND t.status = 'Cleared' THEN t.amount_cents END), 0) AS income_cents,
+        coalesce(sum(CASE WHEN t.kind IN ('Rent', 'Other receipt') AND t.status = 'Cleared' THEN t.amount_cents WHEN t.kind = 'Returned payment' THEN -t.amount_cents END), 0) AS income_cents,
         coalesce(sum(CASE WHEN t.kind = 'Vendor payout' THEN t.amount_cents END), 0) AS expense_cents,
         coalesce(sum(CASE WHEN t.kind = 'Management fee' AND t.status = 'Cleared' THEN t.amount_cents END), 0) AS fee_cents,
         count(*) AS items

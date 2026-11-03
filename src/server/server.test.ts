@@ -6,7 +6,7 @@ import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { chargeOpenSql, chargeStatusSql, chargeStatusStoredSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
-import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, movePayment, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle, settleIfDue } from "./money";
+import { approveAndPayWorkOrder, approveBill, disposeDeposit, distributeOwner, markPaymentReturned, movePayment, payBill, payApplicationFee, payOwnerAdjustment, payRent, postLateFees, recordPayment, settle, settleIfDue } from "./money";
 import { randomId } from "./repo";
 import { nextMidnight, resetWorkspace, resolveWorkspace } from "./workspace";
 
@@ -48,7 +48,7 @@ describe("migrations and base", () => {
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
     expect(raw.prepare("SELECT count(*) AS n FROM sqlite_master").get()).toEqual(before);
-    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql"]);
+    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql", "0007_returned_payment.sql"]);
   });
 
   it("loads the base once, with its version, as-of date and trust constants", async () => {
@@ -68,6 +68,29 @@ describe("stored charge allocation (oldest first, per lease)", { timeout: 300_00
           ach AS (SELECT c.lease_id, sum(t.amount_cents) AS a FROM transfers AS t JOIN ${effective("charges")} AS c ON c.id = t.ref WHERE t.workspace_id = ?1 AND t.status = 'Pending' AND t.kind = 'Rent' AND t.key = 'rent:' || t.ref GROUP BY c.lease_id)
         SELECT count(*) AS n FROM owed LEFT JOIN paid ON paid.lease_id = owed.lease_id LEFT JOIN cred ON cred.lease_id = owed.lease_id LEFT JOIN ach ON ach.lease_id = owed.lease_id
         WHERE owed.owed <> max(0, owed.charged - coalesce(paid.a, 0) - coalesce(cred.a, 0)) OR owed.pend <> min(coalesce(ach.a, 0), owed.owed)`, ws);
+
+  it("a returned payment: once, in scope, emits payment.failed, takes the money back and keeps the ledger identity", async () => {
+    const c = await ctx(grace);
+    const pay = (await one<{ id: string; amount_cents: number; lease_id: string; property_id: string }>("SELECT p.id, p.amount_cents, p.lease_id, p.property_id FROM payments AS p JOIN properties AS pr ON pr.id = p.property_id AND pr.workspace_id = 'base' WHERE p.workspace_id = 'base' AND p.nsf = 0 AND p.received_on >= '2026-11-01' AND pr.state = 'TX' AND p.property_id = 'p02' LIMIT 1"))!;
+    const trust = await available(c.ws, "ba-oe01-trust");
+    const owed = () => n(`SELECT sum(c.amount_cents - c.paid_cents) AS n FROM ${effective("charges")} AS c WHERE c.lease_id = ?2`, c.ws, pay.lease_id);
+    const before = await owed();
+    // Out of scope: a leasing agent, and a Phoenix-only accountant.
+    expect(await markPaymentReturned({ ...c, actor: { ...marcus, role: "leasing_agent" } }, pay.id, "NSF")).toMatchObject({ status: 403 });
+    expect(await markPaymentReturned({ ...c, actor: { ...grace, propertyIds: ["p22"] } }, pay.id, "NSF")).toMatchObject({ status: 403 });
+    const twice = await Promise.all([markPaymentReturned(c, pay.id, "NSF"), markPaymentReturned(c, pay.id, "NSF")]);
+    expect(twice.map((r) => r.status).sort()).toEqual([200, 409]);
+    // Texas caps the returned-payment fee at $30.
+    const fee = (await one<{ amount_cents: number }>("SELECT amount_cents FROM charges WHERE workspace_id = ?1 AND id = ?2", c.ws, `nsf-${pay.id}`))!.amount_cents;
+    expect(fee).toBe(3_000);
+    expect(await owed()).toBe(before + pay.amount_cents + fee);
+    const mgmt = Math.floor((pay.amount_cents * 8 + 50) / 100);
+    expect(await available(c.ws, "ba-oe01-trust")).toBe(trust - pay.amount_cents + mgmt);
+    expect(await one("SELECT type, entity_id FROM events WHERE workspace_id = ?1 AND type = 'payment.failed'", c.ws)).toEqual({ type: "payment.failed", entity_id: pay.id });
+    expect(await n("SELECT count(*) AS n FROM audit WHERE workspace_id = ?1 AND action = 'Payment returned'", c.ws)).toBe(1);
+    expect(await markPaymentReturned(c, pay.id, "NSF")).toMatchObject({ status: 409, error: expect.stringContaining("already") });
+    expect(await broken(c.ws)).toBe(0);
+  });
 
   it("matches the lease ledger on the whole seed, and after pay, record, settle, move, disposition and late fees", async () => {
     const c = await ctx(grace);

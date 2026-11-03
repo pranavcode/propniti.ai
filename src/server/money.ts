@@ -787,3 +787,68 @@ export async function movePayment(ctx: ActionContext, paymentId: string, toCharg
   await db.batch(steps);
   return { status: 200, message: `Moved ${dollars(p.amount_cents)} to ${c.lease_id} and applied it to ${c.description}.` };
 }
+
+// A resident's payment bounced (NSF or a returned ACH). In one guarded batch: the bank takes the
+// money back out of trust (a Returned payment transfer, key return:<payment>, so once per payment),
+// the management fee taken on it goes back to trust, the payment is marked NSF so the lease owes the
+// amount again (re-allocated oldest first), and a returned-payment fee is charged at the policy
+// amount capped by the state rule. Emits payment.failed for the Collections agent.
+export const RETURNED_PAYMENT_FEE_CENTS = 3_500;
+export async function markPaymentReturned(ctx: ActionContext, paymentId: string, reason: string): Promise<Outcome> {
+  const { db, ws, nowMs, actor } = ctx;
+  const pay = await db
+    .prepare(
+      `SELECT p.*, pr.owner_entity_id, pr.state, h.name AS household_name,
+         (SELECT r.id FROM ${effective("residents")} AS r WHERE r.household_id = p.household_id ORDER BY r.is_primary DESC LIMIT 1) AS resident_id,
+         (SELECT l.unit_id FROM ${effective("leases")} AS l WHERE l.id = p.lease_id) AS unit_id
+       FROM ${effective("payments")} AS p JOIN ${effective("properties")} AS pr ON pr.id = p.property_id LEFT JOIN ${effective("households")} AS h ON h.id = p.household_id
+       WHERE p.id = ?2`,
+    )
+    .bind(ws, paymentId)
+    .first<{ id: string; lease_id: string; household_id: string; property_id: string; amount_cents: number; nsf: number; owner_entity_id: string; state: string; household_name: string | null; resident_id: string | null; unit_id: string | null; method: string; reference: string }>();
+  if (!pay) return { status: 404, error: "Payment not found" };
+  const denied = forbidden(actor, ["receivables", "accounting"], pay.property_id);
+  if (denied) return denied;
+  const why = reason.trim().slice(0, 200) || "Returned by the bank";
+  const cap = await db.prepare(`SELECT s.value FROM ${effective("state_rules")} AS s WHERE s.state = ?2 AND s.rule = 'nsf_fee_cap_cents' AND s.effective_from <= ?3 ORDER BY s.effective_from DESC LIMIT 1`).bind(ws, pay.state, AS_OF).first<{ value: string }>();
+  const fee = Math.min(RETURNED_PAYMENT_FEE_CENTS, cap ? Number(cap.value) : RETURNED_PAYMENT_FEE_CENTS);
+  const mgmtFee = Math.floor((pay.amount_cents * FEE_PCT + 50) / 100);
+  const at = nowIso(nowMs);
+  const id = uid("tr");
+  const trust = `ba-${pay.owner_entity_id}-trust`;
+  const gated = "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?2)";
+  const steps: DbStatement[] = [
+    db
+      .prepare(
+        `INSERT INTO transfers (${TRANSFER_COLS})
+         SELECT ?1, ?2, 'return:' || p.id, 'Returned payment', ?4, ?5, 'trust', ?4, 'Operating trust', 'bank', p.household_id, 'Returned to the bank', p.amount_cents, p.property_id, p.id, 'Cleared', ?6, NULL, ?6
+         FROM ${effective("payments")} AS p WHERE p.id = ?3 AND p.nsf = 0 AND p.amount_cents = ?7
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'return:' || ?3)
+         ON CONFLICT DO NOTHING`,
+      )
+      .bind(ws, id, pay.id, trust, pay.owner_entity_id, at, pay.amount_cents),
+    db.prepare(overlayUpsertSql("payments", PAYMENT_COLS, { nsf: "1" }, `EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)`)).bind(ws, pay.id, id),
+    db
+      .prepare(
+        `INSERT INTO transfers (${TRANSFER_COLS})
+         SELECT ?1, ?3, 'feeback:' || ?4, 'Other receipt', ?5, ?6, 'pm', 'ba-mgmt', 'Summit Residential Partners (management fees)', 'trust', ?5, 'Operating trust', ?7, ?8, ?4, 'Cleared', ?9, NULL, ?9
+         WHERE ?7 > 0 AND ${gated} ON CONFLICT DO NOTHING`,
+      )
+      .bind(ws, id, uid("tr"), pay.id, trust, pay.owner_entity_id, mgmtFee, pay.property_id, at),
+    db
+      .prepare(
+        `INSERT INTO charges (workspace_id, id, lease_id, household_id, property_id, unit_id, gl_account_id, description, period, due_on, amount_cents)
+         SELECT ?1, ?3, ?4, ?5, ?6, ?7, 'gl-4110', ?8, substr(?9, 1, 7), ?9, ?10 WHERE ?10 > 0 AND ${gated} ON CONFLICT DO NOTHING`,
+      )
+      .bind(ws, id, `nsf-${pay.id}`, pay.lease_id, pay.household_id, pay.property_id, pay.unit_id, `Returned payment fee (${pay.method} ${pay.reference})`, AS_OF, fee),
+    chargeRefreshStmt(db, ws, null, pay.lease_id),
+    eventStmt(db, ws, at, "payment.failed", "payments", pay.id, pay.property_id, { lease_id: pay.lease_id, household_id: pay.household_id, amount_cents: pay.amount_cents, fee_cents: fee, reason: why }, done(id)),
+    auditStmt(db, ws, at, actor, { action: "Payment returned", entityType: "payments", entityId: pay.id, propertyId: pay.property_id, detail: `${dollars(pay.amount_cents)} ${pay.method} (${pay.reference}) returned: ${why}. Fee ${dollars(fee)}.`, before: { nsf: 0 }, after: { nsf: 1 } }, done(id)),
+  ];
+  if (pay.resident_id)
+    steps.push(notifyStmt(db, ws, at, pay.resident_id, "Your payment was returned", `Your ${dollars(pay.amount_cents)} payment (${pay.reference}) was returned by the bank (${why}). A ${dollars(fee)} returned-payment fee applies. Please pay in the resident portal.`, "/portal/resident/pay", ["payments", pay.id], done(id)));
+  const [insert] = await db.batch(steps);
+  if (insert.meta.changes) return { status: 200, message: `Marked ${dollars(pay.amount_cents)} returned; ${dollars(fee)} fee charged to ${pay.household_name ?? "the household"}.` };
+  if (pay.nsf || (await transferAt(db, ws, `return:${pay.id}`))) return { status: 409, error: "This payment is already marked returned." };
+  return { status: 409, error: "This payment changed while you were marking it. Check it and try again." };
+}

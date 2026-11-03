@@ -98,6 +98,9 @@ class Extras {
       ["AZ", "deposit_return_days", "14", "Return within 14 business days after termination and delivery of possession.", "2015-01-01", null],
       ["AZ", "notice_days", "5", "Five-day notice for nonpayment of rent.", "2015-01-01", null],
       ["TX", "late_fee_cap_pct", "12", "Applies to properties of 4 units or fewer (Elm Street Duplex Portfolio).", "2026-02-01", "grace"],
+      ["TX", "nsf_fee_cap_cents", "3000", "Returned check or ACH fee: at most $30 (Tex. Bus. & Com. Code §3.506).", "2015-01-01", null],
+      ["GA", "nsf_fee_cap_cents", "3000", "Returned payment fee: $30 or 5% of the amount, whichever is greater (O.C.G.A. §13-6-15); we charge the flat $30.", "2015-01-01", null],
+      ["AZ", "nsf_fee_cap_cents", "2500", "Returned payment fee: at most $25 (A.R.S. §44-6852).", "2015-01-01", null],
     ];
     rules.forEach(([state, rule, value, note, from, by], i) => add("state_rules", { id: `sr-${i + 1}`, state, rule: rule === "late_fee_cap_pct" && value === "12" ? "late_fee_cap_pct_small" : rule, value, note, effective_from: from, changed_by: by }));
     const ap: [string | null, string, number | null, string, number | null, number][] = [
