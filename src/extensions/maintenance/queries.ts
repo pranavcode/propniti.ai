@@ -121,7 +121,9 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
     db.prepare(`SELECT count(*) AS open, coalesce(sum(t.target_ready_on < ${today}), 0) AS late FROM ${effective("turnovers", ws)} t WHERE t.status IN ('Not started', 'In progress')${scoped(actor.propertyIds, "t.property_id").sql}`).bind(...scoped(actor.propertyIds, "t.property_id").binds).first<{ open: number; late: number }>(),
     db.prepare(`SELECT count(*) AS due, coalesce(sum(m.next_due_on < ${today}), 0) AS overdue FROM ${effective("pm_schedules", ws)} m WHERE m.active = 1 AND m.next_due_on <= date(${today}, '+7 days')${scoped(actor.propertyIds, "m.property_id").sql}`).bind(...scoped(actor.propertyIds, "m.property_id").binds).first<{ due: number; overdue: number }>(),
     // Only vendors who worked at this person's properties in the last 12 months.
-    all<Row>(db, `SELECT c.vendor_id, v.company, c.expires_on, c.status FROM ${effective("vendor_cois", ws)} c JOIN ${effective("vendors", ws)} v ON v.id = c.vendor_id
+    all<Row>(db, `SELECT c.id, c.vendor_id, v.company, c.expires_on, c.status,
+        (SELECT max(n.at) FROM ${effective("notifications", ws)} n WHERE n.user_id = c.vendor_id AND n.title = 'Upload a current certificate of insurance' AND n.at >= date(${today}, '-7 days')) AS requested
+      FROM ${effective("vendor_cois", ws)} c JOIN ${effective("vendors", ws)} v ON v.id = c.vendor_id
       WHERE c.expires_on <= date(${today}, '+30 days') AND v.status = 'Active'
         AND EXISTS (SELECT 1 FROM ${wo} w WHERE w.vendor_id = v.id AND w.opened_at >= date(${today}, '-12 months')${s.sql})
       ORDER BY c.expires_on LIMIT 6`, s.binds),
