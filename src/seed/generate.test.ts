@@ -103,6 +103,12 @@ describe("seed generator", () => {
     expect(sum(T.households, (h) => h.balance_cents as number)).toBe(sum(T.leases, (l) => l.balance_cents as number));
   });
 
+  it("leaves no seeded event unprocessed, so visitors' own events are never queued behind base rows", () => {
+    expect(T.events.length).toBeGreaterThan(100);
+    for (const e of T.events) expect(e.processed_at, e.id as string).toBeTruthy();
+    expect(T.events.filter((e) => e.run_id).length / T.events.length).toBeGreaterThan(0.9);
+  });
+
   it("rent roll: each current lease bills its scheduled rent this month", () => {
     const nov = new Map(T.charges.filter((c) => c.period === "2026-11" && c.gl_account_id === "gl-4000").map((c) => [c.lease_id as string, c]));
     const corrupted = new Set([...flagged("leases.rent_outlier"), ...flagged("leases.end_before_start")]);

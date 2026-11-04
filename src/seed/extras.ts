@@ -1244,8 +1244,17 @@ class Extras {
       add("ai_proposals", p);
     }
     // Pending events not yet picked up (the outbox right now).
-    for (const w of c.workOrders.filter((w) => w.status === "New")) add("events", { id: `ev-new-${w.id}`, type: "wo.created", entity_type: "work_orders", entity_id: w.id, property_id: w.property_id, payload: JSON.stringify({ priority: w.priority }), created_at: w.opened_at, processed_at: null, run_id: null });
-    for (const x of (this.t.vendor_cois ?? []).filter((x) => x.status === "Expiring")) add("events", { id: `ev-coi-${x.id}`, type: "coi.expiring", entity_type: "vendors", entity_id: x.vendor_id, property_id: null, payload: JSON.stringify({ expires_on: x.expires_on }), created_at: ts(ASOF, 360), processed_at: null, run_id: null });
+    // Seeded events are history: every one is processed and linked to the run that handled it, so a
+    // visitor's own events (a new application, a returned payment) are never queued behind base rows.
+    const handled = (entityId: string) => this.t.events.some((e) => e.entity_id === entityId && e.run_id);
+    const lastRun = (agent: string) => this.t.agent_runs.filter((r) => r.agent_key === agent).sort((x, y) => (x.started_at! < y.started_at! ? 1 : -1))[0];
+    for (const w of c.workOrders.filter((w) => w.status === "New")) {
+      if (handled(w.id as string)) continue; // its triage run already logged the event
+      const run = lastRun("maintenance_triage");
+      add("events", { id: `ev-new-${w.id}`, type: "wo.created", entity_type: "work_orders", entity_id: w.id, property_id: w.property_id, payload: JSON.stringify({ priority: w.priority }), created_at: w.opened_at, processed_at: run?.started_at ?? w.opened_at, run_id: run?.id ?? null });
+    }
+    const coiRun = this.t.agent_runs.find((r) => r.agent_key === "compliance" && String(r.summary).includes("certificates"));
+    for (const x of (this.t.vendor_cois ?? []).filter((x) => x.status === "Expiring")) add("events", { id: `ev-coi-${x.id}`, type: "coi.expiring", entity_type: "vendors", entity_id: x.vendor_id, property_id: null, payload: JSON.stringify({ expires_on: x.expires_on }), created_at: ts(ASOF, 360), processed_at: coiRun?.started_at ?? ts(ASOF, 660), run_id: coiRun?.id ?? null });
 
     // AI summaries: rule-based placeholders the AI lane replaces with model output (same ids).
     const sum = (entity: string, id: string, summary: string, facts: object) => add("ai_summaries", { id: `sum-${entity}-${id}`, entity_type: entity, entity_id: id, summary, facts: JSON.stringify(facts), model: "rules", generated_at: ts(ASOF, 300) });
