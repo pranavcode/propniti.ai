@@ -44,7 +44,7 @@ export const EVENT_INFO: Record<string, { label: string; source: string | null }
   "statement.closed": { label: "Owner statement closed", source: null },
   "data_issue.detected": { label: "Data issue found", source: null },
 };
-const eventLabel = (t: string) => EVENT_INFO[t]?.label ?? t.replace(/[._]/g, " ");
+export const eventLabel = (t: string) => EVENT_INFO[t]?.label ?? t.replace(/[._]/g, " ");
 
 const DAYS = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
 const NUM = /^\d{1,2}$/;
@@ -82,6 +82,9 @@ export function sweepTiming(nowMs: number, lastMs: number | null) {
     late: lastMs != null && nowMs - lastMs > 2 * SWEEP_EVERY_MS,
   };
 }
+
+// The sweep timing as of now, from the last sweep's stamp (the Agents page).
+export const sweepNow = (lastIso: string | null) => sweepTiming(Date.now(), lastIso ? Date.parse(lastIso) : null);
 
 export type AutomationAgent = {
   key: AgentKey; name: string; goal: string; href: string; enabled: boolean;

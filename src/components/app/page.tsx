@@ -23,7 +23,7 @@ export function PageHeader({ title, description, actions, icon, meta, className,
             {meta && <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">{meta}</div>}
           </div>
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>}
+        {actions && <div className="flex max-w-full flex-wrap items-center gap-1.5">{actions}</div>}
       </div>
       {children && <div className="mt-4">{children}</div>}
     </div>
@@ -37,14 +37,14 @@ export function PageBody({ children, className }: { children: React.ReactNode; c
 // Titled block inside a page (dashboards, settings, the kit).
 export function Section({ title, description, actions, children, className, id }: { title?: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} className={cn("scroll-mt-4", className)}>
+    <section id={id} className={cn("min-w-0 scroll-mt-4", className)}>
       {(title || actions) && (
-        <div className="mb-2.5 flex items-end gap-3">
-          <div className="min-w-0 flex-1">
+        <div className="mb-2.5 flex flex-wrap items-end gap-x-3 gap-y-2">
+          <div className="min-w-[min(100%,16rem)] flex-1">
             {title && <h2 className="text-[14px] font-semibold tracking-tight">{title}</h2>}
             {description && <p className="text-[12.5px] text-muted-foreground">{description}</p>}
           </div>
-          {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center gap-1.5">{actions}</div>}
         </div>
       )}
       {children}

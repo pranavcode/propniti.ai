@@ -152,7 +152,7 @@ export default async function MaintenanceHome() {
               <Button asChild size="sm" variant="outline"><Link href={`/app/maintenance/work-orders?f.status=New`}>Unassigned work orders</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/turnovers?view=open">Make-ready board</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/preventive?view=due-7">Preventive due this week</Link></Button>
-              <Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/board?view=calendar"><CalendarRange />Calendar</Link></Button>
+              <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/board?view=calendar"><CalendarRange />Calendar</Link></Button>
             </div>
           </div>
         </div>
@@ -173,7 +173,7 @@ export default async function MaintenanceHome() {
               {h?.triage.length ? (
                 <ul className="divide-y">
                   {h.triage.map((w) => (
-                    <li key={String(w.id)} className="flex items-center gap-2 pr-3 hover:bg-muted/40">
+                    <li key={String(w.id)} className="flex flex-wrap items-center gap-x-2 pr-3 hover:bg-muted/40">
                       <Link href={`/app/maintenance/intake/${encodeURIComponent(String(w.id))}`} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3">
                         {w.photo
                           // eslint-disable-next-line @next/next/no-img-element -- 400px static thumb
@@ -187,7 +187,7 @@ export default async function MaintenanceHome() {
                         </span>
                         {!(canDispatch && suggested.has(String(w.id))) && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
                       </Link>
-                      {canDispatch && suggested.has(String(w.id)) && <DispatchSuggested id={String(w.id)} note={suggested.get(String(w.id))?.note} />}
+                      {canDispatch && suggested.has(String(w.id)) && <div className="shrink-0 max-sm:basis-full max-sm:pb-2.5 max-sm:pl-16"><DispatchSuggested id={String(w.id)} note={suggested.get(String(w.id))?.note} /></div>}
                     </li>
                   ))}
                 </ul>

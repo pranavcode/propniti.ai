@@ -6,12 +6,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Banknote, Bot, ClipboardCheck, FileSpreadsheet, HeartPulse, KeyRound, LineChart, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import { AgentCard, AIBadge, RunTrace } from "@/components/app/ai";
-import { RelativeDate } from "@/components/app/display";
 import { Button } from "@/components/ui/button";
+import { ScrollX } from "@/components/app/ScrollX";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AgentCard as Card } from "@/ai/views";
 import type { ApprovalPolicy, Autonomy } from "@/ai/types";
 import { ProposalCard } from "./RunView";
@@ -28,7 +27,6 @@ const AUTONOMY = [
   { value: "act_with_approval", label: "Approve first" },
   { value: "auto_within_policy", label: "Auto within policy" },
 ] as const;
-const AUTONOMY_HELP = "Approve first: every action waits for a person in the approvals inbox. Auto within policy: low-risk actions under your approval-policy limits apply on their own and are logged; anything with money over the limit, legal or safety risk still waits for a person.";
 const level = (a: string) => (a === "suggest" ? "act_with_approval" : a) as Autonomy;
 
 type Status = { provider: string; model: string; label: string; live: boolean; lastSweepAt: string | null; policies: (ApprovalPolicy & { id?: string })[] };
@@ -52,7 +50,7 @@ function LiveRun({ runId, agent, onClose }: { runId: string; agent: string; onCl
   );
 }
 
-export function AgentsCenter({ agents, status, canManage, canRun, canEditPolicies }: { agents: Card[]; status: Status; canManage: boolean; canRun: boolean; canEditPolicies: boolean }) {
+export function AgentsCenter({ agents, status, sweep, canManage, canRun, canEditPolicies }: { agents: (Card & { runsText: string })[]; status: Status; sweep: { lastAgoMin: number | null; nextInMin: number }; canManage: boolean; canRun: boolean; canEditPolicies: boolean }) {
   const router = useRouter();
   const [live, setLive] = useState<{ runId: string; agent: string } | null>(null);
   const [cards, setCards] = useState(agents);
@@ -79,46 +77,38 @@ export function AgentsCenter({ agents, status, canManage, canRun, canEditPolicie
     <div className="space-y-6 px-4 pb-10 md:px-6">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border bg-card px-4 py-3 text-[12.5px]">
         <span className="flex items-center gap-2"><Bot className="size-4 text-tone-ai" /> Model: <AIBadge source={status.live ? "live" : "rules"} model={status.label} /></span>
-        <span className="text-muted-foreground">Schedules run every 15 minutes (Cron Trigger; also on the first visit after a missed sweep). Last sweep: {status.lastSweepAt ? <RelativeDate value={status.lastSweepAt} /> : "not yet"}.</span>
+        <span className="text-muted-foreground">Schedules are checked every 15 minutes, and again on the first visit after a missed check. {sweep.lastAgoMin == null ? "None has run yet" : `Last check ${sweep.lastAgoMin} min ago`}; next in {sweep.nextInMin} min.</span>
         {!status.live && <span className="text-muted-foreground">No model key is set, so agents use their rules: same tools, same proposals, no drafted wording.</span>}
       </div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((a) => (
-          <div key={a.key} className="flex flex-col gap-2">
-            <AgentCard
-              className="flex-1"
-              name={a.name}
-              goal={a.goal}
-              icon={ICONS[a.key]}
-              status={a.lastRun?.status === "failed" ? "failed" : a.pending ? "waiting_approval" : "idle"}
-              lastRun={a.lastRun?.started_at}
-              nextRun={a.nextRunAt}
-              successRate={a.successRate != null ? a.successRate / 100 : undefined}
-              proposed={a.proposed}
-              approved={a.approved}
-              autoApplied={a.auto}
-              autonomy={level(a.autonomy)}
-              enabled={a.enabled}
-              href={`/app/ai/activity?agent=${a.key}`}
-              model={a.lastRun?.model ? `Last run: ${a.lastRun.model}` : undefined}
-              onToggle={canManage ? (v) => void patch(a.key, { enabled: v }) : undefined}
-              onRunNow={canRun ? () => runNow(a.key) : undefined}
-            />
-            <div className="flex items-center gap-2 text-[12px]">
-              <Tooltip>
-                <TooltipTrigger asChild><span className="cursor-help text-muted-foreground underline decoration-dotted underline-offset-2">Autonomy</span></TooltipTrigger>
-                <TooltipContent className="max-w-xs">{AUTONOMY_HELP}</TooltipContent>
-              </Tooltip>
-              <Select value={level(a.autonomy)} disabled={!canManage} onValueChange={(v) => void patch(a.key, { autonomy: v })}>
-                <SelectTrigger size="sm" className="h-7 flex-1"><SelectValue /></SelectTrigger>
+          <AgentCard
+            key={a.key}
+            name={a.name}
+            goal={a.goal}
+            icon={ICONS[a.key]}
+            status={a.lastRun?.status === "failed" ? "failed" : a.pending ? "waiting_approval" : "idle"}
+            lastRun={a.lastRun?.started_at}
+            nextRun={a.nextRunAt}
+            successRate={a.successRate != null ? a.successRate / 100 : undefined}
+            proposed={a.proposed}
+            approved={a.approved}
+            autoApplied={a.auto}
+            autonomy={level(a.autonomy)}
+            autonomyControl={canManage ? (
+              <Select value={level(a.autonomy)} onValueChange={(v) => void patch(a.key, { autonomy: v })}>
+                <SelectTrigger size="sm" className="h-7 min-w-0 flex-1 px-2 text-[12px]" aria-label={`Autonomy for ${a.name}`}><SelectValue /></SelectTrigger>
                 <SelectContent>{AUTONOMY.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div className="text-[11.5px] text-muted-foreground">
-              {a.schedule ? <>Schedule <code className="rounded bg-muted px-1">{a.schedule}</code> (UTC)</> : "No schedule"}{a.events.length ? ` · on ${a.events.join(", ")}` : ""}
-            </div>
-          </div>
+            ) : undefined}
+            runs={a.runsText}
+            enabled={a.enabled}
+            href={`/app/ai/activity?agent=${a.key}`}
+            model={a.lastRun?.model ?? undefined}
+            onToggle={canManage ? (v) => void patch(a.key, { enabled: v }) : undefined}
+            onRunNow={canRun ? () => runNow(a.key) : undefined}
+          />
         ))}
       </section>
 
@@ -145,12 +135,13 @@ function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolic
   };
   return (
     <section className="rounded-lg border bg-card">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
         <ClipboardCheck className="size-4 text-muted-foreground" />
         <h2 className="font-semibold">Approval policies</h2>
         <span className="text-[12px] text-muted-foreground">What agents may apply on their own (autonomy “Auto within policy”), and when the owner decides. Legal and safety always need a person.</span>
       </div>
       {!canEdit && <p className="border-b px-4 py-2 text-[12px] text-muted-foreground">{POLICY_EDITORS_TEXT}</p>}
+      <ScrollX>
       <table className="w-full text-[13px]">
         <thead className="text-left text-[11.5px] text-muted-foreground">
           <tr className="border-b"><th className="px-4 py-2 font-medium">Category</th><th className="px-4 py-2 font-medium">Auto-approve up to</th><th className="px-4 py-2 font-medium">Owner approves over</th><th className="px-4 py-2 font-medium">Approver</th><th /></tr>
@@ -171,6 +162,7 @@ function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolic
           })}
         </tbody>
       </table>
+      </ScrollX>
     </section>
   );
 }

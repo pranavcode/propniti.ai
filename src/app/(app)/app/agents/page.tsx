@@ -7,6 +7,11 @@ import { AgentsCenter } from "@/ai/ui/AgentsCenter";
 import { pageData } from "@/ai/ui/server";
 import { agentCards, aiStatus } from "@/ai/views";
 import { canEditPolicies } from "@/ai/policy-editors";
+import { describeCron, eventLabel, sweepNow } from "@/ai/automations";
+
+// "Daily at 14:00 UTC · on Payment returned, Rent overdue", the same words as the Automations page.
+const runsText = (schedule: string | null, events: string[]) =>
+  [schedule ? `${describeCron(schedule)} UTC` : null, events.length ? `on ${events.map(eventLabel).join(", ")}` : null].filter(Boolean).join(" · ") || "Only when run by hand";
 
 export const metadata = { title: "Agents · Propniti" };
 
@@ -28,7 +33,7 @@ export default async function AgentsPage() {
       />
       {agents.some((a) => a.statsMissing) && <p role="status" className="mx-4 mt-4 rounded-md border bg-muted/40 px-3 py-2 text-[12.5px] md:mx-6">Run and proposal counts couldn&apos;t load, so they read 0 for now. Refresh to try again.</p>}
       <div className="mt-5">
-        <AgentsCenter agents={agents} status={status} canManage={canEditPolicies(persona.role)} canRun={access !== "none"} canEditPolicies={canEditPolicies(persona.role)} />
+        <AgentsCenter agents={agents.map((a) => ({ ...a, runsText: runsText(a.schedule, a.events) }))} status={status} sweep={sweepNow(status.lastSweepAt)} canManage={canEditPolicies(persona.role)} canRun={access !== "none"} canEditPolicies={canEditPolicies(persona.role)} />
       </div>
     </div>
   );
