@@ -1,7 +1,7 @@
 import "server-only";
 import { cashForecast } from "@/extensions/accounting/metrics";
 import { runSpec, scopeProperties, type Ctx } from "@/extensions/accounting/reports/run";
-import { addMonths, COMPARE_LABEL, describeSpec, FIRST_MONTH, GROUP_LABEL, measureOf, METROS, monthsBetween, periodLabel, type Compare, type GroupBy, type QuerySpec } from "@/extensions/accounting/reports/spec";
+import { addMonths, canOpenReports, COMPARE_LABEL, describeSpec, FIRST_MONTH, GROUP_LABEL, measureOf, METROS, monthsBetween, periodLabel, type Compare, type GroupBy, type QuerySpec } from "@/extensions/accounting/reports/spec";
 import { arAging, noiByProperty, pnl, rentRoll } from "@/extensions/accounting/reports/standard";
 import { demoNowIso } from "@/lib/clock";
 import { capNote, EXPORT_CAP, type Column, type ExportDoc } from "@/lib/export/types";
@@ -11,7 +11,6 @@ import { asOfMonth, QueryError } from "@/server/query";
 // (/app/reports): the same roles, the person's property scope and the same period rules. The
 // report builder's result is exported from its validated spec, so the model is not asked again.
 
-export const REPORT_ROLES = new Set(["principal", "regional_manager", "property_manager", "accountant"]);
 const YM = /^\d{4}-(0[1-9]|1[0-2])$/;
 const money = (label: string): Column => ({ label, kind: "money" });
 
@@ -19,7 +18,7 @@ const money = (label: string): Column => ({ label, kind: "money" });
 export const askParams = (s: QuerySpec) => ({ r: "ask", measure: s.measure, group: s.groupBy, from: s.from, to: s.to, compare: s.compareTo, properties: s.properties.join(","), metros: s.metros.join(","), title: s.title });
 
 export async function reportDoc(ctx: Ctx, sp: URLSearchParams, branded: boolean): Promise<ExportDoc & { name: string }> {
-  if (!REPORT_ROLES.has(ctx.actor.role)) throw new QueryError(403, "Reports aren't part of your role");
+  if (!canOpenReports(ctx.actor.role)) throw new QueryError(403, "Reports aren't part of your role");
   const scope = await scopeProperties(ctx);
   const lastClosed = addMonths(await asOfMonth(ctx.db), -1);
   const r = sp.get("r") ?? "";
