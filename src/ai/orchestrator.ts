@@ -263,9 +263,16 @@ export async function emitDueEvents(db: Db, ws: string) {
 // every enabled agent that listens for its type runs once for the batch.
 // With oneAgent, only the events of the first listening agent are taken (plus events nobody listens
 // to); the others stay queued for the next sweep.
-export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25, deadlineMs = 60_000, opts: { oneAgent?: boolean } = {}) {
+// The workspace's own events come first, newest first, so a visitor's new application is never
+// stuck behind the seeded base backlog; base events follow, oldest first. eventIds limits the pass
+// to those events (the public site scores a new application this way, right after submit).
+export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25, deadlineMs = 60_000, opts: { oneAgent?: boolean; eventIds?: string[] } = {}) {
   const e = eff("events", ws);
-  let { results } = await db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.processed_at IS NULL ORDER BY t.created_at LIMIT ?`).bind(...e.params, limit).all<Record<string, unknown>>();
+  const only = opts.eventIds ? " AND t.id IN (SELECT value FROM json_each(?))" : "";
+  let { results } = await db
+    .prepare(`SELECT t.* FROM ${e.sql} t WHERE t.processed_at IS NULL${only} ORDER BY t.workspace_id = ? DESC, CASE WHEN t.workspace_id = ? THEN t.created_at END DESC, t.created_at LIMIT ?`)
+    .bind(...e.params, ...(opts.eventIds ? [JSON.stringify(opts.eventIds)] : []), ws, ws, limit)
+    .all<Record<string, unknown>>();
   if (!results.length) return { processed: 0, runs: [] as { runId: string; done: Promise<RunResult> }[] };
   const configs = await agentConfigs(db, ws);
   if (opts.oneAgent) {
@@ -299,6 +306,8 @@ export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25,
 
 // Writes an event to the outbox (module actions call this after money, imports, work orders and
 // data checks); the next sweep, or the visit that follows, hands it to the listening agents.
-export async function emitEvent(data: DataCtx, e: { type: EventType; entityType?: string; entityId?: string; propertyId?: string; payload?: unknown }) {
-  await (await insert(data.db, data.ws, "events", { id: newId("evt"), type: e.type, entity_type: e.entityType ?? null, entity_id: e.entityId ?? null, property_id: e.propertyId ?? null, payload: JSON.stringify(e.payload ?? {}), created_at: demoNowIso() })).run();
+export async function emitEvent(data: DataCtx, e: { type: EventType; entityType?: string; entityId?: string; propertyId?: string; payload?: unknown }): Promise<string> {
+  const id = newId("evt");
+  await (await insert(data.db, data.ws, "events", { id, type: e.type, entity_type: e.entityType ?? null, entity_id: e.entityId ?? null, property_id: e.propertyId ?? null, payload: JSON.stringify(e.payload ?? {}), created_at: demoNowIso() })).run();
+  return id;
 }

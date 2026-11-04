@@ -104,10 +104,11 @@ export async function submitApplication({ db, ws, body, nowMs }: Ctx<ApplyReques
   // The Leasing agent listens for application.submitted: it scores the application with reasons
   // for and against and puts a recommendation in the broker's approvals queue.
   const data = { db, ws, actor: SYSTEM_ACTOR };
-  await emitEvent(data, { type: "application.submitted", entityType: "applications", entityId: ids.application, propertyId: l.property_id });
+  const eventId = await emitEvent(data, { type: "application.submitted", entityType: "applications", entityId: ids.application, propertyId: l.property_id });
   after(async () => {
-    // waitUntil work is cut off after 30 seconds on Workers, so the run gets 25.
-    const { runs } = await drainEvents(db, ws, Date.now(), 5, 25_000);
+    // Score this application now, not via the queue; waitUntil work is cut off after 30 seconds
+    // on Workers, so the run gets 25.
+    const { runs } = await drainEvents(db, ws, Date.now(), 1, 25_000, { eventIds: [eventId] });
     await Promise.all(runs.map((r) => r.done));
   });
   return { status: 200, body: { applicationId: ids.application } };

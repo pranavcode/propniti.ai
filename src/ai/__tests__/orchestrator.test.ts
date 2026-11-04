@@ -333,3 +333,21 @@ describe("helpers", () => {
     expect(normalizeStreet("45 north lamar boulevard")).toBe("45 N Lamar Blvd");
   });
 });
+
+describe("a visitor's new application is not stuck behind the base backlog", () => {
+  it("scores it in one pass with 20 older base events queued, in the queue and inline", async () => {
+    setModelForTests(null);
+    const { emitEvent } = await import("../orchestrator");
+    for (const inline of [false, true]) {
+      const { raw, db } = openFixture();
+      const old = raw.prepare("INSERT INTO events (workspace_id, id, type, entity_type, entity_id, payload, created_at, processed_at) VALUES ('base', ?, ?, ?, ?, '{}', ?, NULL)");
+      for (let i = 0; i < 20; i++) old.run(`evt-base-${i}`, i % 2 ? "wo.created" : "coi.expiring", "vendors", "v1", `2026-10-${String(i + 1).padStart(2, "0")}T00:00:00Z`);
+      const id = await emitEvent({ db, ws: WS, actor: DANIEL }, { type: "application.submitted", entityType: "applications", entityId: "app-new", propertyId: "p01" });
+      const r = await drainEvents(db, WS, Date.now(), inline ? 1 : 5, 25_000, inline ? { eventIds: [id] } : {});
+      await Promise.all(r.runs.map((x) => x.done));
+      const scored = raw.prepare("SELECT count(*) AS n FROM ai_proposals WHERE workspace_id = ? AND entity_id = 'app-new' AND action = 'applications.decide'").get(WS)!.n;
+      expect(scored, inline ? "inline" : "queue").toBe(1);
+      expect(raw.prepare("SELECT processed_at FROM events WHERE workspace_id = ? AND id = ?").get(WS, id)!.processed_at).toBeTruthy();
+    }
+  }, 30_000);
+});
