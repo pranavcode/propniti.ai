@@ -657,6 +657,7 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, row), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "created", pidOf(def, row), null, row, `Created ${def.label.one.toLowerCase()}`)]);
     forgetOverlay(ctx.actor);
+    forgetInboxCounts(ctx.ws);
   } catch (e) {
     if (outOfScope(e)) throw new QueryError(403, "That record would be outside your scope");
     throw constraintError(e);
@@ -701,6 +702,7 @@ export async function deleteRecord(ctx: WriteCtx, entity: string, id: string): P
   const pid = await propertyOf(ctx, def, id);
   forgetOverlay(ctx.actor);
   await ctx.db.batch([upsert(ctx.db, def.table, { ...before, workspace_id: ctx.ws, deleted: 1 }), ...trail(ctx, def, id, "deleted", pid, before, null, `Deleted ${def.label.one.toLowerCase()} ${String(before[def.fields[def.titleField]?.column ?? def.titleField] ?? id)}`)]);
+  forgetInboxCounts(ctx.ws);
 }
 
 // ---------------------------------------------------------------------------------------------

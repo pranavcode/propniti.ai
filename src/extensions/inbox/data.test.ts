@@ -6,6 +6,7 @@ import { canDecide } from "@/ai/http";
 import { actorFor } from "@/server/permissions";
 import { seed, WS } from "@/server/query.fixture";
 import { decidableTypes, inApp, inboxCounts, inboxPage } from "./data";
+import { cachedCounts } from "./counts";
 
 vi.mock("@/lib/platform", async () => {
   const db = (await import("@/server/query.fixture")).emptyDb();
@@ -126,6 +127,16 @@ describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
   it("counts each kind and what needs him: threads awaiting his reply, approvals and unread alerts", async () => {
     const c = await inboxCounts(await ctx("marcus"));
     expect(c).toEqual({ messages: 2, needsReply: 1, approvals: 2, alerts: 2, unreadAlerts: 1, needsYou: 4 });
+  });
+
+  it("lists items when the badge cache is stale but the page asks for fresh counts", async () => {
+    const c = await ctx("marcus");
+    const empty = { messages: 0, needsReply: 0, approvals: 0, alerts: 0, unreadAlerts: 0, needsYou: 0 };
+    await cachedCounts(WS, "marcus", async () => empty);
+    expect((await inboxPage(c, {}, await cachedCounts(WS, "marcus", () => inboxCounts(c)))).items).toEqual([]);
+    const fresh = await cachedCounts(WS, "marcus", () => inboxCounts(c), Date.now(), true);
+    expect(ids(await inboxPage(c, {}, fresh))).toContain("t-mine");
+    expect((await cachedCounts(WS, "marcus", async () => empty)).needsYou).toBe(fresh.needsYou);
   });
 
   it("filters by kind and pages on the server", async () => {

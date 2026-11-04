@@ -9,10 +9,11 @@ const MAX = 500;
 const entries = new Map<string, { at: number; v: InboxCounts }>();
 const wsKey = (ws: string | null) => ws ?? "base";
 
-export async function cachedCounts(ws: string | null, personaId: string, load: () => Promise<InboxCounts>, nowMs = Date.now()): Promise<InboxCounts> {
+// `fresh` skips the cached entry (the inbox page lists from these counts) and stores the new one.
+export async function cachedCounts(ws: string | null, personaId: string, load: () => Promise<InboxCounts>, nowMs = Date.now(), fresh = false): Promise<InboxCounts> {
   const key = `${wsKey(ws)}|${personaId}`;
   const hit = entries.get(key);
-  if (hit && nowMs - hit.at < TTL_MS) return hit.v;
+  if (!fresh && hit && nowMs - hit.at < TTL_MS) return hit.v;
   const v = await load();
   if (entries.size >= MAX) entries.clear();
   entries.set(key, { at: nowMs, v });

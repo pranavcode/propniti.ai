@@ -18,4 +18,12 @@ describe("inbox badge cache", () => {
     // Another workspace's entry is untouched.
     expect((await cachedCounts("ws-b", "marcus", load, 30_001)).needsYou).toBe(3);
   });
+
+  it("loads fresh when asked, even inside the window, and stores it for the next cached read", async () => {
+    let loads = 0;
+    const load = async () => counts(++loads);
+    expect((await cachedCounts("ws-c", "marcus", load, 0)).needsYou).toBe(1);
+    expect((await cachedCounts("ws-c", "marcus", load, 1_000, true)).needsYou).toBe(2);
+    expect((await cachedCounts("ws-c", "marcus", load, 2_000)).needsYou).toBe(2);
+  });
 });

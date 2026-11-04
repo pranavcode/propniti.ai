@@ -28,7 +28,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   let res: Awaited<ReturnType<typeof inboxPage>> | null = null;
   let page = 1;
   try {
-    const counts = await sessionInboxCounts();
+    const counts = await sessionInboxCounts(true);
     const total = tab.key === "all" ? counts.messages + counts.approvals + counts.alerts : counts[tab.key];
     page = Math.min(Math.max(1, Math.floor(Number(sp.page)) || 1), Math.max(1, Math.ceil(total / PAGE)));
     res = await inboxPage({ db: getPlatform().db, ws: s.ws, actor: s.actor }, { filter: tab.key, page, size: PAGE }, counts);
