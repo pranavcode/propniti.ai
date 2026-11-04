@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { readLocal, writeLocal } from "@/hooks/use-local-storage";
 import { personaGreeting } from "@/lib/format";
+import { canOnboard } from "@/extensions/onboarding/state";
 import { loadFacts } from "../guide/ChatBubble";
 import type { GuideFacts } from "../guide/nudges";
 import { AppMark } from "../shell/AppMark";
@@ -123,6 +124,7 @@ export function WelcomeSplash() {
 
         <div className="flex flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:items-center">
           <button type="button" onClick={() => close(true)} className="self-center rounded text-[12.5px] text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 sm:mr-auto sm:self-auto">Don&apos;t show again</button>
+          {canOnboard(p.role) && <Button asChild variant="outline"><Link href="/app/onboarding" onClick={() => close()}>Set up your portfolio</Link></Button>}
           <Button variant="outline" onClick={() => close()}>Go to dashboard</Button>
           <Button ref={primary} onClick={tour}><Compass /> Take the 2-minute tour</Button>
         </div>

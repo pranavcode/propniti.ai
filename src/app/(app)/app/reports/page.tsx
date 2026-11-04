@@ -125,7 +125,7 @@ function ReportIndex() {
         <Link key={r.key} href={`/app/reports?r=${r.key}`} className="group flex flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40">
           <span className="flex items-center gap-2 text-[13.5px] font-semibold"><r.icon className="size-4 text-muted-foreground" />{r.label}<ArrowRight className="ml-auto size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></span>
           <span className="text-[12.5px] text-muted-foreground">{r.blurb}</span>
-          <span className="mt-auto text-[11.5px] text-muted-foreground">Table, chart and CSV export</span>
+          <span className="mt-auto text-[11.5px] text-muted-foreground">Table, chart and download as CSV, Excel or PDF</span>
         </Link>
       ))}
     </div>
