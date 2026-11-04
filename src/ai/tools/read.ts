@@ -27,7 +27,7 @@ export function slim(row: Row): Row {
 
 const FilterSchema = z.object({
   field: z.string().describe("column name"),
-  op: z.enum(["eq", "ne", "in", "gt", "gte", "lt", "lte", "like", "null", "notnull"]),
+  op: z.enum(["eq", "ne", "in", "nin", "gt", "gte", "lt", "lte", "like", "null", "notnull"]),
   value: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]).optional(),
 });
 
@@ -127,7 +127,7 @@ registerTool({
 
 registerTool({
   key: "metrics.explain_noi",
-  description: "Explains a change in NOI month over month: drivers (rent collected, expenses, vacancy loss, concessions), the properties that moved most and the expense lines that changed. All figures computed.",
+  description: "Explains a change in NOI month over month: drivers that add up to the change (operating expenses, vacancy loss, concessions, other income), the properties that moved most and the expense lines that changed. All figures computed.",
   input: z.object({ metro: z.enum(["Austin", "Dallas", "Atlanta", "Phoenix"]).optional(), property_ids: z.array(z.string()).max(30).optional(), month: z.string().regex(/^\d{4}-\d{2}$/).optional() }),
   output: z.any(),
   mode: "read", roles, requiresApproval: never,
@@ -164,17 +164,35 @@ registerTool({
   },
 });
 
-const STOP = new Set(["how", "do", "i", "a", "an", "the", "to", "in", "of", "for", "and", "or", "is", "can", "my", "what", "where", "when", "with", "on", "it"]);
+const STOP = new Set(["how", "do", "does", "did", "i", "a", "an", "the", "to", "in", "of", "for", "and", "or", "is", "are", "can", "my", "what", "where", "when", "with", "on", "it", "you", "me", "we", "about", "there", "that", "this"]);
+// Words are compared by stem, so "scoring", "scores" and "score" match, as do "application" and
+// "applicant". A few product synonyms widen the query.
+const stem = (w: string) => w.replace(/(ations?|ants?|ings?|ions?|ers?|ed|es|s|e)$/, (m, _s, at: number) => (at >= 3 ? "" : m));
+const SYNONYMS = new Map<string, string[]>();
+for (const group of [["score", "rank", "rating"], ["tenant", "resident"], ["invoice", "bill"], ["repair", "maintenance", "fix"], ["late", "delinquent", "overdue"], ["payment", "pay"]]) {
+  for (const w of group) SYNONYMS.set(stem(w), group.filter((x) => x !== w).map(stem));
+}
+const words = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 1 && !STOP.has(t));
+// Every word and its stem, so a short word the stemmer cuts badly still matches itself.
+const vocab = (text: string) => new Set(words(text).flatMap((w) => [w, stem(w)]));
+
 export async function searchHelp(ctx: AgentCtx, query: string) {
-  const terms = query.toLowerCase().split(/[^a-z0-9-]+/).filter((t) => t.length > 1 && !STOP.has(t));
+  // "How does X work?" asks about X; "work" alone would match every work-order article.
+  const q = /^\s*how (does|do|did)\b/i.test(query) ? query.replace(/\bworks?\s*\??\s*$/i, "") : query;
+  const asked = [...new Set(words(q))];
+  const stems = asked.map(stem);
+  const terms = [
+    ...asked.map((w) => ({ any: [w, stem(w)], w: 1 })),
+    ...stems.flatMap((t) => (SYNONYMS.get(t) ?? []).filter((x) => !stems.includes(x)).map((x) => ({ any: [x], w: 0.5 }))),
+  ];
   const rows = await sql<{ id: string; title: string; body: string; tags: string; route: string | null }>(ctx.data, "SELECT id, title, body, tags, route FROM {help_articles} LIMIT 500", [], { unscoped: true });
   return rows
     .map((r) => {
-      const title = r.title.toLowerCase();
-      const body = r.body.toLowerCase();
-      const tags = r.tags.toLowerCase();
-      const score = terms.reduce((s, t) => s + (title.includes(t) ? 3 : 0) + (tags.includes(t) ? 2 : 0) + (body.includes(t) ? 1 : 0), 0);
-      const at = Math.max(0, terms.map((t) => body.indexOf(t)).filter((x) => x >= 0).sort((a, b) => a - b)[0] ?? 0);
+      const [title, tags, body] = [vocab(r.title), vocab(r.tags), vocab(r.body)];
+      const has = (set: Set<string>, any: string[]) => any.some((x) => set.has(x));
+      const score = terms.reduce((s, { any, w }) => s + w * ((has(title, any) ? 3 : 0) + (has(tags, any) ? 2 : 0) + (has(body, any) ? 1 : 0)), 0);
+      const lower = r.body.toLowerCase();
+      const at = Math.max(0, stems.map((t) => lower.indexOf(t)).filter((x) => x >= 0).sort((a, b) => a - b)[0] ?? 0);
       return { slug: r.id, title: r.title, snippet: r.body.slice(Math.max(0, at - 80), at + 320).replace(/\s+/g, " ").trim(), href: `/app/help/${r.id}`, route: r.route, score };
     })
     .filter((r) => r.score > 0)

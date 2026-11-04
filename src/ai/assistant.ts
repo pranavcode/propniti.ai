@@ -41,7 +41,7 @@ export const AskRequest = z.object({
   context: z.object({ entity: z.string().max(40).optional(), id: z.string().max(80).optional(), title: z.string().max(200).optional(), path: z.string().max(300).optional() }).optional(),
 });
 
-const HELP = /^\s*(how (do|can|should) (i|we|you)|how to|where (do|can|is|are)|what (does|is) (a |an |the )?[\w\s-]+ (mean|do)|can i|is there a way)\b/i;
+const HELP = /^\s*(how (do|can|should) (i|we|you)|how (does|do) [\w\s'-]+ work\b|how to|where (do|can|is|are)|what (does|is) (a |an |the )?[\w\s-]+ (mean|do)|can i|is there a way)\b/i;
 const ACTION = /^\s*(please\s+)?(send|remind|email|text|notify|draft|offer|post|approve|assign|triage|schedule|create|follow up|run|start|renew)\b/i;
 export const detectMode = (q: string): Mode => (HELP.test(q) ? "help" : ACTION.test(q) ? "actions" : "chat");
 
@@ -66,6 +66,8 @@ function unverified(answer: string, outputs: string[]) {
   for (const o of outputs) for (const m of o.matchAll(/"total_balance_cents":(\d+)/g)) seen.add(Number(m[1]));
   return amountsIn(answer).filter((a) => !seen.has(a) && !seen.has(Math.round(a / 100) * 100));
 }
+
+const NO_OFFER = /\b(without|no|missing|lacking)\s+(an?\s+|any\s+)?(renewal\s+)?offers?\b|\b(not|n't|never)\s+(yet\s+)?(been\s+)?(sent|made|given|received|gotten|got)?\s*(an?\s+)?(renewal\s+)?offer/i;
 
 type RulesOut = { answer: string; table?: AssistantReply["table"]; citations: Citation[]; proposals?: boolean };
 
@@ -92,9 +94,15 @@ async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promis
   }
   if (/\b(expir\w*|renewal|renew)\b/i.test(q) && /\blease/i.test(q)) {
     const end = addDays(ctx.today, days || (/next month/i.test(q) ? 60 : 60));
-    const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "leases", filters: [{ field: "status", op: "eq", value: "Active" }, { field: "end_on", op: "gte", value: ctx.today }, { field: "end_on", op: "lte", value: end }], sort: ["end_on", "asc"], size: 25 });
+    // "Without a renewal offer" means no renewal_offers row at all, as on the renewals workbench.
+    const noOffer = NO_OFFER.test(q);
+    const offered = noOffer
+      ? (await sql<{ lease_id: string }>(ctx.data, "SELECT DISTINCT o.lease_id FROM {renewal_offers} o JOIN {leases} l ON l.id = o.lease_id WHERE l.end_on >= ? AND l.end_on <= ?", [ctx.today, end])).map((o) => o.lease_id)
+      : [];
+    const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "leases", filters: [{ field: "status", op: "eq", value: "Active" }, { field: "end_on", op: "gte", value: ctx.today }, { field: "end_on", op: "lte", value: end }, ...(offered.length ? [{ field: "id", op: "nin", value: offered }] : [])], sort: ["end_on", "asc"], size: 25 });
+    const what = `active lease${r.total === 1 ? "" : "s"}${noOffer ? " without a renewal offer" : ""}`;
     return {
-      answer: r.total ? `${r.total} active lease${r.total === 1 ? "" : "s"} end by ${end}. The first: ${r.rows.slice(0, 5).map((l) => `${l.id} on ${l.end_on}`).join(", ")}.` : `No active leases end by ${end}.`,
+      answer: r.total ? `${r.total} ${what} end${r.total === 1 ? "s" : ""} by ${end}. The first: ${r.rows.slice(0, 5).map((l) => `${l.id} on ${l.end_on}`).join(", ")}.` : `No ${what} end by ${end}.`,
       table: { columns: [{ key: "id", label: "Lease" }, { key: "end_on", label: "Ends" }, { key: "rent", label: "Rent", align: "right" }], rows: r.rows.map((l) => ({ id: l.id, end_on: l.end_on, rent: money(Number(l.rent_cents)), href: hrefFor("leases", String(l.id)) })) },
       citations: r.rows.slice(0, 10).map((l) => ({ entity_type: "leases", entity_id: String(l.id), label: `Lease ${l.id}`, href: hrefFor("leases", String(l.id)) })),
     };

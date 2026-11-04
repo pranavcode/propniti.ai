@@ -78,7 +78,7 @@ function readRules(ctx: DataCtx, table: Table) {
   return hidden.length ? (r: Row) => Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))) : (r: Row) => r;
 }
 
-export type Filter = { field: string; op: "eq" | "ne" | "in" | "gt" | "gte" | "lt" | "lte" | "like" | "null" | "notnull"; value?: unknown };
+export type Filter = { field: string; op: "eq" | "ne" | "in" | "nin" | "gt" | "gte" | "lt" | "lte" | "like" | "null" | "notnull"; value?: unknown };
 
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const columnsCache = new Map<string, Set<string>>();
@@ -104,6 +104,7 @@ function filterSql(f: Filter, params: unknown[]): string {
     case "lte": params.push(f.value); return `${c} <= ?`;
     case "like": params.push(`%${String(f.value)}%`); return `${c} LIKE ?`;
     case "in": params.push(JSON.stringify(Array.isArray(f.value) ? f.value : [f.value])); return `${c} IN (SELECT value FROM json_each(?))`;
+    case "nin": params.push(JSON.stringify(Array.isArray(f.value) ? f.value : [f.value])); return `${c} NOT IN (SELECT value FROM json_each(?))`;
     case "null": return `${c} IS NULL`;
     case "notnull": return `${c} IS NOT NULL`;
   }
