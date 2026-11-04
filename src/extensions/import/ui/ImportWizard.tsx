@@ -161,7 +161,7 @@ export function ImportWizard({ options, start, onImported }: { options: WizardOp
       {step === 2 && <MapStep files={files} setFiles={setFiles} ai={ai} aiMappings={aiMappings} acceptMappings={acceptMappings} dismiss={dismiss} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
       {step === 3 && <ReviewStep files={files} setFiles={setFiles} assembled={assembled} suggestions={suggestions} ai={ai} accept={accept} dismiss={dismiss} busy={busy} onBack={() => setStep(2)} onNext={toPreview} />}
       {step === 4 && preview && <PreviewStep preview={preview} options={options} settings={settings} setSettings={setSettings} ai={ai} busy={busy} onBack={() => setStep(3)} onRefresh={toPreview} onImport={runImport} />}
-      {step === 5 && result && <ResultStep result={result} busy={busy} onUndo={() => undo(result.batch)} undone={recent.some((r) => r.batch === result.batch && r.undone)} onAgain={reset} />}
+      {step === 5 && result && <ResultStep result={result} busy={busy} onUndo={() => undo(result.batch)} undone={!!recent.find((r) => r.batch === result.batch)?.undone} onAgain={reset} />}
     </div>
   );
 }
