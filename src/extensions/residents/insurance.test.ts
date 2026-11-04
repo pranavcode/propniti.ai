@@ -38,6 +38,16 @@ describe("renters insurance reminder", () => {
     expect(msgs.results[0].body).toContain("LM-1");
   });
 
+  it("leaves the thread alone when a later click the same day is refused", async () => {
+    const db = getPlatform().db;
+    const before = await db.prepare("SELECT status, last_message_at FROM message_threads WHERE workspace_id = ? AND id = 'thr-ins-ri-1'").bind(WS).first();
+    await db.prepare("UPDATE message_threads SET status = 'Closed' WHERE workspace_id = ? AND id = 'thr-ins-ri-1'").bind(WS).run();
+    const ctx = { ...(await ctxFor("marcus")), nowMs: Date.parse("2026-11-04T18:00:00Z") };
+    expect((await runAction(ctx, resolveAction("renters_insurance", "send_reminder"), "ri-1", {})).status).toBe(409);
+    const after = await db.prepare("SELECT status, last_message_at FROM message_threads WHERE workspace_id = ? AND id = 'thr-ins-ri-1'").bind(WS).first();
+    expect(after).toEqual({ status: "Closed", last_message_at: before!.last_message_at });
+  });
+
   it("isn't offered for an active policy", async () => {
     const r = await runAction(await ctxFor("marcus"), resolveAction("renters_insurance", "send_reminder"), "ri-2", {});
     expect(r.status).toBe(409);
