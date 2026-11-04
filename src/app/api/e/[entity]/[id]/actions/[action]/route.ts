@@ -13,6 +13,6 @@ export async function POST(request: Request, { params }: Ctx) {
     const w = await writeCtx(request, inputSchema(a));
     if (w instanceof Response) return w;
     const r = await runAction(w.ctx, a, id, w.body);
-    return json(r.status === 200 ? { ok: true, message: r.message, href: r.href } : { error: r.error }, r.status, w.setCookie);
+    return json(r.status === 200 ? { ok: true, message: r.message, href: r.href } : r.status === 202 ? { ok: false, queued: true, message: r.message, proposalId: r.proposalId } : { error: r.error }, r.status, w.setCookie);
   });
 }

@@ -38,6 +38,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
       setDone((d) => ({ ...d, [id]: r.queued ? "sent for approval" : action === "apply" ? "applied" : "dismissed" }));
       if (r.queued) toast.info(r.message, { action: { label: "Open approvals", onClick: () => router.push(`/app/ai/approvals?proposal=${r.proposalId}`) } });
       else toast.success(r.message);
+      return r;
     } catch (e) {
       toast.error((e as Error).message);
       throw e;
