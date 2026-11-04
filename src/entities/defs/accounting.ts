@@ -177,8 +177,9 @@ registerEntity({
       { value: "Asset", tone: "neutral" }, { value: "Liability", tone: "neutral" }, { value: "Equity", tone: "neutral" }, { value: "Income", tone: "success" }, { value: "Expense", tone: "warning" },
     ] },
     parent_id: { type: "ref", ref: "gl_accounts", label: "Parent", list: { default: true } },
+    // Header accounts (1000 Cash) include their sub-accounts; postings go to 1010/1020, not 1000.
     ytd: { type: "money", label: "Net activity, year to date", sortable: true, list: { default: true, align: "right" },
-      sql: `(SELECT coalesce(sum(CASE WHEN gl_accounts.type IN ('Income', 'Liability', 'Equity') THEN j.credit_cents - j.debit_cents ELSE j.debit_cents - j.credit_cents END), 0) FROM {journal_entries} j WHERE j.gl_account_id = gl_accounts.id AND j.period >= substr(${AS_OF}, 1, 4) || '-01')` },
+      sql: `(SELECT coalesce(sum(CASE WHEN gl_accounts.type IN ('Income', 'Liability', 'Equity') THEN j.credit_cents - j.debit_cents ELSE j.debit_cents - j.credit_cents END), 0) FROM {journal_entries} j WHERE (j.gl_account_id = gl_accounts.id OR j.gl_account_id IN (SELECT c.id FROM {gl_accounts} c WHERE c.parent_id = gl_accounts.id)) AND j.period >= substr(${AS_OF}, 1, 4) || '-01')` },
   },
   relations: [{ name: "entries", label: "Journal entries", entity: "journal_entries", fk: "gl_account_id", kind: "many" }],
   list: { defaultSort: ["number", "asc"], statusTabs: "type" },

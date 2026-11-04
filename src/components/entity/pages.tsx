@@ -287,17 +287,19 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
       </div>
 
       {facts.length > 0 && (
-        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4 xl:grid-cols-8">
+        <div className="overflow-hidden rounded-lg border bg-card">
+        <dl className="-mb-px -mr-px grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))]">
           {facts.map((k) => {
             const f = def.fields[k];
             return (
-              <div key={k} className="min-w-0 bg-card px-3 py-2">
+              <div key={k} className="min-w-0 border-b border-r px-3 py-2">
                 <dt className="truncate text-[11px] text-muted-foreground">{f.label}</dt>
                 <dd className="mt-0.5 truncate text-[13.5px] font-medium"><Cell col={{ key: k, label: f.label, kind: columnKind(k, f), enum: f.enum, href: f.type === "ref" ? refHref(f, k) : undefined, moneyStyle: "whole" }} row={row} /></dd>
               </div>
             );
           })}
         </dl>
+        </div>
       )}
 
       {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
