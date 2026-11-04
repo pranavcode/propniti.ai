@@ -33,15 +33,19 @@ Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propni
 | Area | Path | Notes |
 | --- | --- | --- |
 | Marketing and docs | `/`, `/pricing`, `/product/...`, `/security`, `/docs` | Static pages |
-| Sign-in | `/login`, `/api/session` | A persona picker; sets the `pn_as` cookie |
-| Staff app | `/app/...` | Static pages for homes and custom screens; `/app/[...path]` resolves every other path to a record type's list or record page |
+| Sign-in | `/login`, `/api/session` | Demo email and password form above one-click persona cards; the server checks the published password in constant time and sets the `pn_as` cookie (30 days). Works without JavaScript |
+| Staff app | `/app/...` | Static pages for homes and custom screens (Inbox, My tasks, Automations, Copilot, Data health, reports, settings); `/app/[...path]` resolves every other path to a record type's list or record page. Out-of-scope or unknown records render an in-app not-found page |
 | Portals | `/portal/owner`, `/portal/resident`, `/portal/vendor`, `/portal/applicant` | Each has its own `ask` route |
 | Public site | `/listings`, `/listings/[id]`, `/apply/[listingId]` | Ask, tour and submit routes; no sign-in |
 | Records API | `/api/e/[entity]`, `/[id]`, `/actions/[action]`, notes, tasks, documents, activity, `export.csv` | Generic reads and writes, scoped by persona |
 | Metrics and views | `/api/metrics/[key]`, `/api/views` | KPI and chart data; saved views |
-| AI API | `/api/ai/...` | Agents, runs (with a streaming trace), proposals, assistant, summaries, data health, policies, sweep, events, invoice reading, import mapping |
+| Import | `/api/import`, `/api/import/undo`, `/api/import/ai` | Commit a checked import as one batch, undo a batch, and the optional AI pass |
+| Guide and alerts | `/api/guide`, `/api/notifications`, `/api/notifications/read` | Counts behind the chat bubble's tips; the bell's alerts and mark read |
+| AI API | `/api/ai/...` | Agents, runs (with a streaming trace), proposals, assistant, summaries, data health, policies, sweep, events, invoice reading |
 
-Old v1 routes (`/demo`, `/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`, `/onboarding`) redirect to their v2 pages.
+Old v1 routes (`/demo`, `/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`, `/onboarding`) redirect to their v2 pages, and `/app/settings/automations` redirects to `/app/automations`.
+
+**Links.** Every in-app link uses `@/components/Link`, which prefetches a page on hover, focus or touch instead of for every visible link. A lint rule blocks importing `next/link` directly. Opening `/app` went from 29 prefetch requests to 2.
 
 ## Data: shared base and visitor overlay
 
@@ -52,10 +56,10 @@ All rows live in one database. Every table has a `workspace_id`.
 | Base | `base` | The generated sample portfolio: 30 properties, units, residents, leases, ledgers, vendors, owners, work orders, 18 closed months of metrics, agent history, data issues. Read-only at runtime |
 | Overlay | The visitor's id | Only the rows that visitor created or changed. A row with the same id replaces the base row; a `deleted = 1` row hides it |
 
-- **Reading.** Queries read the effective rows: overlay rows, plus base rows the overlay doesn't replace. When a visitor has no overlay rows in a table, the query reads base directly. Append-only tables (transfers, audit) read both layers.
+- **Reading.** Queries read the effective rows: overlay rows, plus base rows the overlay doesn't replace. When a visitor has no overlay rows in a table, the query reads base directly. Append-only tables (transfers, audit) read both layers. The overlay reads are written so SQLite and D1 use indexes.
 - **Workspace.** The HttpOnly cookie `pn_ws` holds a random id. The workspace row is created on the first write and expires at the next midnight Pacific. At most 30 new workspaces per IP an hour.
 - **Demo clock.** "Today" is `AS_OF` (2026-11-04) plus the current Pacific time of day. Everything compared with data or shown to people uses this clock. Real time is used only for timeouts, rate limits, cron claims and settlement timers.
-- **Schema.** `migrations/0002_v2.sql` defines 106 tables; 0003–0007 add indexes, stored balances, org usage and payment fields. Money is integer cents. References are indexed columns, not foreign keys, because an overlay row can point at a base row.
+- **Schema.** `migrations/0002_v2.sql` defines 106 tables; 0003–0008 add indexes, stored balances, org usage and payment fields (0008 adds indexes for household charges and the Data Health duplicate checks). Money is integer cents. References are indexed columns, not foreign keys, because an overlay row can point at a base row.
 - **Loading the base.** A generator builds the dataset. Node and SQLite run it in process. For D1, `scripts/seed-d1.mjs` writes it as SQL, loaded with `wrangler d1 execute` at deploy time. Reloading the base wipes every overlay. Stored model summaries load from `.seed/ai-precompute.sql` when it exists.
 
 ## Record types and permissions
@@ -76,7 +80,7 @@ All rows live in one database. Every table has a `workspace_id`.
 - **Trust balance** is recomputed in SQL.
 - **Authority.** Each money action re-checks the role's approve right and the property scope. Maintenance spend over the owner threshold needs the owner's recorded approval.
 - **Bank changes.** No bill or work-order payout while an unverified vendor bank change is open. A different person from the one who entered the change must verify it, read from the audit log.
-- **Settlement.** A new transfer is Pending and clears 8 seconds later. Settlement runs at the start of a request (settle on read), at most 10 transfers per call.
+- **Settlement.** A new transfer is Pending and clears 8 seconds later. Settlement runs at the start of a request (settle on read), at most 10 transfers per call, and skips the database until the next transfer is due.
 - **Fee.** The 8% management fee comes from one constant, `MANAGEMENT_FEE_RATE`.
 - **Ledger.** Payments apply to the oldest open charge first, and stored balances must match the ledger.
 
@@ -90,7 +94,7 @@ No money moves. Bank feeds, ACH and card payments are simulated.
 
 ### Agents
 
-Eight agents are registered in `src/ai/agents`: Collections, Renewals, Leasing, Maintenance triage, Payables, Owner reporting, Compliance and Data Health. Each has a goal, a tool allow-list, a schedule, the events it listens for, a default autonomy and the actions its proposals may run. Staff with approve rights can turn an agent on or off and change its autonomy on the Agents page; the change is stored in their overlay and audited.
+Eight agents are registered in `src/ai/agents`: Collections, Renewals, Leasing, Maintenance triage, Payables, Owner reporting, Compliance and Data Health. Each has a goal, a tool allow-list, a schedule, the events it listens for, a default autonomy and the actions its proposals may run. A principal, regional manager or admin can turn an agent on or off and change its autonomy or schedule on the Agents or Automations page (`canEditPolicies` in `src/ai/policy-editors.ts`, enforced by `PATCH /api/ai/agents/[key]` and `/api/ai/policies/[id]`); the change is stored in their overlay and audited. `/app/automations` (`src/ai/automations.ts`) reads agents, sweep slots, waiting events and approval policies into one page.
 
 Every agent runs the same loop (`framework.ts`):
 
@@ -102,13 +106,13 @@ Every agent runs the same loop (`framework.ts`):
 
 ### Orchestrator and triggers
 
-`src/ai/orchestrator.ts` turns a trigger into an `agent_runs` row, runs the agent under a time limit, and records every step in `agent_steps`. The run page streams those steps over server-sent events.
+`src/ai/orchestrator.ts` turns a trigger into an `agent_runs` row, runs the agent under a time limit, and records every step in `agent_steps`. The run page streams those steps over server-sent events. `src/ai/trace.ts` turns each step into a plain sentence and links the records it touched by name, filling names only for records the viewer may see; raw input and output stay under *Technical details*.
 
 | Trigger | How it starts |
 | --- | --- |
 | Schedule | The Cron Trigger posts to `/api/ai/sweep`. Each sweep does one unit of work: the events of one listening agent, or the most overdue scheduled agent, alternating when both wait |
 | Run on visit | If no sweep has run for 17 minutes, the first AI request starts one in the background with a 15-second budget |
-| Event | Actions write to the `events` outbox. The sweep also raises `charge.overdue` and `lease.expiring` from the demo calendar. A public application and a completed import drain their events right away |
+| Event | Actions write to the `events` outbox. The sweep also raises `charge.overdue` and `lease.expiring` from the demo calendar. A public application drains its events right away; `import.completed` waits for the next sweep. Five listened-for events (`coi.expiring`, `prospect.created`, `screening.completed`, `statement.closed`, `data_issue.detected`) have no source yet, and the Automations page says so |
 | Run now | `POST /api/ai/agents/[key]/run` from the Agents page |
 | Chat | Each assistant turn is a run of the `copilot` agent |
 
@@ -123,12 +127,19 @@ Every agent runs the same loop (`framework.ts`):
 - **Routing.** A proposal applies on its own only when the agent's autonomy is *Auto within policy*, the workspace is not the base, risk is Low, it is not always-human, and its amount is within the policy limit. Over the owner threshold it waits for the owner. Everything else waits for a person.
 - **Deduplication.** One open proposal per agent, record and action.
 - **Approval** (`src/ai/effects.ts`, `src/ai/http.ts`). The server re-checks scope, the record's key fields against the snapshot, the action's precondition and the approver's role. A guarded `ai_decisions` insert runs it once.
+- **One decision rule** (`canDecide`). The approvals inbox, the generic record action route (`/api/e/<entity>/<id>/actions/<action>`) and Data Health all apply it. A proposal the caller can't decide that involves money, legal or safety, or isn't low risk, stays queued (202 with the proposal id); a refused low-risk one returns 403. Data Health fixes that touch money, fraud or legal status always queue, whoever clicks.
+
+### Inbox, tasks and import
+
+- **Inbox** (`src/extensions/inbox`). One query per source, all scoped: open conversations assigned to the persona or nobody (*Needs reply* when the last message is inbound), proposals the persona can decide (same rule as `canDecide`), and the persona's notifications. 25 rows a page. The sidebar badge count is cached for 30 seconds per workspace and persona and cleared by decisions, replies and mark read.
+- **My tasks** (`src/extensions/intelligence/tasks.ts`, `my-tasks.ts`). Tasks assigned to the persona or to `role:<role>`, in scope, bucketed by the demo date. Mark done and reopen are named actions, idempotent and audited; a new task carries an idempotency key.
+- **Import** (`src/extensions/import`). Files are parsed in the browser; the server takes only cleaned records (4 MB body, zod caps), re-matches them to existing records and creates only what the role may create at in-scope properties. The commit is one D1 batch whose first statement is a unique audit row, so a repeat writes nothing. Undo deletes only that batch's overlay rows, and is refused when any live row outside the batch points at one (the reference map is derived from the migrations and checked by a test) or any row is outside the actor's scope. The optional AI pass gets headers, 5 sample rows and up to 30 flagged cells, at most 20,000 characters, under the AI rate limit.
 
 ### Summaries, explanations and the assistant
 
-- **Record summaries** (`src/ai/summaries.ts`). Facts come from the record type's `ai.facts`. A stored model summary is shown only while its facts equal the current facts; otherwise the rules sentence is written from the current figures. Labels: *Rules*, *Generated* or *Precomputed*.
+- **Record summaries** (`src/ai/summaries.ts`). Facts come from the record type's `ai.facts`. A stored model summary is shown only while its facts equal the current facts; otherwise the rules sentence is written from the current figures. Labels: *Rules*, *Generated* or *Precomputed*. A record with no summary offers *Summarize with AI*, which calls the same summary route and stores the result in the visitor's overlay.
 - **Explain** (KPIs, statement lines, budget variances, what-if). Code computes the facts; a model words them only when every number it writes is in the facts.
-- **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools. Common questions are answered by rules from tool results. Any dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes; each item waits for a person.
+- **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools. The *Ask Propniti* chat bubble (`src/components/app/guide`) opens it with page-aware questions and shows at most one data-backed tip at a time, from counts served by `/api/guide`. Common questions are answered by rules from tool results. Any dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes; each item waits for a person.
 - **Prompt hygiene.** Records, documents, messages and questions are framed as data, never instructions, in every prompt. Model output is schema-validated.
 
 ## Security
@@ -137,22 +148,25 @@ The app has no real accounts and moves no real money. Main controls:
 
 | Risk | Control |
 | --- | --- |
-| Reading or writing outside scope | Scope filters in SQL; scope checked inside the write batch; portal personas see only their own rows |
+| Reading or writing outside scope | Scope filters in SQL; scope checked inside the write batch; portal personas see only their own rows; out-of-scope records look the same as missing ones |
 | Skipping a workflow step | System fields set only by actions; actions-only ledger tables; locked records |
 | Double payment or overdraw | Guarded batches, idempotency keys, trust balance in SQL |
 | Paying a changed bank account | Payment hold until a different person verifies the change |
-| AI acting on data | Proposals only; registered actions only; re-checks before an approved proposal runs |
+| AI acting on data | Proposals only; registered actions only; re-checks before an approved proposal runs; one `canDecide` rule on every path that runs a proposal, including Data Health and record actions |
+| Leaking database internals | AI routes, Data Health results and run steps show "The database is busy; try again in a moment" (503) for D1 and SQLite errors; the detail goes to the server log. Model-provider errors are not masked |
+| Imports | Role and scope checks per record type, payload caps, one locked batch, undo refused when other records depend on the batch |
 | Invented figures | Figures from rules; unsupported model figures rejected |
 | AI cost | 20 AI calls a minute per IP; per-run deadline, step limit and budget |
 | Cross-site writes | Same-origin check; HttpOnly, SameSite=Lax, Secure workspace cookie |
 | Request abuse | 60 writes a minute per IP; streamed body caps (64 KB records, 16 KB AI, 4 MB uploads) |
 | Uploads | File type from its signature (JPEG, PNG, WebP, PDF); read in memory and discarded |
 | Cron route | Per-isolate token compared in constant time, or an admin session |
+| Sign-in | Demo password compared in constant time (an unknown email takes as long), same-origin, rate limited, 4 KB body; `next` limited to `/app` and `/portal` paths |
 | Browser | CSP, HSTS, `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy |
 
 **Known gaps.**
 
-- **No authentication.** Anyone can pick any persona, and the `pn_as` cookie is not a security boundary.
+- **No authentication.** The demo password is published; anyone can sign in as any persona, and the `pn_as` cookie is not HttpOnly and not a security boundary.
 - **One key.** The workspace cookie is the only key to a visitor's changes.
 - **Origin checks.** Six AI routes (`extract`, `validate`, `import-map`, `import-parse`, `nl-filter`, `report-spec`) have no origin check. They are rate limited and size capped.
 - **Quotas.** There is no per-org AI quota.
@@ -177,8 +191,8 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 
 | Check | Count | What it covers |
 | --- | --- | --- |
-| Unit tests (Vitest) | 580 in 68 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
-| End-to-end tests (Playwright) | 47 in 12 specs | Each persona's main flows, the portals, the public site and the peek drawer; run against production after each deploy |
+| Unit tests (Vitest) | 922 in 98 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
+| End-to-end tests (Playwright) | 85 in 20 specs | Each persona's main flows, the portals, the public site, the peek drawer, sign-in, Inbox, My tasks, Automations, import and the chat bubble; run against production after each deploy |
 | Live AI evals | 15 case files | Agent and assistant behaviour against a live model, scored by fixed-rule graders (`npm run eval`) |
 
 ## Key decisions
@@ -194,3 +208,6 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 | Ledger | The lease ledger is the source of truth; payments apply oldest charge first | Stored balances always match the ledger |
 | Application fee | $55 into the property's trust account as owner income | Matches how the fee is accounted for |
 | Property NOI | The last closed month | The month in progress has a full month of rent against a few days of expenses |
+| Sign-in | Demo accounts with one published password, plus one-click cards | Shows a real sign-in flow without pretending to be an account system |
+| Import | Code parses, checks and writes; AI only suggests, and a person accepts | Imported records are correct whether or not a model is available |
+| Prefetch | On hover or focus only | Prefetching every visible link loaded D1 on each page view |
