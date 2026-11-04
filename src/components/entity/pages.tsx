@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { EntityList } from "./EntityList";
 import { ChartPanel, KpiTile, type ChartData, type KpiData } from "./Metrics";
 import { RecordActions } from "./RecordActions";
+import { RecordSummary } from "./RecordSummary";
 import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
 import { withActorNames } from "@/server/actors";
@@ -319,15 +320,8 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
 
         <aside className="space-y-3">
           {def.capabilities?.aiSummary && (
-            <section className="rounded-lg border border-tone-ai/25 bg-tone-ai/[0.04] p-3">
-              <h2 className="flex items-center gap-1.5 text-[12.5px] font-semibold"><Sparkles className="size-3.5 text-tone-ai" />AI summary</h2>
-              {summary
-                ? <>
-                    <p className="mt-1.5 text-[13px] leading-relaxed">{summary.summary}</p>
-                    <p className="mt-2 text-[11px] text-muted-foreground">{summary.source === "rules" ? "Rules · from this record's current figures" : `${summary.source === "live" ? "Generated" : "Precomputed"} · ${summary.model} · ${formatRelative(summary.generated_at)}`}</p>
-                  </>
-                : <p className="mt-1.5 text-[12.5px] text-muted-foreground">No summary yet for this {def.label.one.toLowerCase()}. Ask the assistant about it instead.</p>}
-            </section>
+            <RecordSummary entity={def.key} id={id} title={title} label={def.label.one}
+              initial={summary && { summary: summary.summary, model: summary.model, generated_at: summary.generated_at, source: summary.source }} />
           )}
           {issues.length > 0 && (
             <section className="rounded-lg border border-tone-warning/30 bg-tone-warning/[0.05] p-3">

@@ -49,7 +49,7 @@ export function FixPreview({ title, rule, changes, why, confidence, source, need
             <span>· proposed by {source === "rule" ? "a fixed rule" : source}</span>
           </div>
         </div>
-        <Confidence value={confidence} />
+        <Confidence value={confidence} className="self-center" />
       </div>
 
       <table className="w-full text-[12.5px]">
