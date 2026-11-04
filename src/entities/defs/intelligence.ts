@@ -23,6 +23,9 @@ registerEntity({
   titleField: "title",
   subtitle: (r) => [r.property_id__label, r.detail].filter(Boolean).join(" · ").slice(0, 140),
   scopePath: "tasks.property_id",
+  // Tasks on org-level records (vendors, owners, certificates) have no property; staff scoped to
+  // properties still see, and can complete, the ones assigned to them.
+  scopeNullVisible: () => true,
   fields: {
     title: { type: "text", label: "Task", required: true, search: true, sortable: true, list: { default: true, width: 360 } },
     detail: { type: "text", label: "Details", search: true, list: { default: false } },

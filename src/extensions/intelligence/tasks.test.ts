@@ -36,6 +36,8 @@ beforeEach(async () => {
     task("t-lena", { assignee: "lena" }),
     task("t-atlanta", { pid: "p05" }),
     task("t-acct", { assignee: null, role: "accountant", pid: null, entity: ["vendors", "v01"] }),
+    // Added from a vendor's record panel: vendors have no property, so neither does the task.
+    task("t-vendor", { pid: null, entity: ["vendors", "v01"], due: "2026-11-02" }),
     task("t-agent", { assignee: null, role: "maintenance_supervisor", source: "Agent", by: "system", entity: ["work_orders", "WO-1"], created: "2026-10-27T09:00:00Z" }),
     db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', 'WO-1', 'p01', 'Water heater leaking', 'Plumbing', 'Urgent', 'New', '2026-10-26T09:00:00Z')"),
     db.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, action, title, confidence, run_id, created_at) VALUES ('base', 'prop-1', 'maintenance_triage', 'work_orders', 'WO-1', 'work_orders.dispatch', 'Dispatch a plumber', 0.9, 'run-7', '2026-10-27T08:00:00Z')"),
@@ -45,16 +47,16 @@ beforeEach(async () => {
 describe("my tasks", () => {
   it("lists my open tasks and my role's unassigned ones, by due date, with a count per view", async () => {
     const marcus = await actor("marcus");
-    expect(await mineIds(marcus)).toEqual(["t-nodate", "t-overdue", "t-today", "t-role", "t-later"]);
+    expect(await mineIds(marcus)).toEqual(["t-nodate", "t-overdue", "t-today", "t-role", "t-vendor", "t-later"]);
     const res = await list({ db, ws: WS, actor: marcus }, "tasks", myTasksQuery(marcus, new URLSearchParams()));
-    expect(res.counts).toEqual({ overdue: 1, today: 1, upcoming: 3, done: 1 });
+    expect(res.counts).toEqual({ overdue: 1, today: 1, upcoming: 4, done: 1 });
   });
 
   it("splits overdue, today, upcoming and done on the demo day", async () => {
     const marcus = await actor("marcus");
     expect(await mineIds(marcus, "due=overdue")).toEqual(["t-overdue"]);
     expect(await mineIds(marcus, "due=today")).toEqual(["t-today"]);
-    expect(await mineIds(marcus, "due=upcoming")).toEqual(["t-nodate", "t-role", "t-later"]);
+    expect(await mineIds(marcus, "due=upcoming")).toEqual(["t-nodate", "t-role", "t-vendor", "t-later"]);
     expect(await mineIds(marcus, "due=done")).toEqual(["t-done"]);
   });
 
@@ -105,6 +107,12 @@ describe("mark done and reopen", () => {
     expect(await db.prepare("SELECT status FROM tasks WHERE workspace_id = 'base' AND id = 't-overdue'").first()).toEqual({ status: "Open" });
   });
 
+  it("lets a property-scoped person complete a task with no property, such as one on a vendor", async () => {
+    expect((await run("tasks.complete", "t-vendor")).status).toBe(200);
+    expect(await db.prepare("SELECT status FROM tasks WHERE workspace_id = ? AND id = 't-vendor'").bind(WS).first()).toEqual({ status: "Done" });
+    expect(await count("SELECT count(*) AS n FROM activity_events WHERE workspace_id = ? AND verb = 'task_completed' AND entity_type = 'vendors' AND entity_id = 'v01'")).toBe(1);
+  });
+
   it("refuses tasks outside the scope and status edits through the generic API", async () => {
     expect((await run("tasks.complete", "t-atlanta")).status).toBe(404);
     expect((await run("tasks.reopen", "t-today")).status).toBe(409);
@@ -117,10 +125,15 @@ describe("mark done and reopen", () => {
 describe("new task", () => {
   const key = "6f1c1f8e-2a5b-4c3d-9e8f-0a1b2c3d4e5f";
 
-  it("adds one task for me on a double submit, audited, in my list", async () => {
+  it("adds one task for me on a double submit or a retry, audited, in my list", async () => {
     const ctx = await wctx("marcus");
     const body = { key, title: "Call the roofer", due_on: "2026-10-29", property_id: "p02" };
-    expect((await Promise.all([createTask(ctx, body), createTask(ctx, body)])).map((r) => r.status).sort()).toEqual([200, 409]);
+    // A retry with the same key (say the first response was lost) gets the same task back.
+    expect(await Promise.all([createTask(ctx, body), createTask(ctx, body)])).toEqual([{ status: 200, id: `task-${key}` }, { status: 200, id: `task-${key}` }]);
+    expect(await createTask(ctx, body)).toEqual({ status: 200, id: `task-${key}` });
+    expect((await db.prepare("SELECT count(*) AS n FROM tasks WHERE workspace_id = ? AND id = ?").bind(WS, `task-${key}`).first<{ n: number }>())?.n).toBe(1);
+    // Someone else can't claim that key.
+    expect(await createTask(await wctx("grace"), { key, title: "Mine now" })).toMatchObject({ status: 409 });
     expect(await db.prepare("SELECT assignee_id, created_by, source, status, property_id FROM tasks WHERE workspace_id = ? AND id = ?").bind(WS, `task-${key}`).first())
       .toEqual({ assignee_id: "marcus", created_by: "marcus", source: "Manual", status: "Open", property_id: "p02" });
     expect((await db.prepare("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND action = 'tasks.created'").bind(WS).first<{ n: number }>())?.n).toBe(1);

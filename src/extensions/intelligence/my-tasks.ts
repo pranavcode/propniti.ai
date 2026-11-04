@@ -63,7 +63,7 @@ export async function propertyOptions(ctx: QueryCtx): Promise<{ id: string; name
   return res.results.map((r) => ({ id: String(r.id), name: String(r.name) }));
 }
 
-// `key` is made by the browser once per form, so a double submit adds the task once.
+// `key` is made by the browser once per form, so a double submit or a retry adds the task once.
 export const newTaskSchema = z.strictObject({
   key: z.uuid(),
   title: z.string().trim().min(1, "Give the task a title").max(200),
@@ -99,5 +99,9 @@ export async function createTask(ctx: WriteCtx, body: NewTask): Promise<CreateRe
       .bind(ws, `au-${id}`, at, actor.name, actor.personaId, actor.role, id, pid, `Created task "${row.title}"`, JSON.stringify(row)),
   ]);
   forgetOverlay(actor);
-  return results[0].meta.changes ? { status: 200, id } : { status: 409, error: "This task was already added" };
+  if (results[0].meta.changes) return { status: 200, id };
+  // The same person sending the same form again (a double click, or a retry after a lost
+  // response) gets the task that was already saved.
+  const prior = await db.prepare("SELECT created_by FROM tasks WHERE workspace_id = ? AND id = ?").bind(ws, id).first<{ created_by: string | null }>();
+  return prior?.created_by === actor.personaId ? { status: 200, id } : { status: 409, error: "This task was already added" };
 }
