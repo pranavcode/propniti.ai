@@ -192,3 +192,17 @@ describe("Renewals agent follows up on unanswered offers near the lease end", ()
     expect(again.status).toBe(409);
   });
 });
+
+describe("fair-housing rewrite", () => {
+  it("rewrites a flagged listing from the facts and re-runs the check on the result", async () => {
+    const db = getPlatform().db;
+    await db.prepare("INSERT INTO listings (workspace_id, id, property_id, unit_id, headline, description, rent_cents, status, listed_on) VALUES ('base', 'lst-fh', 'p01', 'p01-u3', 'Quiet 1-bed', 'Perfect for young professionals, no kids please.', 150000, 'Draft', '2026-10-20')").run();
+    const ctx = await ctxFor("lena");
+    const r = await runAction(ctx, resolveAction("listings", "draft_description"), "lst-fh", {});
+    if (r.status !== 200) throw new Error(JSON.stringify(r));
+    const d = JSON.parse(String(r.message)) as { headline: string; description: string; flags: unknown[]; runId: string };
+    expect(d.flags).toEqual([]);
+    expect(d.description).not.toMatch(/young|kids/i);
+    expect(r.href).toBe(`/app/ai/runs/${d.runId}`);
+  });
+});

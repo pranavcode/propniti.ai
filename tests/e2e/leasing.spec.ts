@@ -174,3 +174,19 @@ test("renewals: prepare all drafts as proposals, then send the selected ones", a
   await expect(card.getByText(/^Sent \d+/)).toBeVisible({ timeout: 120_000 });
   expect(errors).toEqual([]);
 });
+
+test("broker desk: Rewrite with AI on a fair-housing flag, checked again before use", async ({ page, context }) => {
+  await as(context, "rachel");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/leasing/broker`);
+  const rewrite = page.locator("[data-tour=broker-compliance]").getByRole("link", { name: "Rewrite with AI" }).first();
+  await expect(rewrite).toBeVisible(FIRST_PAINT);
+  await rewrite.click();
+  await page.waitForURL(/\/app\/leasing\/listings\/[^/?]+\?rewrite=1/);
+  // The editor starts the draft on its own and shows the check on the rewritten text.
+  await expect(page.getByText("AI draft", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Fair-housing check on this draft: no issues/)).toBeVisible();
+  await page.getByRole("button", { name: "Use draft, then edit" }).click();
+  await expect(page.getByText("Fair-housing language check")).toBeVisible();
+  expect(errors).toEqual([]);
+});

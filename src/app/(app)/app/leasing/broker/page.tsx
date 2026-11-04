@@ -120,7 +120,8 @@ export default async function BrokerDesk() {
                         <Link href={`/app/leasing/listings/${f.id}`} className="block truncate font-medium hover:text-primary hover:underline">{f.property}{f.unit ? ` #${f.unit}` : ""} · {f.headline}</Link>
                         <p className="mt-1 text-[12.5px]">{f.flags.map((x) => <span key={x.phrase + x.index} className="mr-2 inline-block"><span className="rounded bg-tone-danger/10 px-1 text-tone-danger">“{x.phrase}”</span> <span className="text-muted-foreground">{x.category}</span></span>)}</p>
                       </div>
-                      <Button asChild size="sm" variant="outline" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
+                      <Button asChild size="sm" variant="outline" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}?rewrite=1`}><Sparkles className="text-tone-ai" data-icon="inline-start" />Rewrite with AI</Link></Button>
+                      <Button asChild size="sm" variant="ghost" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
                     </li>
                   ))}
                 </ul>
