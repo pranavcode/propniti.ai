@@ -20,7 +20,7 @@ export default defineAgent({
   goal: "Find bad data before owners or auditors do: re-check the data rules, then propose a fix for each open issue with before/after, a reason and a confidence. Merge duplicates, recode miscoded bills and normalize contact details and addresses.",
   tools: ["data.issues", "records.get", "records.search", "data.propose_fix"],
   triggers: { schedule: "0 6 * * *", events: ["data_issue.detected", "import.completed"] },
-  autonomy: "act_with_approval",
+  autonomy: "auto_within_policy",
   entities: ["data_issues", "data_rules"],
   actions: ["data_issues.apply_fix"],
   maxProposals: 12,

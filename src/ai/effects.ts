@@ -6,7 +6,7 @@ import { letterDates } from "./rules";
 import { can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
 import { INTERNAL_ROLES, type ActionKey, type AgentKey, type Row } from "@/entities/types";
-import { eff, get, getRaw, insert, insertGated, isTable, newId, parseJson, upsertOverlayGated, type DataCtx, type Gate, type Table } from "./data";
+import { DB_BUSY, eff, get, getRaw, insert, insertGated, isTable, newId, parseJson, publicError, upsertOverlayGated, type DataCtx, type Gate, type Table } from "./data";
 import type { DbStatement } from "@/lib/platform/types";
 
 // What approving a proposal does. A registered named action (src/extensions, money through
@@ -180,6 +180,17 @@ async function stillValid(data: DataCtx, proposal: Row, payload: Record<string, 
 // Runs an approved proposal once. The decision row is inserted first with a guarded insert, so a
 // double click or two approvers can't run it twice; a failed run removes the decision again.
 export async function executeProposal(data: DataCtx, proposal: Row, by: By, edited?: unknown, note = ""): Promise<ExecResult> {
+  try {
+    const r = await runProposal(data, proposal, by, edited, note);
+    return r.ok ? r : { ...r, message: publicError(r.message) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (publicError(message) === message) throw err;
+    return { ok: false, status: 503, message: DB_BUSY };
+  }
+}
+
+async function runProposal(data: DataCtx, proposal: Row, by: By, edited: unknown, note: string): Promise<ExecResult> {
   const { db, ws } = data;
   const now = demoNowIso();
   const decisionId = newId("dec");
@@ -242,7 +253,7 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
       : isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
     const input = registered.input ? registered.input.parse((payload as { input?: unknown }).input ?? payload) : undefined;
     const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);
-    result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: r.error };
+    result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: "error" in r ? r.error : r.message };
   } catch (err) {
     result = { ok: false, status: 400, message: err instanceof Error ? err.message : String(err) };
   }
