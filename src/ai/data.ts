@@ -48,9 +48,10 @@ export const isTable = (t: string): t is Table => Object.hasOwn(TABLES, t);
 // Every placeholder is a plain `?`; eff() returns the params it needs in order.
 export function eff(table: Table, ws: string): { sql: string; params: unknown[] } {
   if (ws === "base") return { sql: `(SELECT * FROM ${table} WHERE workspace_id = 'base' AND deleted = 0)`, params: [] };
+  // One SELECT, not a UNION ALL, so SQLite can flatten it into joins and use the (workspace_id, id) index.
   return {
-    sql: `(SELECT * FROM (SELECT * FROM ${table} WHERE workspace_id = ? UNION ALL SELECT * FROM ${table} b WHERE b.workspace_id = 'base' AND NOT EXISTS (SELECT 1 FROM ${table} o WHERE o.workspace_id = ? AND o.id = b.id)) WHERE deleted = 0)`,
-    params: [ws, ws],
+    sql: `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ?) AND deleted = 0 AND (workspace_id = ? OR NOT EXISTS (SELECT 1 FROM ${table} o WHERE o.workspace_id = ? AND o.id = ${table}.id)))`,
+    params: [ws, ws, ws],
   };
 }
 

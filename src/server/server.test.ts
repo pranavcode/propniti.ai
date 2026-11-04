@@ -48,7 +48,7 @@ describe("migrations and base", () => {
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
     expect(raw.prepare("SELECT count(*) AS n FROM sqlite_master").get()).toEqual(before);
-    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql", "0007_returned_payment.sql"]);
+    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql", "0007_returned_payment.sql", "0008_perf_indexes.sql"]);
   });
 
   it("loads the base once, with its version, as-of date and trust constants", async () => {
