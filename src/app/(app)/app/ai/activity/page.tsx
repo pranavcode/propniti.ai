@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/app/states";
 import { AIBadge } from "@/components/app/ai";
 import { cn } from "@/lib/utils";
 import { sql } from "@/ai/data";
-import { AGENT_LABEL } from "@/ai/ui/client";
+import { AGENT_LABEL } from "@/ai/ui/labels";
 import { PERMISSIONS } from "@/auth/personas";
 import { pageData } from "@/ai/ui/server";
 import { runsPage } from "@/ai/views";

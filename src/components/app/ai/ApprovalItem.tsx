@@ -42,7 +42,7 @@ const RISK: Record<Risk, string> = {
 };
 
 export function RiskBadge({ risk }: { risk: Risk }) {
-  return <span className={cn("inline-flex h-5 items-center gap-1 rounded-full px-2 text-[11px] font-medium ring-1 ring-inset", RISK[risk])}>{risk === "High" && <ShieldAlert className="size-3" />}{risk} risk</span>;
+  return <span className={cn("inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] whitespace-nowrap font-medium ring-1 ring-inset", RISK[risk])}>{risk === "High" && <ShieldAlert className="size-3" />}{risk} risk</span>;
 }
 
 // One proposed action in the approvals queue. People approve; agents only propose.

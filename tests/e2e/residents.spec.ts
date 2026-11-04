@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { as as asPersona, go, openFull, watch } from "./helpers";
 
 // Residents lane flows in a real browser: Today, the unified inbox with an AI-suggested reply,
-// lease abstraction with "AI: fix this", the duplicate-resident merge and the announcement
+// lease abstraction with "AI: fix this" (sent for approval), the duplicate-resident merge and the announcement
 // composer, in the run's shared demo workspace; base data is untouched.
 // The seed ids used here (L-10601 with swapped dates, res-p01-0076 and its duplicate) are planted
 // by the generator's corrupted cases.
@@ -43,7 +43,7 @@ test("inbox: suggest a reply, edit it and send it on the conversation", async ({
   expect(errors).toEqual([]);
 });
 
-test("lease abstraction cites pages, flags swapped dates and fixes the record", async ({ page }) => {
+test("lease abstraction cites pages, flags swapped dates and sends the fix for approval", async ({ page }) => {
   // The model reads the whole lease; on Workers that can take a few minutes.
   test.setTimeout(420_000);
   const errors = await as(page, "marcus");
@@ -54,7 +54,8 @@ test("lease abstraction cites pages, flags swapped dates and fixes the record", 
   await expect(page.getByText(/terms? in the document differ from the lease record/)).toBeVisible();
   const fix = page.getByRole("region", { name: "AI: fix expiration date from the signed lease" });
   await fix.getByRole("button", { name: "Apply fix" }).click();
-  await expect(page.getByText(/Updated leases L-10601/)).toBeVisible({ timeout: 60_000 });
+  // A wrong expiration date is a critical issue, so the fix waits in the approvals inbox instead of applying here.
+  await expect(page.getByText(/^Sent to the approvals inbox/)).toBeVisible({ timeout: 60_000 });
   expect(errors).toEqual([]);
 });
 

@@ -54,7 +54,7 @@ export function InboxList({ items }: { items: InboxItem[] }) {
               </p>
             </div>
             {it.action && (
-              <Button asChild size="sm" variant={it.kind === "alert" ? "ghost" : "outline"} className="mt-0.5 shrink-0">
+              <Button asChild size="sm" variant={it.kind === "alert" ? "ghost" : "outline"} className="shrink-0 self-center">
                 <Link href={it.action.href} aria-label={`${it.action.label}: ${it.who ? `${it.who}, ` : ""}${it.title}`}>{it.action.label}</Link>
               </Button>
             )}
