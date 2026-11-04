@@ -1,39 +1,25 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { BASE, go, reload, watch } from "./helpers";
 
 // The renter's path through the public site, signed out: search → listing → ask about the unit →
 // book a tour → apply in five steps → status page. Run against a dev server:
 // BASE_URL=http://localhost:3201 npx playwright test tests/e2e/public-listings.spec.ts
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3201";
 const slow = expect.configure({ timeout: 120_000 });
 
 test.setTimeout(900_000);
 
-function watchErrors(page: Page) {
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => m.type() === "error" && !/Download the React DevTools/.test(m.text()) && errors.push(m.text()));
-  return errors;
-}
-
 test("a renter searches, asks, books a tour and applies without signing in", async ({ page }) => {
-  const errors = watchErrors(page);
+  const errors = watch(page);
 
   // Search: the metro chooser and filters narrow server-paginated results, kept in the URL.
-  await page.goto(`${BASE}/listings`, { timeout: 300_000 });
+  await go(page, `${BASE}/listings`);
   await slow(page.getByRole("heading", { level: 1, name: "Find your next home" })).toBeVisible();
-  // On a busy dev server a click can land before hydration; retry until the URL changes.
-  await expect(async () => {
-    await page.getByRole("region", { name: "Choose a metro" }).getByRole("link", { name: /^Austin/ }).first().click();
-    await expect(page).toHaveURL(/metro=Austin/, { timeout: 20_000 });
-  }).toPass({ timeout: 300_000 });
+  await page.getByRole("region", { name: "Choose a metro" }).getByRole("link", { name: /^Austin/ }).first().click();
+  await expect(page).toHaveURL(/metro=Austin/);
   await slow(page.getByRole("heading", { level: 1, name: "Homes for rent in Austin" })).toBeVisible();
-  await expect(async () => {
-    const one = page.getByRole("group", { name: "Bedrooms" }).getByRole("checkbox", { name: "1", exact: true });
-    if (!(await one.isChecked())) await one.check({ force: true });
-    else await one.dispatchEvent("change", { bubbles: true });
-    await expect(page).toHaveURL(/beds=1/, { timeout: 20_000 });
-  }).toPass({ timeout: 300_000 });
+  await page.getByRole("group", { name: "Bedrooms" }).getByRole("checkbox", { name: "1", exact: true }).check({ force: true });
+  await expect(page).toHaveURL(/beds=1/);
   const results = page.getByRole("list").filter({ has: page.locator("article") }).first();
   await slow(results.locator("article").first()).toBeVisible();
   const count = await results.locator("article").count();
@@ -51,12 +37,16 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
   await expect(page.getByRole("heading", { level: 2, name: /^Floor plan/ })).toBeVisible();
   await expect(page.getByRole("img", { name: /^Floor plan/ })).toBeVisible();
 
-  // Ask about this unit: a priced answer with its source, then a fair-housing refusal.
+  // Ask about this unit: the answer states the listed move-in total and cites its source; the
+  // wording is the model's, so only the facts are checked. Then a fair-housing refusal.
+  const dueRow = await page.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Due before move-in" }) }).innerText();
+  const [dollars, cents = "00"] = dueRow.match(/\$([\d,]+)(?:\.(\d\d))?/)!.slice(1);
+  const moveIn = new RegExp(`\\$${dollars.replace(/,/g, ",?")}${cents === "00" ? "(\\.00)?" : `\\.${cents}`}(?![\\d,])`);
   const ask = page.getByRole("region", { name: /^Ask about unit/ });
   const sources = ask.getByText(/^Source:/);
   await ask.getByRole("button", { name: "What's the total to move in?" }).click();
   await slow(sources.first()).toBeVisible();
-  await expect(ask).toContainText("Before move-in you pay");
+  await expect(ask).toContainText(moveIn);
   await expect(ask).toContainText(/Rule-based fallback|AI/);
   await ask.getByLabel("Your question about this home").fill("Is this a safe neighborhood for families?");
   await ask.getByLabel("Your question about this home").press("Enter");
@@ -75,7 +65,7 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
   await slow(tour.getByText(/^Tour booked:/)).toBeVisible();
 
   // Apply: step validation blocks an empty step and focuses the first invalid field.
-  await page.goto(`${BASE}/apply/${listingId}`, { timeout: 300_000 });
+  await go(page, `${BASE}/apply/${listingId}`);
   await slow(page.getByRole("heading", { level: 1, name: /^Apply for unit/ })).toBeVisible();
   await page.getByRole("button", { name: /^Continue/ }).click();
   await expect(page.getByText("Required").first()).toBeVisible();
@@ -129,7 +119,7 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
   await expect(page.getByRole("button", { name: "Open the broker's approvals" })).toBeVisible();
   // The Leasing agent scores this application in the background; the page refreshes itself.
   await expect(async () => {
-    await page.reload();
+    await reload(page);
     await expect(page.getByText(/Jordan Avery .* score \d+/)).toBeVisible({ timeout: 15_000 });
   }).toPass({ timeout: 300_000 });
   await expect(page.getByRole("button", { name: "See the agent's steps" })).toBeVisible();
@@ -139,7 +129,7 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
 
 test("another visitor can't open someone else's application status", async ({ browser }) => {
   const page = await (await browser.newContext()).newPage();
-  const res = await page.goto(`${BASE}/apply/lst-u-p01-105/status?app=app_notyours`, { timeout: 300_000 });
+  const res = await page.goto(`${BASE}/apply/lst-u-p01-105/status?app=app_notyours`);
   expect(res?.status()).toBe(404);
 });
 

@@ -1,26 +1,13 @@
 import { expect as baseExpect, test, type Page } from "@playwright/test";
+import { as as asPersona, go, watch } from "./helpers";
 
 // The shared dev server compiles pages on first visit, which can take well over the 5 s default.
 const expect = baseExpect.configure({ timeout: 60_000 });
 
-// Receivables flows in a real browser. Each test gets a fresh context, so a fresh visitor overlay.
-// BASE_URL defaults to the shared dev server.
-const BASE = process.env.BASE_URL ?? "http://localhost:3201";
-
+// Receivables flows in a real browser, in the run's shared demo workspace.
 async function as(page: Page, persona: string) {
-  await page.context().addCookies([{ name: "pn_as", value: persona, url: BASE }]);
-  // Product tours open on first visit; mark them dismissed so they don't cover the page.
-  await page.addInitScript(() => {
-    const at = new Date().toISOString();
-    localStorage.setItem("pn_tours", JSON.stringify(Object.fromEntries(["app-basics", "receivables"].map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: at }]))));
-  });
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => m.type() === "error" && !/favicon|404/.test(m.text()) && errors.push(m.text()));
-  return errors;
-}
-async function go(page: Page, path: string) {
-  await page.goto(BASE + path, { waitUntil: "load" });
+  await asPersona(page.context(), persona);
+  return watch(page);
 }
 
 test.describe.configure({ timeout: 300_000 });
@@ -67,8 +54,9 @@ test("deposit disposition: itemise, send once, settled", async ({ page }) => {
   await go(page, "/app/receivables/deposits?view=due");
   await page.getByRole("row").nth(1).getByRole("cell").first().click();
   await expect(page).toHaveURL(/receivables\/deposits\/dep-/);
+  // The row opens the record by client navigation; wait for the form before reading its state.
+  await expect(page.getByRole("button", { name: /Send disposition and refund/ })).toBeVisible();
   // Open charges come pre-selected up to the deposit; clear them so a damage line fits.
-  await page.waitForLoadState("networkidle");
   const checked = page.getByRole("checkbox", { checked: true });
   while (await checked.count()) await checked.first().click();
   await page.getByRole("button", { name: "Add line" }).click();

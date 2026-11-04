@@ -1,30 +1,11 @@
-import { expect as baseExpect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect as baseExpect, test } from "@playwright/test";
+import { as, BASE, go, watch } from "./helpers";
 
 // Owner statements (staff) and the four portals. Run against a dev server: BASE_URL=http://localhost:3201.
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3201";
 // The dev server compiles each route on its first hit; allow for it.
 test.setTimeout(300_000);
 const expect = baseExpect.configure({ timeout: 60_000 });
-const DISMISSED = ["app-basics", "owner-statements", "owner-portal", "resident-portal", "vendor-portal", "applicant-portal"];
-
-async function as(context: BrowserContext, persona: string) {
-  await context.addCookies([{ name: "pn_as", value: persona, url: BASE }]);
-  await context.addInitScript((ids) => localStorage.setItem("pn_tours", JSON.stringify(Object.fromEntries(ids.map((id) => [id, { tour: id, step: 0, status: "Dismissed", updatedAt: "2026-11-04T00:00:00Z" }])))), DISMISSED);
-}
-
-// Wait for client chunks too: clicks before hydration do nothing on a cold dev server.
-// The staff shell keeps a connection open, so network idle is a best-effort wait, not a requirement.
-async function go(page: Page, url: string) {
-  await page.goto(url);
-  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-}
-
-function watch(page: Page) {
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  return errors;
-}
 
 test("accountant reads a statement, explains a line and sees the rounding issue", async ({ page, context }) => {
   await as(context, "grace");

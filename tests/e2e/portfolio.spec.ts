@@ -1,25 +1,17 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment -- see the next line */
-// @ts-nocheck -- @playwright/test is not a dependency yet (requested from the lead); remove once it is.
-import { expect, test, type BrowserContext } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { as, BASE, go } from "./helpers";
 
 // Portfolio flows: principal home → explain a KPI → drill to a property → unit stack → unit;
 // regional comparison with "explain this variance"; the what-if simulator with its AI narrative.
 // Run against a dev server: BASE_URL=http://localhost:3201.
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3201";
-const TOURS = ["app-basics", "portfolio-principal", "portfolio-regional"];
-
-async function as(context: BrowserContext, persona: string) {
-  await context.addCookies([{ name: "pn_as", value: persona, url: BASE }]);
-  await context.addInitScript((ids: string[]) => localStorage.setItem("pn_tours", JSON.stringify(Object.fromEntries(ids.map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: "2026-11-04T00:00:00Z" }])))), TOURS);
-}
 
 test("principal home explains NOI and drills to a property and unit", async ({ page, context }) => {
   await as(context, "daniel");
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
-  await page.goto(`${BASE}/app`);
+  await go(page, `${BASE}/app`);
   await expect(page.getByRole("heading", { name: /^Good (morning|afternoon|evening), Daniel$/, level: 1 })).toBeVisible();
   await expect(page.getByText("Briefing")).toBeVisible();
   await expect(page.getByText("Portfolio NOI vs budget")).toBeVisible();
@@ -45,7 +37,7 @@ test("principal home explains NOI and drills to a property and unit", async ({ p
 
 test("regional comparison explains one property's variance", async ({ page, context }) => {
   await as(context, "priya");
-  await page.goto(`${BASE}/app`);
+  await go(page, `${BASE}/app`);
   await expect(page.getByText("Property comparison")).toBeVisible();
   const rows = page.locator("#compare tbody tr");
   await expect(rows).toHaveCount(14);
@@ -55,7 +47,7 @@ test("regional comparison explains one property's variance", async ({ page, cont
 
 test("what-if simulator recomputes NOI and narrates the scenario", async ({ page, context }) => {
   await as(context, "daniel");
-  await page.goto(`${BASE}/app/portfolio/what-if?rent=3`);
+  await go(page, `${BASE}/app/portfolio/what-if?rent=3`);
   await expect(page.getByRole("heading", { name: /What-if/ })).toBeVisible();
   await page.locator('[data-tour="whatif-explain"]').getByRole("button").first().click();
   await expect(page.getByRole("link", { name: /View run/ })).toBeVisible({ timeout: 30_000 });

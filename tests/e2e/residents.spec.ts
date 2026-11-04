@@ -1,24 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
+import { as as asPersona, go, watch } from "./helpers";
 
 // Residents lane flows in a real browser: Today, the unified inbox with an AI-suggested reply,
 // lease abstraction with "AI: fix this", the duplicate-resident merge and the announcement
-// composer. Each test gets a fresh context, so a fresh visitor overlay; base data is untouched.
+// composer, in the run's shared demo workspace; base data is untouched.
 // The seed ids used here (L-10601 with swapped dates, res-p01-0076 and its duplicate) are planted
 // by the generator's corrupted cases.
-const BASE = process.env.BASE_URL ?? "http://localhost:3201";
-
 async function as(page: Page, persona: string) {
-  await page.context().addCookies([{ name: "pn_as", value: persona, url: BASE }]);
-  await page.addInitScript(() => {
-    const at = new Date().toISOString();
-    localStorage.setItem("pn_tours", JSON.stringify(Object.fromEntries(["app-basics", "pm-today"].map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: at }]))));
-  });
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => m.type() === "error" && !/favicon|404/.test(m.text()) && errors.push(m.text()));
-  return errors;
+  await asPersona(page.context(), persona);
+  return watch(page);
 }
-const go = (page: Page, path: string) => page.goto(BASE + path, { waitUntil: "load" });
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -53,12 +44,14 @@ test("inbox: suggest a reply, edit it and send it on the conversation", async ({
 });
 
 test("lease abstraction cites pages, flags swapped dates and fixes the record", async ({ page }) => {
+  // The model reads the whole lease; on Workers that can take a few minutes.
+  test.setTimeout(420_000);
   const errors = await as(page, "marcus");
   await go(page, "/app/leases/L-10601?tab=abstraction");
   await page.getByRole("button", { name: /Abstract lease on file|Re-run/ }).click();
-  await expect(page.getByText(/terms? in the document differ from the lease record/)).toBeVisible({ timeout: 60_000 });
   const terms = page.getByRole("region", { name: "Abstracted terms" });
-  await expect(terms.getByRole("row", { name: /Expiration date .* Page 1 .* Differs/ })).toBeVisible();
+  await expect(terms.getByRole("row", { name: /Expiration date .* Page 1 .* Differs/ })).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByText(/terms? in the document differ from the lease record/)).toBeVisible();
   const fix = page.getByRole("region", { name: "AI: fix expiration date from the signed lease" });
   await fix.getByRole("button", { name: "Apply fix" }).click();
   await expect(page.getByText(/Updated leases L-10601/)).toBeVisible({ timeout: 60_000 });
