@@ -34,16 +34,16 @@ const level = (a: string) => (a === "suggest" ? "act_with_approval" : a) as Auto
 type Status = { provider: string; model: string; label: string; live: boolean; lastSweepAt: string | null; policies: (ApprovalPolicy & { id?: string })[] };
 
 function LiveRun({ runId, agent, onClose }: { runId: string; agent: string; onClose: () => void }) {
-  const { run, steps, proposals, live } = useRunStream(runId);
+  const { run, steps, proposals, refs, live } = useRunStream(runId);
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl" data-surface="app">
         <SheetHeader>
           <SheetTitle>{AGENT_LABEL[agent] ?? agent} · live run</SheetTitle>
-          <SheetDescription>Every tool call, model turn and proposal appears here as it happens. <Link className="text-primary hover:underline" href={`/app/ai/runs/${runId}`}>Open the full run</Link></SheetDescription>
+          <SheetDescription>Each step appears here in plain words as it happens. <Link className="text-primary hover:underline" href={`/app/ai/runs/${runId}`}>Open the full run</Link></SheetDescription>
         </SheetHeader>
         <div className="space-y-3 px-4 pb-6">
-          <RunTrace steps={steps.map(toTrace)} status={run?.status ?? "running"} model={run?.model ?? undefined} tokensIn={run?.tokens_in} tokensOut={run?.tokens_out} costCents={run?.cost_cents} live={live || !run} />
+          <RunTrace steps={steps.map(toTrace)} refs={refs} status={run?.status ?? "running"} model={run?.model ?? undefined} tokensIn={run?.tokens_in} tokensOut={run?.tokens_out} costCents={run?.cost_cents} live={live || !run} />
           {run?.summary && !live && <p className="rounded-md bg-muted/50 p-3 whitespace-pre-line">{run.summary}</p>}
           {proposals.map((p) => <ProposalCard key={p.id} p={p} variant="row" />)}
         </div>
