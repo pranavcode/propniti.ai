@@ -61,6 +61,7 @@ registerEntity({
   list: {
     defaultSort: ["due_on", "asc"],
     statusTabs: "bucket",
+    bulkActions: ["tasks.complete", "tasks.snooze"],
   },
   detail: {
     facts: ["status", "due_on", "priority", "property_id", "assignee_id", "source", "created_by"],

@@ -30,7 +30,7 @@ export default async function VendorInsurance() {
               </ul>
             ) : <div className="p-4"><EmptyState kind="documents" title="No certificate on file" description="Upload your certificate to keep getting jobs." compact /></div>}
           </section>
-          <CoiForm me={c.me} today={AS_OF} />
+          <CoiForm me={c.me} today={AS_OF} onFile={list.find((k) => k.status !== "Pending verification") ?? list[0] ?? null} />
         </div>
       </div>
     </>

@@ -74,3 +74,67 @@ describe("vendor certificates", () => {
     expect((await PATCH(req, p({ entity: "vendor_cois", id: created }))).status).toBe(403);
   });
 });
+
+describe("requesting a current certificate", () => {
+  const count = async (sql: string, ...b: unknown[]) => (await db().prepare(sql).bind(WS, ...b).first<{ n: number }>())?.n;
+  const asked = (vendor: string) => count("SELECT count(*) AS n FROM notifications WHERE workspace_id = ? AND user_id = ? AND title LIKE 'Upload a current certificate%'", vendor);
+
+  beforeAll(async () => {
+    for (const s of [
+      `INSERT INTO vendors (workspace_id, id, company, trade, status, metros) VALUES ('base', 'v02', 'Hill Country HVAC', 'HVAC', 'Active', '["Austin"]')`,
+      `INSERT INTO vendors (workspace_id, id, company, trade, status, metros) VALUES ('base', 'v03', 'Bright Turn Services', 'Turns', 'Active', '["Austin"]')`,
+      `INSERT INTO vendors (workspace_id, id, company, trade, status, metros) VALUES ('base', 'v04', 'Green Lawn Co', 'Landscaping', 'Active', '["Austin"]')`,
+      "INSERT INTO vendor_cois (workspace_id, id, vendor_id, carrier, gl_limit_cents, workers_comp, expires_on, status) VALUES ('base', 'coi-v02', 'v02', 'Travelers', 200000000, 1, '2026-09-30', 'Expired')",
+      "INSERT INTO vendor_cois (workspace_id, id, vendor_id, carrier, gl_limit_cents, workers_comp, expires_on, status) VALUES ('base', 'coi-v03', 'v03', 'Hartford', 100000000, 0, '2026-08-31', 'Expired')",
+      // Asked two weeks ago: that's outside the window, so v04 can be asked again.
+      "INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, at) VALUES ('base', 'n-old', 'v04', 'In-app', 'Upload a current certificate of insurance', '', '2026-10-15T10:00:00Z')",
+    ]) await db().prepare(s).run();
+  });
+
+  it("asks once on a double click, audited, and refuses a repeat inside the window", async () => {
+    const a = getAction("vendor_cois.request_certificate")!;
+    const ctx = await wctx("tom");
+    const statuses = (await Promise.all([runAction(ctx, a, "coi-v02", {}), runAction(ctx, a, "coi-v02", {})])).map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 409]);
+    expect(await asked("v02")).toBe(1);
+    expect(await count("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND action = 'vendor_cois.request_certificate' AND entity_id = 'coi-v02'")).toBe(1);
+    expect(await count("SELECT count(*) AS n FROM activity_events WHERE workspace_id = ? AND verb = 'requested' AND entity_id IN ('v02', 'coi-v02')")).toBe(2);
+    // The same vendor from its record is the same request.
+    const again = await runAction(ctx, getAction("vendors.request_certificate")!, "v02", {});
+    expect(again).toMatchObject({ status: 409, error: expect.stringContaining("already asked") });
+    expect(await asked("v02")).toBe(1);
+  });
+
+  it("asks a vendor from its record when the last request is older than the window", async () => {
+    const r = await runAction(await wctx("tom"), getAction("vendors.request_certificate")!, "v04", {});
+    expect(r.status).toBe(200);
+    expect(await count("SELECT count(*) AS n FROM notifications WHERE workspace_id = ? AND user_id = 'v04'")).toBe(1);
+  });
+
+  it("requests all in one call, reporting each certificate", async () => {
+    const { POST } = await import("@/app/api/e/[entity]/actions/[action]/route");
+    const res = await POST(post("/api/e/vendor_cois/actions/request_certificate", { ids: ["coi-v02", "coi-v03"] }, "tom"), p({ entity: "vendor_cois", action: "request_certificate" }));
+    const out = await res.json();
+    expect(out).toMatchObject({ ok: 1, failed: 1 });
+    expect(out.results.find((x: { id: string }) => x.id === "coi-v03")).toMatchObject({ status: 200 });
+    expect(await asked("v03")).toBe(1);
+  });
+
+  it("is staff-only", async () => {
+    await expect(runAction(await wctx("vendor"), getAction("vendor_cois.request_certificate")!, "coi-v03", {})).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("vendor upload with an AI read", () => {
+  it("records that AI read the file and the vendor confirmed, and still waits for staff", async () => {
+    const a = getAction("vendors.upload_coi")!;
+    const input = a.input!.parse({ carrier: "Travelers", glLimitCents: 200_000_000, workersComp: false, expiresOn: "2027-08-31", fileName: "coi.pdf", read: { source: "live", confidence: 0.93, fields: ["carrier", "glLimit", "workersComp", "expiresOn"] } });
+    expect((await runAction(await wctx("vendor"), a, "v01", input)).status).toBe(200);
+    const coi = await db().prepare("SELECT status, gl_limit_cents FROM vendor_cois WHERE workspace_id = ? AND vendor_id = 'v01' AND carrier = 'Travelers'").bind(WS).first();
+    expect(coi).toEqual({ status: "Pending verification", gl_limit_cents: 200_000_000 });
+    const ev = await db().prepare("SELECT payload FROM events WHERE workspace_id = ? AND type = 'coi.uploaded' ORDER BY created_at DESC LIMIT 1").bind(WS).first<{ payload: string }>();
+    expect(JSON.parse(ev!.payload).read).toMatchObject({ source: "live", confidence: 0.93 });
+    // A typed upload needs no read at all.
+    expect(a.input!.parse({ carrier: "Travelers", glLimitCents: 200_000_000, workersComp: false, expiresOn: "2027-08-31", fileName: "coi.pdf" })).toMatchObject({ read: { source: "manual" } });
+  });
+});

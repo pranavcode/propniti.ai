@@ -88,6 +88,9 @@ test("vendor accepts a job and opens the invoice form", async ({ page, context }
   await expect(page.getByText("Upload your invoice")).toBeVisible();
   await go(page, `${BASE}/portal/vendor/insurance`);
   await expect(page.getByRole("heading", { name: "Insurance" })).toBeVisible();
+  // The form starts from the certificate on file, labelled as such, not from fixed defaults.
+  await expect(page.getByLabel("Insurance carrier")).not.toHaveValue("");
+  await expect(page.getByText("From your certificate on file").first()).toBeVisible();
 
   // An uploaded certificate doesn't count until staff verify it.
   await page.locator("#coi-file").setInputFiles({ name: "coi-2027.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 sample") });

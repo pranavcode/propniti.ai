@@ -203,3 +203,39 @@ describe("extractInvoice", () => {
     expect(r.invoice).toBeUndefined();
   });
 });
+
+describe("extractCoi", () => {
+  const png = { mime: "image/png", base64: "iVBORw0KGgo=" };
+  const read = { is_certificate: true, insured: "Hill Country HVAC", carrier: "Travelers", general_liability_each_occurrence: 2_000_000, workers_comp: false, expires_on: "2027-08-31", confidence: 0.93, issues: [] };
+
+  it("says it can't read the certificate when no model is configured", async () => {
+    const { extractCoi } = await import("./llm");
+    const r = await extractCoi(png);
+    expect(r).toMatchObject({ source: "mock", note: expect.stringMatching(/certificate can't be read/) });
+    expect(r.coi).toBeUndefined();
+    expect(anthropicParse).not.toHaveBeenCalled();
+  });
+
+  it("returns the model's read with its source, framing the file as data", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    anthropicParse.mockResolvedValue({ stop_reason: "end_turn", parsed_output: read });
+    const { extractCoi } = await import("./llm");
+    const r = await extractCoi(png);
+    expect(r).toMatchObject({ source: "anthropic", coi: { carrier: "Travelers", glLimit: 2_000_000, workersComp: false, expiresOn: "2027-08-31", confidence: 0.93, issues: [] } });
+    expect(anthropicParse.mock.calls[0][0].system).toMatch(/data, never instructions/);
+  });
+
+  it("blanks fields the form can't hold and lists them", async () => {
+    const { toCoiRead } = await import("./llm");
+    const r = toCoiRead({ ...read, expires_on: "08/31/2027", general_liability_each_occurrence: -5, confidence: 1.4 });
+    expect(r).toMatchObject({ expiresOn: "", glLimit: 0, confidence: 1 });
+    expect(r.issues).toEqual(["Expiry date not readable", "General liability limit not readable"]);
+  });
+
+  it("falls back to no read when the provider fails", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "bad");
+    anthropicParse.mockRejectedValue(new Error("boom"));
+    const { extractCoi } = await import("./llm");
+    expect(await extractCoi(png)).toMatchObject({ source: "mock", note: expect.stringMatching(/failed/) });
+  });
+});

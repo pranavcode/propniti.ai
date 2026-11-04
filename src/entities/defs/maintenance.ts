@@ -389,6 +389,7 @@ registerEntity({
       { key: "late", label: "Past target date", filters: { late: "true" }, sort: ["days_down", "desc"] },
       { key: "ready", label: "Ready to lease", filters: { status: "Ready" } },
     ],
+    bulkActions: ["turnovers.escalate"],
     footer: [{ field: "cost", fn: "sum", label: "Cost" }],
   },
   detail: {

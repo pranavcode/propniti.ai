@@ -13,16 +13,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DataTable } from "@/components/app/data-table/DataTable";
-import type { DataColumn, EmptyCopy, Facet, Row } from "@/components/app/data-table/types";
+import type { BulkAction, DataColumn, EmptyCopy, Facet, Row } from "@/components/app/data-table/types";
 import { RelativeDate } from "@/components/app/display";
 import { TONE_DOT } from "@/components/app/status";
 import { apiJson } from "@/components/app/forms/api";
 import { openPeek } from "@/components/app/peek/usePeek";
 import { isModifiedClick } from "@/components/app/peek/url";
 import { AGENT_LABEL } from "@/ai/ui/client";
+import { TaskDialogs, TaskMenu, type Pending, type Staff } from "./TaskActions";
 
-// My tasks (client half): the view tabs, the task table with one-click done / reopen, and the
-// New task sheet. Rows, counts and facets come from the server page; every change goes through
+// My tasks (client half): the view tabs, the task table with one-click done / reopen, a row menu
+// (snooze, reassign, draft notice), bulk done / snooze, and the New task sheet. Rows, counts and facets come from the server page; every change goes through
 // the tasks actions or POST /app/tasks/create, then the page re-renders.
 
 export type TaskView = "open" | "overdue" | "today" | "upcoming" | "done";
@@ -160,7 +161,7 @@ function NewTaskSheet({ open, onOpenChange, properties, needsProperty }: { open:
   );
 }
 
-export function MyTasks({ me, view, columns, rows, total, page, size, counts, facets, error, properties, needsProperty }: {
+export function MyTasks({ me, view, columns, rows, total, page, size, counts, facets, error, properties, needsProperty, bulkActions, staff, today }: {
   me: string;
   view: TaskView;
   columns: DataColumn[];
@@ -173,6 +174,9 @@ export function MyTasks({ me, view, columns, rows, total, page, size, counts, fa
   error: string | null;
   properties: { id: string; name: string }[];
   needsProperty: boolean;
+  bulkActions: BulkAction[];
+  staff: Staff[];
+  today: string;
 }) {
   const router = useRouter();
   const { params, set } = useUrlState();
@@ -188,6 +192,25 @@ export function MyTasks({ me, view, columns, rows, total, page, size, counts, fa
       toast.error(e instanceof Error ? e.message : "Couldn't update the task");
     }
     router.refresh();
+  };
+
+  const [pending, setPending] = useState<Pending>(null);
+  const done = (msg: string) => { toast.success(msg); router.refresh(); };
+
+  // Bulk actions from the tasks entity config. Snooze asks for a date first; the bulk bar's
+  // progress toast stays up until the dialog closes.
+  const onBulkAction = async (key: string, ids: string[]) => {
+    if (key === "tasks.snooze") {
+      const snoozed = await new Promise<boolean>((resolve) => setPending({ kind: "snooze", ids, title: "", done: resolve }));
+      if (!snoozed) throw new Error("Snooze cancelled");
+      return;
+    }
+    const res = await fetch(`/api/e/tasks/actions/${encodeURIComponent(key)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) });
+    const out = (await res.json().catch(() => ({}))) as { ok?: number; failed?: number; error?: string; results?: { status: number; error?: string }[] };
+    router.refresh();
+    const why = out.error ?? out.results?.find((r) => r.status !== 200)?.error ?? "not available";
+    if (!out.ok) throw new Error(`Nothing changed: ${why}`);
+    if (out.failed) toast.info(`${out.failed} skipped: ${why}`);
   };
 
   const byKey = Object.fromEntries(columns.map((c) => [c.key, c]));
@@ -216,6 +239,7 @@ export function MyTasks({ me, view, columns, rows, total, page, size, counts, fa
     { ...byKey.assignee_id, defaultHidden: true, href: undefined },
     { ...byKey.created_at, defaultHidden: true },
     { ...byKey.completed_at, defaultHidden: true },
+    { key: "actions", label: "Actions", sortable: false, width: 44, render: (r: Row) => isDone(r) ? null : <TaskMenu row={r} onPick={setPending} /> },
   ].filter((c): c is DataColumn => !!c?.key);
 
   const open = (counts.overdue ?? 0) + (counts.today ?? 0) + (counts.upcoming ?? 0);
@@ -250,7 +274,10 @@ export function MyTasks({ me, view, columns, rows, total, page, size, counts, fa
         empty={EMPTY[view]}
         error={error}
         toolbar={<Button size="sm" onClick={() => setSheet(true)}><Plus className="size-4" />New task</Button>}
+        bulkActions={view === "done" ? [] : bulkActions}
+        onBulkAction={onBulkAction}
       />
+      <TaskDialogs pending={pending} onClose={() => setPending(null)} today={today} staff={staff} onDone={done} />
       <NewTaskSheet open={sheetOpen} onOpenChange={setSheet} properties={properties} needsProperty={needsProperty} />
     </>
   );
