@@ -58,7 +58,8 @@ const RULES_FOR = TRAITS.map((t) => ({
   category: t.category,
   // Addressed or described people: "residents with kids", "applicants under 40", "Jewish applicants".
   people: [
-    t.with && `\\b${PEOPLE} (?:with|who have|who has|having|in|on|who are|that are|that have)? ?${t.with}\\b`,
+    // "in"/"on" fit "residents in wheelchairs" and "tenants on vouchers", but "residents in older buildings" is about buildings.
+    t.with && `\\b${PEOPLE} (?:with|who have|who has|having|who are|that are|that have${t.category === "Age" ? "" : "|in|on"})? ?${t.with}\\b`,
     t.adjective && `\\b${t.adjective} ${PEOPLE}\\b`,
     t.category === "Race or national origin" && `\\b(?:${STANDALONE})\\b`,
   ].filter(Boolean).map((x) => re(x as string)),
@@ -79,7 +80,8 @@ function findTraits(text: string, screening: boolean): { phrase: string; categor
     // One phrase per stretch of text: "residents with children are advised" is one finding.
     const seen: [number, number][] = [];
     for (const r of RULES_FOR) {
-      if (r.category === "Disability" && ACCESS_HELP.test(sentence)) continue;
+      // An offer of help names disability without singling anyone out; a screening request never qualifies.
+      if (r.category === "Disability" && !screening && ACCESS_HELP.test(sentence)) continue;
       const patterns = [...r.people, ...(r.directive ? [r.directive] : []), ...(screening && r.noun ? [r.noun] : [])];
       for (const p of patterns) {
         for (const m of sentence.matchAll(p)) {

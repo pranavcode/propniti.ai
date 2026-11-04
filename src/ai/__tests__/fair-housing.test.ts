@@ -38,6 +38,7 @@ describe("fair-housing targeting", () => {
     for (const t of [
       "The children's play area will be closed Saturday for resurfacing.", "Kids' pool closed Thursday.", "Parents' night at the clubhouse Friday.",
       "The ramp for wheelchair users at Building B will be repaired Tuesday.", "Notices are now available for non-English speakers in Spanish and Vietnamese.",
+      "Residents in older buildings will get new windows next week.",
     ]) expect(protectedTargeting(t), t).toEqual([]);
     const elevator = "Elevator out of service; residents in wheelchairs can call the office for help";
     expect(withoutTargeting(elevator)).toEqual({ text: elevator, removed: [] });
@@ -59,6 +60,7 @@ describe("fair-housing targeting", () => {
       ["Exclude Jewish applicants", "Religion"], ["Don't rent to women", "Sex"], ["Skip families", "Familial status"],
       ["Reject applicants who aren't US citizens", "Race or national origin"], ["Avoid tenants with Section 8 vouchers", "Source of income"],
       ["drop the old ones", "Age"], ["only approve applicants under 40", "Age"],
+      ["Skip disabled applicants who request a ground floor unit.", "Disability"],
     ];
     for (const [q, category] of cases) expect(screensByProtectedClass(q).map((f) => f.category), q).toContain(category);
   });
