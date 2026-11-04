@@ -113,6 +113,20 @@ export function validateReply(req: AiRequest, reply: z.infer<typeof Reply>): Pic
   return { mappings, suggestions, notes };
 }
 
+// Workers AI (Llama 4 Scout) writes 10 to 55 tokens a second depending on load, so the same
+// 950-token reply for a four-file import took 17 to 90 s. A 20 s limit cut off most such imports;
+// a minute covers the usual case and stays well under the 100 s edge limit.
+const TIMEOUT_MS = 60_000;
+
+// What the person sees when the model fails. Provider messages can carry request ids, so they go to
+// the server log only.
+function failure(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/timed out|timeout|abort/i.test(msg)) return "The model took too long to answer, so columns were matched and checked by rules only. Try again, or import fewer files at once.";
+  if (err instanceof z.ZodError || err instanceof SyntaxError || /model reply/i.test(msg)) return "The model's answer couldn't be used, so columns were matched and checked by rules only. Try again, or continue with the rule matches.";
+  return "The AI service returned an error, so columns were matched and checked by rules only. Try again in a minute.";
+}
+
 export async function suggest(req: AiRequest): Promise<AiResult> {
   const model = currentModel();
   const info = model?.info ?? RULES;
@@ -120,10 +134,10 @@ export async function suggest(req: AiRequest): Promise<AiResult> {
   const rules = (note: string): AiResult => ({ live: false, source: "Rules", model: RULES.model, note, estimate: est, mappings: [], suggestions: [], notes: [] });
   if (!model) return rules("No AI model is configured, so columns were matched and checked by rules only.");
   try {
-    const { value, usage } = await model.structured(Reply, SYSTEM, userMessage(req), { timeoutMs: 20_000 });
+    const { value, usage } = await model.structured(Reply, SYSTEM, userMessage(req), { timeoutMs: TIMEOUT_MS });
     return { live: true, source: info.label, model: info.model, usage, estimate: est, ...validateReply(req, value) };
   } catch (err) {
     console.error("[import] AI suggestions failed, using rules:", err instanceof Error ? err.message : err);
-    return rules(`The model didn't answer (${err instanceof Error && /timeout|abort/i.test(err.message) ? "timed out" : "error"}), so columns were matched and checked by rules only.`);
+    return rules(failure(err));
   }
 }

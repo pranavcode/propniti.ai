@@ -1,12 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setModelForTests, type ChatModel } from "@/ai/providers";
+import { workersModel } from "@/ai/providers/workers";
 import { AI_CAPS, AiRequest, suggest, userMessage } from "./ai";
 import { buildAiRequest } from "./airequest";
 import { assemble, type ImportFile } from "./assemble";
 import { detect } from "./mapping";
 import { parseDelimited, toSheet } from "./parse";
 
-afterEach(() => setModelForTests(undefined));
+afterEach(() => {
+  setModelForTests(undefined);
+  vi.useRealTimers();
+});
 
 const rows = Array.from({ length: 40 }, (_, i) => `Maple Court,${i === 2 ? "#4B" : 100 + i},${i === 1 ? "JOHN SMITH" : `Tenant ${i} Person`},${i === 3 ? 14500 : 1450},2026-01-01,2026-12-31,${i === 39 ? "SECRET-LAST-ROW" : "note"}`);
 const TEXT = `Property,Unit,Tenant,Rent,Lease Start,Lease End,Remarks\n${rows.join("\n")}`;
@@ -72,10 +76,52 @@ describe("AI suggestions", () => {
 
   it("falls back to rules when the model fails or none is configured", async () => {
     const { req } = setup();
-    setModelForTests(scripted(null, new Error("Request timeout after 20000ms")));
-    expect(await suggest(req)).toMatchObject({ live: false, source: "Rules", mappings: [], suggestions: [], note: expect.stringMatching(/timed out/) });
+    setModelForTests(scripted(null, new Error("Request timed out.")));
+    expect(await suggest(req)).toMatchObject({ live: false, source: "Rules", mappings: [], suggestions: [], note: expect.stringMatching(/took too long/) });
+    setModelForTests(scripted(null, new Error("401 invalid x-api-key req_abc123")));
+    const failed = await suggest(req);
+    expect(failed.note).toMatch(/AI service returned an error/);
+    expect(failed.note).not.toContain("req_abc123");
     setModelForTests(null);
     expect(await suggest(req)).toMatchObject({ live: false, source: "Rules", note: expect.stringMatching(/No AI model is configured/) });
+  });
+});
+
+// A four-file Yardi Voyager import gets a 950-token reply from Workers AI in 17 to 90 s; the old 20 s
+// limit sent it to rules almost every time.
+describe("AI suggestions on Workers AI", () => {
+  const reply = { mappings: [], cleanups: [{ file: "f1", field: "tenant", kind: "replace", from: "JOHN SMITH", to: "John Smith", line: null, confidence: 0.9, reason: "Name in all capitals" }], notes: [] };
+  const slowAi = (ms: number, response: unknown) => ({
+    run: () => new Promise((resolve) => setTimeout(() => resolve({ response, usage: { prompt_tokens: 2389, completion_tokens: 977 } }), ms)),
+    toMarkdown: async () => [],
+  });
+
+  it("waits for a reply that takes 45 seconds", async () => {
+    vi.useFakeTimers();
+    setModelForTests(workersModel(slowAi(45_000, JSON.stringify(reply))));
+    const { req } = setup();
+    const pending = suggest(req);
+    await vi.advanceTimersByTimeAsync(45_000);
+    const r = await pending;
+    expect(r).toMatchObject({ live: true, model: "@cf/meta/llama-4-scout-17b-16e-instruct", usage: { tokensOut: 977 } });
+    expect(r.suggestions.map((s) => s.to)).toEqual(["John Smith"]);
+  });
+
+  it("says the model took too long when Workers AI never answers", async () => {
+    vi.useFakeTimers();
+    setModelForTests(workersModel(slowAi(10 * 60_000, "{}")));
+    const { req } = setup();
+    const pending = suggest(req);
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(await pending).toMatchObject({ live: false, source: "Rules", note: expect.stringMatching(/took too long/) });
+  });
+
+  it("says the reply couldn't be used when it doesn't match the schema", async () => {
+    setModelForTests(workersModel(slowAi(0, '{"mappings": "none"}')));
+    const { req } = setup();
+    expect(await suggest(req)).toMatchObject({ live: false, source: "Rules", note: expect.stringMatching(/answer couldn't be used/) });
+    setModelForTests(workersModel(slowAi(0, '{"mappings": [')));
+    expect((await suggest(req)).note).toMatch(/answer couldn't be used/);
   });
 });
 
