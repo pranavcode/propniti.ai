@@ -29,6 +29,9 @@ import { bulkActions, columnKind, formFields, parentValues, refHref, statusTabs,
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
 // Static routes under src/app/(app)/app/ override these for custom pages.
 
+// KPI tiles fill their row on desktop: two tiles take half each, three a third. A lone tile stays
+// card-sized rather than stretching across the page.
+const KPI_COLS = ["", "lg:grid-cols-4", "lg:grid-cols-2", "lg:grid-cols-3", "lg:grid-cols-4"];
 const ctxOf = (s: Session): QueryCtx => ({ db: getPlatform().db, ws: s.ws, actor: s.actor });
 const errMsg = (e: unknown) => (e instanceof QueryError ? e.message : "This list couldn't load. Try again, or clear the filters.");
 // Links from stored data: same-site paths and http(s) only, never javascript: or data: URLs.
@@ -90,7 +93,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
   return (
     <main className="space-y-4 p-4 md:p-6">
       <PageHeader def={def} />
-      {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
+      {kpis.length > 0 && <div className={cn("grid grid-cols-2 gap-3", KPI_COLS[Math.min(kpis.length, 4)])}>{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
       <EntityList
         key={def.key}
         entity={def.key}
@@ -304,7 +307,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
         </div>
       )}
 
-      {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
+      {kpis.length > 0 && <div className={cn("grid grid-cols-2 gap-3", KPI_COLS[Math.min(kpis.length, 4)])}>{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-3">
@@ -391,7 +394,7 @@ export async function ModuleIndex({ path, session }: { path: string; session: Se
         <h1 className="text-[18px] font-semibold tracking-tight">{title}</h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">{session.actor.scope.label} · {defs.map((d) => d.label.many).join(", ")}</p>
       </header>
-      {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
+      {kpis.length > 0 && <div className={cn("grid grid-cols-2 gap-3", KPI_COLS[Math.min(kpis.length, 4)])}>{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
       {charts.length > 0 && <div className="grid gap-3 lg:grid-cols-2">{charts.map((c) => <ChartPanel key={c.key} c={c} />)}</div>}
       <div className="grid gap-3 lg:grid-cols-2">
         {lists.map(({ d, res }) => {

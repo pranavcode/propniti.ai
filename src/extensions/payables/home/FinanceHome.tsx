@@ -43,6 +43,8 @@ export async function FinanceHome({ session }: { session: Session }) {
   const k = h.kpis;
   const runs = h.briefing.runs.reduce((s, r) => s + Number(r.n), 0);
   const receivables = widgetsFor(actor.role).filter((w) => w.key.startsWith("receivables."));
+  // Small tiles share their row: two (or four) take half each, so none leaves a gap at the end.
+  const smCount = receivables.filter((w) => w.size === "sm").length;
   const ie = h.incomeExpense.map((p) => ({ ...p, label: label(p.month) })) as ChartPoint[];
   const bva = h.bva.map((p) => ({ ...p, label: label(p.month) })) as ChartPoint[];
   const forecast = (h.forecast?.weeks ?? []) as unknown as ChartPoint[];
@@ -135,7 +137,7 @@ export async function FinanceHome({ session }: { session: Session }) {
         {receivables.length > 0 && (
           <Section title="Receivables" description="From the receivables team's dashboards" actions={<Button asChild size="sm" variant="ghost"><Link href="/app/receivables/charges">Charges <ChevronRight /></Link></Button>}>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
-              {receivables.map((w) => <div key={w.key} className={cn("min-w-0 md:col-span-2", SPAN[w.size])}><w.component actor={actor} /></div>)}
+              {receivables.map((w) => <div key={w.key} className={cn("min-w-0", w.size === "sm" ? "md:col-span-1" : "md:col-span-2", w.size === "sm" && smCount % 2 === 0 ? "xl:col-span-6" : SPAN[w.size])}><w.component actor={actor} /></div>)}
             </div>
           </Section>
         )}
