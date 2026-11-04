@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PeekLink } from "@/components/app/peek/PeekLink";
 import { CalendarDays, ChevronLeft, ChevronRight, ClipboardPlus, KanbanSquare, TriangleAlert } from "lucide-react";
 import { can } from "@/entities";
 import type { Row } from "@/entities/types";
@@ -31,7 +32,7 @@ function qs(sp: Record<string, string | undefined>, patch: Record<string, string
 
 function Card({ w }: { w: Row }) {
   return (
-    <Link href={`/app/maintenance/${["New", "Triaged"].includes(String(w.status)) ? "intake" : "work-orders"}/${encodeURIComponent(String(w.id))}`}
+    <PeekLink entity="work_orders" id={String(w.id)} href={`/app/maintenance/${["New", "Triaged"].includes(String(w.status)) ? "intake" : "work-orders"}/${encodeURIComponent(String(w.id))}`}
       className="block rounded-md border bg-card p-2.5 shadow-xs transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className="flex items-start gap-2">
         <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", PRIORITY_DOT[String(w.priority)])} title={`${w.priority} priority`} />
@@ -48,7 +49,7 @@ function Card({ w }: { w: Row }) {
         {w.past_sla ? <span className="inline-flex shrink-0 items-center gap-0.5 font-medium whitespace-nowrap text-tone-danger"><TriangleAlert className="size-3" />Past SLA</span>
           : w.sla_due_at ? <span className="shrink-0 whitespace-nowrap text-muted-foreground">Due {formatRelative(String(w.sla_due_at))}</span> : null}
       </div>
-    </Link>
+    </PeekLink>
   );
 }
 
@@ -149,11 +150,11 @@ function Calendar({ month, rows, sp }: { month: string; rows: Row[]; sp: Record<
                     <ul className=".5">
                       {items.slice(0, 3).map((w) => (
                         <li key={String(w.id)}>
-                          <Link href={`/app/maintenance/work-orders/${encodeURIComponent(String(w.id))}`} title={`${w.id} · ${w.title} · ${w.property}`}
+                          <PeekLink entity="work_orders" id={String(w.id)} href={`/app/maintenance/work-orders/${encodeURIComponent(String(w.id))}`} title={`${w.id} · ${w.title} · ${w.property}`}
                             className={cn("flex items-center gap-1 truncate rounded px-1 py-0.5 text-[11.5px] hover:bg-muted", !!w.past_sla && "text-tone-danger")}>
                             <span className={cn("size-1.5 shrink-0 rounded-full", PRIORITY_DOT[String(w.priority)])} />
                             <span className="truncate">{w.scheduled ? "" : "Due: "}{String(w.title)}</span>
-                          </Link>
+                          </PeekLink>
                         </li>
                       ))}
                     </ul>

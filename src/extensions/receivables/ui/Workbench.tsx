@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { PeekLink } from "@/components/app/peek/PeekLink";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Play, Scale, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -143,7 +144,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                       <td className="max-w-0 px-2 py-2">
                         {r.dataError && <span className="float-right ml-1 mt-0.5 rounded bg-tone-warning/12 px-1.5 text-[10.5px] font-medium text-tone-warning" title="Lease rent looks 10× too high">Rent typo</span>}
                         <button type="button" aria-expanded={isOpen} aria-controls={`wb-${r.lease_id}`} onClick={() => setOpen(isOpen ? null : r.lease_id)} className="block max-w-full truncate text-left font-medium hover:text-primary">{r.resident}</button>
-                        <span className="block truncate text-[11.5px] text-muted-foreground">{r.property} #{r.unit} · {r.lease_id}{r.language === "es" ? " · prefers Spanish" : ""}</span>
+                        <span className="block truncate text-[11.5px] text-muted-foreground">{r.property} #{r.unit} · <PeekLink entity="leases" id={r.lease_id} href={`/app/leases/${r.lease_id}`} className="hover:text-foreground hover:underline">{r.lease_id}</PeekLink>{r.language === "es" ? " · prefers Spanish" : ""}</span>
                       </td>
                       <td className="px-2 py-2"><span className={cn("inline-flex h-5 items-center gap-1 rounded-full px-2 text-[11.5px] font-medium tabular-nums ring-1 ring-inset", BAND[r.band])}>{r.score} · {r.band}</span></td>
                       <td className="px-2 py-2 text-right tabular-nums"><span className="font-medium">{usd(r.balance)}</span><span className="block text-[11.5px] text-muted-foreground">{r.days_late} days late</span></td>
@@ -166,7 +167,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                                 <div className="rounded-md border border-tone-warning/30 bg-tone-warning/[0.07] px-3 py-2 text-[12.5px]">
                                   <p className="flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5 text-tone-warning" />Lease rent is {usd(r.dataError.rent)} on a unit that rents for about {usd(r.dataError.market)}.</p>
                                   <p className="text-muted-foreground">Looks like a typo (10× off). Charges bill the right amount, so the balance is real; the score uses the market rent. Fix the lease so renewals and reports are right.</p>
-                                  <Link href={`/app/leases/${r.lease_id}`} className="mt-1 inline-block font-medium text-primary hover:underline">Review the fix on the lease →</Link>
+                                  <PeekLink entity="leases" id={r.lease_id} href={`/app/leases/${r.lease_id}`} className="mt-1 inline-block font-medium text-primary hover:underline">Review the fix on the lease →</PeekLink>
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-3 pt-1 text-[12.5px]">
