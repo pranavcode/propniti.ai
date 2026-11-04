@@ -11,6 +11,9 @@ export type AssistantState = {
   // `from` is "bubble" when the chat bubble opened it; the panel then shows the page guide.
   setOpen: (open: boolean, from?: "bubble") => void;
   openedFrom: "bubble" | null;
+  // Open the panel from code, e.g. show({ reason: "auto" }) for the once-a-day auto-open.
+  // "bubble" also shows the page guide, as the chat bubble does.
+  show: (opts?: { reason?: "auto" | "bubble" | "tip" | "shortcut" }) => void;
   toggle: () => void;
   // Open the dock and hand it a question (from ⌘K "Ask AI", AskBox). A null query opens it on the
   // context without sending anything ("Ask about this": the person picks or types the question).

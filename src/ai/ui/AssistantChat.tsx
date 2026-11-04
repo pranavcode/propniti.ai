@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { loadFacts } from "@/components/app/guide/ChatBubble";
 import { api, useRunStream } from "./client";
+import { demoDay, hiddenToday, hideToday, rightNowItems, type RightNowItem } from "./rightNow";
 
 // The assistant conversation, used in the ⌘J dock and on /app/copilot. It sends the current page
 // (and record) as context, shows what it looked up, renders tables and links, and turns action
@@ -211,6 +213,39 @@ function Answer({ reply }: { reply: Reply }) {
   );
 }
 
+// "Right now": up to three one-click things from the bubble's counts (GET /api/guide, cached).
+function RightNow({ persona, nav, onAsk }: { persona: string; nav: string[]; onAsk: (q: string) => void }) {
+  const [items, setItems] = useState<RightNowItem[]>([]);
+  const [hidden, setHidden] = useState(true);
+  const navKey = nav.join("|");
+  useEffect(() => {
+    let live = true;
+    const day = demoDay();
+    if (hiddenToday(localStorage, persona, day)) return;
+    void loadFacts(persona).then((f) => { if (live) { setItems(rightNowItems(f, navKey.split("|"))); setHidden(false); } });
+    return () => { live = false; };
+  }, [persona, navKey]);
+  if (hidden || !items.length) return null;
+  return (
+    <section aria-label="Right now" className="rounded-lg border bg-muted/30">
+      <div className="flex items-center justify-between px-3 pt-2 text-[12px]">
+        <span className="font-medium">Right now</span>
+        <button className="text-muted-foreground hover:text-foreground" onClick={() => { hideToday(localStorage, persona, demoDay()); setHidden(true); }}>Hide for today</button>
+      </div>
+      <ul className="divide-y px-3 pb-1">
+        {items.map((it) => (
+          <li key={it.id} className="flex items-center gap-2 py-1.5 text-[12.5px]">
+            <span className="min-w-0 flex-1">{it.text}</span>
+            {it.action.kind === "href"
+              ? <Button asChild size="sm" variant="outline"><Link href={it.action.href}>{it.action.label}</Link></Button>
+              : <Button size="sm" variant="outline" onClick={() => onAsk((it.action as { prompt: string }).prompt)}>{it.action.label}</Button>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 // The dock's history menu, rendered into the panel header: recent conversations, new, open as a page.
 function RecentMenu({ current, onOpen, onNew }: { current?: string; onOpen: (id: string) => void; onNew: () => void }) {
   const [rows, setRows] = useState<ThreadRow[] | null>(null);
@@ -363,6 +398,7 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
     <div className={cn("flex h-full min-h-0 flex-col", page && "min-h-[calc(100vh-10rem)]")}>
       {slot && createPortal(<RecentMenu current={threadId} onOpen={(id) => void open(id)} onNew={reset} />, slot)}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        {persona && shell && !shell.data.persona.portal && <RightNow persona={persona} nav={shell.data.nav.flatMap((s) => s.items.map((i) => i.href))} onAsk={(q) => void ask(q)} />}
         {notice && <p className="text-[12px] text-muted-foreground">{notice}</p>}
         {more && threadId && <p className="text-center text-[12px] text-muted-foreground">Earlier messages are in <Link href={`/app/copilot?thread=${encodeURIComponent(threadId)}`} className="text-primary hover:underline">Copilot</Link>.</p>}
         {restoring && <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Opening your conversation…</div>}

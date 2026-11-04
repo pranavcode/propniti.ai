@@ -69,6 +69,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   const assistant = useMemo(() => ({
     open: aiOpen,
     setOpen: (open: boolean, from?: "bubble") => { setAiFrom(open ? from ?? null : null); setAiOpen(open); },
+    show: (opts?: { reason?: "auto" | "bubble" | "tip" | "shortcut" }) => { setAiFrom(opts?.reason === "bubble" ? "bubble" : null); setAiOpen(true); },
     openedFrom: aiOpen ? aiFrom : null,
     toggle: () => { setAiFrom(null); setAiOpen((o) => !o); },
     ask: (query: string | null, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); if (!aiOpen) setAiFrom(null); setAiOpen(true); },
