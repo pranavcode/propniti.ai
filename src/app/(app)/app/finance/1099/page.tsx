@@ -20,7 +20,7 @@ const YEARS = [2026, 2025];
 export default async function Page({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const session = await currentSession();
   if (!["accountant", "principal"].includes(session.actor.role)) {
-    return <main className="p-6"><EmptyState kind="table" title="1099 preparation isn't part of your role" description="Switch to the accountant from your avatar menu to prepare 1099s." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState kind="table" title="1099 preparation isn't part of your role" description="Switch to the accountant from your avatar menu to prepare 1099s." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const sp = await searchParams;
   const year = YEARS.includes(Number(sp.year)) ? Number(sp.year) : YEARS[0];
@@ -31,7 +31,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
   const near = rows.filter((r) => r.state === "Near threshold").length;
 
   return (
-    <main>
+    <div>
       <PageHeader
         icon={<FileStack />}
         title="1099 preparation"
@@ -54,6 +54,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         <Prep1099 rows={rows} year={year} />
         <p className="text-[12px] text-muted-foreground">Threshold: $600 for payments through 2025, $2,000 from 2026. Amounts are vendor payouts that cleared or are in transit; voided and returned payments are excluded. Card and third-party network payments are reported on 1099-K by the processor and aren&apos;t included here.</p>
       </PageBody>
-    </main>
+    </div>
   );
 }

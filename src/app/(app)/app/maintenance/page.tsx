@@ -55,7 +55,7 @@ export default async function MaintenanceHome() {
   const session = await currentSession();
   const { actor, persona, ws } = session;
   if (!can(actor.role, "read", "work_orders")) {
-    return <main className="p-6"><EmptyState title="Maintenance isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="Maintenance isn't part of your role" description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const db = getPlatform().db;
   const q = { db, ws, actor };
@@ -95,7 +95,7 @@ export default async function MaintenanceHome() {
   const toChase = (h?.cois ?? []).filter((x) => !x.requested).map((x) => String(x.id));
 
   return (
-    <main>
+    <div>
       <PageHeader
         title={isSup ? personaGreeting(persona) : "Maintenance"}
         meta={<><span>{persona.title}</span><span>·</span><span>{persona.scope.label}</span><span>·</span><span>As of {formatDate("2026-11-04", "always")}</span></>}
@@ -252,6 +252,6 @@ export default async function MaintenanceHome() {
           </Section>
         </div>
       </PageBody>
-    </main>
+    </div>
   );
 }

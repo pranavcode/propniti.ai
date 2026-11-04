@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef, type RowSelectionState, type VisibilityState } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Download, Rows3, Rows4, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Rows3, Rows4, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatNumber } from "@/lib/format";
@@ -31,6 +31,7 @@ import { fillTemplate, filterKeys, paramsToView, PAGE_SIZES, readSort, readValue
 import { serverViews, type SavedViewsAdapter } from "./views";
 import { PeekLink } from "../peek/PeekLink";
 import { EdgeFades, useScrollEdges } from "../ScrollX";
+import { DownloadMenu } from "@/extensions/export/DownloadMenu";
 import { usePeek, usePeekPageEntity } from "../peek/usePeek";
 import type { AiFilterFn, AiFilterResult, BulkAction, DataColumn, EmptyCopy, Facet, Row, SavedView, StatusTabs } from "./types";
 
@@ -228,7 +229,10 @@ export function DataTable(props: DataTableProps) {
     clearSelection();
   };
 
-  const exportUrl = exportHref ? `${exportHref}${exportHref.includes("?") ? "&" : "?"}${new URLSearchParams([...params].filter(([k]) => !["page", "view", "cols", "tab"].includes(k))).toString()}` : null;
+  // Downloads carry the list's state, including the saved view and the columns on screen.
+  const exportQuery = new URLSearchParams([...params].filter(([k]) => !["page", "cols", "tab"].includes(k)));
+  exportQuery.set("cols", columns.filter((c) => c.primary || visibleKeys.includes(c.key)).map((c) => c.key).join(","));
+  const exportUrl = exportHref ? `${exportHref}${exportHref.includes("?") ? "&" : "?"}${exportQuery.toString()}` : null;
 
   return (
     <div className={cn("flex min-w-0 flex-col", className)} data-entity={entity}>
@@ -267,12 +271,7 @@ export function DataTable(props: DataTableProps) {
         <div className="ml-auto flex items-center gap-1">
           <ColumnsMenu columns={columns} visible={visibleKeys} onChange={setColumns} />
           <DensityToggle />
-          {exportUrl && (
-            <Tooltip>
-              <TooltipTrigger asChild><Button asChild variant="outline" size="sm"><a href={exportUrl} download><Download /> <span className="hidden md:inline">Export</span></a></Button></TooltipTrigger>
-              <TooltipContent>Export {formatNumber(total)} {label.many.toLowerCase()} as CSV</TooltipContent>
-            </Tooltip>
-          )}
+          {exportUrl && <DownloadMenu total={total} hrefs={{ csv: exportUrl, xlsx: exportUrl.replace("/export.csv", "/export.xlsx"), pdf: exportUrl.replace("/export.csv", "/export.pdf") }} />}
           {toolbar}
         </div>
       </div>

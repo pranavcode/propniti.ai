@@ -32,7 +32,7 @@ type SP = { r?: string; ask?: string; from?: string; to?: string; property?: str
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const session = await currentSession();
   if (!ROLES.has(session.actor.role)) {
-    return <main className="p-6"><EmptyState kind="chart" title="Reports aren't part of your role" description="Switch role from your avatar menu to see reports as an accountant, manager or principal." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState kind="chart" title="Reports aren't part of your role" description="Switch role from your avatar menu to see reports as an accountant, manager or principal." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const sp = await searchParams;
   const db = getPlatform().db;
@@ -62,7 +62,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     : <ReportIndex />;
 
   return (
-    <main>
+    <div>
       <PageHeader icon={<LineChart />} title={ask ? "Report from your question" : report?.label ?? "Reports"}
         description={ask ? undefined : report?.blurb ?? "Standard finance reports, or ask for the one you need in plain words."}
         meta={<><span>{session.actor.scope.label}</span><span>·</span><span>Books closed through {periodLabel(LAST_CLOSED, LAST_CLOSED)}</span></>}>
@@ -93,7 +93,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         )}
         {body}
       </PageBody>
-    </main>
+    </div>
   );
 }
 
@@ -125,7 +125,7 @@ function ReportIndex() {
         <Link key={r.key} href={`/app/reports?r=${r.key}`} className="group flex flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:border-primary/40">
           <span className="flex items-center gap-2 text-[13.5px] font-semibold"><r.icon className="size-4 text-muted-foreground" />{r.label}<ArrowRight className="ml-auto size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></span>
           <span className="text-[12.5px] text-muted-foreground">{r.blurb}</span>
-          <span className="mt-auto text-[11.5px] text-muted-foreground">Table, chart and CSV export</span>
+          <span className="mt-auto text-[11.5px] text-muted-foreground">Table, chart and download as CSV, Excel or PDF</span>
         </Link>
       ))}
     </div>

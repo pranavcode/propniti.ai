@@ -22,7 +22,7 @@ type Params = { status?: string; kind?: string; unread: boolean; q?: string; pag
 export async function InboxPage(p: Params) {
   const ctx = await pageCtx();
   if (!can(ctx.actor.role, "read", "message_threads")) {
-    return <main className="p-6"><EmptyState title="Messages aren't part of your role" description="Switch role from your avatar menu to see the inbox." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="Messages aren't part of your role" description="Switch role from your avatar menu to see the inbox." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const status = STATUSES.includes(p.status as (typeof STATUSES)[number]) ? p.status : p.status === "all" ? undefined : "Open";
   const filters: Record<string, string> = {};
@@ -56,7 +56,7 @@ export async function InboxPage(p: Params) {
   const pages = Math.max(1, Math.ceil((res?.total ?? 0) / PAGE));
 
   return (
-    <main className="flex h-[calc(100dvh-3rem)] min-h-[520px] flex-col">
+    <div className="flex h-[calc(100dvh-3rem)] min-h-[520px] flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3 md:px-6">
         <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-2 text-[18px] font-semibold tracking-tight"><Inbox className="size-5 text-muted-foreground" />Messages</h1>
@@ -141,6 +141,6 @@ export async function InboxPage(p: Params) {
           {selected ? <ThreadPane id={selected} actor={ctx.actor} /> : <EmptyState title="Pick a conversation" description="Select a conversation on the left to read it and reply." />}
         </section>
       </div>
-    </main>
+    </div>
   );
 }

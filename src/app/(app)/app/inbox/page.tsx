@@ -49,7 +49,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const pages = res ? Math.max(1, Math.ceil(res.total / PAGE)) : 1;
 
   return (
-    <main>
+    <div>
       <PageHeader icon={<Inbox />} title="Inbox" description="What needs you now: conversations waiting on your reply, agent proposals waiting on your decision and alerts for you."
         meta={<><span>{s.actor.scope.label}</span>{counts && <span><span className="font-medium text-foreground tabular-nums">{counts.needsYou}</span> need you</span>}</>}>
         <nav aria-label="Inbox filter" className="flex flex-wrap items-center gap-1 border-b">
@@ -82,6 +82,6 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }

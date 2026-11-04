@@ -81,7 +81,7 @@ export function SourceStep({ tool, setTool, recent, onUndo, busy, onNext }: { to
 }
 
 let seq = 0;
-async function toFile(name: string, bytes: Uint8Array, tool: ToolKey): Promise<ImportFile> {
+export async function toFile(name: string, bytes: Uint8Array, tool?: ToolKey): Promise<ImportFile> {
   const sheet = toSheet(await readTable(name, bytes));
   if (!sheet.rows.length) throw new Error(`${name} has a header row but no data rows.`);
   if (sheet.rows.length > MAX_ROWS) throw new Error(`${name} has ${formatNumber(sheet.rows.length)} rows; import up to ${formatNumber(MAX_ROWS)} rows per file. Split it by property and import each part.`);

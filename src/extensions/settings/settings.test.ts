@@ -120,11 +120,23 @@ describe("settings routes", () => {
   });
 
   it("refuses org settings from non-admins and cross-site posts, and validates input", async () => {
-    expect((await invite.POST(post("/app/settings/users/invite", { ...body, email: "x@y.example" }, "daniel"))).status).toBe(403);
+    for (const p of ["marcus", "priya", "grace", "lena"]) expect((await invite.POST(post("/app/settings/users/invite", { ...body, email: "x@y.example" }, p))).status, p).toBe(403);
     const cross = new Request(`http://${host}/app/settings/users/invite`, { method: "POST", body: JSON.stringify(body), headers: { host, origin: "https://evil.example", "content-type": "application/json", cookie: `pn_as=sam; pn_ws=${WS}` } });
     expect((await invite.POST(cross)).status).toBe(403);
     const bad = { legal_name: "Summit", ein: "123", address: "600 Congress Ave", phone: "5125550140", support_email: "a@b.example", timezone: "America/Chicago", fiscal_year_start: "January", license_number: "" };
     expect((await company.POST(post("/app/settings/company/save", bad))).status).toBe(400);
+  });
+
+  it("lets the principal add people, but not grant the administrator role or reach outside the org", async () => {
+    const as = (b: unknown, p = "daniel") => invite.POST(post("/app/settings/users/invite", b, p));
+    const ok = await as({ ...body, email: "pm.new@summitresidential.example" });
+    expect(ok.status).toBe(200);
+    expect((await db().prepare("SELECT role FROM role_assignments WHERE workspace_id = ? AND staff_id = ?").bind(WS, (await ok.json()).id).all()).results).toEqual([{ role: "property_manager" }, { role: "property_manager" }]);
+    expect((await as({ ...body, email: "boss@summitresidential.example", role: "admin", scope_kind: "org", scope_ids: [] })).status).toBe(403);
+    expect((await as({ ...body, email: "far@summitresidential.example", scope_ids: ["p01", "p99"] })).status).toBe(403);
+    expect((await db().prepare("SELECT count(*) AS n FROM staff WHERE workspace_id = ? AND email IN ('boss@summitresidential.example', 'far@summitresidential.example')").bind(WS).first<{ n: number }>())!.n).toBe(0);
+    // An administrator still grants the administrator role.
+    expect((await as({ ...body, email: "admin2@summitresidential.example", role: "admin", scope_kind: "org", scope_ids: [] }, "sam")).status).toBe(200);
   });
 
   it("saves personal notification preferences for any staff persona and merges them", async () => {

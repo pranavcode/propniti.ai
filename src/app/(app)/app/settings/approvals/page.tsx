@@ -69,7 +69,7 @@ export default async function ApprovalsPage() {
       <PageHeader icon={<ShieldCheck />} title="Approval policies" description="How much agents and staff may approve alone, who approves above that, and when the owner signs off. Agents read these before they act: anything over a limit becomes a proposal for a person." />
       <PageBody>
         {!all.length ? (
-          <EmptyState kind="table" title="No approval policies yet" description="Until policies exist, every agent action that moves money, changes a lease or involves legal or safety waits for a person." />
+          <EmptyState kind="table" title="No approval policies yet" description="Until policies exist, every agent action that moves money, changes a lease or involves legal or safety waits for a person." action={{ label: "Get suggested limits", href: "/app/onboarding" }} />
         ) : (
           <>
             <Section title="Org defaults" description="Apply to every owner entity without an override. Agents currently apply these org defaults to every owner, including those with an override below.">

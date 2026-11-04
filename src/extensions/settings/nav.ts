@@ -9,6 +9,8 @@ export type SettingsGroup = { label: string; items: SettingsLink[] };
 
 export const canSettings = (role: Role) => (PERMISSIONS[role].settings ?? "none") !== "none";
 export const canEditSettings = (role: Role) => PERMISSIONS[role].settings === "approve";
+// Adding people: admins, and the principal (who can't grant the admin role; the invite route checks).
+export const canInvite = (role: Role) => canEditSettings(role) || role === "principal";
 
 export function settingsNav(role: Role): SettingsGroup[] {
   const groups: SettingsGroup[] = [];

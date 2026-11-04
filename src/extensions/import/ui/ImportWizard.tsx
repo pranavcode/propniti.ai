@@ -7,7 +7,7 @@ import { useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
 import { apiJson } from "@/components/app/forms/api";
 import type { AiResult, AiMapping } from "../ai";
 import { buildAiRequest } from "../airequest";
-import { assemble, applySuggestion, type Edit, type ImportFile, type Suggestion } from "../assemble";
+import { assemble, applySuggestion, type Assembled, type Edit, type ImportFile, type Suggestion } from "../assemble";
 import { PRESETS, type ToolKey } from "../presets";
 import type { ImportResult, ImportTable, PlanSummary, RecentImport } from "../server";
 import { MapStep, ReviewStep } from "./MapReview";
@@ -29,15 +29,27 @@ export type Preview = { batch: string; summary: PlanSummary; skipped: { type: st
 
 const STEPS = ["Source", "Files", "Columns", "Review", "Preview", "Done"] as const;
 
-export function ImportWizard({ options }: { options: WizardOptions }) {
+// The optional AI pass on the files; any failure falls back to rules only and says so.
+export async function importSuggestions(files: ImportFile[], assembled: Assembled): Promise<AiResult> {
+  try {
+    return await apiJson<AiResult>("POST", "/api/import/ai", buildAiRequest(files, assembled));
+  } catch (e) {
+    return { live: false, source: "Rules", model: "rules", note: `AI suggestions unavailable (${(e as Error).message}); rules only.`, estimate: { tokensIn: 0, tokensOut: 0, costCents: 0 }, mappings: [], suggestions: [], notes: [] };
+  }
+}
+
+// start: files already read and identified elsewhere (onboarding), opened at the Columns step.
+export type WizardStart = { tool: ToolKey; files: ImportFile[]; aiOn: boolean; ai: AiResult | null };
+
+export function ImportWizard({ options, start, onImported }: { options: WizardOptions; start?: WizardStart; onImported?: (r: ImportResult) => void }) {
   const { setDone } = useSetupProgress();
-  const [step, setStep] = useState(0);
-  const [tool, setTool] = useState<ToolKey | null>(null);
-  const [aiOn, setAiOn] = useState(options.ai.available);
-  const [files, setFiles] = useState<ImportFile[]>([]);
+  const [step, setStep] = useState(start ? 2 : 0);
+  const [tool, setTool] = useState<ToolKey | null>(start?.tool ?? null);
+  const [aiOn, setAiOn] = useState(start?.aiOn ?? options.ai.available);
+  const [files, setFiles] = useState<ImportFile[]>(start?.files ?? []);
   const [edits, setEdits] = useState<Edit[]>([]);
   const [decided, setDecided] = useState<Record<string, "accepted" | "dismissed">>({});
-  const [ai, setAi] = useState<AiResult | null>(null);
+  const [ai, setAi] = useState<AiResult | null>(start?.ai ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -78,13 +90,8 @@ export function ImportWizard({ options }: { options: WizardOptions }) {
     setError(null);
     if (aiOn && !ai) {
       setBusy("Asking the model for suggestions (up to a minute)…");
-      try {
-        setAi(await apiJson<AiResult>("POST", "/api/import/ai", buildAiRequest(files, assembled)));
-      } catch (e) {
-        setAi({ live: false, source: "Rules", model: "rules", note: `AI suggestions unavailable (${(e as Error).message}); rules only.`, estimate: { tokensIn: 0, tokensOut: 0, costCents: 0 }, mappings: [], suggestions: [], notes: [] });
-      } finally {
-        setBusy(null);
-      }
+      setAi(await importSuggestions(files, assembled));
+      setBusy(null);
     }
     setStep(2);
   }
@@ -110,6 +117,7 @@ export function ImportWizard({ options }: { options: WizardOptions }) {
       setResult(r);
       setRecent((list) => [{ batch: r.batch, at: "", actor: "You", detail: `Imported ${Object.values(r.created).reduce((s, n) => s + (n ?? 0), 0)} records`, undone: false, created: r.created }, ...list]);
       setDone("import", true);
+      onImported?.(r);
       setStep(5);
     } catch (e) {
       setError((e as Error).message);
@@ -153,7 +161,7 @@ export function ImportWizard({ options }: { options: WizardOptions }) {
       {step === 2 && <MapStep files={files} setFiles={setFiles} ai={ai} aiMappings={aiMappings} acceptMappings={acceptMappings} dismiss={dismiss} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
       {step === 3 && <ReviewStep files={files} setFiles={setFiles} assembled={assembled} suggestions={suggestions} ai={ai} accept={accept} dismiss={dismiss} busy={busy} onBack={() => setStep(2)} onNext={toPreview} />}
       {step === 4 && preview && <PreviewStep preview={preview} options={options} settings={settings} setSettings={setSettings} ai={ai} busy={busy} onBack={() => setStep(3)} onRefresh={toPreview} onImport={runImport} />}
-      {step === 5 && result && <ResultStep result={result} busy={busy} onUndo={() => undo(result.batch)} undone={recent.some((r) => r.batch === result.batch && r.undone)} onAgain={reset} />}
+      {step === 5 && result && <ResultStep result={result} busy={busy} onUndo={() => undo(result.batch)} undone={!!recent.find((r) => r.batch === result.batch)?.undone} onAgain={reset} />}
     </div>
   );
 }
