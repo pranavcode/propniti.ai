@@ -89,7 +89,7 @@ describe("announcement drafts", () => {
     const { raw, data } = setup();
     const r = await draftAnnouncement(data, "ann-1", "Water shut-off Thursday 9am to 1pm for riser repair, residents with kids should stay home");
     expect(r).toMatchObject({ ok: true, source: "rules", removed: ["residents with kids should stay home"] });
-    expect(r.ok && r.note).toMatch(/familial status breaks the Fair Housing Act/);
+    expect(r.ok && r.note).toBe('I left out the part that singles out residents by familial status ("residents with kids should stay home"): announcements need to apply to all residents under fair housing law. Here\'s a version for everyone.');
     const a = saved(raw);
     expect(protectedTargeting(`${a.title} ${a.body}`)).toEqual([]);
     expect(a.body).toContain("riser repair");
@@ -100,7 +100,7 @@ describe("announcement drafts", () => {
     const { data } = setup();
     const r = await draftAnnouncement(data, "ann-1", "Residents with kids should stay home");
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.error).toMatch(/can't draft this.*all residents/);
+    expect(!r.ok && r.error).toBe("I can't draft a notice aimed at residents by familial status: announcements need to apply to all residents under fair housing law. Reword the topic so it covers everyone and I'll draft it.");
   });
 });
 

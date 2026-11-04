@@ -281,8 +281,9 @@ export function rulesAnnouncement(topic: string, property: string, templates: Ro
 export async function draftAnnouncement(data: Data, id: string, rawTopic: string) {
   const { text: topic, removed } = withoutTargeting(rawTopic);
   const groups = [...new Set(protectedTargeting(rawTopic).map((f) => f.category.toLowerCase()))].join(" or ");
-  const why = `announcements go to every resident on equal terms, and singling out residents by ${groups} breaks the Fair Housing Act`;
-  if (removed.length && topic.split(/\s+/).filter(Boolean).length < 3) return { ok: false as const, error: `I can't draft this: ${why}. Rewrite the topic so it applies to all residents.` };
+  const RULE = "announcements need to apply to all residents under fair housing law";
+  const refusal = `I can't draft a notice aimed at ${groups ? `residents by ${groups}` : "one group of residents"}: ${RULE}. Reword the topic so it covers everyone and I'll draft it.`;
+  if (removed.length && topic.split(/\s+/).filter(Boolean).length < 3) return { ok: false as const, error: refusal };
   const a = await one(data, "SELECT * FROM {announcements} WHERE id = ?", [id]);
   if (!a) return { ok: false as const, error: "Announcement not found" };
   const pid = JSON.parse(String(a.audience ?? "{}")).property_ids?.[0];
@@ -302,7 +303,7 @@ export async function draftAnnouncement(data: Data, id: string, rawTopic: string
     if (targets(out).length) return { summary: "The draft singled out residents by a protected characteristic, so it was not saved.", result: null };
     return { summary: `Drafted announcement "${out.title}" for ${property}${out.template ? ` from template ${out.template}` : ""}${removed.length ? `; left out "${removed.join("; ")}"` : ""}.`, result: { ...out, source: live ? "live" : "rules" } };
   });
-  if (!run.result) return { ok: false as const, error: run.summary.startsWith("The draft singled out") ? `I can't draft this: ${why}. Rewrite the topic so it applies to all residents.` : run.summary, runId: run.runId };
+  if (!run.result) return { ok: false as const, error: run.summary.startsWith("The draft singled out") ? refusal : run.summary, runId: run.runId };
   await overlayWrite(data.db, data.ws, "announcements", id, { title: run.result.title, body: run.result.body });
-  return { ok: true as const, runId: run.runId, source: run.result.source, removed, note: removed.length ? `Left out "${removed.join("; ")}": ${why}.` : undefined };
+  return { ok: true as const, runId: run.runId, source: run.result.source, removed, note: removed.length ? `I left out the part that singles out residents by ${groups} ("${removed.join("; ")}"): ${RULE}. Here's a version for everyone.` : undefined };
 }
