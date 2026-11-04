@@ -42,7 +42,7 @@ describe("narrative tokens", () => {
       wo_opened: 30, wo_sla_breach: 5 + i, ai_minutes_saved: 600 * (i + 1),
     })));
     const noi = { month: "2026-10", prior_month: "2026-09", noi_cents: 1, prior_noi_cents: 1, change_pct: 1.5, budget_noi_cents: 19_000_000, by_property: [],
-      drivers: [{ label: "Rent collected", delta_cents: 200_000, detail: "" }, { label: "Operating expenses", delta_cents: -50_000, detail: "" }], expense_lines: [{ gl: "Repairs", delta_cents: 50_000, month_cents: 1, prior_cents: 1 }] };
+      drivers: [{ label: "Other income", delta_cents: 200_000, detail: "" }, { label: "Operating expenses", delta_cents: -50_000, detail: "" }], expense_lines: [{ gl: "Repairs", delta_cents: 50_000, month_cents: 1, prior_cents: 1 }] };
     const ctx = { today: "2026-11-04", ws: "base", step: async () => "s", actor: { propertyIds: "all", scope: { label: "Texas · 14 properties" } }, call: async (k: string) => (k === "metrics.explain_noi" ? noi : { rows }) } as unknown as AgentCtx;
     for (const key of Object.keys(EXPLAINABLE) as ExplainableKey[]) {
       for (const property of [undefined, ["p01"]]) {

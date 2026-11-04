@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { getEntity, type ChartDef, type KpiDef } from "@/entities";
 import { metrics } from "@/server/query";
 import { ChartCard, KpiCard } from "@/components/app/dashboard";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

@@ -134,11 +134,17 @@ export async function explainNoi(ctx: DataCtx, f: { metro?: string; propertyIds?
   const noi = sum(month, "noi_cents");
   const priorNoi = sum(prior, "noi_cents");
   const budgetRows = rows.filter((r) => r.month === month && r.budget_noi_cents != null);
+  // NOI is booked income less operating expenses, so the drivers split that change and add up to
+  // it exactly: vacancy and concessions are named, and the rest of the income change is "other".
+  // Cash collected is not a driver: it isn't part of NOI.
+  const opexEffect = -(sum(month, "opex_cents") - sum(prior, "opex_cents"));
+  const vacancyEffect = -(sum(month, "vacancy_loss_cents") - sum(prior, "vacancy_loss_cents"));
+  const concessionEffect = -(sum(month, "concessions_cents") - sum(prior, "concessions_cents"));
   const drivers: Driver[] = [
-    { label: "Rent collected", delta_cents: sum(month, "collected_cents") - sum(prior, "collected_cents"), detail: "cash received from residents" },
-    { label: "Operating expenses", delta_cents: -(sum(month, "opex_cents") - sum(prior, "opex_cents")), detail: "higher expenses lower NOI" },
-    { label: "Vacancy loss", delta_cents: -(sum(month, "vacancy_loss_cents") - sum(prior, "vacancy_loss_cents")), detail: "rent lost on empty units" },
-    { label: "Concessions", delta_cents: -(sum(month, "concessions_cents") - sum(prior, "concessions_cents")), detail: "discounts given" },
+    { label: "Operating expenses", delta_cents: opexEffect, detail: "higher expenses lower NOI" },
+    { label: "Vacancy loss", delta_cents: vacancyEffect, detail: "rent lost on empty units" },
+    { label: "Concessions", delta_cents: concessionEffect, detail: "discounts given" },
+    { label: "Other income", delta_cents: noi - priorNoi - opexEffect - vacancyEffect - concessionEffect, detail: "rent billed, fees and other income not covered above" },
   ].sort((a, b) => Math.abs(b.delta_cents) - Math.abs(a.delta_cents));
   const ids = [...new Set(rows.map((r) => String(r.property_id)))];
   const by_property = ids

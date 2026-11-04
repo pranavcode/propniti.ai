@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffSession } from "@/extensions/receivables/staff";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { PeekLink } from "@/components/app/peek/PeekLink";
 import { ArrowRight, X } from "lucide-react";
 import { can } from "@/entities";

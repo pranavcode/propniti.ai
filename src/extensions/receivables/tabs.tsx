@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { currentSession } from "@/auth/session";
 import { can } from "@/entities";
 import { registerTab, type TabProps } from "@/extensions/tabs";

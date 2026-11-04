@@ -1,5 +1,5 @@
 import "server-only";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { CircleAlert, Info } from "lucide-react";
 import { can } from "@/entities";
 import { Money, StatusBadge } from "@/components/app/display";

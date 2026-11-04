@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertOctagon, ArrowUpRight, CheckCircle2, TriangleAlert } from "lucide-react";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";

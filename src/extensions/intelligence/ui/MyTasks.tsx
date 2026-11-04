@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Plus, Sparkles, Workflow } from "lucide-react";
