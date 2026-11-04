@@ -85,7 +85,8 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
     setConfirm(null);
     try {
       const r = await api<{ applied: number; queued: number; runId: string; more: boolean }>("/api/ai/data-health/bulk", "POST", { match: filters, mode });
-      const msg = mode === "safe" ? `Applied ${r.applied} safe fixes${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}` : `Sent ${r.queued} fixes to the approvals inbox${r.applied ? `; applied ${r.applied}` : ""}`;
+      const fixes = (n: number, kind = "") => `${n} ${kind}${n === 1 ? "fix" : "fixes"}`;
+      const msg = mode === "safe" ? `Applied ${fixes(r.applied, "safe ")}${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}` : `Sent ${fixes(r.queued)} to the approvals inbox${r.applied ? `; applied ${r.applied}` : ""}`;
       toast.success(`${msg}${r.more ? ". More match: run it again for the rest." : ""}`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
       router.refresh();
     } catch (e) {
