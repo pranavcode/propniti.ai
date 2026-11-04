@@ -15,21 +15,37 @@ test.beforeEach(async ({ context, page }) => {
 
 test("hovering Economic occupancy shows its definition", async ({ page }) => {
   await page.locator('[data-term="Economic occupancy"]').first().hover();
-  const tip = page.getByRole("tooltip");
-  await expect(tip).toBeVisible();
-  await expect(tip).toContainText("gross potential rent");
-  await expect(tip.getByRole("link", { name: /Learn more/ })).toHaveAttribute("href", "/app/help/occupancy");
+  const pop = page.getByRole("dialog", { name: "Economic occupancy" });
+  await expect(pop).toBeVisible();
+  await expect(pop).toContainText("gross potential rent");
+  await expect(pop.getByRole("link", { name: /Learn more/ })).toHaveAttribute("href", "/app/help/occupancy");
 });
 
-test("keyboard focus opens a definition and Escape closes it", async ({ page }) => {
-  const term = page.locator('[data-term="Vacancy loss"]').first();
-  await term.focus();
-  const tip = page.getByRole("tooltip");
-  await expect(tip).toContainText("units sat empty");
+test("keyboard: focus previews, Enter pins, Tab reaches Learn more, Escape closes and returns focus", async ({ page }) => {
+  const term = page.locator('[data-term="Occupancy"]').first();
   const described = await term.getAttribute("aria-describedby");
-  await expect(page.locator(`[id="${described}"]`)).toHaveText(/units sat empty/);
+  await expect(page.locator(`[id="${described}"]`)).toHaveText(/on-notice units/);
+  await term.focus();
+  const pop = page.getByRole("dialog", { name: "Occupancy" });
+  await expect(pop).toContainText("on-notice units");
+  await page.keyboard.press("Enter");
+  await expect(term).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Tab");
+  await expect(pop.getByRole("link", { name: /Learn more/ })).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(tip).toBeHidden();
+  await expect(pop).toBeHidden();
+  await expect(term).toBeFocused();
+});
+
+test("a click pins the definition open until clicked again", async ({ page }) => {
+  const term = page.locator('[data-term="NOI"]').first();
+  await term.click();
+  await page.mouse.move(5, 5);
+  const pop = page.getByRole("dialog", { name: "NOI" });
+  await expect(pop).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/portfolio$/);
+  await term.click();
+  await expect(pop).toBeHidden();
 });
 
 test("the help article behind Learn more opens", async ({ page }) => {

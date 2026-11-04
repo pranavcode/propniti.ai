@@ -25,10 +25,10 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: "Rent roll", aliases: ["Rent roll (leases)"], summary: "A list of every unit with its resident, lease dates, rent and balance. Owners and lenders use it as the snapshot of a property." },
   { term: "Lease abstraction", aliases: ["Lease abstract"], summary: "Pulling the key terms (dates, rent, deposits, clauses) out of a signed lease document into structured fields.", article: "lease-abstraction" },
   { term: "Renewal offer", aliases: ["Renewal offers", "Renewals"], summary: "The new rent and term offered to a resident before their lease ends.", article: "renewal-offers" },
-  { term: "Make-ready", aliases: ["Make ready", "Turnover", "Turnovers", "Units not rent-ready"], summary: "The cleaning, repairs and paint that get an empty unit ready for the next resident. The time it takes is the turnover time.", article: "make-ready-turnovers" },
+  { term: "Make-ready", aliases: ["Make ready", "Units not rent-ready"], summary: "The cleaning, repairs and paint that get an empty unit ready for the next resident.", article: "make-ready-turnovers" },
   { term: "Days on market", summary: "How long a unit has been listed for rent without a signed lease." },
   { term: "Screening", aliases: ["Screening flagged"], summary: "Checking an applicant's credit, income, rental history and background against the property's written criteria.", article: "screening-applicant-scores" },
-  { term: "Fair housing", summary: "US laws that forbid treating applicants or residents differently because of race, religion, sex, disability, family status, national origin and other protected traits.", article: "fair-housing-applicant-scoring" },
+  { term: "Fair housing", summary: "US laws that forbid treating applicants or residents differently because of race, religion, sex, disability, familial status, national origin and other protected traits.", article: "fair-housing-applicant-scoring" },
 
   // Receivables
   { term: "Delinquency", aliases: ["Delinquent", "Past due", "Past-due balance"], summary: "Rent and fees residents owe after the due date has passed.", article: "delinquency" },
@@ -51,7 +51,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: "AP", aliases: ["Accounts payable", "Open payables", "AP bill"], summary: "Accounts payable: bills the company owes vendors and hasn't paid yet.", article: "ap-inbox" },
   { term: "AR", aliases: ["Accounts receivable"], summary: "Accounts receivable: money residents and tenants owe the company, such as rent and fees." },
   { term: "PO", aliases: ["Purchase order", "Purchase orders", "PO total"], summary: "Purchase order: an approved commitment to buy something from a vendor at an agreed price, before the bill arrives." },
-  { term: "1099", aliases: ["1099s", "Form 1099"], summary: "The US tax form reporting payments of $600 or more in a year to an unincorporated vendor. It needs the vendor's W-9.", article: "prepare-1099s" },
+  { term: "1099", aliases: ["1099s", "Form 1099"], summary: "The US tax form for reporting payments to vendors and owners above the IRS reporting threshold for the year; collect a W-9 first. Rents paid to owners go on a 1099-MISC.", article: "prepare-1099s" },
   { term: "Trust account", aliases: ["Cash in trust", "Trust accounts"], summary: "A bank account holding owners' and residents' money, kept apart from the management company's own funds as state law requires.", article: "bank-reconciliation-ai-matches" },
   { term: "Bank reconciliation", aliases: ["Reconciliation", "Reconciliations", "Unreconciled items", "Unreconciled"], summary: "Matching each bank transaction to the ledger so the books and the bank agree to the cent.", article: "bank-reconciliation-ai-matches" },
   { term: "Owner distribution", aliases: ["Owner distributions", "Distributions", "Distributed"], summary: "Money paid out to a property's owner from its trust balance, after bills, the management fee and any reserve.", article: "owner-statements-distributions" },

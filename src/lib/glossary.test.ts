@@ -36,13 +36,15 @@ describe("glossary lookup", () => {
 describe("<Term>", () => {
   const html = (props: Parameters<typeof Term>[0]) => renderToStaticMarkup(createElement(Term, props));
 
-  it("renders a focusable, underlined trigger that opens the definition", () => {
+  it("renders a focusable trigger always described by the definition", () => {
     const out = html({ children: "Economic occupancy" });
     expect(out).toMatch(/<button[^>]*type="button"/);
     expect(out).toContain('data-term="Economic occupancy"');
-    expect(out).toContain('aria-haspopup="dialog"');
     expect(out).toContain("decoration-dotted");
-    expect(out).toContain(">Economic occupancy</span>");
+    expect(out).not.toContain('role="tooltip"');
+    const id = out.match(/aria-describedby="([^"]+)"/)?.[1];
+    expect(id).toBeTruthy();
+    expect(out).toMatch(new RegExp(`id="${id}"[^>]*>${lookupTerm("Economic occupancy")!.summary.slice(0, 40)}`));
   });
 
   it("decorates a plain label when it has its own help", () => {
