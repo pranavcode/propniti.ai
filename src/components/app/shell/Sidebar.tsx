@@ -4,6 +4,7 @@ import Link from "@/components/Link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,6 +15,7 @@ import { NewDot, useNewDot } from "../welcome/WhatsNew";
 import { loadFacts } from "../guide/ChatBubble";
 import { useShell } from "./context";
 import { AppMark } from "./AppMark";
+import { afterNav } from "./progress";
 import type { ShellNavItem, ShellNavSection } from "./types";
 
 // Longest nav href that prefixes the path is the active item ("/app" only matches exactly).
@@ -55,7 +57,9 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
     if (plain && href === pathname) {
       e.preventDefault();
       document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
+      const label = data.nav.flatMap((s) => s.items).find((i) => i.href === href)?.label ?? "Page";
       router.refresh();
+      afterNav(() => toast.success(`${label} is up to date`, { duration: 2500 }));
     } else if (plain) setClicked({ href, from: pathname });
     onNavigate?.();
   };
