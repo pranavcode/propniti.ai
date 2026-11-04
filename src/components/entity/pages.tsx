@@ -22,7 +22,7 @@ import { RecordActions } from "./RecordActions";
 import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
 import { withActorNames } from "@/server/actors";
-import { bulkActions, columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
+import { bulkActions, columnKind, formFields, parentValues, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
 
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
 // Static routes under src/app/(app)/app/ override these for custom pages.
@@ -223,6 +223,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
         facetOptions(ctx, rel.key, q).catch(() => ({})),
         sub ? list(ctx, def.key, { size: 20, where: { column: sub.fk, value: id } }).then((x) => x.rows).catch(() => []) : Promise.resolve([]),
       ]);
+      const relCreate = can(role, "create", rel.key) ? { fields: formFields(rel, role, "create"), parent: parentValues(def, row, rel, remote, value) } : undefined;
       return (
         <div className="space-y-3">
         {children.length > 0 && (
@@ -234,7 +235,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
         )}
         <EntityList key={rel.key} entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
           counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
-          searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
+          searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" create={relCreate} />
         </div>
       );
     } else if (active?.kind === "custom") {

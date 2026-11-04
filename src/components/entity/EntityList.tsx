@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableProps } from "@/components/app/data-table/DataTable";
 import { useUrlState } from "@/hooks/use-url-state";
 import { runBulk } from "@/lib/bulk";
+import { prefill } from "./prefill";
 import { RecordSheet } from "./RecordSheet";
 import type { FormField } from "./spec";
 
-// Generic list page body: the DataTable plus the "New" sheet (opened by the button or ?new=1)
-// and bulk actions, which run through the actions API in chunks ("Select all matching" first
-// asks the server for the ids).
+// Generic list page body: the DataTable plus the "New" sheet (opened by the button or ?new=1),
+// prefilled from the list's filters and the parent record, and bulk actions, which run through
+// the actions API in chunks ("Select all matching" first asks the server for the ids).
 
 export function EntityList({ create, routeBase, ...table }: Omit<DataTableProps, "onBulkAction" | "toolbar"> & {
-  create?: { fields: FormField[] };
+  create?: { fields: FormField[]; parent?: Record<string, string> };
   routeBase: string;
 }) {
   const router = useRouter();
@@ -27,6 +28,7 @@ export function EntityList({ create, routeBase, ...table }: Omit<DataTableProps,
     if (!o && params.get("new")) set({ new: null });
   };
   const label = table.label ?? { one: "record", many: "records" };
+  const initial = useMemo(() => (create ? prefill(create.fields, params, create.parent) : undefined), [create, params]);
 
   const onBulkAction = async (key: string, target: string[] | "matching", progress: (done: number, of: number) => void) => {
     let ids = target === "matching" ? null : target;
@@ -54,7 +56,7 @@ export function EntityList({ create, routeBase, ...table }: Omit<DataTableProps,
         onBulkAction={table.bulkActions?.length ? onBulkAction : undefined}
         toolbar={create ? <Button size="sm" onClick={() => setOpen(true)}><Plus className="size-4" />New {label.one.toLowerCase()}</Button> : undefined}
       />
-      {create && <RecordSheet entity={table.entity} label={label} mode="create" fields={create.fields} open={open} onOpenChange={setOpen} routeBase={routeBase} />}
+      {create && <RecordSheet entity={table.entity} label={label} mode="create" fields={create.fields} initial={initial} open={open} onOpenChange={setOpen} routeBase={routeBase} />}
     </>
   );
 }

@@ -47,8 +47,20 @@ function RefInput({ f, value, onChange, id }: { f: FormField; value: string; onC
     }, 150);
     return () => (clearTimeout(t), ctrl.abort());
   }, [f.refEntity, q]);
+  // A prefilled value may not be among the first options: look its title up once.
+  const [named, setNamed] = useState<{ id: string; title: string } | null>(null);
+  const [first] = useState(value);
+  useEffect(() => {
+    if (!f.refEntity || !first) return;
+    const ctrl = new AbortController();
+    fetch(`/api/e/${f.refEntity}/${encodeURIComponent(first)}?relations=0`, { signal: ctrl.signal, cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { row: Row } | null) => b && setNamed({ id: first, title: String(b.row._title ?? first) }))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [f.refEntity, first]);
   const listId = `${id}-list`;
-  const current = opts.find((o) => o.id === value);
+  const current = opts.find((o) => o.id === value) ?? (named?.id === value ? named : undefined);
   return (
     <>
       <Input id={id} list={listId} value={value} onChange={(e) => { onChange(e.target.value); setQ(e.target.value); }} placeholder={`Search ${f.label.toLowerCase()}…`} autoComplete="off" />

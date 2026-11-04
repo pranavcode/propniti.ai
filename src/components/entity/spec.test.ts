@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getEntity } from "@/entities";
 import "@/extensions";
-import { bulkActions } from "./spec";
+import { bulkActions, parentValues } from "./spec";
 
 const def = (k: string) => getEntity(k)!;
 
@@ -20,5 +20,16 @@ describe("bulk actions on lists", () => {
 
   it("drop actions the role can't run", () => {
     expect(bulkActions(def("work_orders"), "leasing_agent").map((a) => a.key)).not.toContain("work_orders.check_photos");
+  });
+});
+
+describe("new record from a parent's tab", () => {
+  it("fills the link to the parent and the references the two share", () => {
+    const unit = { id: "p01-u1", property_id: "p01", unit_type_id: "ut1" };
+    expect(parentValues(def("units"), unit, def("work_orders"), "unit_id", "p01-u1")).toEqual({ unit_id: "p01-u1", property_id: "p01" });
+  });
+
+  it("fills a property's id into its children", () => {
+    expect(parentValues(def("properties"), { id: "p03" }, def("work_orders"), "property_id", "p03")).toEqual({ property_id: "p03" });
   });
 });

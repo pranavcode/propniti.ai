@@ -1,6 +1,6 @@
 import "server-only";
 import type { ZodType } from "zod";
-import { can, getEntity, type EntityDef, type FieldDef, type Role } from "@/entities";
+import { can, getEntity, type EntityDef, type FieldDef, type Role, type Row } from "@/entities";
 import { actionsFor, getAction } from "@/extensions/actions";
 import type { BulkAction, ColumnKind, DataColumn, Facet, StatusTabs } from "@/components/app/data-table/types";
 import { editable, type FacetOptions } from "@/server/query";
@@ -116,4 +116,17 @@ export function bulkActions(def: EntityDef, role: Role): BulkAction[] {
     if (!a || !can(role, k, def.key)) return [];
     return [{ key: k, label: a.label, tone: a.confirm?.tone === "danger" ? "danger" as const : "default" as const, confirm: a.confirm ? a.confirm.body ?? a.confirm.title : undefined }];
   });
+}
+
+// Starting values for a record created from a parent's tab (a work order from a unit): the link
+// to the parent, plus each reference the parent holds to the same entity (the unit's property).
+export function parentValues(parent: EntityDef, row: Row, child: EntityDef, fk: string, value: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, f] of Object.entries(child.fields)) {
+    if (f.type !== "ref") continue;
+    const pf = parent.fields[key];
+    if (pf?.type === "ref" && pf.ref === f.ref && row[key] != null) out[key] = String(row[key]);
+  }
+  if (value != null) out[fk] = String(value);
+  return out;
 }
