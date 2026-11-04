@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { formatDue, formatRelative } from "./format";
+import { formatDate, formatDateTime, formatDue, formatFull, formatMonth, formatRelative } from "./format";
 
 // Relative dates read the same in every viewer's time zone. The demo clock is demo wall time
 // written as UTC (clock.ts): 20:30Z is 8:30 PM on Nov 4 in the demo, though it is already Nov 5
@@ -18,6 +18,16 @@ describe.each(["Asia/Kolkata", "America/Los_Angeles", "UTC"])("relative dates wi
       expect(formatRelative("2026-11-05T09:00:00Z", now)).toBe("tomorrow");
       expect(formatRelative("2026-11-01T12:00:00Z", now)).toBe("3 days ago");
       expect(formatRelative("2026-11-06", now)).toBe("in 2 days");
+    });
+
+    it(`shows dates and tooltips on the demo date at ${now.toISOString().slice(11, 16)} demo time`, () => {
+      process.env.TZ = tz;
+      expect(formatDate("2026-11-04", "auto", now)).toBe("Nov 4");
+      expect(formatDate("2025-12-31T23:30:00Z", "auto", now)).toBe("Dec 31, 2025");
+      expect(formatMonth("2026-11-01")).toBe("Nov 2026");
+      expect(formatDateTime("2026-11-04T20:30:00Z")).toBe("Nov 4, 8:30 PM");
+      expect(formatFull("2026-11-04T20:30:00Z")).toBe("Wed, Nov 4, 2026, 8:30 PM");
+      expect(formatFull("2026-11-04")).toBe("Wed, Nov 4, 2026, 12:00 AM");
     });
   }
 });

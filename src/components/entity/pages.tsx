@@ -1,5 +1,6 @@
 import "server-only";
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { ChevronRight, CircleHelp, Sparkles } from "lucide-react";
 import { allEntities, can, getEntity, type ChartDef, type EntityDef, type KpiDef, type ListQuery, type Row, type TabDef } from "@/entities";
@@ -229,21 +230,32 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
       const [remote, local] = r.fk.split("=", 2);
       const value = local ? (await ctx.db.prepare(`SELECT ${local.replace(/[^a-z_]/g, "")} AS v FROM ${effective(def.table, ctx.ws)} WHERE id = ?`).bind(id).first<{ v: unknown }>())?.v : id;
       const q = parseListQuery(withView(rel, searchParams));
-      const [{ res, error }, facets] = await Promise.all([
+      const sub = def.relations.find((x) => x.name === "subaccounts");
+      const [{ res, error }, facets, children] = await Promise.all([
         attempt(list(ctx, rel.key, { ...q, where: { column: remote, value } })),
         facetOptions(ctx, rel.key, q).catch(() => ({})),
+        sub ? list(ctx, def.key, { size: 20, where: { column: sub.fk, value: id } }).then((x) => x.rows).catch(() => []) : Promise.resolve([]),
       ]);
       return (
+        <div className="space-y-3">
+        {children.length > 0 && (
+          <p className="rounded-md border bg-muted/40 px-3 py-2 text-[12.5px] text-muted-foreground">
+            {rel.label.many} post to its sub-accounts:{" "}
+            {children.map((c, i) => <Fragment key={String(c.id)}>{i > 0 && ", "}<Link href={`${def.route}/${encodeURIComponent(String(c.id))}`} className="font-medium text-foreground hover:text-primary hover:underline">{String(c._title ?? c.id)}</Link></Fragment>)}
+            ; its totals include them.
+          </p>
+        )}
         <EntityList key={rel.key} entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
           counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
           searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
+        </div>
       );
     } else if (active?.kind === "custom") {
       const c = getTab(active.customKey!)!;
       return c.component({ entity: def.key, id, row, actor: session.actor });
     } else if (active) {
       const res = await collab(ctx, active.kind as "notes" | "tasks" | "activity" | "documents", def.key, id, Number(searchParams.get("page")) || 1, 50);
-      if (active.kind === "notes") res.rows = await withActorNames(ctx.db, ctx.ws, res.rows, "author_id", "author_name");
+      if (active.kind === "notes") res.rows = await withActorNames(ctx, res.rows, "author_id", "author_name");
       return (
         <div className="space-y-3">
           {(active.kind === "notes" || active.kind === "tasks") && <Composer entity={def.key} id={id} kind={active.kind} />}

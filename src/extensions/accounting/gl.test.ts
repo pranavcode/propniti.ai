@@ -4,7 +4,8 @@ import { getPersona } from "@/auth/personas";
 import type { Db } from "@/lib/platform/types";
 import { actorFor } from "@/server/permissions";
 import { emptyDb, seed } from "@/server/query.fixture";
-import { getRow } from "@/server/query";
+import { getEntity } from "@/entities";
+import { getRow, list } from "@/server/query";
 
 // Cash (1000) is a header account: rent, deposits and payouts post to its sub-accounts 1010 and
 // 1020. Its year-to-date activity is theirs plus its own.
@@ -25,5 +26,13 @@ describe("chart of accounts", () => {
     expect((await getRow(ctx, "gl_accounts", "gl-1000"))!.ytd).toBe(1280);
     expect((await getRow(ctx, "gl_accounts", "gl-1010"))!.ytd).toBe(380);
     expect((await getRow(ctx, "gl_accounts", "gl-1020"))!.ytd).toBe(900);
+  });
+
+  it("lists a header account's sub-accounts for the note on its tabs", async () => {
+    const ctx = { db, ws: null, actor: await actorFor(db, null, getPersona("daniel")!) };
+    const sub = getEntity("gl_accounts")!.relations.find((r) => r.name === "subaccounts")!;
+    const rows = (await list(ctx, "gl_accounts", { where: { column: sub.fk, value: "gl-1000" } })).rows;
+    expect(rows.map((r) => [r.id, r._title])).toEqual([["gl-1010", "1010 · Cash — operating trust"], ["gl-1020", "1020 · Cash — security deposits"]]);
+    expect((await list(ctx, "gl_accounts", { where: { column: sub.fk, value: "gl-1010" } })).rows).toEqual([]);
   });
 });

@@ -13,7 +13,7 @@ export const collabGet = (kind: Collab) => async (request: Request, { params }: 
     const sp = new URL(request.url).searchParams;
     const ctx = await readCtx(request);
     const res = await collab(ctx, kind, entity, id, Number(sp.get("page")) || 1, Number(sp.get("size")) || 50);
-    return json(kind === "activity" ? { ...res, rows: await withActorNames(ctx.db, ctx.ws, res.rows, "actor_id", "actor_name") } : kind === "notes" ? { ...res, rows: await withActorNames(ctx.db, ctx.ws, res.rows, "author_id", "author_name") } : res);
+    return json(kind === "activity" ? { ...res, rows: await withActorNames(ctx, res.rows, "actor_id", "actor_name") } : kind === "notes" ? { ...res, rows: await withActorNames(ctx, res.rows, "author_id", "author_name") } : res);
   });
 
 export const collabPost = (kind: "notes" | "tasks") => async (request: Request, { params }: Ctx) =>

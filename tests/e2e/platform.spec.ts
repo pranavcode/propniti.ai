@@ -32,6 +32,15 @@ test("a record outside the persona's scope 404s inside the app shell", async ({ 
   expect(errors.filter((e) => !/404|Not Found/i.test(e))).toEqual([]);
 });
 
+test("an unknown /app page 404s inside the shell without a list link", async ({ context, page }) => {
+  await as(context, "marcus");
+  const res = await go(page, `${BASE}/app/no-such-page/deeper`);
+  expect(res?.status()).toBe(404);
+  await expect(page.getByText("This page doesn't exist or isn't part of your role")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to the list" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Go to your home" })).toBeVisible();
+});
+
 test("admin briefing shows overnight agents, what needs you and risks", async ({ context, page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
