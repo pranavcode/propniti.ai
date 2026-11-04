@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- image optimisation is off on Workers; files are pre-sized webp */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "@/components/Link";
 import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, LoaderCircle, Lock } from "lucide-react";
 import { DEMO_PASSWORD, LAST_PERSONA } from "@/auth/personas";
@@ -49,12 +49,13 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
   const match = cards.find((c) => c.email === email.trim().toLowerCase());
   const nextInput = next && <input type="hidden" name="next" value={next} />;
 
-  const pick = (c: Card) => {
+  // Arrow keys in the picker fill the form but keep focus on the list (focusForm = false).
+  const pick = (c: Card, focusForm = true) => {
     setEmail(c.email);
     setPassword(DEMO_PASSWORD);
     setError(undefined);
     setSwitching(true);
-    setFocusTick((t) => t + 1);
+    if (focusForm) setFocusTick((t) => t + 1);
   };
 
   // Returning visitors: preselect the last person who signed in, unless the URL already chose.
@@ -78,7 +79,7 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
   }, []);
 
   // Focus the sign-in button so Enter signs in. Scroll to it only after the double-click window,
-  // so a double-click on a card lower down still lands on the card.
+  // so a double-click on a row lower down (phones) still lands on the row.
   useEffect(() => {
     const b = button.current;
     if (!focusTick || !b) return;
@@ -123,35 +124,28 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
     if (err.field === "password") passwordRef.current?.select();
   }
 
-  const staff = cards.filter((c) => !c.portal);
-  const portals = cards.filter((c) => c.portal);
-  const cardProps = { selected: match?.id, next, onPick: pick, onGo: () => window.clearTimeout(scrollTimer.current) };
-
   return (
     <div style={MK_VARS} className="min-h-[100dvh] bg-(--mk-bg) font-sans text-(--mk-text) antialiased">
       <header className="relative isolate overflow-hidden bg-(--mk-ink) text-(--mk-on-ink)">
         <img src="/img/marketing/hero-community.webp" alt="" className="absolute inset-0 -z-10 h-full w-full object-cover object-[center_40%]" />
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,oklch(0.2_0.03_208/0.85),oklch(0.2_0.03_208/0.95))]" />
-        <div className="mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:pb-16">
+        <div className="mx-auto max-w-7xl px-4 pb-8 pt-5 sm:px-6 lg:pb-10">
           <div className="flex items-center justify-between text-white">
             <Link href="/" aria-label="Propniti home"><Wordmark size={28} /></Link>
             <Link href="/" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] text-(--mk-on-ink-muted) hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
               <ArrowLeft aria-hidden className="size-4" /> Back to site
             </Link>
           </div>
-          <div className="mt-8 grid items-center gap-8 lg:mt-14 lg:grid-cols-[1fr_440px] lg:gap-16">
-            <div className="max-w-2xl">
-              <h1 className="text-balance text-[clamp(2rem,5vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-white">Sign in to the Propniti demo.</h1>
-              <p className="mt-5 hidden text-pretty text-[17px] leading-relaxed text-(--mk-on-ink-muted) sm:block">
-                Each person sees Propniti through their own role and scope: 30 properties, 18 months of history and the agents working alongside them. Switch role any time from your avatar menu in the top bar.
-              </p>
-              <p className="mt-6 hidden items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[13px] text-white sm:inline-flex">
-                <Lock aria-hidden className="size-3.5 text-(--mk-mint)" />
-                Private demo data, resets at midnight Pacific.
-              </p>
-            </div>
+          <div className="mt-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-2 lg:mt-8">
+            <h1 className="text-balance text-[clamp(1.75rem,3.2vw,2.5rem)] font-semibold leading-[1.05] tracking-[-0.03em] text-white">Sign in to the Propniti demo.</h1>
+            <p className="hidden items-center gap-2 text-[13px] text-(--mk-on-ink-muted) sm:inline-flex">
+              <Lock aria-hidden className="size-3.5 text-(--mk-mint)" />
+              Private demo data, resets at midnight Pacific.
+            </p>
+          </div>
 
-            <div className="rounded-2xl bg-white p-5 text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] sm:p-7">
+          <div className="mt-5 grid items-start gap-4 lg:mt-6 lg:grid-cols-[400px_1fr] lg:gap-5">
+            <div className="rounded-2xl bg-white p-5 text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] sm:p-6">
               {!switching && current ? (
                 <div>
                   <p className="text-[14px] text-(--mk-muted)">You&apos;re signed in as</p>
@@ -181,7 +175,7 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
                 <form action="/api/session" method="post" onSubmit={submit} aria-labelledby="signin-title">
                   <h2 id="signin-title" className="text-[20px] font-semibold tracking-[-0.01em]">Sign in</h2>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-(--mk-muted)">
-                    Demo accounts: every person below signs in with password <code className="rounded bg-(--mk-teal-tint) px-1.5 py-0.5 font-mono text-[13px] font-medium text-(--mk-teal-deep)">{DEMO_PASSWORD}</code>
+                    Every demo person signs in with password<code className="whitespace-nowrap rounded bg-(--mk-teal-tint) px-1.5 py-0.5 font-mono text-[13px] font-medium text-(--mk-teal-deep)">{DEMO_PASSWORD}</code>
                   </p>
                   {nextInput}
 
@@ -256,33 +250,40 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
                   >
                     {pending ? <><LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" /> Signing in…</> : <>{match ? `Sign in as ${match.name}` : "Sign in"} <ArrowRight aria-hidden className="size-4" /></>}
                   </button>
-                  <p className="mt-3 text-[13px] leading-relaxed text-(--mk-muted)">Or pick a person below: click a card to fill this form, double-click to sign in straight away.</p>
                 </form>
               )}
             </div>
+
+            <Picker cards={cards} selected={match?.id} next={next} onPick={pick} onGo={() => window.clearTimeout(scrollTimer.current)} />
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
-        <section aria-labelledby="staff" className="pt-10 lg:pt-12">
+        <section aria-labelledby="sees" className="pt-10 lg:pt-12">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="staff" className="text-[20px] font-semibold tracking-[-0.01em]">Staff</h2>
-            <p className="text-[14px] text-(--mk-muted)">{staff.length} roles inside a property management company</p>
+            <h2 id="sees" className="text-[20px] font-semibold tracking-[-0.01em]">What each person sees</h2>
+            <p className="text-[14px] text-(--mk-muted)">Switch person any time from your avatar menu in the top bar.</p>
           </div>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {staff.map((c, i) => <PersonaCard key={c.id} c={c} i={i} {...cardProps} />)}
-          </div>
-        </section>
-
-        <section aria-labelledby="portals" className="pt-14">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="portals" className="text-[20px] font-semibold tracking-[-0.01em]">Portals</h2>
-            <p className="text-[14px] text-(--mk-muted)">Owners, residents, vendors and applicants see only their own records</p>
-          </div>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {portals.map((c, i) => <PersonaCard key={c.id} c={c} i={i + staff.length} {...cardProps} />)}
-          </div>
+          {GROUPS.map((g) => (
+            <div key={g.label} className="mt-6">
+              <h3 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label} <span className="font-normal normal-case tracking-normal">· {g.blurb}</span></h3>
+              <ul className={`mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 ${g.portal ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+                {cards.filter((c) => c.portal === g.portal).map((c) => (
+                  <li key={c.id} className="rounded-xl bg-white p-4 ring-1 ring-(--mk-line)">
+                    <div className="flex items-center gap-3">
+                      <Avatar c={c} i={cards.indexOf(c)} />
+                      <div className="min-w-0">
+                        <div className="truncate text-[15px] font-semibold">{c.name}</div>
+                        <div className="truncate text-[13px] text-(--mk-muted)">{c.title}</div>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[14px] leading-relaxed text-(--mk-muted)">{c.sees}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
 
         <p className="mt-14 text-center text-[13px] text-(--mk-muted)">Fictional names and companies. No real payments or messages are sent.</p>
@@ -291,52 +292,87 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
   );
 }
 
-// Without JavaScript the card is a one-click sign-in (a plain form post). With it, a click fills the
-// sign-in form instead; a double-click or "Sign in now" posts the card's form directly.
-function PersonaCard({ c, i, selected, next, onPick, onGo }: { c: Card; i: number; selected?: string; next?: string; onPick: (c: Card) => void; onGo: () => void }) {
-  const [pending, setPending] = useState(false);
-  const on = selected === c.id;
+const GROUPS = [
+  { label: "Staff", portal: false, blurb: "roles inside a property management company" },
+  { label: "Portals", portal: true, blurb: "owners, residents, vendors and applicants see only their own records" },
+];
+const noop = () => () => {};
+
+function Avatar({ c, i, on, pending }: { c: Card; i: number; on?: boolean; pending?: boolean }) {
   return (
-    <form action="/api/session" method="post" className="relative h-full" onSubmit={() => { remember(c.id); setPending(true); onGo(); }}>
+    <span aria-hidden className={`grid size-8 shrink-0 place-items-center rounded-full text-[12px] font-semibold ${TONES[i % TONES.length]}`}>
+      {pending ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : on ? <Check className="size-3.5" /> : initials(c.name)}
+    </span>
+  );
+}
+
+// The compact people list beside the form: one radio group, a row per person. Arrow keys, Home and
+// End move through it (one tab stop once hydrated). Click fills the form; double-click signs in.
+function Picker({ cards, selected, next, onPick, onGo }: { cards: Card[]; selected?: string; next?: string; onPick: (c: Card, focusForm?: boolean) => void; onGo: () => void }) {
+  // Before hydration (or without JavaScript) every row is a plain tab stop and a one-click sign-in.
+  const hydrated = useSyncExternalStore(noop, () => true, () => false);
+  const stop = selected ?? cards[0]?.id;
+  const keys = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const rows = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]"));
+    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+    const to = { ArrowDown: at + 1, ArrowRight: at + 1, ArrowUp: at - 1, ArrowLeft: at - 1, Home: 0, End: rows.length - 1 }[e.key];
+    if (to === undefined || at < 0) return;
+    e.preventDefault();
+    const row = rows[(to + rows.length) % rows.length];
+    row.focus();
+    const c = cards.find((x) => x.id === row.dataset.persona);
+    if (c) onPick(c, false);
+  };
+  return (
+    <div className="rounded-2xl bg-white p-4 text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] sm:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-1">
+        <h2 id="picker-title" className="text-[16px] font-semibold tracking-[-0.01em]">Pick a person</h2>
+        <p className="text-[13px] text-(--mk-muted)">Click to fill the form · double-click to sign in</p>
+      </div>
+      <div role="radiogroup" aria-labelledby="picker-title" onKeyDown={keys} className="mt-2">
+        {GROUPS.map((g) => (
+          <div key={g.label} role="group" aria-labelledby={`picker-${g.label}`} className="mt-2 first:mt-0">
+            <h3 id={`picker-${g.label}`} className="px-1 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label}</h3>
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+              {cards.filter((c) => c.portal === g.portal).map((c) => (
+                <PersonRow key={c.id} c={c} i={cards.indexOf(c)} on={selected === c.id} tabStop={!hydrated || stop === c.id} next={next} onPick={onPick} onGo={onGo} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Without JavaScript the row is a one-click sign-in (a plain form post). With it, a click fills the
+// sign-in form instead and a double-click posts the row's form directly.
+function PersonRow({ c, i, on, tabStop, next, onPick, onGo }: { c: Card; i: number; on: boolean; tabStop: boolean; next?: string; onPick: (c: Card) => void; onGo: () => void }) {
+  const [pending, setPending] = useState(false);
+  return (
+    <form action="/api/session" method="post" onSubmit={() => { remember(c.id); setPending(true); onGo(); }}>
       <input type="hidden" name="persona" value={c.id} />
       {next && <input type="hidden" name="next" value={next} />}
       <button
         type="submit"
+        role="radio"
+        aria-checked={on}
         aria-label={`${c.name}, ${c.title}`}
-        aria-pressed={on}
+        tabIndex={tabStop ? 0 : -1}
         data-persona={c.id}
         onClick={(e) => {
           e.preventDefault();
           onPick(c);
         }}
         onDoubleClick={(e) => e.currentTarget.form?.requestSubmit()}
-        className={`group flex h-full w-full flex-col rounded-xl p-5 text-left transition-[box-shadow,transform,background-color] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--mk-teal) active:translate-y-0 ${on ? "bg-[oklch(0.97_0.015_192)] ring-2 ring-(--mk-teal)" : "bg-white ring-1 ring-(--mk-line) hover:ring-(--mk-teal)/40"}`}
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--mk-teal) ${on ? "bg-[oklch(0.97_0.015_192)] ring-2 ring-(--mk-teal)" : "hover:bg-(--mk-bg-2)"}`}
       >
-        <div className="flex items-center gap-3">
-          <span aria-hidden className={`grid size-10 shrink-0 place-items-center rounded-full text-[14px] font-semibold ${TONES[i % TONES.length]}`}>{on ? <Check className="size-4" /> : initials(c.name)}</span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-semibold">{c.name}</div>
-            <div className="truncate text-[13px] text-(--mk-muted)">{c.title}</div>
-          </div>
-          {on ? <span aria-hidden className="w-28 shrink-0" /> : <ArrowRight aria-hidden className="size-4 shrink-0 text-(--mk-muted) transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-(--mk-teal)" />}
-        </div>
-        <div className="mt-3.5 flex flex-wrap gap-1.5 text-[12px]">
-          <span className="rounded-md bg-(--mk-teal-tint) px-2 py-0.5 font-medium text-(--mk-teal-deep)">{c.role}</span>
-          <span className="rounded-md bg-(--mk-bg-2) px-2 py-0.5 text-(--mk-muted)">{c.scope}</span>
-        </div>
-        <p className="mt-3 text-[14px] leading-relaxed text-(--mk-muted)">{c.sees}</p>
+        <Avatar c={c} i={i} on={on} pending={pending} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-medium leading-5">{c.name}</span>
+          <span className="block truncate text-[12px] leading-4 text-(--mk-muted)">{c.role} · {c.scope}</span>
+        </span>
       </button>
-      {on && (
-        <button
-          type="submit"
-          disabled={pending}
-          aria-label={`Sign in now as ${c.name}`}
-          className="absolute right-4 top-[25px] inline-flex h-8 items-center gap-1.5 rounded-full bg-(--mk-teal) px-3 text-[13px] font-medium text-white hover:bg-(--mk-teal-deep) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--mk-teal) disabled:opacity-80"
-        >
-          {pending ? <LoaderCircle aria-hidden className="size-3.5 animate-spin motion-reduce:animate-none" /> : null}
-          Sign in now
-        </button>
-      )}
     </form>
   );
 }

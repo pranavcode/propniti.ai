@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BASE, go } from "./helpers";
 
-// The sign-in page: email + password form over one-click persona cards. Each test starts signed
+// The sign-in page: email + password form beside a compact one-click people list. Each test starts signed
 // out (storageState carries the workspace cookie only, no pn_as).
 
 const persona = async (page: Page) => (await page.context().cookies(BASE)).find((c) => c.name === "pn_as")?.value;
@@ -11,17 +11,34 @@ const password = (page: Page) => page.getByLabel("Password", { exact: true });
 const landed = (page: Page, path: string) => page.waitForURL((u) => u.pathname === path);
 
 test.describe("sign in", () => {
-  test("clicking a card fills the form, and Enter signs in", async ({ page }) => {
+  test("clicking a person fills the form, and Enter signs in", async ({ page }) => {
     await go(page, "/login");
-    await page.getByRole("button", { name: "Marcus Bell, Property manager" }).click();
+    await page.getByRole("radio", { name: "Marcus Bell, Property manager" }).click();
     await expect(email(page)).toHaveValue("marcus@propniti.demo");
     await expect(password(page)).toHaveValue("propniti-demo");
-    await expect(page.getByRole("button", { name: "Marcus Bell, Property manager" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("radio", { name: "Marcus Bell, Property manager" })).toHaveAttribute("aria-checked", "true");
     const submit = page.getByRole("button", { name: "Sign in as Marcus Bell" });
     await expect(submit).toBeFocused();
     await page.keyboard.press("Enter");
     await page.waitForURL("**/app/today");
     expect(await persona(page)).toBe("marcus");
+  });
+
+  test("the people list and the form both fit the first screen; arrow keys move through the list", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await go(page, "/login");
+    const picker = page.getByRole("radiogroup", { name: "Pick a person" });
+    for (const box of [await picker.boundingBox(), await page.getByRole("button", { name: "Sign in", exact: true }).boundingBox()]) {
+      expect(box && box.y >= 0 && box.y + box.height <= 900).toBe(true);
+    }
+    await expect(picker.getByRole("radio")).toHaveCount(13);
+
+    await page.getByRole("radio", { name: "Daniel Reyes, Principal" }).focus();
+    await page.keyboard.press("ArrowDown");
+    const priya = page.getByRole("radio", { name: "Priya Shah, Regional manager" });
+    await expect(priya).toBeFocused();
+    await expect(priya).toHaveAttribute("aria-checked", "true");
+    await expect(email(page)).toHaveValue("priya@propniti.demo");
   });
 
   test("typing an email shows who it is", async ({ page }) => {
@@ -52,12 +69,12 @@ test.describe("sign in", () => {
     await email(page).fill("mallory@propniti.demo");
     await password(page).fill("propniti-demo");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByRole("alert")).toHaveText("No demo account with that email — pick a person below.");
+    await expect(page.getByRole("alert")).toHaveText("No demo account with that email — pick a person from the list.");
   });
 
-  test("double-clicking a card signs in straight away", async ({ page }) => {
+  test("double-clicking a person signs in straight away", async ({ page }) => {
     await go(page, "/login");
-    await page.getByRole("button", { name: "Tom Alvarez, Maintenance supervisor" }).dblclick();
+    await page.getByRole("radio", { name: "Tom Alvarez, Maintenance supervisor" }).dblclick();
     await page.waitForURL("**/app/maintenance");
     expect(await persona(page)).toBe("tom");
   });
@@ -101,9 +118,9 @@ test.describe("sign in without JavaScript", () => {
     expect(await persona(page)).toBe("priya");
   });
 
-  test("a card still signs in with one click", async ({ page }) => {
+  test("a person still signs in with one click", async ({ page }) => {
     await page.goto(BASE + "/login");
-    await page.getByRole("button", { name: "Helen Carter, Owner · Bluebonnet Residential Fund II" }).click();
+    await page.getByRole("radio", { name: "Helen Carter, Owner · Bluebonnet Residential Fund II" }).click();
     await page.waitForURL("**/portal/owner");
     expect(await persona(page)).toBe("owner");
   });
