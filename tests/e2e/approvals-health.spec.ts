@@ -2,7 +2,7 @@ import { expect as baseExpect, test } from "@playwright/test";
 import { as, BASE, go, watch } from "./helpers";
 
 // Approvals inbox filters that survive paging and URL links, "approve all matching" with a count,
-// and Data Health honouring the record and rule
+// "Notify approver" for someone who can't decide, and Data Health honouring the record and rule
 // links other pages send, with removable filter pills and bulk actions across pages.
 
 test.describe.configure({ timeout: 240_000 });
@@ -40,6 +40,16 @@ test("Marcus sees how many low-risk items match on every page before approving t
   await expect(dialog.getByRole("heading", { name: /^(Approve \d+ low-risk items?\?|Nothing to approve in bulk)$/ })).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
+});
+
+test("Sam can't decide approvals, so he can notify the approver", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/ai/approvals`);
+  const item = page.locator("article[id^=proposal-]").first();
+  await expect(item.getByRole("button", { name: /Needs approver/ })).toBeVisible();
+  await item.getByRole("button", { name: "Notify approver" }).click();
+  await expect(page.getByText(/^(Notified |Already notified today)/)).toBeVisible();
+  await expect(item.getByRole("button", { name: "Notify approver" })).toBeHidden();
 });
 
 test("Data Health honours rule and record links, shows removable pills and bulk counts", async ({ page, context }) => {

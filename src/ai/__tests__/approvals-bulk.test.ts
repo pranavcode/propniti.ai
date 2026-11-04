@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
-import { approveSafe, safeMatching } from "../bulk";
+import { approveSafe, safeMatching, withCanDecide } from "../bulk";
 import { applyFixes } from "../datafix";
 import { approvalFilters } from "../filters";
+import { notifyApprover } from "../notify";
 import { setModelForTests } from "../providers";
 import { proposalsPage } from "../views";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
@@ -15,6 +16,7 @@ const who = (id: string, propertyIds: Actor["propertyIds"]) => {
   return { persona: p, actor: { personaId: id, name: p.name, role: p.role, scope: p.scope, propertyIds } as Actor };
 };
 const LENA = who("lena", ["p01", "p02", "p03"]);
+const SAM = who("sam", "all");
 
 // 30 low-risk address fixes queued by a leasing agent (who may not apply them): 20 at p02, 10 at
 // p10 (outside Marcus's scope), plus a rent fix (money, High) and a Medium spend with an amount.
@@ -91,5 +93,51 @@ describe("approve all low-risk matching", () => {
     expect(refused.results[0]).toMatchObject({ ok: false, message: expect.stringMatching(/individual review/) });
     const lena = await approveSafe({ ...s, ...LENA }, ids);
     expect(lena.approved).toBe(0);
+  });
+
+  it("marks rows this persona can't decide", async () => {
+    const f = await seed();
+    const data = { db: f.db, ws: WS, actor: SAM.actor };
+    const page = await proposalsPage(data, { queue: "needs_you", size: 50 });
+    const rows = await withCanDecide({ ...data, persona: SAM.persona }, page.rows);
+    expect(rows.every((r) => r.can_decide === false)).toBe(true);
+    const mine = await withCanDecide({ ...data, actor: MARCUS, persona: getPersona("marcus")! }, page.rows.filter((r) => r.property_id === "p02"));
+    expect(mine.every((r) => r.can_decide)).toBe(true);
+  });
+});
+
+describe("notify approver", () => {
+  const prop = (raw: Awaited<ReturnType<typeof seed>>["raw"], entity: string) => (raw.prepare("SELECT id FROM ai_proposals WHERE workspace_id = ? AND entity_id = ?").get(WS, entity) as { id: string }).id;
+  const notes = (raw: Awaited<ReturnType<typeof seed>>["raw"]) => raw.prepare("SELECT user_id, href, entity_id, at FROM notifications WHERE workspace_id = ? ORDER BY user_id").all(WS) as { user_id: string; href: string; entity_id: string }[];
+
+  it("notifies the assignee role in scope, once per proposal per day", async () => {
+    const f = await seed();
+    const s = { db: f.db, ws: WS, ...SAM };
+    const id = prop(f.raw, "di-rent");
+    const r = await notifyApprover(s, id, "2026-11-04T10:00:00Z");
+    expect(r).toMatchObject({ ok: true, notified: ["Grace Kim"] });
+    expect(notes(f.raw)).toEqual([{ user_id: "grace", href: `/app/ai/approvals?proposal=${id}`, entity_id: id, at: "2026-11-04T10:00:00Z" }]);
+    const [again, twice] = await Promise.all([notifyApprover(s, id, "2026-11-04T11:00:00Z"), notifyApprover({ ...s, ...LENA }, id, "2026-11-04T12:00:00Z")]);
+    expect(again).toMatchObject({ ok: false, status: 409, error: "Already notified today" });
+    expect(twice).toMatchObject({ ok: false, status: 409 });
+    expect(await notifyApprover(s, id, "2026-11-05T09:00:00Z")).toMatchObject({ ok: true });
+    expect(notes(f.raw)).toHaveLength(2);
+  });
+
+  it("without an assignee, goes to the manager in scope: Marcus for p02, the principal for Atlanta", async () => {
+    const f = await seed();
+    const s = { db: f.db, ws: WS, ...SAM };
+    expect(await notifyApprover(s, prop(f.raw, "di-a0"))).toMatchObject({ ok: true, notified: ["Marcus Bell"] });
+    expect(await notifyApprover(s, prop(f.raw, "di-a25"))).toMatchObject({ ok: true, notified: ["Daniel Reyes"] });
+  });
+
+  it("refuses when the persona can decide it, or it is decided or unknown", async () => {
+    const f = await seed();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS, persona: getPersona("marcus")! };
+    const id = prop(f.raw, "di-a0");
+    expect(await notifyApprover(marcus, id)).toMatchObject({ ok: false, status: 409, error: "You can decide this one yourself." });
+    await approveSafe(marcus, [id]);
+    expect(await notifyApprover({ db: f.db, ws: WS, ...SAM }, id)).toMatchObject({ ok: false, status: 409, error: "Already decided" });
+    expect(await notifyApprover({ db: f.db, ws: WS, ...SAM }, "nope")).toMatchObject({ ok: false, status: 404 });
   });
 });

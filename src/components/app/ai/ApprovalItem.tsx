@@ -2,7 +2,7 @@
 
 import Link from "@/components/Link";
 import { useState } from "react";
-import { Check, ChevronDown, CornerDownRight, ExternalLink, Lock, Pencil, ShieldAlert, X } from "lucide-react";
+import { BellRing, Check, ChevronDown, CornerDownRight, ExternalLink, Lock, Pencil, ShieldAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Money, RelativeDate } from "../display";
@@ -29,6 +29,7 @@ export type ApprovalItemProps = {
   onApprove?: () => void | Promise<unknown>;
   onEdit?: () => void;
   onReject?: () => void | Promise<unknown>;
+  onNotify?: () => void | Promise<unknown>; // shown beside the lock when canApprove is false
   variant?: "card" | "row";
   defaultOpen?: boolean;
   className?: string;
@@ -47,7 +48,7 @@ export function RiskBadge({ risk }: { risk: Risk }) {
 
 // One proposed action in the approvals queue. People approve; agents only propose.
 export function ApprovalItem(p: ApprovalItemProps) {
-  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, variant = "card", defaultOpen, className, id } = p;
+  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, onNotify, variant = "card", defaultOpen, className, id } = p;
   const [open, setOpen] = useState(defaultOpen ?? variant === "card");
   const [state, setState] = useState<"open" | "approved" | "rejected">("open");
   const [busy, setBusy] = useState(false);
@@ -63,7 +64,10 @@ export function ApprovalItem(p: ApprovalItemProps) {
       {onEdit && variant === "card" && <Button size="sm" variant="outline" disabled={busy} onClick={onEdit}><Pencil /> Edit</Button>}
       {onApprove && (canApprove
         ? <Button size="sm" disabled={busy} onClick={() => void act("approved")}><Check /> Approve</Button>
-        : <Button size="sm" variant="outline" disabled title={policy}><Lock /> Needs approver</Button>)}
+        : <>
+            {onNotify && <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setBusy(true); void Promise.resolve(onNotify()).finally(() => setBusy(false)); }}><BellRing /> Notify approver</Button>}
+            <Button size="sm" variant="outline" disabled title={policy}><Lock /> Needs approver</Button>
+          </>)}
     </div>
   ) : (
     <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", state === "approved" ? "text-tone-success" : "text-muted-foreground")}>

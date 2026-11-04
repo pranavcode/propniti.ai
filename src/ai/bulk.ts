@@ -43,3 +43,8 @@ export async function approveSafe(s: Who, ids: string[]) {
   return { approved: results.filter((r) => r.ok).length, results };
 }
 
+// Marks each inbox row with whether this persona may decide it, so the page can offer
+// "Notify approver" on the ones it can't.
+export async function withCanDecide<T extends Row>(s: Who, rows: T[]) {
+  return Promise.all(rows.map(async (p) => ({ ...p, can_decide: !p.decision && (await canDecide(s, p)).ok })));
+}

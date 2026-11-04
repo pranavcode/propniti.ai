@@ -48,6 +48,7 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
   // The full approvals page has filters; the home page's embedded queue doesn't.
   const filterable = !!initial.facets;
   const [confirm, setConfirm] = useState<Bulk | null>(null);
+  const [notified, setNotified] = useState<Record<string, true>>({});
 
   useEffect(() => {
     if (focusId) document.getElementById(`proposal-${focusId}`)?.scrollIntoView({ block: "center" });
@@ -135,6 +136,16 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
     }
   };
 
+  const notify = async (p: ProposalJson) => {
+    try {
+      const r = await api<{ message: string }>(`/api/ai/proposals/${p.id}/notify`, "POST", {});
+      toast.success(r.message);
+      setNotified((n) => ({ ...n, [p.id]: true }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const message = (p: ProposalJson) => ((p.payload.effects as MessageEffect[] | undefined) ?? []).find((e) => e.kind === "message");
   const pages = Math.max(1, Math.ceil(data.total / data.size));
   const tab = TABS.find((t) => t.key === queue)!;
@@ -199,6 +210,8 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
                 createdAt={p.created_at}
                 source={sourceOf(p)}
                 model={p.model ?? undefined}
+                canApprove={p.can_decide !== false}
+                onNotify={!decided && p.can_decide === false && !notified[p.id] ? () => notify(p) : undefined}
                 onApprove={decided ? undefined : () => decide(p, "approve")}
                 onReject={decided ? undefined : () => decide(p, "reject")}
                 onEdit={!decided && m ? () => setEditing({ p, subject: m.subject ?? "", body: m.body ?? "" }) : undefined}
