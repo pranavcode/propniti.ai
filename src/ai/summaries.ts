@@ -18,27 +18,37 @@ export type Summary = { entity_type: string; entity_id: string; summary: string;
 // Same ids as the seed's rule-written summaries, so precomputed and regenerated ones replace them.
 const summaryId = (entity: string, id: string) => `sum-${entity}-${id}`;
 
-export async function cachedSummary(data: DataCtx, entity: string, id: string): Promise<Summary | null> {
-  // The record must be readable in this persona's scope before its summary is.
-  if (!getEntity(entity) || !(await getRow({ db: data.db, ws: data.ws === "base" ? null : data.ws, actor: data.actor }, entity, id).catch(() => null))) return null;
+// The summary the record page shows. Its figures always come from the record as it is now: a stored
+// model summary is shown only while the facts it was written from still equal the current facts;
+// otherwise (and for stored rules text) the rules sentence is written from the current facts.
+// `row` is the record the caller already read with getRow, so the page and summary share one read.
+export async function cachedSummary(data: DataCtx, entity: string, id: string, row?: Row): Promise<Summary | null> {
+  const def = getEntity(entity);
+  if (!def) return null;
   const e = eff("ai_summaries", data.ws);
-  const r = await data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.entity_type = ? AND t.entity_id = ? ORDER BY t.generated_at DESC LIMIT 1`).bind(...e.params, entity, id).first<Row>();
-  if (!r) return null;
-  return {
-    entity_type: entity, entity_id: id, summary: String(r.summary), facts: JSON.parse(String(r.facts || "{}")), model: String(r.model), generated_at: String(r.generated_at),
-    source: r.model === "rules" ? "rules" : r.workspace_id === "base" ? "precomputed" : "live",
-  };
+  // factsFor reads the record in this persona's scope, so an out-of-scope record has no summary.
+  const [f, r] = await Promise.all([
+    factsFor(data, entity, id, row).catch(() => null),
+    data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.entity_type = ? AND t.entity_id = ? ORDER BY t.generated_at DESC LIMIT 1`).bind(...e.params, entity, id).first<Row>(),
+  ]);
+  if (!f) return null;
+  if (r && r.model !== "rules" && String(r.facts) === JSON.stringify(f.facts)) {
+    return { entity_type: entity, entity_id: id, summary: String(r.summary), facts: f.facts, model: String(r.model), generated_at: String(r.generated_at), source: r.workspace_id === "base" ? "precomputed" : "live" };
+  }
+  const text = def.ai?.rulesSummary?.(f.facts) ?? (r ? rulesSummary(f.title, f.facts) : null);
+  return text ? { entity_type: entity, entity_id: id, summary: text, facts: f.facts, model: RULES.model, generated_at: demoNowIso(), source: "rules" } : null;
 }
 
-export async function factsFor(data: DataCtx, entity: string, id: string): Promise<{ facts: Facts; title: string; prompt?: string } | null> {
+export async function factsFor(data: DataCtx, entity: string, id: string, known?: Row): Promise<{ facts: Facts; title: string; prompt?: string } | null> {
   const def = getEntity(entity);
   if (!def) return null;
   const q = { db: data.db, ws: data.ws === "base" ? null : data.ws, actor: data.actor };
-  const row = await getRow(q, entity, id);
+  const row = known ?? (await getRow(q, entity, id));
   if (!row) return null;
   const title = String(row[def.titleField] ?? id);
   if (def.ai?.facts) {
-    const rel = await relations(q, def, row, undefined, 25);
+    // A facts function that takes no related rows skips the relation queries (one per relation).
+    const rel = def.ai.facts.length > 1 ? await relations(q, def, row, undefined, 25) : {};
     const related = Object.fromEntries(Object.entries(rel).map(([k, v]) => [k, v.rows]));
     return { facts: def.ai.facts(row, related), title, prompt: def.ai.summaryPrompt };
   }
@@ -87,7 +97,7 @@ export async function generateSummary(data: DataCtx, entity: string, id: string,
       console.error("[ai] summary model failed, using rules:", err instanceof Error ? err.message : err);
     }
   }
-  const summary = text ?? rulesSummary(f.title, f.facts);
+  const summary = text ?? getEntity(entity)?.ai?.rulesSummary?.(f.facts) ?? rulesSummary(f.title, f.facts);
   const generated_at = demoNowIso();
   const ws = opts.writeTo ?? data.ws;
   if (ws !== "base" || opts.writeTo === "base") {

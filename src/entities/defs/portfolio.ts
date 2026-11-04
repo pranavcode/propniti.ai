@@ -4,13 +4,31 @@
 import { Briefcase, Building, Building2, DoorOpen, LayoutPanelTop, Map as MapIcon } from "lucide-react";
 import { AS_OF, issuesField, LEADERS, OPS, propertyPhoto, STAFF, thumb } from "../common";
 import { getEntity, registerEntity } from "../registry";
-import type { Role } from "../types";
+import type { Facts, Role } from "../types";
+import { formatMoney, formatPct } from "@/lib/format";
+import { AS_OF as TODAY } from "@/seed/constants";
 
 const OWNER_PORTAL: Role[] = ["owner"];
 
 // Latest precomputed month for the property (metrics_monthly), for list columns that would be
 // too costly to aggregate from 150k ledger rows per page.
 const latest = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id ORDER BY mm.month DESC LIMIT 1)`;
+
+function monthName(period: string) {
+  const name = new Date(`${period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  return period === TODAY.slice(0, 7) ? `${name} to date` : name;
+}
+
+function propertySummary(f: Facts) {
+  const n = (v: Facts[string]) => (v == null ? null : Number(v));
+  const occ = n(f.occupancy), noi = n(f.noi_month), late = n(f.delinquent), wo = n(f.open_work_orders) ?? 0, vacant = n(f.vacant_units) ?? 0;
+  const s = [
+    occ == null ? `${f.property} has no occupancy figure yet.` : `${f.property} is ${formatPct(occ)} occupied${vacant ? `, with ${vacant} vacant unit${vacant === 1 ? "" : "s"}` : ""}.`,
+    noi == null ? null : `NOI for ${f.noi_period ? monthName(String(f.noi_period)) : "the latest month"} is ${formatMoney(noi, "whole")}.`,
+    `${late == null ? "No balance" : formatMoney(late, "whole")} is past due, and there ${wo === 1 ? "is 1 open work order" : `are ${wo} open work orders`}.`,
+  ];
+  return s.filter(Boolean).join(" ");
+}
 
 registerEntity({
   key: "properties",
@@ -38,11 +56,13 @@ registerEntity({
     occupancy: { type: "number", label: "Occupancy", format: "pct", sortable: true, list: { default: true, align: "right" },
       sql: "(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u WHERE u.property_id = properties.id AND u.status <> 'Model')",
       help: { summary: "Physical occupancy: occupied and on-notice units over rentable units, live from the unit list.", article: "occupancy" } },
-    noi_month: { type: "money", label: "NOI (month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: latest("mm.noi_cents"), help: { summary: "Net operating income for the latest closed month: collected income less operating expenses.", article: "noi" } },
+    noi_month: { type: "money", label: "NOI (month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: latest("mm.noi_cents"), help: { summary: "Net operating income for the latest month in the monthly figures (the current month is month to date): collected income less operating expenses.", article: "noi" } },
+    noi_period: { type: "text", label: "NOI month", sql: latest("mm.month") },
     delinquent: { type: "money", label: "Delinquent", format: "compact", sortable: true, list: { default: true, align: "right" },
       sql: latest("mm.aging_0_30_cents + mm.aging_31_60_cents + mm.aging_61_90_cents + mm.aging_90p_cents"), help: { summary: "Unpaid resident balances past due, all aging buckets.", article: "delinquency" } },
     open_work_orders: { type: "number", label: "Open WOs", sortable: true, list: { default: false, align: "right" },
       sql: "(SELECT count(*) FROM {work_orders} w WHERE w.property_id = properties.id AND w.status NOT IN ('Completed', 'Paid', 'Cancelled'))" },
+    vacant_units: { type: "number", label: "Vacant units", sortable: true, list: { default: false, align: "right" }, sql: "(SELECT count(*) FROM {units} u WHERE u.property_id = properties.id AND u.status = 'Vacant')" },
     neighborhood: { type: "text", label: "Neighborhood", search: true, list: { default: false } },
     street: { type: "text", label: "Street", search: true, required: true },
     city: { type: "text", label: "City", search: true, facet: true, required: true },
@@ -112,12 +132,14 @@ registerEntity({
     { key: "aging", title: "Delinquency aging", kind: "bar", metric: "receivables.aging", x: "label", series: [{ key: "amount", label: "Balance", format: "money" }], drill: "/app/receivables/charges?f.aging={bucket}" },
   ],
   ai: {
-    facts: (r, rel) => ({
+    // Every figure is a field the record page shows, read from the same row.
+    facts: (r) => ({
       property: String(r.name), metro: String(r.metro), type: String(r.type), units: Number(r.units ?? 0),
       occupancy: r.occupancy == null ? null : Math.round(Number(r.occupancy) * 1000) / 10,
-      noi_month: r.noi_month == null ? null : Number(r.noi_month), delinquent: r.delinquent == null ? null : Number(r.delinquent),
-      open_work_orders: Number(r.open_work_orders ?? 0), open_data_issues: Number(r.open_issues ?? 0), vacant_units_listed: rel.units?.filter((u) => u.status === "Vacant").length ?? 0,
+      noi_month: r.noi_month == null ? null : Number(r.noi_month), noi_period: (r.noi_period as string) ?? null, delinquent: r.delinquent == null ? null : Number(r.delinquent),
+      open_work_orders: Number(r.open_work_orders ?? 0), open_data_issues: Number(r.open_issues ?? 0), vacant_units: Number(r.vacant_units ?? 0),
     }),
+    rulesSummary: propertySummary,
     summaryPrompt: "Summarise this property's month for its manager in 3 sentences: occupancy, collections, maintenance, and the one thing to act on. Use only the facts.",
     agents: ["collections", "maintenance_triage", "data_health"],
   },

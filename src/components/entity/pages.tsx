@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ChevronRight, CircleHelp, Sparkles } from "lucide-react";
 import { allEntities, can, getEntity, type ChartDef, type EntityDef, type KpiDef, type ListQuery, type Row, type TabDef } from "@/entities";
 import { getTab } from "@/extensions/tabs";
+import { cachedSummary } from "@/ai/summaries";
 import type { Session } from "@/auth/session";
 import { Cell } from "@/components/app/data-table/cells";
 import { fillTemplate } from "@/components/app/data-table/params";
@@ -189,10 +190,6 @@ async function healthIssues(ctx: QueryCtx, entity: string, id: string): Promise<
   return res.results.map((r) => ({ id: String(r.id), rule: String(r.rule_id), severity: r.severity as HealthIssue["severity"], summary: String(r.name) }));
 }
 
-async function aiSummary(ctx: QueryCtx, entity: string, id: string) {
-  return ctx.db.prepare(`SELECT summary, model, generated_at FROM ${effective("ai_summaries", ctx.ws)} WHERE entity_type = ? AND entity_id = ? ORDER BY generated_at DESC LIMIT 1`).bind(entity, id).first<{ summary: string; model: string; generated_at: string }>();
-}
-
 function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "documents"; rows: Row[] }) {
   if (!rows.length) return <EmptyState compact kind="table" title={kind === "activity" ? "No activity yet" : `No ${kind} yet`} description={kind === "activity" ? "Changes, payments, approvals and agent actions on this record appear here." : undefined} />;
   return (
@@ -262,7 +259,7 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
   const [rail, issues, summary, kpis, body] = await Promise.all([
     relations(ctx, def, row, def.detail.related, 5),
     def.dataRules?.length ? healthIssues(ctx, def.key, id) : Promise.resolve([] as HealthIssue[]),
-    def.capabilities?.aiSummary ? aiSummary(ctx, def.key, id) : Promise.resolve(null),
+    def.capabilities?.aiSummary ? cachedSummary({ db: ctx.db, ws: session.ws ?? "base", actor: session.actor }, def.key, id, row) : Promise.resolve(null),
     def.key === "properties" ? kpiData(ctx, (def.kpis ?? []).slice(0, 4), id) : Promise.resolve([] as KpiData[]),
     tabBody(),
   ]);
@@ -328,7 +325,7 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
               {summary
                 ? <>
                     <p className="mt-1.5 text-[13px] leading-relaxed">{summary.summary}</p>
-                    <p className="mt-2 text-[11px] text-muted-foreground">Precomputed · {summary.model} · {formatRelative(summary.generated_at)}</p>
+                    <p className="mt-2 text-[11px] text-muted-foreground">{summary.source === "rules" ? "Rules · from this record's current figures" : `${summary.source === "live" ? "Generated" : "Precomputed"} · ${summary.model} · ${formatRelative(summary.generated_at)}`}</p>
                   </>
                 : <p className="mt-1.5 text-[12.5px] text-muted-foreground">No summary yet for this {def.label.one.toLowerCase()}. Ask the assistant about it instead.</p>}
             </section>

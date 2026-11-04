@@ -213,7 +213,9 @@ export type EntityDef = {
   capabilities?: Capabilities;
   kpis?: KpiDef[];
   charts?: ChartDef[];
-  ai?: { facts: (row: Row, related: Record<string, Row[]>) => Facts; summaryPrompt?: string; agents?: AgentKey[] };
+  // rulesSummary words the facts without a model; the record page shows it whenever no stored
+  // model summary matches the record's current facts.
+  ai?: { facts: (row: Row, related: Record<string, Row[]>) => Facts; summaryPrompt?: string; rulesSummary?: (facts: Facts) => string; agents?: AgentKey[] };
   permissions: { read: Role[]; create?: Role[]; update?: Role[]; delete?: Role[] };
   // generic: POST/PATCH/DELETE through write(). actions-only: writes only via named actions
   // (required for ledger tables: a test enforces it). none: read-only.
