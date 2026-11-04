@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { setModelForTests, type ChatModel, type Reply, type Turn } from "../providers";
 import { startRun, sweep, drainEvents, claimSweep } from "../orchestrator";
 import { executeProposal } from "../effects";
+import { MIN_MODEL_MS, modelTimeout } from "../runtime";
 import { normalizeStreet } from "../agents/data-health";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
 import "../agents";
@@ -252,10 +253,10 @@ describe("sweep and events", () => {
     });
     const { raw, db } = openFixture();
     // Date stands still, so the model call starts before the deadline however slow the machine is
-    // (otherwise the run can pass its 50 ms before the call and finish on the rules instead).
-    // The hard stop is a real timer and still fires.
+    // (otherwise the run can pass its budget before the call and finish on the rules instead).
+    // 600 ms is just over MIN_MODEL_MS, so the call is made. The hard stop is a real timer and still fires.
     vi.useFakeTimers({ toFake: ["Date"] });
-    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 50 })).done.finally(() => vi.useRealTimers());
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 600 })).done.finally(() => vi.useRealTimers());
     expect(r.status).not.toBe("failed");
     const run = raw.prepare("SELECT status, summary FROM agent_runs WHERE id = ?").get(r.runId) as Record<string, string>;
     expect(run.status).not.toBe("running");
@@ -271,6 +272,33 @@ describe("sweep and events", () => {
     expect(r.summary).toMatch(/^Rules: /);
     expect(proposals(raw, r.runId).length).toBeGreaterThan(0);
   }, 20_000);
+
+  it("skips the model call with under half a second left, logs why, and the rules still propose", async () => {
+    const chat = vi.fn(() => new Promise<never>(() => {}));
+    setModelForTests({ info: { provider: "anthropic", model: "claude-opus-5", label: "Slow", native: true }, chat, structured: () => new Promise(() => {}) });
+    const { raw, db } = openFixture();
+    // Date stands still, so exactly 300 ms remain when the loop asks for a timeout.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 300 })).done.finally(() => vi.useRealTimers());
+    expect(chat).not.toHaveBeenCalled();
+    expect(r.summary).toMatch(/^Rules: /);
+    const outputs = steps(raw, r.runId).map((x) => JSON.parse(String(x.output ?? "null")));
+    expect(outputs).toContainEqual({ model_error: "deadline reached", fallback: "rules" });
+    expect(proposals(raw, r.runId).length).toBeGreaterThan(0);
+  });
+
+  it("gives a model call the time left before the deadline, capped, and refuses under MIN_MODEL_MS", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const now = Date.now();
+      expect(modelTimeout({ deadline: now + 8_000 })).toBe(8_000);
+      expect(modelTimeout({ deadline: now + 30_000 }, 20_000)).toBe(20_000);
+      expect(() => modelTimeout({ deadline: now + MIN_MODEL_MS - 1 })).toThrow("deadline reached");
+      expect(() => modelTimeout({ deadline: now - 1_000 })).toThrow("deadline reached");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("events reach their agents", () => {

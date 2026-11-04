@@ -67,6 +67,16 @@ export type AgentCtx = Omit<RunContext, "propose"> & {
   addUsage(u: Usage): void;
 };
 
+// Timeout for one model call: never past the run's deadline, because the hard stop comes 3 s after
+// it and the rules fallback has to fit in that gap. With under MIN_MODEL_MS left it throws instead
+// (the SDKs abort a 0 ms call at once and then retry), so the caller's catch falls back to rules.
+export const MIN_MODEL_MS = 500;
+export function modelTimeout(ctx: Pick<AgentCtx, "deadline">, capMs = Infinity): number {
+  const left = ctx.deadline - Date.now();
+  if (left < MIN_MODEL_MS) throw new Error("deadline reached");
+  return Math.min(capMs, left);
+}
+
 const MAX_OUTPUT = 6000;
 export const truncate = (v: unknown, max = MAX_OUTPUT) => {
   const s = JSON.stringify(v ?? null) ?? "null";
@@ -218,9 +228,7 @@ export async function modelLoop(ctx: AgentCtx, opts: { system: string; prompt: s
     }
     let reply;
     try {
-      // Never past the deadline: the run's hard stop comes 3 s after it, and the rules path below
-      // (the fallback when the model gives up) has to fit in that gap.
-      reply = await model.chat(system, turns, specs, { timeoutMs: ctx.deadline - Date.now() });
+      reply = await model.chat(system, turns, specs, { timeoutMs: modelTimeout(ctx) });
     } catch (err) {
       console.error(`[ai] ${model.info.label} failed, using rules:`, errText(err));
       await ctx.step({ kind: "message", output: { model_error: errText(err), fallback: "rules" }, ok: false });
