@@ -41,7 +41,7 @@ export const PILLARS: Pillar[] = [
       "Answers show the records the assistant looked up",
     ],
     shot: "/img/marketing/shots/explained.webp",
-    shotAlt: "Principal dashboard: a briefing of what changed, NOI, occupancy, collections and delinquency KPIs, each with an Explain button",
+    shotAlt: "Explain panel on the collections rate KPI: what changed since last month in plain English and the properties that moved it most",
     appHref: "/app",
   },
   {
@@ -55,7 +55,7 @@ export const PILLARS: Pillar[] = [
       "Certificates of insurance and permits that expire within 30 days",
     ],
     shot: "/img/marketing/shots/predictions.webp",
-    shotAlt: "Residents list with delinquency, collections, high delinquency risk and lapsed insurance counts above the table",
+    shotAlt: "Residents list with past-due balance, collections rate, high delinquency risk and lapsed insurance counts above the table",
     appHref: "/app/residents",
   },
   {
@@ -69,7 +69,7 @@ export const PILLARS: Pillar[] = [
       "A plain-English summary of the scenario you can share",
     ],
     shot: "/img/marketing/shots/what-if.webp",
-    shotAlt: "What-if simulator: rent, occupancy and expense controls with baseline and scenario NOI for each property",
+    shotAlt: "What-if simulator: rent, occupancy and expense controls, baseline and scenario NOI, and the NOI change for each property",
     appHref: "/app/portfolio/what-if",
   },
 ];
