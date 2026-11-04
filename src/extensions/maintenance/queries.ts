@@ -108,7 +108,9 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
          (SELECT ph.url FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo,
          (SELECT ph.check_result FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo_check,
          (SELECT pr.title FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = pr.id) ORDER BY pr.created_at DESC LIMIT 1) AS suggestion,
-         (SELECT pr.confidence FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' ORDER BY pr.created_at DESC LIMIT 1) AS confidence
+         (SELECT pr.confidence FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' ORDER BY pr.created_at DESC LIMIT 1) AS confidence,
+         (SELECT json_object('id', pr.id, 'vendor_id', json_extract(pr.payload, '$.effects[0].changes.vendor_id'), 'amount_cents', pr.amount_cents, 'confidence', pr.confidence, 'queue_state', pr.queue_state)
+            FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = pr.id) ORDER BY pr.created_at DESC LIMIT 1) AS open_suggestion
        FROM ${wo} w JOIN ${effective("properties", ws)} p ON p.id = w.property_id LEFT JOIN ${effective("units", ws)} u ON u.id = w.unit_id
        WHERE w.status IN ('New', 'Triaged')${s.sql}
        ORDER BY CASE w.priority WHEN 'Emergency' THEN 0 WHEN 'Urgent' THEN 1 WHEN 'Normal' THEN 2 ELSE 3 END, w.opened_at LIMIT 12`, s.binds),

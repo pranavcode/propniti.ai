@@ -10,7 +10,7 @@ import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
 import { registerAction } from "../actions";
 import { checkPhoto, nextDue, PHOTO_TAGS, policyCheck, usd, validateInvoice } from "./rules";
 import { insertStmt, newId, OPEN_STATUSES, parse, row as readRow, update, updateStmt } from "./store";
-import { invoiceInputs, policyFor, techCovers } from "./queries";
+import { invoiceInputs, latestTriage, policyFor, techCovers } from "./queries";
 
 // Named actions for the maintenance module. Each runs inside the generic action route, which has
 // already checked the role, module access, the record's scope and `when`, and audits success.
@@ -66,7 +66,7 @@ const Dispatch = z.strictObject({
   proposal_id: z.string().max(80).optional(),
 });
 
-registerAction({
+const dispatch = registerAction({
   key: "work_orders.dispatch",
   label: "Dispatch",
   entity: "work_orders",
@@ -115,6 +115,42 @@ registerAction({
     await c.db.batch(stmts);
     const who = vendorName || "the in-house technician";
     return ok(pol.level === "owner" ? `${r.id} is on hold until the owner approves ${usd(estimateCents)}. ${who} is lined up.` : `${r.id} dispatched to ${who}.`);
+  },
+});
+
+// "Dispatch as suggested" from the triage queue, one at a time or in bulk ("Accept N"): dispatches
+// the Maintenance Triage agent's open suggestion through work_orders.dispatch, so the insurance,
+// status and double-click guards are the same. Estimates over the auto-approve limit aren't
+// dispatched from here: the suggestion goes to the policy's approver in Approvals. Estimates over
+// the owner's limit put the job on hold for the owner, as a manual dispatch does.
+export const HIGH_CONFIDENCE = 0.8;
+const APPROVER_ROLES = (role: string) => ["principal", "regional_manager", role];
+
+registerAction({
+  key: "work_orders.dispatch_suggested",
+  label: "Dispatch as suggested",
+  entity: "work_orders",
+  roles: SUP,
+  icon: Sparkles,
+  bulk: true,
+  when: (r) => ["New", "Triaged"].includes(String(r.status)),
+  help: { summary: "Dispatches the vendor the Maintenance Triage agent suggested. Estimates over the auto-approve limit go to Approvals instead; over the owner's limit, the job waits for the owner.", article: "maintenance-triage-agent" },
+  handler: async (c, r) => {
+    const p = await latestTriage(c.db, c.ws, String(r.id));
+    if (!p || p.decision || p.queue_state === "auto_handled") return conflict(`${r.id} has no open AI suggestion. Open it to dispatch.`);
+    const vendor = typeof p.changes.vendor_id === "string" ? p.changes.vendor_id : null;
+    if (!vendor) return conflict(`The suggestion for ${r.id} is an in-house technician. Open it to pick one.`);
+    const estimateCents = p.amount_cents ?? Math.round(Number(r.estimate ?? 0) * 100);
+    const policy = await policyFor(c.db, c.ws, String(r.property_id));
+    const pol = policyCheck(estimateCents, policy);
+    if (pol.level === "approver" && !APPROVER_ROLES(policy?.approver_role ?? "property_manager").includes(c.actor.role)) {
+      const role = policy?.approver_role ?? "property_manager";
+      await c.db.batch([await updateStmt(c.db, c.ws, "ai_proposals", p.id, { assignee_role: role, queue_state: "needs_you" })]);
+      return { status: 202, message: `${r.id}: ${pol.text} It's in Approvals.`, proposalId: p.id };
+    }
+    const input = Dispatch.safeParse({ vendor_id: vendor, priority: p.changes.priority ?? r.priority, category: p.changes.category ?? r.category, ...(estimateCents ? { estimate: estimateCents / 100 } : {}), proposal_id: p.id });
+    if (!input.success) return { status: 400, error: `The suggestion for ${r.id} is incomplete. Open it to dispatch.` };
+    return dispatch.handler(c, r, input.data);
   },
 });
 

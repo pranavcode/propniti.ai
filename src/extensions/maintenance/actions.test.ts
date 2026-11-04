@@ -115,3 +115,45 @@ describe("invoice photo requirement", () => {
     expect(await act("work_orders.approve_and_pay", "WO-2", { expected_cents: 30000 })).toMatchObject({ status: 200 });
   });
 });
+
+describe("dispatch as suggested", () => {
+  const suggest = (id: string, wo: string, vendor: string | null, amount: number, conf = 0.86) =>
+    db.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, payload, confidence, amount_cents, queue_state, assignee_role, run_id, created_at) VALUES ('base', ?, 'maintenance_triage', 'work_orders', ?, 'p01', 'work_orders.assign_vendor', ?, ?, ?, ?, 'needs_you', 'maintenance_supervisor', 'run-1', '2026-10-28T09:05:00Z')")
+      .bind(id, wo, `Assign ${vendor ?? "in-house tech"} to ${wo}`, JSON.stringify({ effects: [{ kind: "update", table: "work_orders", id: wo, changes: vendor ? { status: "Assigned", vendor_id: vendor } : { status: "Assigned" } }] }), conf, amount);
+  const wo = (id: string, title = "Leak") => db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', ?, 'p01', ?, 'Plumbing', 'Urgent', 'New', '2026-10-28T09:00:00Z')").bind(id, title);
+  const decisions = async (pid: string) => (await db.prepare("SELECT count(*) AS n FROM ai_decisions WHERE workspace_id = ? AND proposal_id = ?").bind(WS, pid).first<{ n: number }>())?.n;
+
+  it("dispatches the suggested vendor once and records the decision", async () => {
+    await db.batch([wo("WO-10"), suggest("prop-10", "WO-10", "v01", 30000)]);
+    expect(await twice(() => act("work_orders.dispatch_suggested", "WO-10"))).toEqual([200, 409]);
+    expect(await db.prepare("SELECT status, vendor_id FROM work_orders WHERE workspace_id = ? AND id = 'WO-10'").bind(WS).first()).toEqual({ status: "Assigned", vendor_id: "v01" });
+    expect(await decisions("prop-10")).toBe(1);
+  });
+
+  it("sends an estimate over the auto-approve limit to the approver instead of dispatching", async () => {
+    await db.batch([wo("WO-11"), suggest("prop-11", "WO-11", "v01", 120000)]);
+    const r = await act("work_orders.dispatch_suggested", "WO-11");
+    expect(r).toMatchObject({ status: 202, message: expect.stringContaining("over the $750 auto-approve limit") });
+    expect(await db.prepare("SELECT status FROM work_orders WHERE workspace_id = ? AND id = 'WO-11'").bind(WS).first()).toBeNull();
+    expect(await db.prepare("SELECT assignee_role FROM ai_proposals WHERE workspace_id = ? AND id = 'prop-11'").bind(WS).first()).toEqual({ assignee_role: "property_manager" });
+    // The property manager is the approver: their click dispatches.
+    expect((await act("work_orders.dispatch_suggested", "WO-11", {}, "marcus")).status).toBe(200);
+  });
+
+  it("holds a job over the owner's limit for the owner", async () => {
+    await db.batch([wo("WO-12"), suggest("prop-12", "WO-12", "v01", 300000)]);
+    expect(await act("work_orders.dispatch_suggested", "WO-12", {}, "marcus")).toMatchObject({ status: 200, message: expect.stringContaining("on hold until the owner approves") });
+  });
+
+  it("won't dispatch an uninsured vendor, an in-house suggestion, or a decided one", async () => {
+    await db.batch([wo("WO-13"), suggest("prop-13", "WO-13", "v02", 30000), wo("WO-14"), suggest("prop-14", "WO-14", null, 30000), wo("WO-15")]);
+    expect(await act("work_orders.dispatch_suggested", "WO-13")).toMatchObject({ status: 409, error: expect.stringContaining("insurance") });
+    expect(await act("work_orders.dispatch_suggested", "WO-14")).toMatchObject({ status: 409, error: expect.stringContaining("in-house") });
+    expect(await act("work_orders.dispatch_suggested", "WO-15")).toMatchObject({ status: 409, error: expect.stringContaining("no open AI suggestion") });
+  });
+
+  it("stays inside the supervisor's scope", async () => {
+    await db.batch([db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', 'WO-16', 'p05', 'Leak', 'Plumbing', 'Urgent', 'New', '2026-10-28T09:00:00Z')"), suggest("prop-16", "WO-16", "v01", 30000)]);
+    expect((await act("work_orders.dispatch_suggested", "WO-16")).status).toBe(404);
+  });
+});

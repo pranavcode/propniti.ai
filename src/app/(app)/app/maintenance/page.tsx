@@ -15,7 +15,10 @@ import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } 
 import { StatusBadge } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { AIBadge, Confidence } from "@/components/app/ai";
-import { homeData, maintenanceProposals } from "@/extensions/maintenance/queries";
+import { homeData, maintenanceProposals, policyFor } from "@/extensions/maintenance/queries";
+import { HIGH_CONFIDENCE } from "@/extensions/maintenance/actions";
+import { policyCheck } from "@/extensions/maintenance/rules";
+import { AcceptSuggestions, DispatchSuggested } from "@/extensions/maintenance/ui/TriageActions";
 import { OPEN_FILTER } from "@/extensions/maintenance/store";
 import { MxApprovals, MxAsk } from "@/extensions/maintenance/ui/home";
 import { RequestCoiButton } from "@/extensions/risk/ui/RequestCoi";
@@ -66,6 +69,19 @@ export default async function MaintenanceHome() {
   const failed = [home, sla, ageP, trade, spend, techs].some((x) => x.error);
   const invoiceTotal = (h?.invoices ?? []).reduce((a, r) => a + Number(r.invoice_cents ?? 0), 0);
 
+  // The agent's open suggestion on each queued request, and whether this person's click dispatches
+  // it or sends it to Approvals (estimate over the auto-approve limit, and they aren't the approver).
+  const canDispatch = can(actor.role, "work_orders.dispatch_suggested", "work_orders");
+  const policies = new Map(await Promise.all([...new Set((h?.triage ?? []).map((w) => String(w.property_id)))].map(async (pid) => [pid, await policyFor(db, ws, pid).catch(() => null)] as const)));
+  const suggested = new Map((h?.triage ?? []).flatMap((w) => {
+    const sg = w.open_suggestion ? JSON.parse(String(w.open_suggestion)) as { id: string; vendor_id: string | null; amount_cents: number | null; confidence: number; queue_state: string } : null;
+    if (!sg?.vendor_id || sg.queue_state === "auto_handled") return [];
+    const pol = policies.get(String(w.property_id)) ?? null;
+    const level = policyCheck(Number(sg.amount_cents ?? 0), pol).level;
+    const toApprovals = level === "approver" && !["principal", "regional_manager", pol?.approver_role ?? "property_manager"].includes(actor.role);
+    return [[String(w.id), { high: Number(sg.confidence) >= HIGH_CONFIDENCE, toApprovals, note: toApprovals ? "Estimate is over the auto-approve limit: this sends it to Approvals" : level === "owner" ? "Estimate is over the owner's limit: the job waits for the owner" : undefined }]] as const;
+  }));
+  const highIds = [...suggested].filter(([, v]) => v.high).map(([k]) => k);
   const watch: { text: string; href: string; tone: string; coi?: boolean }[] = [];
   if (Number(c.emergencies)) watch.push({ text: `${c.emergencies} emergency work order${c.emergencies > 1 ? "s" : ""} open`, href: `/app/maintenance/work-orders?f.priority=Emergency&f.status=${OPEN}`, tone: "bg-tone-danger" });
   if (Number(c.past_sla)) watch.push({ text: `${c.past_sla} past SLA, ${c.due_today} more due today`, href: "/app/maintenance/work-orders?view=past-sla", tone: "bg-tone-danger" });
@@ -143,14 +159,14 @@ export default async function MaintenanceHome() {
         </KpiRow>
 
         <div className="grid gap-5 xl:grid-cols-12">
-          <Section id="triage" title="Triage queue" description="New requests, emergencies first. The Maintenance Triage agent's suggestion is ready on most; open one to review and dispatch." className="xl:col-span-7"
-            actions={<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button>}>
+          <Section id="triage" title="Triage queue" description="New requests, emergencies first. Dispatch the Maintenance Triage agent's suggestion here, or open a request to review it." className="xl:col-span-7"
+            actions={<>{canDispatch && <AcceptSuggestions ids={highIds} overLimit={highIds.filter((id) => suggested.get(id)?.toApprovals).length} />}<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button></>}>
             <div data-tour="mx-triage" className="overflow-hidden rounded-lg border bg-card">
               {h?.triage.length ? (
                 <ul className="divide-y">
                   {h.triage.map((w) => (
-                    <li key={String(w.id)}>
-                      <Link href={`/app/maintenance/intake/${encodeURIComponent(String(w.id))}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40">
+                    <li key={String(w.id)} className="flex items-center gap-2 pr-3 hover:bg-muted/40">
+                      <Link href={`/app/maintenance/intake/${encodeURIComponent(String(w.id))}`} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3">
                         {w.photo
                           // eslint-disable-next-line @next/next/no-img-element -- 400px static thumb
                           ? <img src={String(w.photo).replace(/\.webp$/, "-400.webp")} alt="" className="size-10 shrink-0 rounded-md object-cover ring-1 ring-border" loading="lazy" />
@@ -161,8 +177,9 @@ export default async function MaintenanceHome() {
                           {w.suggestion ? <span className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-tone-ai"><Sparkles className="size-3 shrink-0" /><span className="truncate">{String(w.suggestion).replace(/^[\w-]+: /, "")}</span>{w.confidence != null && <Confidence value={Number(w.confidence)} />}</span>
                             : <span className="mt-0.5 block text-[12px] text-muted-foreground">Not triaged yet</span>}
                         </span>
-                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                        {!(canDispatch && suggested.has(String(w.id))) && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
                       </Link>
+                      {canDispatch && suggested.has(String(w.id)) && <DispatchSuggested id={String(w.id)} note={suggested.get(String(w.id))?.note} />}
                     </li>
                   ))}
                 </ul>
