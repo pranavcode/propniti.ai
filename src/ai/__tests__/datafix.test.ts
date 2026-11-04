@@ -3,6 +3,7 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { get } from "../data";
 import { applyFixes } from "../datafix";
+import { fixProposal, queueReason } from "../tools/write";
 import { setModelForTests } from "../providers";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
 
@@ -74,5 +75,16 @@ describe("applying fixes from Data Health", () => {
     const refused = await apply("lena", actorOf("lena"), ["di1"], true);
     expect(refused.r.applied).toBe(0);
     expect(refused.decisions).toBe(0);
+  });
+
+  it("the page's button label follows the same rule: queued exactly when applying would queue", async () => {
+    for (const [id, actor] of [["lena", actorOf("lena")], ["marcus", MARCUS], ["daniel", actorOf("daniel")]] as const) {
+      for (const issue of ["di1", "di-rent"]) {
+        const { r, raw } = await apply(id, actor, [issue]);
+        const row = raw.prepare("SELECT * FROM data_issues WHERE id = ?").get(issue) as Record<string, unknown>;
+        const fix = row.suggested_fix ? row : { ...row, suggested_fix: JSON.stringify({ changes: { street: "123 Main St" } }) };
+        expect(queueReason(fixProposal(fix), actor.role) !== null).toBe(!r.results[0].ok);
+      }
+    }
   });
 });
