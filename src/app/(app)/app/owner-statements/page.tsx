@@ -11,6 +11,7 @@ import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { Money, StatusBadge } from "@/components/app/display";
 import { entitiesOf, entityInScope, monthLabel, periodsOf, statementOf } from "@/extensions/owners/statements";
 import { StatementView } from "@/extensions/owners/ui/StatementView";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 export const metadata = { title: "Owner statements · Propniti" };
 
@@ -63,7 +64,7 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
         </div>
 
         <div className="grid gap-3 lg:grid-cols-3">
-          <ChartCard className="lg:col-span-2" title="Rent collected to distribution, trailing 12 months" kind="stacked" data={waterfall.points.map((p) => ({ ...p, label: new Date(`${p.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) })) as never} x="label"
+          <ChartCard className="lg:col-span-2" title="Rent collected to distribution, trailing 12 months" kind="stacked" data={waterfall.points.map((p) => ({ ...p, label: monthTick(String(p.month)) })) as never} x="label"
             series={[{ key: "amount", label: "Distributed", format: "money" }, { key: "expense", label: "Vendor payments", format: "money" }, { key: "fee", label: "Management fee", format: "money" }, { key: "reserve", label: "Kept in reserve", format: "money" }]}
             drill="/app/owner-distributions?f.period={month}" help="Each bar is one month's cleared income, split into what was paid out, spent on vendors and kept as fees." />
           <ChartCard title={`Distribution by entity, ${byEntity.asOf ? monthLabel(byEntity.asOf) : ""}`} kind="hbar" data={byEntity.points as never} x="name"
@@ -92,7 +93,7 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
               {periods.slice(0, 13).map((p) => (
                 <li key={p.period}><Link href={href(entityId, p.period)} aria-current={p.period === period ? "page" : undefined}
                   className={cn("inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] tabular-nums transition-colors hover:bg-muted", p.period === period ? "border-primary/40 bg-primary/[0.07] font-medium text-primary" : "bg-card")}>
-                  {p.closed ? new Date(`${p.period}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) : "Open"}
+                  {p.closed ? monthTick(p.period) : "Open"}
                   {p.gap_cents !== 0 && <><span className="size-1.5 rounded-full bg-tone-danger" aria-hidden /><span className="sr-only">, unreconciled</span></>}
                 </Link></li>
               ))}

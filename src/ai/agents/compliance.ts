@@ -1,6 +1,7 @@
 import type { Row } from "@/entities/types";
 import { daysBetween, sql } from "../data";
 import { addDays, defineAgent, type Candidate } from "./framework";
+import { formatDate } from "@/lib/format";
 
 // Vendor insurance certificates (COIs) and property compliance items that are expired or due within
 // 30 days. An expired COI on a vendor with open jobs is a person's call: stop assigning them.
@@ -61,7 +62,7 @@ export default defineAgent({
         entity: "compliance_items", entityId: String(c.id), propertyId: (c.property_id as string) ?? null, action: "compliance_items.schedule",
         title: `${days < 0 ? "Overdue" : "Due soon"}: ${c.title} (${c.due_on})`, why: [`${c.kind} ${days < 0 ? `overdue by ${-days} days` : `due in ${days} days`}`], confidence: 0.9, risk: days < 0 ? "Medium" : "Low",
         facts: { item: String(c.title), due_on: String(c.due_on), days_left: days }, evidence: [{ entity_type: "compliance_items", entity_id: String(c.id), label: String(c.title) }],
-        effects: [{ kind: "task", title: `Schedule: ${c.title}`, detail: `${c.kind} due ${c.due_on}.`, property_id: (c.property_id as string) ?? null, assignee_role: "property_manager", priority: days < 0 ? "High" : "Normal", due_on: days < 0 ? ctx.today : String(c.due_on) }],
+        effects: [{ kind: "task", title: `Schedule: ${c.title}`, detail: `${c.kind} due ${formatDate(String(c.due_on), "always")}.`, property_id: (c.property_id as string) ?? null, assignee_role: "property_manager", priority: days < 0 ? "High" : "Normal", due_on: days < 0 ? ctx.today : String(c.due_on) }],
         priority: 1500 - days,
       });
     }

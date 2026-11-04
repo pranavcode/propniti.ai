@@ -16,6 +16,7 @@ import { errText, modelLoop, type AgentCtx } from "./runtime";
 import type { ToolKey } from "./types";
 import "./agents";
 import { agentName } from "@/ai/ui/labels";
+import { formatDate } from "@/lib/format";
 
 // The assistant (⌘J and /app/copilot). Three modes over the same tools the agents use:
 //   chat    answers about your data; the model plans the lookups, figures come from tool results
@@ -110,7 +111,7 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "leases", filters: [{ field: "status", op: "eq", value: "Active" }, { field: "end_on", op: "gte", value: ctx.today }, { field: "end_on", op: "lte", value: end }, ...(offered.length ? [{ field: "id", op: "nin", value: offered }] : [])], sort: ["end_on", "asc"], size: 25 });
     const what = `active lease${r.total === 1 ? "" : "s"}${noOffer ? " without a renewal offer" : ""}`;
     return {
-      answer: r.total ? `${r.total} ${what} end${r.total === 1 ? "s" : ""} by ${end}. The first: ${r.rows.slice(0, 5).map((l) => `${l.id} on ${l.end_on}`).join(", ")}.` : `No ${what} end by ${end}.`,
+      answer: r.total ? `${r.total} ${what} end${r.total === 1 ? "s" : ""} by ${end}. The first: ${r.rows.slice(0, 5).map((l) => `${l.id} on ${formatDate(String(l.end_on), "always")}`).join(", ")}.` : `No ${what} end by ${end}.`,
       table: { columns: [{ key: "id", label: "Lease" }, { key: "end_on", label: "Ends" }, { key: "rent", label: "Rent", align: "right" }], rows: r.rows.map((l) => ({ id: l.id, end_on: l.end_on, rent: money(Number(l.rent_cents)), href: hrefFor("leases", String(l.id)) })) },
       citations: r.rows.slice(0, 10).map((l) => ({ entity_type: "leases", entity_id: String(l.id), label: `Lease ${l.id}`, href: hrefFor("leases", String(l.id)) })),
     };
@@ -146,7 +147,7 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
   }
   if (/\bbank (detail|change|account)/i.test(q)) {
     const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "vendors", filters: [{ field: "bank_changed_at", op: "notnull" }], sort: ["bank_changed_at", "desc"], size: 10 });
-    return { answer: r.total ? `${r.total} vendor${r.total === 1 ? "" : "s"} changed bank details: ${r.rows.map((v) => `${v.company} on ${String(v.bank_changed_at).slice(0, 10)}`).join(", ")}. Payments to them should wait for a phone verification.` : "No vendor has changed bank details.", citations: r.rows.map((v) => ({ entity_type: "vendors", entity_id: String(v.id), label: String(v.company), href: hrefFor("vendors", String(v.id)) })) };
+    return { answer: r.total ? `${r.total} vendor${r.total === 1 ? "" : "s"} changed bank details: ${r.rows.map((v) => `${v.company} on ${formatDate(String(v.bank_changed_at), "always")}`).join(", ")}. Payments to them should wait for a phone verification.` : "No vendor has changed bank details.", citations: r.rows.map((v) => ({ entity_type: "vendors", entity_id: String(v.id), label: String(v.company), href: hrefFor("vendors", String(v.id)) })) };
   }
   if (/\b(data (issue|health|quality)|bad data|duplicates?)\b/i.test(q)) {
     const r = await ctx.call<{ total: number; rows: Row[] }>("data.issues", { status: "open", size: 10 });
@@ -195,7 +196,7 @@ async function planActions(ctx: AgentCtx, q: string, start: StartAgent): Promise
       const m = reminder(d);
       await ctx.proposeFull({
         entity: "leases", entityId: d.lease_id, propertyId: d.property_id, action: "leases.send_reminder",
-        title: `Remind ${d.resident} — ${money(d.balance_cents)}, ${d.days_late} days late`, why: [`${money(d.balance_cents)} owed since ${d.oldest_due_on}`, `Requested in the assistant: "${q.slice(0, 120)}"`],
+        title: `Remind ${d.resident} — ${money(d.balance_cents)}, ${d.days_late} days late`, why: [`${money(d.balance_cents)} owed since ${formatDate(d.oldest_due_on, "always")}`, `Requested in the assistant: "${q.slice(0, 120)}"`],
         confidence: 0.9, risk: "Low", payload: { effects: [{ kind: "message", party_kind: "resident", party_id: d.resident_id, property_id: d.property_id, channel: "Email", ...m, entity_type: "leases", entity_id: d.lease_id }], facts: { balance_cents: d.balance_cents, days_late: d.days_late } },
         evidence: [{ entity_type: "leases", entity_id: d.lease_id, label: `${d.resident} · ${d.property} #${d.unit}` }],
       });

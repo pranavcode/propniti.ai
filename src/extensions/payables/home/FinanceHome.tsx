@@ -15,11 +15,12 @@ import type { ProposalJson } from "@/ai/ui/client";
 import { agentName } from "@/ai/ui/labels";
 import { ApprovalQueue, HomeAsk } from "@/extensions/portfolio/home/client";
 import { financeHome, type BriefingItem } from "./data";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // The accountant's home (Grace Kim): briefing and approvals first, then payables, cash and budget.
 // Receivables widgets come from the receivables lane through the widgets registry.
 
-const label = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const label = monthTick;
 const monthLong = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const TONE: Record<BriefingItem["tone"], string> = { danger: "bg-tone-danger", warning: "bg-tone-warning", info: "bg-tone-info", success: "bg-tone-success" };
 const SPAN = { sm: "xl:col-span-4", md: "xl:col-span-6", lg: "xl:col-span-8", full: "xl:col-span-12" } as const;

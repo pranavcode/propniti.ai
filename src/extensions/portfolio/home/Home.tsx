@@ -16,11 +16,12 @@ import type { ProposalJson } from "@/ai/ui/client";
 import { ExplainableKpi, ExplainLink } from "../ui/Explain";
 import { ApprovalQueue, CompareTable, HomeAsk } from "./client";
 import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, type CompareRow, type HomeMetrics } from "./data";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // AI-first homes for the principal (org-wide) and the regional manager (one region). Briefing and
 // approvals first, then explainable KPIs, then charts that drill to the rows behind them.
 
-const label = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const label = monthTick;
 const monthLong = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const pts = (rows: Row[]): ChartPoint[] => rows.map((r) => ({ ...(r as ChartPoint), label: label(String(r.month)) }));
 

@@ -9,9 +9,10 @@ import { answerOwner } from "@/extensions/owners/portal/answers/owner";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { PortalAsk } from "@/extensions/owners/portal/ui/PortalAsk";
 import { monthLabel } from "@/extensions/owners/statements";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // Chart axes read "Oct 26"; the drill-down keeps the YYYY-MM month.
-const short = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+const short = monthTick;
 
 const hero = (photos: string, id: string) => {
   try {

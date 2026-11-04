@@ -7,6 +7,7 @@ import { registerEntity } from "../registry";
 import type { Role } from "../types";
 import { COI_STATUS_SQL, COMPLIANCE_STATUS_SQL, POLICY_STATUS_SQL } from "@/extensions/risk/sql";
 import { complianceSentence } from "@/ai/rules-sentences";
+import { formatDate } from "@/lib/format";
 
 const RISK_WRITE: Role[] = [...OPS, "maintenance_supervisor"];
 const WO_OPEN = "('Completed', 'Paid', 'Cancelled')";
@@ -80,7 +81,7 @@ registerEntity({
   nav: { section: "operations", group: "Compliance", order: 72, label: "Vendor COIs" },
   route: "/app/compliance/cois",
   titleField: "name",
-  subtitle: (r) => [r.carrier, r.expires_on ? `expires ${r.expires_on}` : null].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.carrier, r.expires_on ? `expires ${formatDate(String(r.expires_on), "always")}` : null].filter(Boolean).join(" · "),
   scopePath: null,
   fields: {
     name: { type: "text", label: "Certificate", sortable: true, list: { default: true, width: 260 },

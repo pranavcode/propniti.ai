@@ -14,6 +14,7 @@ import { registerTab } from "../tabs";
 import { Bva } from "./budget/Bva";
 import { loadReconciliation } from "./recon/data";
 import { ReconcileView, type ReconJson } from "./recon/ReconcileView";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // Custom record tabs for the accounting module (referenced from src/entities/defs/accounting.ts).
 
@@ -154,7 +155,7 @@ registerTab({
     const list = rows.results;
     if (!list.length) return <EmptyState compact kind="chart" title="No readings yet" description="Monthly readings appear here once the meter is read or the utility's bill is imported." />;
     const unit = row.utility === "Electric" ? "kWh" : row.utility === "Gas" ? "therms" : "kgal";
-    const chart = list.slice().reverse().map((r) => ({ month: r.read_on.slice(0, 7), label: new Date(`${r.read_on.slice(0, 7)}-15T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }), usage: r.usage, cost: r.cost_cents == null ? null : r.cost_cents / 100 }));
+    const chart = list.slice().reverse().map((r) => ({ month: r.read_on.slice(0, 7), label: monthTick(r.read_on), usage: r.usage, cost: r.cost_cents == null ? null : r.cost_cents / 100 }));
     const avg = list.filter((r) => r.usage != null).reduce((s, r, _, a) => s + Number(r.usage) / a.length, 0);
     return (
       <div className="space-y-3">

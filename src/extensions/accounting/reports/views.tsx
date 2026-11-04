@@ -14,11 +14,12 @@ import { runSpec, type Ctx } from "./run";
 import { arAging, noiByProperty, pnl, rentRoll } from "./standard";
 import { COMPARE_LABEL, describeSpec, GROUP_LABEL, measureOf, periodLabel, type ScopeProperty } from "./spec";
 import type { AskResult } from "./ask";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // Server-rendered report bodies. Each pairs a chart (one axis) with the table behind it and a CSV
 // of exactly the rows shown.
 
-const monthShort = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const monthShort = monthTick;
 const r2 = (n: number | null) => (n == null ? null : Math.round(n * 100) / 100);
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : "−"}${Math.abs(n * 100).toFixed(1)}%`);
 

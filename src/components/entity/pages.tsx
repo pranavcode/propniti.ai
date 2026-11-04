@@ -14,7 +14,7 @@ import { DataHealthBadge, type HealthIssue } from "@/components/app/ai/DataHealt
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
 import { getPlatform } from "@/lib/platform";
-import { formatDateTime, formatRelative } from "@/lib/format";
+import { formatDate, formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { fieldRows, hintsFor, valueText, type FieldHint } from "@/lib/fieldText";
 import { Term } from "@/components/app/Term";
@@ -206,7 +206,7 @@ function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "do
             {kind === "documents" && <a href={safeHref(r.url)} target="_blank" rel="noreferrer" className="text-[13px] font-medium hover:text-primary hover:underline">{String(r.name)}</a>}
             <p className="mt-0.5 text-[11.5px] text-muted-foreground">
               {kind === "notes" && <>{String(r.author_name ?? r.author_id)} · </>}
-              {kind === "tasks" && r.due_on != null && <>Due {String(r.due_on)} · {String(r.priority)} · </>}
+              {kind === "tasks" && r.due_on != null && <>Due {formatDate(String(r.due_on), "always")} · {String(r.priority)} · </>}
               {kind === "documents" && <>{String(r.doc_type ?? "Document")}{r.filed_to ? ` · ${String(r.filed_to)}` : ""} · </>}
               <span title={formatDateTime(String(r.created_at ?? r.at ?? r.uploaded_at))}>{formatRelative(String(r.created_at ?? r.at ?? r.uploaded_at))}</span>
             </p>

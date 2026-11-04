@@ -2,6 +2,7 @@ import type { Delinquent } from "../facts";
 import type { ActionKey } from "@/entities/types";
 import { addDays, defineAgent, money, planOf, type Candidate } from "./framework";
 import { planMessage, planSplit, reminder } from "../rules";
+import { formatDate } from "@/lib/format";
 export { reminder } from "../rules";
 
 // Delinquency follow-up: a reminder for the recently late, a payment plan offer at 31–90 days,
@@ -46,7 +47,7 @@ export default defineAgent({
       if (action === "leases.refer_to_legal") {
         return {
           ...base, action: "leases.refer_to_legal", title: `Review ${d.resident} for legal action — ${money(d.balance_cents)}, ${d.days_late} days late`,
-          why: [`${money(d.balance_cents)} owed; oldest unpaid charge due ${d.oldest_due_on} (${d.days_late} days)`, `${money(d.aging.d90p)} is over 90 days old`, d.open_plan ? "A payment plan is already open and isn't being kept" : "No payment plan on file"],
+          why: [`${money(d.balance_cents)} owed; oldest unpaid charge due ${formatDate(d.oldest_due_on, "always")} (${d.days_late} days)`, `${money(d.aging.d90p)} is over 90 days old`, d.open_plan ? "A payment plan is already open and isn't being kept" : "No payment plan on file"],
           confidence: 0.85, risk: "High", category: "Legal", alwaysHuman: true, mandatory: true, priority: 3000 + d.days_late,
           effects: [{ kind: "task", title: `Legal review: ${d.resident}, ${d.property} #${d.unit}`, detail: `Balance ${money(d.balance_cents)}, ${d.days_late} days late. Check state notice rules before any filing.`, assignee_role: "property_manager", priority: "High", due_on: addDays(ctx.today, 3) }],
         };
@@ -62,7 +63,7 @@ export default defineAgent({
       }
       return {
         ...base, action: "leases.send_reminder", title: `Remind ${d.resident} — ${money(d.balance_cents)}, ${d.days_late} days late`,
-        why: [`${money(d.balance_cents)} owed since ${d.oldest_due_on}`, d.risk_score != null ? `Delinquency risk score ${d.risk_score}/100` : "First reminder this cycle"],
+        why: [`${money(d.balance_cents)} owed since ${formatDate(d.oldest_due_on, "always")}`, d.risk_score != null ? `Delinquency risk score ${d.risk_score}/100` : "First reminder this cycle"],
         confidence: 0.92, risk: "Low", priority: 1000 + d.days_late,
         message: party ? { ...party, ...reminder(d) } : undefined, effects: [],
       };

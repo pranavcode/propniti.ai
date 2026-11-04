@@ -6,6 +6,7 @@ import { AS_OF } from "@/seed/constants";
 import { effective } from "@/server/effective";
 import { nowIso } from "@/server/workspace";
 import { registerAction } from "../actions";
+import { formatDate } from "@/lib/format";
 
 // "Ask about renewing" from the resident portal: a message in the resident's renewal conversation
 // with the office, at most once per lease per week. The message id carries the lease and the week,
@@ -52,7 +53,7 @@ async function askRenewal(ctx: ActionContext, resident: Row): Promise<ActionResu
       .bind(ctx.ws, thread, lease.property_id, String(resident.id), lease.id, at, msg),
   ]);
   if (!sent.meta.changes) return { status: 409, error: "You already asked this week. The office replies in Messages." };
-  await notifyManager(ctx, lease.property_id, "Resident asking about renewal", `${name || "A resident"} asked about renewing lease ${lease.id}${lease.end_on ? ` (ends ${lease.end_on})` : ""}.`, `/app/leases/${lease.id}`, ["leases", lease.id]).run();
+  await notifyManager(ctx, lease.property_id, "Resident asking about renewal", `${name || "A resident"} asked about renewing lease ${lease.id}${lease.end_on ? ` (ends ${formatDate(lease.end_on, "always")})` : ""}.`, `/app/leases/${lease.id}`, ["leases", lease.id]).run();
   return { status: 200, message: "Sent to the office. They'll reply in Messages.", href: `/portal/resident/messages?thread=${thread}` };
 }
 

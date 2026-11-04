@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FixPreview } from "@/components/app/ai/FixPreview";
 import { runAction, usd } from "./client";
+import { formatDate } from "@/lib/format";
 
 export type WrongLeaseIssue = {
   id: string; status: string; paymentId: string; amount: number;
@@ -29,9 +30,9 @@ export function WrongLeaseFix({ issue }: { issue: WrongLeaseIssue }) {
       rule="payments.wrong_lease"
       changes={[
         { field: "lease_id", label: "Lease", before: issue.from.label, after: `${to.lease} (${to.household})` },
-        ...(issue.from.charge === to.charge ? [] : [{ field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${to.due_on}` }]),
+        ...(issue.from.charge === to.charge ? [] : [{ field: "charge_id", label: "Applied to", before: issue.from.charge ?? "unapplied", after: `${to.description}, due ${formatDate(to.due_on, "always")}` }]),
       ]}
-      why={[...issue.why, ...(issue.from.charge === to.charge ? [`It already pays ${to.description} (due ${to.due_on}), which is on ${to.lease}`] : []), ...(issue.canApprove ? ["No money moves; both leases are in the same property and trust account. Applying the fix counts as your approval and is recorded in the audit log."] : [])]}
+      why={[...issue.why, ...(issue.from.charge === to.charge ? [`It already pays ${to.description} (due ${formatDate(to.due_on, "always")}), which is on ${to.lease}`] : []), ...(issue.canApprove ? ["No money moves; both leases are in the same property and trust account. Applying the fix counts as your approval and is recorded in the audit log."] : [])]}
       confidence={issue.confidence}
       source={issue.source}
       needsPerson={issue.canApprove ? null : "Moves a ledger entry: needs an accountant, regional manager or principal"}

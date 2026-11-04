@@ -4,6 +4,7 @@ import { daysBetween, sql } from "../data";
 import { addDays, defineAgent, money, planOf, type Candidate } from "./framework";
 import { letterDates, renewalRent } from "../rules";
 import type { AgentCtx } from "../runtime";
+import { formatDate } from "@/lib/format";
 export { renewalRent } from "../rules";
 
 // Renewal offers for leases ending in the next 90 days that have no offer yet. Pricing: move toward
@@ -48,11 +49,11 @@ export default defineAgent({
       return {
         entity: "leases", entityId: String(r.id), propertyId: String(r.property_id), action: "leases.send_renewal_offer",
         title: `Offer ${name} a 12-month renewal at ${money(rent)} (${rent > current ? `+${(((rent - current) / current) * 100).toFixed(1)}%` : "flat"})`,
-        why: [`Lease ends ${r.end_on} (${days} days)`, reason, risky ? `Delinquency risk score ${r.risk_score}: a person should confirm` : "Pays on time; good renewal candidate"],
+        why: [`Lease ends ${formatDate(String(r.end_on), "always")} (${days} days)`, reason, risky ? `Delinquency risk score ${r.risk_score}: a person should confirm` : "Pays on time; good renewal candidate"],
         confidence: risky ? 0.6 : 0.82, risk: risky ? "Medium" : "Low", category: rent < current ? "Concession" : undefined,
         facts: { resident: name, property: String(r.property), unit: String(r.unit), end_on: String(r.end_on), current_rent_cents: current, market_rent_cents: market, offer_rent_cents: rent, days_to_end: days },
         evidence: [{ entity_type: "leases", entity_id: String(r.id), label: `${name} · ${r.property} #${r.unit}` }],
-        message: { party_kind: "resident", party_id: String(r.resident_id), subject: `Your renewal offer at ${r.property}`, body: `Hi ${r.first_name}, your lease at ${r.property} #${r.unit} ends on ${r.end_on}. We'd love for you to stay: we can renew for 12 months at ${money(rent)} a month. Reply to accept or to talk about other terms.` },
+        message: { party_kind: "resident", party_id: String(r.resident_id), subject: `Your renewal offer at ${r.property}`, body: `Hi ${r.first_name}, your lease at ${r.property} #${r.unit} ends on ${formatDate(String(r.end_on), "always")}. We'd love for you to stay: we can renew for 12 months at ${money(rent)} a month. Reply to accept or to talk about other terms.` },
         effects: [{ kind: "insert", table: "renewal_offers", row: { lease_id: String(r.id), property_id: String(r.property_id), version: 1, term_months: 12, rent_cents: rent, current_rent_cents: current, market_rent_cents: market, status: "Sent", sent_at: demoNowIso(), expires_on: addDays(ctx.today, 30) } }],
         priority: 1000 - days,
       };
@@ -77,7 +78,7 @@ async function unanswered(ctx: AgentCtx): Promise<Candidate[]> {
     return {
       entity: "renewal_offers", entityId: String(r.id), propertyId: String(r.property_id), action: "renewal_offers.follow_up",
       title: notice ? `${name}'s lease ends ${days ? `in ${days} day${days === 1 ? "" : "s"}` : "today"} with no reply: send a month-to-month notice` : `Remind ${name}: renewal offer unanswered, lease ends in ${days} days`,
-      why: [`Offer of ${money(rent)} sent ${String(r.sent_at).slice(0, 10)}, no reply`, `Lease ends ${r.end_on} (${days ? `${days} days` : "today"})`, notice ? "Month-to-month wording is a legal notice: a person decides" : "A reminder before the lease ends"],
+      why: [`Offer of ${money(rent)} sent ${formatDate(String(r.sent_at), "always")}, no reply`, `Lease ends ${formatDate(String(r.end_on), "always")} (${days ? `${days} days` : "today"})`, notice ? "Month-to-month wording is a legal notice: a person decides" : "A reminder before the lease ends"],
       confidence: notice ? 0.7 : 0.85, risk: notice ? "Medium" : "Low", alwaysHuman: notice,
       facts: { resident: name, property: String(r.property), unit: String(r.unit), end_on: String(r.end_on), offer_rent_cents: rent, current_rent_cents: Number(r.current_rent_cents ?? rent), days_to_end: days },
       evidence: [{ entity_type: "leases", entity_id: String(r.lease_id), label: `${name} · ${r.property} #${r.unit}` }, { entity_type: "renewal_offers", entity_id: String(r.id), label: "Renewal offer" }],

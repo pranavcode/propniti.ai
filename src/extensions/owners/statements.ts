@@ -3,6 +3,7 @@ import { MANAGEMENT_FEE_RATE } from "@/lib/ledger";
 import type { Db } from "@/lib/platform/types";
 import { CURRENT_PERIOD } from "@/seed/constants";
 import { effective } from "@/server/query";
+import { formatDate } from "@/lib/format";
 
 // Owner statements per entity per month, computed from trust transfers. A closed month is the
 // transfers between two owner payouts (Lane A's period cutoff by seq); the open month is everything
@@ -149,7 +150,7 @@ export async function statementOf(c: Ctx, entityId: string, period: string): Pro
     if (d.reserve_cents) lines.push({ key: "reserve", label: d.reserve_cents > 0 ? "Added to operating reserve" : "Released from operating reserve", amount_cents: Math.abs(d.reserve_cents), sign: d.reserve_cents > 0 ? -1 : 1, detail: `Reserve target ${(entity.reserve_cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} per the management agreement` });
     if (adj) lines.push({ key: "gap", label: "Correction paid to owner", amount_cents: adj.amount_cents, sign: -1, detail: `Rounding shortfall paid ${adj.created.slice(0, 10)} by ACH` });
     if (gap) lines.push({ key: "gap", label: "Unreconciled difference", amount_cents: Math.abs(gap), sign: gap > 0 ? -1 : 1, detail: "The payout and the statement disagree" });
-    lines.push({ key: "distribution", label: "Distributed to owner", amount_cents: d.amount_cents, sign: -1, detail: `Paid ${d.paid_on} by ACH` });
+    lines.push({ key: "distribution", label: "Distributed to owner", amount_cents: d.amount_cents, sign: -1, detail: `Paid ${formatDate(d.paid_on, "always")} by ACH` });
   } else {
     lines.push({ key: "distribution", label: "Available to distribute", amount_cents: Math.max(net, 0), sign: -1, detail: totals.pending_in_cents ? "Pending deposits are added once they clear" : "Cleared items since the last payout" });
   }
@@ -253,7 +254,7 @@ export async function explainLine(c: Ctx, entityId: string, period: string, line
       trace.push({ label: "Payout transfer", detail: `${d.transfer_id}, ${d.status === "Pending" ? "on its way" : d.status === "Cleared" ? "cleared" : d.status ?? "unknown"}` });
       text = `Income of ${usd(d.income_cents)} less vendor payments of ${usd(d.expense_cents)} and the management fee of ${usd(d.fee_cents)} leaves ${usd(d.income_cents - d.expense_cents - d.fee_cents)}.`;
       if (d.reserve_cents) text += ` ${usd(Math.abs(d.reserve_cents))} was ${d.reserve_cents > 0 ? "kept in" : "released from"} the operating reserve.`;
-      text += ` ${usd(d.amount_cents)} was paid to ${st.entity.owner_name} on ${d.paid_on} by ACH.`;
+      text += ` ${usd(d.amount_cents)} was paid to ${st.entity.owner_name} on ${formatDate(d.paid_on, "always")} by ACH.`;
       if (prior?.distribution) text += change(d.amount_cents, prior.distribution.amount_cents).replace("the month before", `${monthLabel(prior.period)}'s distribution`);
     } else {
       text = `So far this month: ${usd(st.totals.income_cents)} of income has cleared, less ${usd(st.totals.vendor_cents)} of vendor payments and ${usd(st.totals.fee_cents)} of fees, leaving ${usd(st.net_cents)} to distribute.${st.totals.pending_in_cents ? ` Another ${usd(st.totals.pending_in_cents)} is still clearing.` : ""} The statement closes when the distribution is sent.`;
