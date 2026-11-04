@@ -5,6 +5,7 @@ import { scoreApplicant } from "../agents/leasing";
 import { triage } from "../agents/maintenance";
 import { checkDraft, fixProposal } from "../tools/write";
 import { unknownNumbers } from "../rules";
+import { fixRangeDirection } from "../nlfilter";
 
 // The rule-side eval cases (evals/cases/{triage,draft,data-fix,applicant-scoring}.json): what the
 // agents compute without a model, and what any model output is checked against.
@@ -96,5 +97,19 @@ describe("summary number check", () => {
   });
   it("still flags invented or abbreviated figures", () => {
     expect(unknownNumbers("Spend was $117K over 18 months.", facts)).toEqual(["$117", "18"]);
+  });
+});
+
+describe("AI filter range direction", () => {
+  const spec = (op: "min" | "max", value: string) => ({ filters: [{ field: "cost", op, value }], q: null, sort: null, sortDir: null, explanation: "" });
+  it("turns a model's max into min for 'over $1,000' (nlf-wo-cost)", () => {
+    expect(fixRangeDirection(spec("max", "1000.00"), "jobs that cost over $1,000").filters[0].op).toBe("min");
+  });
+  it("turns min into max for 'under 2k' and leaves a matching op alone", () => {
+    expect(fixRangeDirection(spec("min", "2000"), "bills under 2k").filters[0].op).toBe("max");
+    expect(fixRangeDirection(spec("min", "1000"), "at least $1,000").filters[0].op).toBe("min");
+  });
+  it("leaves a number the text didn't compare alone", () => {
+    expect(fixRangeDirection(spec("max", "500"), "jobs that cost over $1,000").filters[0].op).toBe("max");
   });
 });
