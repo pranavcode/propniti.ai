@@ -29,6 +29,9 @@ describe("format", () => {
     expect(formatRelative("2026-11-04T11:55:00Z", now)).toBe("5m ago");
     expect(formatRelative("2026-11-03T09:00:00Z", now)).toBe("yesterday");
     expect(formatRelative("2026-11-01T09:00:00Z", now)).toBe("3 days ago");
+    // A stamp a little ahead of "now" (another machine's clock) is still "just now", never "in 1m".
+    expect(formatRelative("2026-11-04T12:01:30Z", now)).toBe("just now");
+    expect(formatRelative("2026-11-04T12:30:00Z", now)).toBe("in 30m");
     expect(formatDue("2026-11-02", now)).toEqual({ text: "Late by 2 days", late: true, soon: false });
     expect(formatDue("2026-11-04", now).text).toBe("Due today");
   });

@@ -86,13 +86,14 @@ export const formatDateTime = (v: DateInput) => { const d = toDate(v); return d 
 export const formatFull = (v: DateInput) => { const d = toDate(v); return d ? full.format(d) : "—"; };
 
 // "just now", "5m ago", "3h ago", "yesterday", "3 days ago", "in 2 days", then the date.
+// A stamp up to 2 minutes ahead of now (a browser clock behind the server's) still reads "just now".
 export function formatRelative(v: DateInput, now = demoNow()): string {
   const d = toDate(v);
   if (!d) return "—";
   const diff = d.getTime() - now.getTime();
   const past = diff < 0;
   const s = Math.abs(diff) / 1000;
-  if (s < 45) return "just now";
+  if (s < 45 || (!past && s < 120)) return "just now";
   const m = s / 60, h = m / 60;
   if (m < 60) return past ? `${Math.round(m)}m ago` : `in ${Math.round(m)}m`;
   if (h < 24 && sameDay(d, now)) return past ? `${Math.round(h)}h ago` : `in ${Math.round(h)}h`;
