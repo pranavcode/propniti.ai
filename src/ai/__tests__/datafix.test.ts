@@ -180,7 +180,9 @@ describe("Data Health filters and bulk actions across pages", () => {
     const t = await issueTargets(data, { entity_id: "p02" }, "safe");
     const [a, b] = await Promise.all([applyFixes(data, getPersona("marcus")!, t.ids, { safeOnly: true }), applyFixes(data, getPersona("marcus")!, t.ids, { safeOnly: true })]);
     expect(a.applied + b.applied).toBe(31);
-    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_decisions WHERE workspace_id = ?").get(WS)).toMatchObject({ n: 31 });
+    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_decisions WHERE workspace_id = ? AND decision = 'Approved'").get(WS)).toMatchObject({ n: 31 });
+    // A proposal that lost the race is closed (Rejected, noted as superseded), so nothing is left waiting.
+    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_proposals p WHERE workspace_id = ? AND entity_type = 'data_issues' AND NOT EXISTS (SELECT 1 FROM ai_decisions d WHERE d.workspace_id = p.workspace_id AND d.proposal_id = p.id)").get(WS)).toMatchObject({ n: 0 });
     const lena = { db: f.db, ws: WS, actor: actorOf("lena") };
     const send = await issueTargets(lena, { rule: "leases.rent_outlier" }, "send");
     const r = await applyFixes(lena, getPersona("lena")!, send.ids, { safeOnly: false });

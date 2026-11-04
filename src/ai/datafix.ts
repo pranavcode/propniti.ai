@@ -59,7 +59,9 @@ async function fixFor(data: DataCtx, issue: Row): Promise<Record<string, unknown
   return c ? { ...c, source: "data_health" } : null;
 }
 
-export const BULK_FIX_CAP = 100;
+// Each fix runs about a dozen queries (proposal, snapshot, decision, change, log, audit), so 50 per
+// click stays well under D1's ~1,000 queries per request.
+export const BULK_FIX_CAP = 50;
 const SCAN = 500;
 
 // The bulk buttons on the Data Health page, across every page that matches the filters. "safe":
