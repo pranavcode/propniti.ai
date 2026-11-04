@@ -11,3 +11,36 @@ export function cleanNarrative(text: string): string {
 
 // True when text still holds a fact key ("delta_pct"), a unit suffix or a {placeholder}.
 export const hasTokens = (text: string) => TOKEN.test(text);
+
+// The figure check proves a number came from the facts, not that the sentence moves it the right
+// way: "$4,619 decrease" passes when the fact is +4,619. These checks catch the direction.
+const UP = /^(increas\w*|gain\w*|ris(e|es|ing)|rose|grow\w*|grew|higher|up|add(s|ed|ing)?|improv\w*|boost\w*)$/i;
+const DOWN = /^(decreas\w*|declin\w*|drop\w*|fell|fall\w*|lower\w*|loss\w*|los(e|es|ing)|lost|loser|down|reduc\w*|shrink\w*|shrank|tak(e|es|ing))$/i;
+// For costs, "rose" means NOI fell, so clauses about costs are left to the figure check.
+const COST = /\b(expense|opex|cost|vacancy|concession|tax|insurance|payroll|repair|utilit)/i;
+
+export function wrongDirections(text: string, facts: Record<string, unknown>): string[] {
+  const signed = Object.entries(facts).filter((e): e is [string, number] => typeof e[1] === "number" && e[1] !== 0 && /(delta|change|effect)/.test(e[0]) && e[0].endsWith("_usd"));
+  const out: string[] = [];
+  for (const clause of text.split(/[;.](?=\s|$)|,\s|\s(?:and|while|but)\s/)) {
+    if (COST.test(clause)) continue;
+    const words = [...clause.matchAll(/[A-Za-z]+/g)].map((m) => ({ w: m[0], at: m.index! })).filter((x) => UP.test(x.w) || DOWN.test(x.w));
+    for (const m of clause.matchAll(/([+\-−])?\$\s?(\d[\d,]*)(?:\.\d+)?/g)) {
+      const n = Number(m[2].replace(/,/g, ""));
+      const signs = new Set(signed.filter(([, v]) => Math.abs(Math.round(v)) === n).map(([, v]) => Math.sign(v)));
+      if (signs.size !== 1) continue;
+      const sign = [...signs][0];
+      let said = m[1] ? (m[1] === "+" ? 1 : -1) : 0;
+      if (!said && words.length) {
+        const near = words.reduce((a, b) => (Math.abs(b.at - m.index!) < Math.abs(a.at - m.index!) ? b : a));
+        said = UP.test(near.w) ? 1 : -1;
+      }
+      if (said && said !== sign) out.push(`${m[0].trim()} is a ${sign > 0 ? "gain" : "loss"}`);
+    }
+  }
+  // "Top loser" for a property that gained (or "top gainer" for one that lost).
+  const ranked = (kind: "gainer" | "loser") => Object.entries(facts).some(([k, v]) => k.includes(kind) && k.endsWith("_usd") && typeof v === "number" && (kind === "gainer" ? v > 0 : v < 0));
+  if (/\blosers?\b|\bloses (the )?most\b/i.test(text) && !ranked("loser")) out.push("names a top loser, but no property lost");
+  if (/\bgainers?\b|\bgains (the )?most\b/i.test(text) && !ranked("gainer")) out.push("names a top gainer, but no property gained");
+  return out;
+}
