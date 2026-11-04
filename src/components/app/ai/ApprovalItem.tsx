@@ -19,7 +19,7 @@ export type ApprovalItemProps = {
   why: string[];
   evidence?: Evidence[];
   confidence?: number;
-  policy?: string;                       // "Over the $500 owner limit · needs a principal"
+  policy?: string;                       // "Over the $500 owner limit · needs a principal"; shown when this person can't approve
   runHref?: string;                      // the agent run that proposed it
   recordHref?: string;
   createdAt?: string;
@@ -57,6 +57,8 @@ export function ApprovalItem(p: ApprovalItemProps) {
     finally { setBusy(false); }
   };
 
+  // The policy explains why Approve is locked; for someone who may approve it would only mislead.
+  const shownPolicy = onApprove && canApprove ? undefined : policy;
   const actions = state === "open" ? (
     <div className="flex shrink-0 items-center gap-1">
       {onReject && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act("rejected")} aria-label={`Reject: ${title}`}><X /><span className={cn(variant === "row" && "sr-only")}>Reject</span></Button>}
@@ -94,7 +96,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
           {amount != null && <Money value={amount} className="w-24 text-right font-medium" />}
           {actions}
         </div>
-        {open && <Details why={why} evidence={evidence} confidence={confidence} policy={policy} runHref={runHref} recordHref={recordHref} className="px-3 pb-3 pl-9" />}
+        {open && <Details why={why} evidence={evidence} confidence={confidence} policy={shownPolicy} runHref={runHref} recordHref={recordHref} className="px-3 pb-3 pl-9" />}
       </div>
     );
   }
@@ -108,7 +110,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
         </div>
         {amount != null && <div className="text-right"><Money value={amount} className="text-[15px] font-semibold" /><div className="text-[11px] text-muted-foreground">amount</div></div>}
       </div>
-      {open && <Details why={why} evidence={evidence} confidence={confidence} policy={policy} runHref={runHref} recordHref={recordHref} className="px-3.5 pb-3" />}
+      {open && <Details why={why} evidence={evidence} confidence={confidence} policy={shownPolicy} runHref={runHref} recordHref={recordHref} className="px-3.5 pb-3" />}
       <div className="flex items-center gap-2 border-t px-3.5 py-2">
         <button onClick={() => setOpen((o) => !o)} className="text-[12px] text-muted-foreground hover:text-foreground">{open ? "Hide details" : "Why?"}</button>
         <div className="ml-auto">{actions}</div>
