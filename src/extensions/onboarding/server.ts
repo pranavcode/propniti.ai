@@ -36,29 +36,36 @@ export async function liveImport(ctx: QueryCtx, batch: string): Promise<boolean>
   return Number(r?.done ?? 0) > Number(r?.undone ?? 0);
 }
 
-const SAMPLE_CAP = 5000;
 const dollars = (rows: { c: number }[]) => rows.map((r) => Number(r.c) / 100);
+// About 1,000 values spread evenly over the sorted column (every k-th), so medians and percentiles
+// match the whole table, plus the true count.
+const SAMPLE = 1000;
+const spread = (expr: string, from: string, where: string) =>
+  `SELECT v AS c, n FROM (SELECT ${expr} AS v, row_number() OVER (ORDER BY ${expr}) AS rn, count(*) OVER () AS n FROM ${from} WHERE ${where}) WHERE (rn - 1) % max(1, n / ${SAMPLE}) = 0`;
 
 // The figures the suggested limits are sized from. Units and rents come from the import when there
 // is one; work orders and bills don't come over in an import, so those are the workspace's own.
+// Only vendor work orders count: in-house jobs don't spend against the maintenance limit.
 export async function portfolioStats(ctx: QueryCtx, s: OnboardingState): Promise<Stats> {
   const { db, ws } = ctx;
   const batch = s.import?.batch && (await liveImport(ctx, s.import.batch)) ? s.import.batch : null;
-  const all = <T,>(sql: string, ...params: unknown[]) => db.prepare(sql).bind(...params).all<T>().then((r) => r.results);
+  const all = (sql: string, ...params: unknown[]) => db.prepare(sql).bind(...params).all<{ c: number; n: number }>().then((r) => r.results);
   const ACTIVE = "status IN ('Active', 'Notice', 'Month-to-month', 'Future')";
   const [importedUnits, importedRents, allUnits, allRents, workOrders, bills] = await Promise.all([
     batch ? db.prepare(`SELECT count(*) AS n FROM ${effective("units", ws)} WHERE id LIKE ?`).bind(batchPattern(batch)).first<{ n: number }>().then((r) => Number(r?.n ?? 0)) : 0,
-    batch ? all<{ c: number }>(`SELECT rent_cents AS c FROM ${effective("leases", ws)} WHERE id LIKE ? AND ${ACTIVE} AND rent_cents > 0 LIMIT ${SAMPLE_CAP}`, batchPattern(batch)) : [],
+    batch ? all(spread("rent_cents", effective("leases", ws), `id LIKE ?1 AND ${ACTIVE} AND rent_cents > 0`), batchPattern(batch)) : [],
     db.prepare(`SELECT count(*) AS n FROM ${effective("units", ws)}`).first<{ n: number }>().then((r) => Number(r?.n ?? 0)),
-    all<{ c: number }>(`SELECT rent_cents AS c FROM ${effective("leases", ws)} WHERE ${ACTIVE} AND rent_cents > 0 LIMIT ${SAMPLE_CAP}`),
-    all<{ c: number }>(`SELECT cost_cents AS c FROM ${effective("work_orders", ws)} WHERE status IN ('Completed', 'Paid') AND cost_cents > 0 LIMIT ${SAMPLE_CAP}`),
-    all<{ c: number }>(`SELECT amount_cents AS c FROM ${effective("bills", ws)} WHERE amount_cents > 0 LIMIT ${SAMPLE_CAP}`),
+    all(spread("rent_cents", effective("leases", ws), `${ACTIVE} AND rent_cents > 0`)),
+    all(spread("cost_cents", effective("work_orders", ws), "status IN ('Completed', 'Paid') AND vendor_id IS NOT NULL AND cost_cents > 0")),
+    all(spread("amount_cents", effective("bills", ws), "amount_cents > 0")),
   ]);
   const units = importedUnits ? { units: importedUnits, unitsFrom: "import" as const } : s.company?.size ? { units: s.company.size, unitsFrom: "stated" as const } : { units: allUnits, unitsFrom: "workspace" as const };
+  const rents = importedRents.length ? { rows: importedRents, rentsFrom: "import" as const } : { rows: allRents, rentsFrom: "workspace" as const };
+  const total = (rows: { n: number }[]) => Number(rows[0]?.n ?? 0);
   return {
     ...units,
-    workOrders: dollars(workOrders), bills: dollars(bills),
-    ...(importedRents.length ? { rents: dollars(importedRents), rentsFrom: "import" as const } : { rents: dollars(allRents), rentsFrom: "workspace" as const }),
+    workOrders: dollars(workOrders), bills: dollars(bills), rents: dollars(rents.rows), rentsFrom: rents.rentsFrom,
+    counts: { workOrders: total(workOrders), bills: total(bills), rents: total(rents.rows) },
   };
 }
 

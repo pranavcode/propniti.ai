@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Calculator, Check, Loader2, Pencil } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { ContinueButton, type StepProps } from "./Onboarding";
 
 type Decision = "saved" | "kept";
 const usd = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString("en-US")}`);
-const limits = (x: { limit: number | null; owner: number | null }) => `${x.limit == null ? "always a person" : `auto up to ${usd(x.limit)}`}${x.owner == null ? "" : ` · owner above ${usd(x.owner)}`}`;
+const limits = (x: { limit: number | null; owner: number | null }) => `${!x.limit ? "always a person" : `auto up to ${usd(x.limit)}`}${x.owner == null ? "" : ` · owner above ${usd(x.owner)}`}`;
 const LEVEL: Record<string, string> = { act_with_approval: "Approve first", auto_within_policy: "Auto within policy" };
 const dollars = (s: string) => (s.trim() === "" ? null : Number(s.replace(/[$,\s]/g, "")));
 const SOURCE: Record<string, string> = { import: "imported units", stated: "units (your estimate)", workspace: "units in this workspace" };
@@ -81,6 +82,7 @@ function AgentRow({ a, canEdit, decision, onSave, onKeep }: { a: AutonomySuggest
 }
 
 export function RulesStep({ data, state, save, footer, complete }: StepProps) {
+  const router = useRouter();
   const applied = new Set(state.rules?.applied ?? []);
   const [decided, setDecided] = useState<Record<string, Decision>>(() => Object.fromEntries([...applied].map((id) => [id, "saved" as const])));
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +95,8 @@ export function RulesStep({ data, state, save, footer, complete }: StepProps) {
       await apiJson("PATCH", url, body);
       setDecided((d) => ({ ...d, [id]: "saved" }));
       await save({ rules: { applied: [id] } });
+      // "Now" shows the saved policy, read again from the server.
+      router.refresh();
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -107,7 +111,7 @@ export function RulesStep({ data, state, save, footer, complete }: StepProps) {
     <>
       <div className="flex flex-col gap-5 px-4 py-5 sm:px-5">
         <p className="rounded-md border bg-muted/30 px-3 py-2.5 text-[12.5px] text-muted-foreground">
-          Sized from <span className="font-medium text-foreground tabular-nums">{formatNumber(st.units)} {SOURCE[st.unitsFrom]}</span>, {formatNumber(st.workOrders)} completed work orders, {formatNumber(st.bills)} bills and {formatNumber(st.rents)} leases{st.unitsFrom === "import" ? "" : ". Work orders and bills don't come over in an import, so those are this workspace's sample data"}. These figures are computed by Propniti, not by a model.
+          Sized from <span className="font-medium text-foreground tabular-nums">{formatNumber(st.units)} {SOURCE[st.unitsFrom]}</span>, {formatNumber(st.workOrders)} completed vendor work orders, {formatNumber(st.bills)} bills and {formatNumber(st.rents)} leases{st.unitsFrom === "import" ? "" : ". Work orders and bills don't come over in an import, so those are this workspace's sample data"}. These figures are computed by Propniti, not by a model.
         </p>
         {!canEdit && <p className="rounded-md border px-3 py-2 text-[12.5px] text-muted-foreground">Only a principal, regional manager or administrator with AI access changes approval policies and agent settings. You can read the suggestions; ask one of them to apply them.</p>}
         {error && <p role="alert" className="text-[12.5px] text-tone-danger">{error}</p>}

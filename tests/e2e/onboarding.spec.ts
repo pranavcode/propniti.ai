@@ -58,7 +58,7 @@ test("rules only: company, import, a suggested limit, Data Health and the summar
   await expect(page.getByRole("heading", { name: "Approval rules", exact: true })).toBeVisible();
   await expect(page.getByText(/Sized from 12 imported units/)).toBeVisible();
   const maintenance = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Maintenance spend" }) });
-  await expect(maintenance).toContainText(/Median completed work order \$[\d,]+ across [\d,]+ jobs → auto-approve up to \$[\d,]+/);
+  await expect(maintenance).toContainText(/Median completed vendor work order \$[\d,]+ across [\d,]+ jobs → auto-approve up to \$[\d,]+/);
   await expect(maintenance).toContainText(/Computed from your records · (High|Medium) confidence/);
   const before = (await maintenance.locator("dd").first().innerText()).trim();
   await maintenance.getByRole("button", { name: /Accept the suggested maintenance spend limit/ }).click();

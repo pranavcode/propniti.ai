@@ -55,7 +55,7 @@ export default async function OnboardingPage() {
     canImportProperties: mayCreate(session.actor.role, "properties"),
     canEditPolicies: canEditPolicies(session.actor.role),
     canInvite: canEditSettings(session.actor.role),
-    stats: { units: stats.units, unitsFrom: stats.unitsFrom, workOrders: stats.workOrders.length, bills: stats.bills.length, rents: stats.rents.length },
+    stats: { units: stats.units, unitsFrom: stats.unitsFrom, ...stats.counts! },
     policies: suggestPolicies(stats, policyNow),
     fixedPolicies: policyNow.filter((p) => p.alwaysHuman || p.category === "Owner distribution").map((p) => p.category),
     autonomy: suggestAutonomy(stats.units, stats.unitsFrom, agents),

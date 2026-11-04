@@ -25,7 +25,7 @@ describe("suggestPolicies", () => {
     const s = suggestPolicies(stats(), POLICIES).find((x) => x.category === "Maintenance spend")!;
     expect(s.suggested).toEqual({ limit: 500, owner: 2500 });
     expect(s.current).toEqual({ limit: 750, owner: 2500 });
-    expect(s.basis).toBe("Median completed work order $410 across 15 jobs → auto-approve up to $500. 90th percentile $2,172 → owner approves above $2,500.");
+    expect(s.basis).toBe("Median completed vendor work order $410 across 15 jobs → auto-approve up to $500. 90th percentile $2,172 → owner approves above $2,500.");
     expect(s.sample).toBe(15);
     expect(s.confidence).toBe("Medium");
     expect(s.changed).toBe(true);
@@ -48,12 +48,19 @@ describe("suggestPolicies", () => {
     expect(cats).not.toContain("Owner distribution");
   });
 
+  it("quotes the full record count when the figures come from an even sample of a large table", () => {
+    const s = suggestPolicies(stats({ counts: { workOrders: 17_800, bills: 40, rents: 6 } }), POLICIES).find((x) => x.category === "Maintenance spend")!;
+    expect(s.basis).toMatch(/^Median completed vendor work order \$410 across 17,800 jobs/);
+    expect(s.sample).toBe(17_800);
+    expect(s.confidence).toBe("High");
+  });
+
   it("skips a category with too few records and says why", () => {
     const s = suggestPolicies(stats({ workOrders: [300, 900] }), POLICIES).find((x) => x.category === "Maintenance spend")!;
     expect(s.suggested).toEqual(s.current);
     expect(s.changed).toBe(false);
     expect(s.confidence).toBe("Low");
-    expect(s.basis).toMatch(/Only 2 completed work orders/);
+    expect(s.basis).toMatch(/Only 2 completed vendor work orders/);
   });
 
   it("says when the figures come from the workspace rather than the import", () => {

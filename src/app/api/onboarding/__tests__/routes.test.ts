@@ -7,6 +7,10 @@ import * as undoRoute from "@/app/api/import/undo/route";
 import * as stateRoute from "../route";
 import * as detectRoute from "../detect/route";
 import * as checkRoute from "../check/route";
+import { getPersona } from "@/auth/personas";
+import { actorFor } from "@/server/permissions";
+import { portfolioStats } from "@/extensions/onboarding/server";
+import { EMPTY } from "@/extensions/onboarding/state";
 
 // The onboarding routes on a fresh in-memory database: who may save progress, what the AI file
 // check accepts and sends, and the Data Health run over one import's records.
@@ -59,6 +63,23 @@ describe("POST /api/onboarding", () => {
     const steps = await db().prepare("SELECT step, status FROM onboarding_progress WHERE workspace_id = ? ORDER BY step").bind(WS).all();
     expect(steps.results).toEqual(expect.arrayContaining([{ step: "payments", status: "Done" }]));
     expect(steps.results.filter((s) => s.step === "payments")).toHaveLength(1);
+  });
+});
+
+describe("portfolioStats", () => {
+  it("sizes from vendor work orders only, reading an even sample of the sorted costs and the true count", async () => {
+    const costs = Array.from({ length: 2400 }, (_, i) => 1000 + i * 100); // $10 … $2,409
+    for (let k = 0; k < costs.length; k += 400) {
+      const values = costs.slice(k, k + 400).map((c, i) => `('base', 'wo-${k + i}', 'p01', 'Fix', 'General', 'Normal', 'Completed', 'v01', ${c}, '2026-10-01')`).join(", ");
+      await db().prepare(`INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, cost_cents, opened_at) VALUES ${values}`).run();
+    }
+    await db().prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, cost_cents, opened_at) VALUES ('base', 'wo-inhouse', 'p01', 'Fix', 'General', 'Normal', 'Completed', NULL, 99999999, '2026-10-01')").run();
+    const s = await portfolioStats({ db: db(), ws: WS, actor: await actorFor(db(), WS, getPersona("daniel")!) }, EMPTY);
+    expect(s.counts!.workOrders).toBe(2400);
+    expect(s.workOrders.length).toBe(1200);
+    expect(Math.max(...s.workOrders)).toBeLessThan(2410);
+    const sorted = [...s.workOrders].sort((a, b) => a - b);
+    expect(sorted[600]! - sorted[599]!).toBe(2);
   });
 });
 

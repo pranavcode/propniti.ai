@@ -176,7 +176,7 @@ export function DataStep({ data, state, save, footer, complete }: StepProps) {
               {opts.ai.available ? `${opts.ai.label} names each file's tool and contents, then suggests column matches and fixes you accept one by one.` : "No AI model is configured here, so the server answers with rules only."}{" "}
               Only file names, header rows and the first rows of each file are sent (3 rows to identify, 5 for suggestions), each cell cut to 60 characters. Never the whole file.
             </p>
-            {!aiOn && <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground"><Lock className="size-3" aria-hidden />Rules only: files are identified by their columns and names, and nothing is sent to a model.</p>}
+            {!aiOn && <p className="flex items-start gap-1.5 text-[12px] text-muted-foreground"><Lock className="mt-0.5 size-3 shrink-0" aria-hidden />Rules only: files are identified by their columns and names, and nothing is sent to a model.</p>}
           </div>
         </div>
 

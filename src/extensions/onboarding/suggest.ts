@@ -4,8 +4,10 @@
 
 export type Stats = {
   units: number; unitsFrom: "import" | "stated" | "workspace";
-  workOrders: number[]; bills: number[]; // completed work order costs, bill totals
+  workOrders: number[]; bills: number[]; // completed vendor work order costs, bill totals
   rents: number[]; rentsFrom: "import" | "workspace"; // monthly rent of active leases
+  // Full record counts when the arrays are an even sample of a larger table (sorted, every k-th).
+  counts?: { workOrders: number; bills: number; rents: number };
 };
 export type PolicyNow = { id: string; category: string; limit: number | null; owner: number | null; approver: string; alwaysHuman: boolean };
 export type Confidence = "High" | "Medium" | "Low";
@@ -46,31 +48,34 @@ const MIN_SAMPLE = 5;
 
 export function suggestPolicies(stats: Stats, policies: PolicyNow[]): PolicySuggestion[] {
   const out: PolicySuggestion[] = [];
-  const rentsWhere = stats.rentsFrom === "import" ? count(stats.rents.length, "imported lease") : count(stats.rents.length, "lease") + " in this workspace";
+  const n = { workOrders: stats.counts?.workOrders ?? stats.workOrders.length, bills: stats.counts?.bills ?? stats.bills.length, rents: stats.counts?.rents ?? stats.rents.length };
+  const rentsWhere = stats.rentsFrom === "import" ? count(n.rents, "imported lease") : count(n.rents, "lease") + " in this workspace";
   for (const p of policies) {
     if (p.alwaysHuman || p.category === "Owner distribution") continue;
     const current = { limit: p.limit, owner: p.owner };
     const keep = (basis: string, sample: number): PolicySuggestion => ({ id: p.id, category: p.category, current, suggested: current, basis, sample, confidence: "Low", changed: false });
     let s: PolicySuggestion | null = null;
     if (p.category === "Maintenance spend" || p.category === "Bill payment") {
-      const xs = p.category === "Maintenance spend" ? stats.workOrders : stats.bills;
-      const what = p.category === "Maintenance spend" ? ["completed work order", "job", "jobs"] : ["bill", "bill", "bills"];
-      if (xs.length < MIN_SAMPLE) { out.push(keep(`Only ${count(xs.length, what[0]!)} on file, too few to size a limit. Kept as it is.`, xs.length)); continue; }
+      const maint = p.category === "Maintenance spend";
+      const xs = maint ? stats.workOrders : stats.bills;
+      const total = maint ? n.workOrders : n.bills;
+      const what = maint ? ["completed vendor work order", "job", "jobs"] : ["bill", "bill", "bills"];
+      if (xs.length < MIN_SAMPLE) { out.push(keep(`Only ${count(total, what[0]!)} on file, too few to size a limit. Kept as it is.`, total)); continue; }
       const mid = median(xs)!;
-      const pct = p.category === "Maintenance spend" ? 0.9 : 0.95;
+      const pct = maint ? 0.9 : 0.95;
       const high = percentile(xs, pct)!;
       const limit = niceCeil(mid);
       const owner = Math.max(niceCeil(high), limit);
       s = {
-        id: p.id, category: p.category, current, suggested: { limit, owner }, sample: xs.length, confidence: confidence(xs.length), changed: false,
-        basis: `Median ${what[0]} ${usd(mid)} across ${count(xs.length, what[1]!, what[2])} → auto-approve up to ${usd(limit)}. ${pct * 100}th percentile ${usd(high)} → owner approves above ${usd(owner)}.`,
+        id: p.id, category: p.category, current, suggested: { limit, owner }, sample: total, confidence: confidence(total), changed: false,
+        basis: `Median ${what[0]} ${usd(mid)} across ${count(total, what[1]!, what[2])} → auto-approve up to ${usd(limit)}. ${pct * 100}th percentile ${usd(high)} → owner approves above ${usd(owner)}.`,
       };
     } else if (p.category === "Concession" || p.category === "Write-off") {
-      if (stats.rents.length < MIN_SAMPLE) { out.push(keep(`Only ${rentsWhere}, too few to size a limit. Kept as it is.`, stats.rents.length)); continue; }
+      if (stats.rents.length < MIN_SAMPLE) { out.push(keep(`Only ${rentsWhere}, too few to size a limit. Kept as it is.`, n.rents)); continue; }
       const mid = median(stats.rents)!;
       const limit = niceFloor(mid * (p.category === "Concession" ? 0.25 : 0.05));
       s = {
-        id: p.id, category: p.category, current, suggested: { limit, owner: p.owner }, sample: stats.rents.length, confidence: confidence(stats.rents.length), changed: false,
+        id: p.id, category: p.category, current, suggested: { limit, owner: p.owner }, sample: n.rents, confidence: confidence(n.rents), changed: false,
         basis: p.category === "Concession"
           ? `Median rent ${usd(mid)} on ${rentsWhere} → concessions up to ${usd(limit)} (a quarter of a month's rent, rounded down) without a manager.`
           : `5% of the median rent (${usd(mid)} on ${rentsWhere}) → write off balances up to ${usd(limit)} without a manager.`,
