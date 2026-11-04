@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPatch, canOnboard, EMPTY, nextStep, OnboardingPatch, prevStep, resumeStep, setupKeysFor, STEPS } from "./state";
+import { applyPatch, canOnboard, EMPTY, nextStep, OnboardingPatch, oneAtATime, prevStep, resumeStep, setupKeysFor, STEPS } from "./state";
 
 // Onboarding progress: one JSON record per org, merged patch by patch, so a person can leave at any
 // step and come back to the same place. Every step can be skipped.
@@ -71,5 +71,28 @@ describe("canOnboard", () => {
   it("is for the principal, regional managers and admins only", () => {
     expect(["principal", "regional_manager", "admin"].map((r) => canOnboard(r as never))).toEqual([true, true, true]);
     expect(["property_manager", "accountant", "leasing_agent", "broker", "maintenance_supervisor", "platform_admin", "owner", "resident", "vendor", "applicant"].some((r) => canOnboard(r as never))).toBe(false);
+  });
+});
+
+describe("oneAtATime", () => {
+  // A rule's save and the Continue click overlapped; the server's read-modify-write then dropped
+  // the saved rule from the summary. The second save must not start until the first is stored.
+  it("starts a task only after the one before it settles, failures included", async () => {
+    const queue = oneAtATime();
+    const log: string[] = [];
+    let release!: () => void;
+    const first = queue(() => new Promise<void>((r) => { log.push("rules start"); release = () => { log.push("rules stored"); r(); }; }));
+    const second = queue(async () => { log.push("continue start"); });
+    const third = queue(async () => { throw new Error("refused"); });
+    const fourth = queue(async () => { log.push("after a failure"); return 4; });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(log).toEqual(["rules start"]);
+    release();
+    await first;
+    await second;
+    await expect(third).rejects.toThrow("refused");
+    await expect(fourth).resolves.toBe(4);
+    expect(log).toEqual(["rules start", "rules stored", "continue start", "after a failure"]);
   });
 });

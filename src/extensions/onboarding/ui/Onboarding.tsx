@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { apiJson } from "@/components/app/forms/api";
 import { useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
 import type { WizardOptions } from "@/extensions/import/ui/ImportWizard";
-import { nextStep, prevStep, resumeStep, setupKeysFor, STEPS, type OnboardingPatch, type OnboardingState, type StepKey } from "../state";
+import { nextStep, oneAtATime, prevStep, resumeStep, setupKeysFor, STEPS, type OnboardingPatch, type OnboardingState, type StepKey } from "../state";
 import type { AutonomySuggestion, PolicySuggestion, Stats } from "../suggest";
 import { CompanyStep } from "./CompanyStep";
 import { DataStep } from "./DataStep";
@@ -64,6 +64,7 @@ export function Onboarding({ data }: { data: OnboardingData }) {
   const setup = useSetupProgress();
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
+  const queue = useRef(oneAtATime()).current;
 
   // Focus the new step's heading after a move (not on first load), so screen readers announce it.
   useEffect(() => {
@@ -73,7 +74,7 @@ export function Onboarding({ data }: { data: OnboardingData }) {
   async function save(patch: OnboardingPatch) {
     setError(null);
     try {
-      const r = await apiJson<{ state: OnboardingState }>("POST", "/api/onboarding", patch);
+      const r = await queue(() => apiJson<{ state: OnboardingState }>("POST", "/api/onboarding", patch));
       setState(r.state);
       for (const k of patch.done ?? []) for (const key of setupKeysFor(k)) if (data.setupKeys.includes(key)) setup.setDone(key, true);
       return r.state;
