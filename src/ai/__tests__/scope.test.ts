@@ -4,7 +4,7 @@ import { portalRefused } from "../http";
 import { startRun } from "../orchestrator";
 import { setModelForTests } from "../providers";
 import type { AiSession } from "../session";
-import { runDetail, runsPage } from "../views";
+import { runDetail, runsPage, traceRefs, type StepRow } from "../views";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
 
 afterEach(() => setModelForTests(undefined));
@@ -50,5 +50,21 @@ describe("AI reads follow the entity rules", () => {
     raw.exec(`INSERT INTO message_threads (workspace_id, id, property_id, party_kind, party_id, subject, last_message_at) VALUES ('base', 't-atl', 'p10', 'resident', 'r3', 'Hi', '2026-11-01'), ('base', 't-aus', 'p01', 'resident', 'r1', 'Hi', '2026-11-01')`);
     raw.exec(`INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES ('base', 'm1', 't-atl', 'Email', 'in', 'resident', 'r3', 'Atlanta', '2026-11-01'), ('base', 'm2', 't-aus', 'Email', 'in', 'resident', 'r1', 'Austin', '2026-11-01')`);
     expect((await list({ db, ws: WS, actor: MARCUS }, "messages", {})).rows.map((r) => r.id)).toEqual(["m2"]);
+  });
+
+  it("names trace records only inside the viewer's scope, in one lookup per record type", async () => {
+    const { db } = openFixture();
+    const steps: StepRow[] = [
+      { id: "s0", idx: 0, kind: "proposal", tool_key: null, input: { action: "leases.refer_to_legal", entity: "households", id: "h1" }, output: { title: "x", confidence: 0.9 }, latency_ms: 5, ok: true, at: "2026-11-04T09:00:00Z" },
+      { id: "s1", idx: 1, kind: "proposal", tool_key: null, input: { action: "leases.refer_to_legal", entity: "households", id: "h3" }, output: { title: "y", confidence: 0.9 }, latency_ms: 5, ok: true, at: "2026-11-04T09:00:00Z" },
+    ];
+    const prepared: string[] = [];
+    const spy = { ...db, prepare: (q: string) => (prepared.push(q), db.prepare(q)) } as typeof db;
+    const marcus = await traceRefs({ db: spy, ws: WS, actor: MARCUS }, steps);
+    expect(marcus.records["households:h1"]).toMatchObject({ name: "Lee household", property: "The Lofts at Riverside", href: expect.stringContaining("h1") });
+    expect(marcus.records["households:h3"]).toEqual({ type: expect.any(String) });
+    expect(prepared.filter((q) => /FROM .*households/.test(q) && q.includes("json_each"))).toHaveLength(1);
+    const daniel = await traceRefs({ db, ws: WS, actor: DANIEL }, steps);
+    expect(daniel.records["households:h3"]).toMatchObject({ name: "Okoro household", property: "Inman Park Flats" });
   });
 });
