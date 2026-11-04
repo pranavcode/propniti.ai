@@ -98,6 +98,8 @@ export function PeekDrawer() {
         aria-describedby={undefined}
         style={mobile ? undefined : { width: `min(${width}px, 100vw)` }}
         className={cn("gap-0 p-0", mobile ? "data-[side=bottom]:h-[85dvh] rounded-t-xl" : "max-w-none data-[side=right]:sm:max-w-none")}
+        // A toast (its View or Undo button) sits outside the drawer; clicking it isn't a dismiss.
+        onInteractOutside={(e) => { if ((e.target as Element | null)?.closest?.("[data-sonner-toaster]")) e.preventDefault(); }}
         onCloseAutoFocus={(e) => {
           // Back to the row the drawer was showing last (it may have moved with J/K).
           const el = last.current && peekRowElement(last.current);

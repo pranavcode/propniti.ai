@@ -34,6 +34,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          // A modal sheet (the peek drawer) sets pointer-events: none on the body; toasts and their
+          // View/Undo buttons must still take clicks above it.
+          pointerEvents: "auto",
         } as React.CSSProperties
       }
       toastOptions={{
