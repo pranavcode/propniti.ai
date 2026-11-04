@@ -8,6 +8,8 @@ export const GREETING = /Good (morning|afternoon|evening)/;
 const TOUR_IDS = ["app-basics", "applicant-portal", "broker", "finance-month-end", "leasing-agent", "maintenance-supervisor", "owner-portal", "owner-statements", "persona-accountant", "persona-admin", "persona-broker", "persona-principal", "pm-today", "portfolio-principal", "portfolio-regional", "receivables", "resident-portal", "vendor-portal"];
 // Every product tour marked dismissed, so none covers the page.
 export const TOURS = JSON.stringify(Object.fromEntries(TOUR_IDS.map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: "2026-11-04T00:00:00Z" }])));
+// Chat bubble tips off, so no nudge covers the page (chat-bubble.spec.ts turns them back on).
+export const TIPS_OFF = JSON.stringify({ off: true });
 
 // Act as a persona inside the run's shared workspace (the pn_ws cookie comes from storageState).
 export async function as(context: BrowserContext, persona: string) {

@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { Activity, Bot, CheckSquare, HeartPulse, Inbox, LayoutDashboard, LineChart, Settings, ShieldCheck, Sparkles, Workflow } from "lucide-react";
-import { allEntities, can, navTree, registerPage, INTERNAL_ROLES, type Role } from "@/entities";
+import { allEntities, can, getEntity, navTree, registerPage, INTERNAL_ROLES, type Role } from "@/entities";
 import { PERMISSIONS, PERSONAS, PN_AS, type Persona } from "@/auth/personas";
 import { currentPersona } from "@/auth/session";
 import { toursFor } from "../tour/registry";
@@ -39,6 +39,7 @@ export async function shellData(counts: Record<string, number> = {}): Promise<Sh
     items: g.items.filter((i) => !seen.has(i.href) && seen.add(i.href)).map((i) => ({
       key: i.key, label: i.label, href: i.href, group: i.group, icon: <i.icon className={ic} />,
       count: counts[i.href], countTone: (i.href === "/app/inbox" || i.href === "/app/ai/approvals" ? "attention" : "default") as "attention" | "default",
+      help: getEntity(i.key)?.help?.summary,
     })),
   }));
 

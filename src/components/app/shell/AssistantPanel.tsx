@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AskBox } from "../ai/AskBox";
+import { PanelGuide } from "../guide/PanelGuide";
 import { useShell } from "./context";
 
 export const AI_MIN_W = 340;
@@ -42,7 +43,7 @@ export function AssistantPanel({ children, onResize }: { children?: React.ReactN
       style={{ width: assistant.width }}
       className={cn(
         "relative flex h-full shrink-0 flex-col border-l bg-background",
-        "max-xl:fixed max-xl:top-0 max-xl:right-0 max-xl:bottom-0 max-xl:z-40 max-xl:max-w-[100vw] max-xl:shadow-2xl",
+        "max-xl:fixed max-xl:top-0 max-xl:right-0 max-xl:bottom-0 max-xl:z-40 max-xl:max-w-[100vw] max-xl:shadow-2xl max-sm:w-full! max-sm:pb-[env(safe-area-inset-bottom)]",
         "animate-in slide-in-from-right-4 fade-in-0 duration-200 motion-reduce:animate-none",
       )}
     >
@@ -76,6 +77,7 @@ export function AssistantPanel({ children, onResize }: { children?: React.ReactN
         </div>
       </div>
 
+      {assistant.openedFrom === "bubble" && <PanelGuide />}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {children ?? (
           <div className="flex h-full flex-col justify-end gap-4 p-4">
