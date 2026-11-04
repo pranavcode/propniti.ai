@@ -2,7 +2,7 @@ import "server-only";
 import Link from "@/components/Link";
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { allEntities, can, getEntity, type ChartDef, type EntityDef, type KpiDef, type ListQuery, type Row, type TabDef } from "@/entities";
 import { getTab } from "@/extensions/tabs";
 import { cachedSummary } from "@/ai/summaries";
@@ -276,8 +276,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
         {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public; the Workers build has no image optimizer */}
         {hero && <img src={hero} alt="" className="h-24 w-36 shrink-0 rounded-lg object-cover ring-1 ring-border" />}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 text-[12px] text-muted-foreground"><Link href={def.route} className="hover:text-foreground hover:underline">{def.label.many}</Link><ChevronRight className="size-3" /><span className="truncate">{id}</span></div>
-          <h1 className="mt-0.5 flex flex-wrap items-center gap-2 text-[20px] font-semibold tracking-tight">
+          <h1 className="flex flex-wrap items-center gap-2 text-[20px] font-semibold tracking-tight">
             {title}
             {statusKey && row[statusKey] != null && <StatusBadge value={row[statusKey]} enumDef={def.fields[statusKey].enum} />}
             {def.dataRules?.length ? <DataHealthBadge issues={issues} /> : null}

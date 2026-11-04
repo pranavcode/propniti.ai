@@ -41,7 +41,8 @@ export function crumbsFor(pathname: string, nav: ShellNavSection[], title: strin
   const out: Crumb[] = [{ label: section.label, href: here(section.section === "home" ? home : section.items[0].href) }];
   if (item.group) out.push({ label: item.group, href: here(section.items.find((i) => i.group === item.group)!.href) });
   out.push({ label: item.label, href: rest.length ? item.href : undefined });
-  rest.forEach((seg, i) => out.push({ label: i === rest.length - 1 && title ? title : humanize(decodeURIComponent(seg)) }));
+  // A record id ("L-10601") stays as written; a sub-page slug ("state-rules") reads as words.
+  rest.forEach((seg, i) => { const s = decodeURIComponent(seg); out.push({ label: i === rest.length - 1 && title ? title : /\d/.test(s) ? s : humanize(s) }); });
   // A section and its item can share a name ("Settings › Settings"); keep the later, linked one.
   return out.filter((c, i) => c.label !== out[i + 1]?.label);
 }

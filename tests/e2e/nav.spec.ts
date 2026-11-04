@@ -68,3 +68,15 @@ test("the section and group holding the current page open, other saved-closed se
   await go(page, href!);
   await expect(nav.locator('a[href="/app/maintenance/work-orders"][aria-current="page"]')).toBeVisible();
 });
+
+test("a record page has one breadcrumb, and a payment's title doesn't repeat its method", async ({ page, context }) => {
+  await as(context, "grace");
+  await go(page, "/app/receivables/payments?f.method=ACH");
+  const href = await page.locator("main a[href^='/app/receivables/payments/']").first().getAttribute("href");
+  await go(page, href!);
+  const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumbs).toHaveCount(1);
+  await expect(page.locator("main").getByRole("link", { name: "Payments", exact: true })).toHaveCount(0);
+  await expect(page.locator("main h1")).not.toContainText("ACH · ACH");
+  await expect(crumbs).not.toContainText("ACH · ACH");
+});

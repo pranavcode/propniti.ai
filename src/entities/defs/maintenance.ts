@@ -26,7 +26,7 @@ registerEntity({
   nav: { section: "operations", group: "Maintenance", order: 40 },
   route: "/app/maintenance/work-orders",
   titleField: "title",
-  subtitle: (r) => [r.id, r.property_id__label, r.unit_id__label].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.id, r.unit_id__label || r.property_id__label].filter(Boolean).join(" · "), // unit labels carry the property name
   scopePath: "work_orders.property_id",
   fields: {
     title: { type: "text", label: "Work order", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
@@ -235,7 +235,7 @@ registerEntity({
   nav: { section: "operations", group: "Maintenance", order: 41 },
   route: "/app/maintenance/inspections",
   titleField: "title",
-  subtitle: (r) => [r.property_id__label, r.unit_id__label, r.scheduled_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.unit_id__label || r.property_id__label, r.scheduled_on].filter(Boolean).join(" · "),
   scopePath: "inspections.property_id",
   fields: {
     title: { type: "text", label: "Inspection", sortable: true, list: { default: true, width: 220 },
