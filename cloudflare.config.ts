@@ -6,6 +6,8 @@ export default defineConfig({
     // vinext fetch plus the Cron Trigger below (AI agent sweep); see src/worker-entry.ts.
     entrypoint: "./src/worker-entry.ts",
     triggers: [triggers.scheduled({ schedule: "*/15 * * * *" })],
+    // CPU per invocation (paid plan); one agent run per cron tick stays well inside it.
+    limits: { cpuMs: 60_000 },
     domains: ["propniti.ai", "www.propniti.ai"],
     workersDev: true,
     compatibilityDate: "2026-10-28",

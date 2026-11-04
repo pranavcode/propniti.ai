@@ -180,29 +180,45 @@ describe("sweep and events", () => {
     expect(await claimSweep(db, now + 15 * 60_000)).toBe(true);
   });
 
-  it("runs due scheduled agents in active workspaces (never base), drains their outbox and reaps stuck runs", async () => {
+  it("does one unit of work per sweep: due scheduled agents in rotation and the outbox, never base, reaping stuck runs", async () => {
     setModelForTests(null);
     const { raw, db } = openFixture();
-    // 2:00:30 PM Pacific, so the demo clock reads 2026-11-04T14:00:30Z.
-    const at = Date.parse("2026-11-04T22:00:30Z");
-    raw.prepare("UPDATE workspaces SET last_seen_at = ? WHERE id = ?").run(at - 60_000, WS);
-    // A seeded pending event in base, and a run left "running" by a stopped isolate.
+    const at = Date.parse("2026-11-04T14:00:30Z");
+    raw.prepare("UPDATE workspaces SET last_seen_at = ? WHERE id = ?").run(at + 3_600_000, WS);
     raw.exec(`INSERT INTO events (workspace_id, id, type, entity_type, entity_id, payload, created_at) VALUES ('base', 'e1', 'wo.created', 'work_orders', 'WO-10001', '{}', '2026-11-04')`);
-    raw.exec(`INSERT INTO agent_runs (workspace_id, id, agent_key, trigger_kind, status, started_at) VALUES ('${WS}', 'old', 'collections', 'schedule', 'running', '2026-11-04T13:00:00Z')`);
-    const report = await sweep(db, at);
-    expect(report!.reaped).toBe(1);
-    // 14:00 UTC: collections (0 14 * * *), payables (0 */2 * * *) and maintenance triage (*/15) are due.
-    expect(report!.scheduled.map((s) => s.agent).sort()).toEqual(["ap", "collections", "maintenance_triage"]);
-    expect(report!.scheduled.every((s) => s.ws === WS)).toBe(true);
-    // The seeded wo.created event plus the two leases whose rent went overdue this week.
-    expect(report!.events).toEqual([{ ws: WS, processed: 3, runs: [expect.any(String), expect.any(String)] }]);
-    expect(raw.prepare("SELECT count(*) AS n FROM agent_runs WHERE workspace_id = 'base'").get()!.n).toBe(0);
+    raw.exec(`INSERT INTO agent_runs (workspace_id, id, agent_key, trigger_kind, status, started_at) VALUES ('${WS}', 'old', 'collections', 'schedule', 'running', '2026-11-03T13:00:00Z')`);
+    const reports = [];
+    for (let i = 0; i < 6; i++) reports.push((await sweep(db, at + i * 15 * 60_000, undefined, { force: true }))!);
+    expect(reports[0].reaped).toBe(1);
     expect(raw.prepare("SELECT status FROM agent_runs WHERE id = 'old'").get()).toEqual({ status: "failed" });
+    for (const r of reports) expect(r.scheduled.length + r.events.length).toBeLessThanOrEqual(1);
+    const scheduled = reports.flatMap((r) => r.scheduled);
+    expect(scheduled.every((x) => x.ws === WS)).toBe(true);
+    // Rotation: the agent whose last scheduled run is oldest goes next, so no agent runs twice
+    // while another due agent waits.
+    expect(scheduled.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(scheduled.map((x) => x.agent)).size).toBe(scheduled.length);
+    expect(reports.some((r) => r.events.length)).toBe(true);
+    expect(raw.prepare("SELECT count(*) AS n FROM agent_runs WHERE workspace_id = 'base'").get()!.n).toBe(0);
+    expect(raw.prepare("SELECT count(*) AS n FROM agent_runs WHERE status = 'running'").get()!.n).toBe(0);
     // The base event stays unprocessed in base; the workspace's overlay copy records the claim.
     expect(raw.prepare("SELECT processed_at IS NULL AS open FROM events WHERE workspace_id = 'base' AND id = 'e1'").get()).toEqual({ open: 1 });
     expect(raw.prepare("SELECT processed_at IS NOT NULL AS done, run_id IS NOT NULL AS linked FROM events WHERE workspace_id = ? AND id = 'e1'").get(WS)).toEqual({ done: 1, linked: 1 });
-    expect((await drainEvents(db, WS, Date.now())).processed).toBe(0);
   });
+
+  it("ends a run at its time budget as done with partial results, not running", async () => {
+    setModelForTests({
+      info: { provider: "anthropic", model: "claude-opus-5", label: "Slow", native: true },
+      chat: () => new Promise(() => {}),
+      structured: () => new Promise(() => {}),
+    });
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 50 })).done;
+    expect(r.status).not.toBe("failed");
+    const run = raw.prepare("SELECT status, summary FROM agent_runs WHERE id = ?").get(r.runId) as Record<string, string>;
+    expect(run.status).not.toBe("running");
+    expect(run.summary).toMatch(/time budget/);
+  }, 20_000);
 });
 
 describe("events reach their agents", () => {

@@ -75,6 +75,8 @@ export async function startRun(o: StartOpts): Promise<{ runId: string; done: Pro
   return { runId, done };
 }
 
+class BudgetEnded extends Error {}
+
 export type RunResult = { runId: string; status: "done" | "failed" | "waiting_approval"; summary: string; proposals: number };
 
 async function executeRun(def: AgentDef, runId: string, o: StartOpts, nowMs: number): Promise<RunResult> {
@@ -102,12 +104,22 @@ export async function runWithContext<T>(
     await ctx.step({ kind: "plan", ok: true, output: { trigger: o.trigger.kind, event_id: o.trigger.eventId ?? null, autonomy: ctx.autonomy, model: ctx.model?.info.label ?? "Rules (no model configured)", as_of: ctx.today } });
     const c = ctx;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const hardStop = new Promise<never>((_, rej) => (timer = setTimeout(() => ((c.aborted = true), rej(new Error("Run timed out"))), Math.max(5_000, c.deadline - Date.now() + 10_000))));
-    const { summary, result } = await Promise.race([body(ctx), hardStop]).finally(() => clearTimeout(timer));
+    const hardStop = new Promise<never>((_, rej) => (timer = setTimeout(() => ((c.aborted = true), rej(new BudgetEnded())), Math.max(3_000, c.deadline - Date.now() + 3_000))));
+    let summary: string;
+    let result: T | null = null;
+    try {
+      ({ summary, result } = await Promise.race([body(ctx), hardStop]).finally(() => clearTimeout(timer)));
+    } catch (err) {
+      if (!(err instanceof BudgetEnded)) throw err;
+      // The time budget ended: keep what was done (every step and proposal is already stored).
+      const made = ctx.proposals.filter((p) => !p.duplicate).length;
+      summary = `Stopped at its time budget; partial results kept (${made} new proposal${made === 1 ? "" : "s"}).`;
+      await ctx.step({ kind: "message", output: { stopped: "time budget", partial: true }, ok: false }).catch(() => {});
+    }
     const waiting = ctx.proposals.some((p) => !p.duplicate && p.queueState !== "auto_handled");
     const status = waiting ? "waiting_approval" : "done";
     await finish(db, ws, runId, { status, summary, ctx });
-    return { status, summary, proposals: ctx.proposals.filter((p) => !p.duplicate).length, result, ctx };
+    return { status, summary, proposals: ctx.proposals.filter((p) => !p.duplicate).length, result: result as T | null, ctx };
   } catch (err) {
     console.error(`[ai] run ${runId} (${agent}) failed:`, errText(err));
     await ctx?.step({ kind: "message", output: { error: errText(err) }, ok: false }).catch(() => {});
@@ -167,17 +179,28 @@ export async function reapStaleRuns(db: Db, nowMs: number) {
   return r.meta.changes;
 }
 
-// The 15-minute sweep, per recently active workspace (the shared base is read-only and never
-// gets runs): agents whose schedule fell due run in that visitor's workspace, and its events
-// outbox (its own events and the seeded pending ones) is drained.
+// The 15-minute sweep. Each call does ONE unit of agent work, so a cron invocation (or a visit)
+// stays well inside the Workers limits: either the events of one listening agent in one workspace,
+// or the most overdue scheduled agent (the one whose last scheduled run is oldest). Ticks alternate
+// between the two when both are waiting; the rest waits for the next tick. agent_runs and the
+// events outbox are the rotation state. The shared base is read-only and never gets runs.
+export const SWEEP_RUN_BUDGET_MS = 20_000;
+
 export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unknown>) => void, opts: { force?: boolean; deadlineMs?: number; workspaces?: string[] } = {}): Promise<SweepReport | null> {
   if (!opts.force && !(await claimSweep(db, nowMs))) return null;
   const report: SweepReport = { at: demoNowIso(nowMs), reaped: await reapStaleRuns(db, nowMs), scheduled: [], events: [] };
   const active = opts.workspaces ?? (await db.prepare("SELECT id FROM workspaces WHERE id <> 'base' AND last_seen_at > ? ORDER BY last_seen_at DESC LIMIT ?").bind(nowMs - 30 * 60_000, ACTIVE_WS).all<{ id: string }>()).results.map((a) => a.id);
-  const runs: Promise<unknown>[] = [];
+  const deadlineMs = Math.min(opts.deadlineMs ?? SWEEP_RUN_BUDGET_MS, SWEEP_RUN_BUDGET_MS);
   // Run times are stamped on the demo clock, so schedules are checked against it too.
   const demoMs = demoNow(nowMs).getTime();
+  const due: { ws: string; agent: AgentKey; lastAt: number }[] = [];
+  let eventsWs: string | null = null;
   for (const ws of active) {
+    await emitDueEvents(db, ws);
+    if (!eventsWs) {
+      const e = eff("events", ws);
+      if (await db.prepare(`SELECT 1 FROM ${e.sql} t WHERE t.processed_at IS NULL LIMIT 1`).bind(...e.params).first()) eventsWs = ws;
+    }
     const configs = await agentConfigs(db, ws);
     const { results: last } = await db
       .prepare("SELECT agent_key, max(started_at) AS at FROM agent_runs WHERE workspace_id IN (?, 'base') AND trigger_kind = 'schedule' GROUP BY agent_key")
@@ -186,21 +209,25 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
     const lastAt = new Map(last.map((l) => [l.agent_key, Date.parse(l.at)]));
     for (const cfg of configs.values()) {
       if (!cfg.enabled || !cfg.schedule) continue;
-      let due = false;
       try {
-        due = dueBetween(cfg.schedule, lastAt.get(cfg.key) ?? demoMs - SWEEP_EVERY_MS, demoMs);
+        // Never run here: due if its schedule fired in the last day; the rotation spreads them out.
+        if (dueBetween(cfg.schedule, lastAt.get(cfg.key) ?? demoMs - 86_400_000, demoMs)) due.push({ ws, agent: cfg.key, lastAt: lastAt.get(cfg.key) ?? 0 });
       } catch {
         continue;
       }
-      if (!due) continue;
-      const { runId, done } = await startRun({ db, ws, actor: SYSTEM_ACTOR, agent: cfg.key, trigger: { kind: "schedule" }, deadlineMs: opts.deadlineMs ?? 120_000, nowMs });
-      report.scheduled.push({ ws, agent: cfg.key, runId });
-      runs.push(done);
     }
-    await emitDueEvents(db, ws);
-    const r = await drainEvents(db, ws, nowMs, 25, opts.deadlineMs);
-    if (r.processed) report.events.push({ ws, processed: r.processed, runs: r.runs.map((x) => x.runId) });
+  }
+  const tick = Math.floor(nowMs / SWEEP_EVERY_MS);
+  const runs: Promise<unknown>[] = [];
+  if (eventsWs && (!due.length || tick % 2 === 0)) {
+    const r = await drainEvents(db, eventsWs, nowMs, 25, deadlineMs, { oneAgent: true });
+    if (r.processed) report.events.push({ ws: eventsWs, processed: r.processed, runs: r.runs.map((x) => x.runId) });
     runs.push(...r.runs.map((x) => x.done));
+  } else if (due.length) {
+    const next = due.sort((a, b) => a.lastAt - b.lastAt)[0];
+    const { runId, done } = await startRun({ db, ws: next.ws, actor: SYSTEM_ACTOR, agent: next.agent, trigger: { kind: "schedule" }, deadlineMs, nowMs });
+    report.scheduled.push({ ws: next.ws, agent: next.agent, runId });
+    runs.push(done);
   }
   const all = Promise.allSettled(runs);
   if (waitUntil) waitUntil(all);
@@ -234,11 +261,18 @@ export async function emitDueEvents(db: Db, ws: string) {
 // Consumes the workspace's events outbox (overlay over base). Each event is claimed with one
 // guarded statement (an overlay copy, or an update of the overlay row, only while unprocessed), then
 // every enabled agent that listens for its type runs once for the batch.
-export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25, deadlineMs = 60_000) {
+// With oneAgent, only the events of the first listening agent are taken (plus events nobody listens
+// to); the others stay queued for the next sweep.
+export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25, deadlineMs = 60_000, opts: { oneAgent?: boolean } = {}) {
   const e = eff("events", ws);
-  const { results } = await db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.processed_at IS NULL ORDER BY t.created_at LIMIT ?`).bind(...e.params, limit).all<Record<string, unknown>>();
+  let { results } = await db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.processed_at IS NULL ORDER BY t.created_at LIMIT ?`).bind(...e.params, limit).all<Record<string, unknown>>();
   if (!results.length) return { processed: 0, runs: [] as { runId: string; done: Promise<RunResult> }[] };
   const configs = await agentConfigs(db, ws);
+  if (opts.oneAgent) {
+    const listeners = (type: unknown) => [...configs.values()].filter((c) => c.enabled && c.events.includes(type as EventType)).map((c) => c.key);
+    const first = results.map((ev) => listeners(ev.type)[0]).find(Boolean);
+    results = results.filter((ev) => !listeners(ev.type).length || listeners(ev.type).includes(first!));
+  }
   const byAgent = new Map<AgentKey, Record<string, unknown>[]>();
   const at = demoNowIso(nowMs);
   let processed = 0;
@@ -251,6 +285,7 @@ export async function drainEvents(db: Db, ws: string, nowMs: number, limit = 25,
     processed++;
     for (const cfg of configs.values()) if (cfg.enabled && cfg.events.includes(ev.type as EventType)) (byAgent.get(cfg.key) ?? byAgent.set(cfg.key, []).get(cfg.key)!).push(ev);
   }
+  if (opts.oneAgent) for (const k of [...byAgent.keys()].slice(1)) byAgent.delete(k);
   const runs: { runId: string; done: Promise<RunResult> }[] = [];
   for (const [agent, evs] of byAgent) {
     const one = evs.length === 1 ? evs[0] : null;
