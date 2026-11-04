@@ -171,8 +171,9 @@ export const personaByEmail = (email: string | null | undefined) => {
   return e ? PERSONAS.find((p) => demoEmail(p.id) === e) : undefined;
 };
 
-// Where to land after sign-in: only /app or /portal paths, so `next` can't be an open redirect.
-export const safeNext = (next: string | null | undefined) => (next && /^\/(app|portal)(\/|$|\?)/.test(next) ? next : undefined);
+// Where to land after sign-in: only /app or /portal paths, so `next` can't be an open redirect;
+// no CR/LF, so it can't split the Location header.
+export const safeNext = (next: string | null | undefined) => (next && /^\/(app|portal)(\/|$|\?)/.test(next) && !/[\r\n]/.test(next) ? next : undefined);
 
 // localStorage key for the last person who signed in, preselected on the sign-in page.
 export const LAST_PERSONA = "pn_last_persona";

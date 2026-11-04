@@ -24,7 +24,7 @@ describe("demo accounts", () => {
     expect(safeNext("/app/properties/p01")).toBe("/app/properties/p01");
     expect(safeNext("/portal/owner?x=1")).toBe("/portal/owner?x=1");
     expect(safeNext("/app")).toBe("/app");
-    for (const bad of ["https://evil.example", "//evil.example", "/apples", "/login", "", undefined, null]) expect(safeNext(bad)).toBeUndefined();
+    for (const bad of ["https://evil.example", "//evil.example", "/apples", "/login", "/app\r\nSet-Cookie: x=1", "/app/\nx", "", undefined, null]) expect(safeNext(bad)).toBeUndefined();
   });
 });
 

@@ -29,10 +29,13 @@ const SEES: Record<string, string> = {
 const roleLabel = (p: Persona) => p.role.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) + (p.portal ? " portal" : "");
 const ERRORS = { email: "No demo account with that email — pick a person below.", password: "Wrong password — the demo password is shown above." } as const;
 
-type Params = { next?: string; as?: string; error?: string; email?: string; switch?: string };
+type Params = Partial<Record<"next" | "as" | "error" | "email" | "switch", string | string[]>>;
+// A repeated query param (?email=a&email=b) arrives as an array: use the first value.
+const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function Login({ searchParams }: { searchParams: Promise<Params> }) {
-  const sp = await searchParams;
+  const raw = await searchParams;
+  const sp = { next: first(raw.next), as: first(raw.as), error: first(raw.error), email: first(raw.email), switch: first(raw.switch) };
   const next = safeNext(sp.next);
   const as = getPersona(sp.as);
   const field = sp.error === "email" || sp.error === "password" ? sp.error : undefined;
