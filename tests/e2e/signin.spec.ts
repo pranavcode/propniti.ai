@@ -7,6 +7,8 @@ import { BASE, go } from "./helpers";
 const persona = async (page: Page) => (await page.context().cookies(BASE)).find((c) => c.name === "pn_as")?.value;
 const email = (page: Page) => page.getByLabel("Email", { exact: true });
 const password = (page: Page) => page.getByLabel("Password", { exact: true });
+// Match the path, not a glob: "**/app/x" also matches "/login?next=/app/x" before sign-in finishes.
+const landed = (page: Page, path: string) => page.waitForURL((u) => u.pathname === path);
 
 test.describe("sign in", () => {
   test("clicking a card fills the form, and Enter signs in", async ({ page }) => {
@@ -34,7 +36,7 @@ test.describe("sign in", () => {
     await expect(email(page)).toHaveValue("grace@propniti.demo");
     await expect(password(page)).toHaveValue("propniti-demo");
     await page.getByRole("button", { name: "Sign in as Grace Kim" }).click();
-    await page.waitForURL("**/app/payables/bills");
+    await landed(page, "/app/payables/bills");
     expect(await persona(page)).toBe("grace");
   });
 
@@ -95,7 +97,7 @@ test.describe("sign in without JavaScript", () => {
 
     await password(page).fill("propniti-demo");
     await page.getByRole("button", { name: "Sign in as Priya Shah" }).click();
-    await page.waitForURL("**/app/properties");
+    await landed(page, "/app/properties");
     expect(await persona(page)).toBe("priya");
   });
 

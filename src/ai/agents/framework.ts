@@ -36,6 +36,8 @@ export type AgentSpec = {
 };
 
 const keyOf = (entityId: string, action: string) => `${entityId}|${action}`;
+// Models often echo the rules' reasons back; compare without case, spacing or end punctuation.
+const sameWhy = (w: string) => w.toLowerCase().replace(/\s+/g, " ").replace(/[.!\s]+$/, "").trim();
 
 // "Improve with AI" plans start a run for the records a person already reviewed: the agent's own
 // rules still decide each proposal, but only for those records, without the model loop (the plan's
@@ -57,10 +59,12 @@ function finalize(ctx: AgentCtx, c: Candidate, modelWhy: string[] = [], modelCon
       entity_type: c.entity, entity_id: c.entityId,
     });
   }
+  const rulesWhy = new Set(c.why.map(sameWhy));
+  const newWhy = modelWhy.filter((w) => !rulesWhy.has(sameWhy(w)));
   return {
     entity: c.entity, entityId: c.entityId, action: c.action, title: c.title, amountCents: c.amountCents, propertyId: c.propertyId,
     risk: c.risk, category: c.category, evidence: c.evidence, alwaysHuman: c.alwaysHuman, assignee: c.assignee,
-    why: [...c.why, ...modelWhy.slice(0, 2).map((w) => `AI: ${w}`)].slice(0, 6),
+    why: [...c.why, ...newWhy.slice(0, 2).map((w) => `AI: ${w}`)].slice(0, 6),
     confidence: modelConfidence == null ? c.confidence : Math.min(c.confidence, modelConfidence),
     // subject/body at the top too, for registered actions that send their own message from input.
     payload: { ...c.extra, ...(c.message ? { subject: draft?.subject ?? c.message.subject, body: draft?.body ?? c.message.body } : {}), effects, facts: c.facts, drafted_by: draft ? ctx.modelUsed.model : "template" },

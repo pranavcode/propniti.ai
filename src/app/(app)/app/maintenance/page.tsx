@@ -15,6 +15,7 @@ import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } 
 import { ImprovableKpi } from "@/components/app/ai/ImproveWithAI";
 import { StatusBadge } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
+import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { AIBadge, Confidence } from "@/components/app/ai";
 import { homeData, maintenanceProposals } from "@/extensions/maintenance/queries";
 import { OPEN_FILTER } from "@/extensions/maintenance/store";
@@ -88,13 +89,17 @@ export default async function MaintenanceHome() {
         {failed && <ErrorBanner title="Some figures didn't load" message="The rest of the page is current. Reload to try again." />}
 
         <div className="grid gap-3 xl:grid-cols-12">
-          <section data-tour="mx-briefing" className="flex flex-col rounded-xl border bg-card xl:col-span-8">
-            <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+          <Collapsible id="briefing" label="Briefing" data-tour="mx-briefing" className="peer/brief flex flex-col rounded-xl border bg-card xl:col-span-8 xl:data-collapsed:col-span-full">
+            <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3 group-data-collapsed/collapse:flex-nowrap group-data-collapsed/collapse:border-b-0">
               <span className="flex size-6 items-center justify-center rounded-md bg-tone-ai/10 text-tone-ai"><Sparkles className="size-3.5" /></span>
-              <h2 className="text-[13.5px] font-semibold">Briefing</h2>
-              <span className="text-[12px] text-muted-foreground">Work orders, invoices, make-ready and vendors in your scope</span>
-              <Link href="/app/ai/runs?agent=maintenance_triage" className="ml-auto text-[12px] text-muted-foreground hover:text-foreground">Agent runs <ChevronRight className="inline size-3" /></Link>
+              <h2 className="shrink-0 text-[13.5px] font-semibold">Briefing</h2>
+              <WhenExpanded><span className="text-[12px] text-muted-foreground">Work orders, invoices, make-ready and vendors in your scope</span></WhenExpanded>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${Number(c.untriaged ?? 0).toLocaleString("en-US")} need you · ${watch.length} to watch`}</span></WhenCollapsed>
+              <Link href="/app/ai/runs?agent=maintenance_triage" className="ml-auto shrink-0 text-[12px] text-muted-foreground hover:text-foreground max-sm:group-data-collapsed/collapse:hidden">Agent runs <ChevronRight className="inline size-3" /></Link>
+              <CollapseButton className="-mr-1.5 max-sm:group-data-collapsed/collapse:ml-auto" />
             </header>
+            <CollapseBody className="flex-1">
+            <div className="flex h-full flex-col">
             <div className="grid flex-1 md:grid-cols-3 md:divide-x">
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">What happened</h3>
@@ -117,8 +122,10 @@ export default async function MaintenanceHome() {
               </div>
             </div>
             <footer className="flex items-center gap-2 border-t px-4 py-2 text-[11.5px] text-muted-foreground"><AIBadge source="rules" size="xs" />Counts are computed live from work orders, turnovers, schedules and certificates. Suggestions come from logged agent runs.</footer>
-          </section>
-          <div className="flex flex-col gap-3 xl:col-span-4">
+            </div>
+            </CollapseBody>
+          </Collapsible>
+          <div className="flex flex-col gap-3 xl:col-span-4 xl:peer-data-collapsed/brief:col-span-full">
             <MxAsk suggestions={persona.role === "maintenance_supervisor" ? persona.assistantPrompts : ["Which work orders will breach SLA today?", "Which vendors have expiring insurance?", "How many units are not rent-ready?"]} />
             <div className="flex flex-wrap gap-1.5">
               <Button asChild size="sm" variant="outline"><Link href={`/app/maintenance/work-orders?f.status=New`}>Unassigned work orders</Link></Button>
