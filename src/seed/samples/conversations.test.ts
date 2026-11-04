@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getPersona, PERSONAS } from "@/auth/personas";
-import { unverified } from "@/ai/assistant";
+import { ask, threadMessages, threads as listThreads, unverified } from "@/ai/assistant";
 import { staffDecision } from "@/ai/decide";
 import { Payload } from "@/ai/effects";
 import { setModelForTests } from "@/ai/providers";
@@ -99,6 +99,21 @@ describe.skipIf(write)("sample conversations", { timeout: 600_000 }, () => {
       }
     }
     expect(checked).toBeGreaterThan(30);
+  });
+
+  it("shows each persona only their own sample threads", async () => {
+    const { raw, db } = openBase(baseData());
+    raw.prepare("INSERT INTO workspaces (id, kind, created_at, last_seen_at) VALUES ('samples-scope-000000000001', 'demo', 0, 0)").run();
+    const marcus = getPersona("marcus")!;
+    const data = { db, ws: "samples-scope-000000000001", actor: await resolveActor(db, marcus, "samples-scope-000000000001") };
+    const own = (id: string) => threads.filter((t) => t.user_id === id).map((t) => String(t.id)).sort();
+    for (const ws of ["base", data.ws]) expect((await listThreads({ ...data, ws }, "marcus", 30)).map((t) => t.id).sort()).toEqual(own("marcus"));
+    for (const id of own("daniel")) expect(await threadMessages(data, "marcus", id), id).toBeNull();
+    expect(await threadMessages(data, "marcus", own("marcus")[0])).not.toBeNull();
+    // Asking as Marcus with Daniel's thread id starts a new thread of Marcus's; Daniel's is untouched.
+    const r = await ask({ data, persona: marcus, question: "How do I post a late fee?", threadId: own("daniel")[0] });
+    expect(r.threadId).not.toBe(own("daniel")[0]);
+    expect((await threadMessages({ ...data, actor: await resolveActor(db, getPersona("daniel")!, data.ws) }, "daniel", own("daniel")[0]))!.turns).toHaveLength(turns(own("daniel")[0]).length);
   });
 
   it("re-asks every portal question and gets the same answer", async () => {

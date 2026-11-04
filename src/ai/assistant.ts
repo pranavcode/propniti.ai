@@ -57,7 +57,7 @@ export const hrefFor = (table: string, id: string) => {
   return def ? `${def.route}/${encodeURIComponent(id)}` : undefined;
 };
 
-const CHAT_TOOLS: ToolKey[] = ["records.search", "records.get", "records.related", "ledger.delinquency", "ledger.lookup", "metrics.monthly", "metrics.explain_noi", "data.issues", "policy.lookup", "help.search"];
+const CHAT_TOOLS: ToolKey[] = ["records.search", "records.get", "records.related", "ledger.delinquency", "ledger.lookup", "metrics.monthly", "metrics.explain_noi", "data.issues", "approvals.needs_you", "policy.lookup", "help.search"];
 const CATALOG: Table[] = ["properties", "units", "residents", "leases", "work_orders", "vendors", "bills", "applications", "prospects", "renewal_offers", "vendor_cois", "compliance_items", "tasks", "ai_proposals", "agent_runs", "data_issues"];
 
 async function catalog(db: DataCtx["db"]) {
@@ -141,8 +141,9 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     };
   }
   if (/\b(approv\w*|needs? (my|me)|waiting|inbox)\b/i.test(q)) {
-    const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "ai_proposals", filters: [{ field: "queue_state", op: "eq", value: "needs_you" }], sort: ["created_at", "desc"], size: 10 });
-    return { answer: r.total ? `${r.total} item${r.total === 1 ? "" : "s"} wait for a decision. Latest: ${r.rows.slice(0, 5).map((p) => p.title).join("; ")}.` : "Nothing is waiting for your approval.", citations: [{ label: "Approvals inbox", href: "/app/ai/approvals" }] };
+    // The same rule and order as the Needs you tab: only what this role may decide, in scope.
+    const r = await ctx.call<{ total: number; rows: Row[] }>("approvals.needs_you", { size: 10 });
+    return { answer: r.total ? `${r.total} item${r.total === 1 ? "" : "s"} wait for your decision in Needs you. First in the list: ${r.rows.slice(0, 5).map((p) => p.title).join("; ")}.` : "Nothing is waiting for your decision.", citations: [{ label: "Approvals inbox", href: "/app/ai/approvals" }] };
   }
   if (/\bbank (detail|change|account)/i.test(q)) {
     const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "vendors", filters: [{ field: "bank_changed_at", op: "notnull" }], sort: ["bank_changed_at", "desc"], size: 10 });
@@ -211,7 +212,7 @@ function statusFor(key: ToolKey, input: unknown, about: string | undefined) {
   if (key === "records.search") return entity ? `${entity.key === about ? "Checking similar" : "Searching"} ${entity.label.many.toLowerCase()}…` : "Searching records…";
   const label: Partial<Record<ToolKey, string>> = {
     "records.get": `Reading the ${entity?.label.one.toLowerCase() ?? "record"}…`, "records.related": "Checking related records…", "ledger.delinquency": "Checking who owes rent…", "ledger.lookup": "Reading the ledger…",
-    "metrics.monthly": "Checking monthly figures…", "metrics.explain_noi": "Working out what moved NOI…", "data.issues": "Checking data issues…", "policy.lookup": "Checking approval policies…", "help.search": "Searching help articles…",
+    "metrics.monthly": "Checking monthly figures…", "metrics.explain_noi": "Working out what moved NOI…", "data.issues": "Checking data issues…", "approvals.needs_you": "Checking your approvals…", "policy.lookup": "Checking approval policies…", "help.search": "Searching help articles…",
   };
   return label[key] ?? "Looking it up…";
 }
