@@ -5,6 +5,7 @@ import { AS_OF } from "@/seed/constants";
 import { overlayUpsertSql } from "@/server/effective";
 import { demoNowIso } from "@/lib/clock";
 import { registerAction } from "../actions";
+import { formatDate } from "@/lib/format";
 
 const RISK_WRITE: Role[] = ["principal", "regional_manager", "property_manager", "maintenance_supervisor"];
 const rid = () => crypto.randomUUID();
@@ -58,7 +59,7 @@ registerAction({
   when: (r: Row) => LAPSING.includes(String(r.status)),
   confirm: { title: "Ask the vendor for a current certificate?", body: "They get a notification in the vendor portal asking them to upload a renewed certificate of insurance." },
   handler: async (ctx, row) => {
-    const when = row.status === "Expiring" ? `expires ${row.expires_on}` : row.status === "Missing" ? "is missing" : row.status === "Rejected" ? "was rejected" : `expired ${row.expires_on}`;
+    const when = row.status === "Expiring" ? `expires ${formatDate(String(row.expires_on), "always")}` : row.status === "Missing" ? "is missing" : row.status === "Rejected" ? "was rejected" : `expired ${formatDate(String(row.expires_on), "always")}`;
     return requestCertificate(ctx, String(row.vendor_id), String(row.vendor_id__label ?? row.vendor_id), when, String(row.id));
   },
   help: { summary: `Sends the vendor a portal notification asking for a renewed certificate of insurance. Each vendor is asked at most once every ${REQUEST_DAYS} days.`, article: "vendor-insurance-certificates" },

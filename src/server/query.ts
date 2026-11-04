@@ -105,13 +105,16 @@ function expr(def: EntityDef, key: string, f: FieldDef, ws: Ws) {
   return f.sql ? `(${expand(f.sql, ws)})` : `${def.table}.${ident(f.column ?? key)}`;
 }
 
-// Label of a referenced record: its def's titleField (computed or a column).
+// Label of a referenced record: its def's titleField (computed or a column). A reference whose
+// case is wrong ("P01" for "p01", a data-health issue) still shows the record's name.
 function refLabel(def: EntityDef, key: string, f: FieldDef, ws: Ws) {
   const ref = f.ref && getEntity(f.ref);
   if (!ref) return null;
   const tf = ref.fields[ref.titleField];
   const title = tf?.sql ? `(${expand(tf.sql, ws)})` : `${ref.table}.${ident(tf?.column ?? ref.titleField)}`;
-  return `(SELECT ${title} FROM ${effective(ref.table, ws)} AS ${ref.table} WHERE ${ref.table}.id = ${expr(def, key, f, ws)})`;
+  const by = (id: string) => `(SELECT ${title} FROM ${effective(ref.table, ws)} AS ${ref.table} WHERE ${ref.table}.id = ${id})`;
+  const v = expr(def, key, f, ws);
+  return `coalesce(${by(v)}, ${by(`lower(${v})`)})`;
 }
 
 function selectList(def: EntityDef, role: Role, ws: Ws) {

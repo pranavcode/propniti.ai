@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DateInput } from "@/components/app/forms/DateInput";
 import { Switch } from "@/components/ui/switch";
 import { AIBadge, Confidence } from "@/components/app/ai";
 import { formatDate } from "@/lib/format";
@@ -93,7 +94,7 @@ export function CoiForm({ me, today, onFile }: { me: string; today: string; onFi
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5"><Label htmlFor="coi-carrier">Insurance carrier</Label><Input id="coi-carrier" value={carrier} onChange={(e) => { setCarrier(e.target.value); typed("carrier"); }} placeholder="e.g. Travelers…" maxLength={120} autoComplete="organization" />{tag("carrier", onFileCarrier)}</div>
         <div className="space-y-1.5"><Label htmlFor="coi-limit">General liability limit ($)</Label><Input id="coi-limit" inputMode="numeric" value={limit} onChange={(e) => { setLimit(e.target.value.replace(/[^\d]/g, "")); typed("glLimit"); }} placeholder="e.g. 1000000" className="tabular-nums" />{tag("glLimit", onFileLimit)}</div>
-        <div className="space-y-1.5"><Label htmlFor="coi-exp">Expires on</Label><Input id="coi-exp" type="date" min={today} value={expires} onChange={(e) => { setExpires(e.target.value); typed("expiresOn"); }} />{tag("expiresOn", false)}</div>
+        <div className="space-y-1.5"><Label htmlFor="coi-exp">Expires on</Label><DateInput id="coi-exp" min={today} value={expires} onChange={(v) => { setExpires(v); typed("expiresOn"); }} />{tag("expiresOn", false)}</div>
         <div className="space-y-1.5 pt-6"><div className="flex items-center gap-2"><Switch id="coi-wc" checked={wc} onCheckedChange={(v) => { setWc(v); typed("workersComp"); }} /><Label htmlFor="coi-wc">Includes workers&apos; compensation</Label></div>{tag("workersComp", onFileWc)}</div>
       </div>
       {ai.length > 0 && (

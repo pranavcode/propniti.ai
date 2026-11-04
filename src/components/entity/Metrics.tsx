@@ -7,6 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAx
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { fillTemplate } from "@/components/app/data-table/params";
 import { formatCountDelta, formatMoney, formatNumber, formatPct } from "@/lib/format";
+import { monthTick } from "@/components/app/dashboard/fmt";
 import { cn } from "@/lib/utils";
 import { useImprove } from "@/components/app/ai/ImproveWithAI";
 import { Term } from "@/components/app/Term";
@@ -23,7 +24,7 @@ const fmt = (v: number | null | undefined, f: Fmt | undefined, compact = false) 
 const monthLabel = (v: unknown) => {
   const s = String(v ?? "");
   if (!/^\d{4}-\d{2}$/.test(s)) return s;
-  return new Date(`${s}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+  return monthTick(s);
 };
 
 function Spark({ values, good }: { values: number[]; good: boolean | null }) {

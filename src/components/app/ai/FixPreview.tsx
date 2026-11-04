@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "@/components/Link";
 import { ArrowRight, Check, CornerDownRight, Lock, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,13 @@ export type FixChange = { field: string; label?: string; before: unknown; after:
 
 export type FixPreviewProps = {
   title: string;                         // "Lease end is before lease start"
-  rule?: string;                         // RuleKey, e.g. "leases.end_before_start"
+  rule?: string;                         // RuleKey, e.g. "leases.end_before_start"; never shown
   changes: FixChange[];
   why: string[];
   confidence: number;
   source: "rule" | string;               // "rule" or the agent that proposed it
   needsPerson?: string | null;           // reason the fix can't be one-click: "Moves money: needs an accountant"
+  nextStep?: { text: string; href?: string; label?: string }; // what a person does when there are no field changes
   onApply?: () => void | Promise<unknown>;
   onDismiss?: () => void | Promise<unknown>;
   className?: string;
@@ -26,7 +28,7 @@ export type FixPreviewProps = {
 
 const show = (v: unknown) => (v == null || v === "" ? <span className="italic text-muted-foreground">empty</span> : typeof v === "object" ? JSON.stringify(v) : String(v));
 
-export function FixPreview({ title, rule, changes, why, confidence, source, needsPerson, onApply, onDismiss, className }: FixPreviewProps) {
+export function FixPreview({ title, changes, why, confidence, source, needsPerson, nextStep, onApply, onDismiss, className }: FixPreviewProps) {
   const [state, setState] = useState<"open" | "applied" | "queued" | "dismissed">("open");
   const [busy, setBusy] = useState(false);
   // The server decides whether a fix applied or went to the approvals inbox: onApply may return { queued }.
@@ -45,14 +47,13 @@ export function FixPreview({ title, rule, changes, why, confidence, source, need
         <div className="min-w-0 flex-1">
           <div className="font-medium">{title}</div>
           <div className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted-foreground">
-            {rule && <code className="font-mono text-[11px]">{rule}</code>}
-            <span>· proposed by {source === "rule" ? "a fixed rule" : source}</span>
+            <span>Proposed by {source === "rule" ? "a fixed rule" : source}</span>
           </div>
         </div>
         <Confidence value={confidence} className="self-center" />
       </div>
 
-      <table className="w-full text-[12.5px]">
+      {changes.length > 0 && <table className="w-full border-b text-[12.5px]">
         <thead>
           <tr className="text-left text-[11px] text-muted-foreground">
             <th className="w-1/4 px-3 py-1.5 font-medium">Field</th>
@@ -71,17 +72,24 @@ export function FixPreview({ title, rule, changes, why, confidence, source, need
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>}
 
-      <ul className="flex flex-col gap-1 border-t px-3 py-2 text-[12.5px] text-muted-foreground">
+      <ul className="flex flex-col gap-1 px-3 py-2 text-[12.5px] text-muted-foreground">
         {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
       </ul>
+
+      {changes.length === 0 && (
+        <div className="border-t px-3 py-2 text-[12.5px]">
+          <p className="font-medium">No automatic fix — a person needs to check this.</p>
+          {nextStep && <p className="mt-0.5 text-muted-foreground">{nextStep.text}{nextStep.href && <> <Link href={nextStep.href} className="font-medium text-primary hover:underline">{nextStep.label ?? "Open the record"}</Link></>}</p>}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
         {state === "open" ? (
           <>
             {needsPerson ? <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-tone-warning"><Lock className="size-3 shrink-0" /><span className="truncate">{needsPerson}</span></span>
-              : <span className="text-[12px] text-muted-foreground">Logged to the audit trail with before and after values.</span>}
+              : changes.length > 0 ? <span className="text-[12px] text-muted-foreground">Logged to the audit trail with before and after values.</span> : null}
             <div className="ml-auto flex gap-1">
               {onDismiss && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act("dismissed")}><X /> Dismiss</Button>}
               {onApply && <Button size="sm" disabled={busy} variant={needsPerson ? "outline" : "default"} onClick={() => void act("applied")}>{needsPerson ? <><Lock /> Send for approval</> : <><Check /> Apply fix</>}</Button>}

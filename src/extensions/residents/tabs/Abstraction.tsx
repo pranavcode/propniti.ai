@@ -11,6 +11,7 @@ import { leaseRecord, pageCtx, sql } from "../server";
 import { AbstractControls } from "../ui/abstract";
 import { IssueFix } from "../ui/client";
 import { agentName } from "@/ai/ui/labels";
+import { humanizeKey, readableText, valueText } from "@/lib/fieldText";
 
 // Lease abstraction: the document on the left with page numbers, the extracted terms on the right
 // with their page and quote, compared with the lease record. Each difference is a data-health
@@ -33,7 +34,7 @@ export async function Abstraction({ id, actor }: TabProps) {
   const saved = await savedAbstract(ctx, id);
   const pages = saved?.uploaded_pages ?? leaseDocument(lease);
   const r = saved?.abstract;
-  const issues = await sql(ctx, "SELECT * FROM {data_issues} WHERE entity_type = 'leases' AND entity_id = ? AND status = 'open' ORDER BY severity = 'critical' DESC, detected_at DESC", [id]);
+  const issues = await sql(ctx, "SELECT i.*, r.name AS rule_name FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id WHERE i.entity_type = 'leases' AND i.entity_id = ? AND i.status = 'open' ORDER BY i.severity = 'critical' DESC, i.detected_at DESC", [id]);
   const canRun = ["principal", "regional_manager", "property_manager", "broker", "accountant"].includes(actor.role);
   const quoted = new Set((r?.fields ?? []).map((f) => `${f.page}|${f.quote}`));
   const differs = r?.comparisons.filter((c) => c.match === false) ?? [];
@@ -115,12 +116,11 @@ export async function Abstraction({ id, actor }: TabProps) {
             const fix = JSON.parse(String(i.suggested_fix ?? "{}"));
             const ev = JSON.parse(String(i.evidence ?? "{}"));
             const cur = lease as unknown as Record<string, unknown>;
-            const fmtV = (k: string, v: unknown) => (v == null || v === "" ? null : k.endsWith("_cents") ? `$${(Number(v) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : String(v));
-            const changes = Object.entries(fix.changes ?? {}).map(([k, after]) => ({ field: k, label: FIX_LABEL[k] ?? k, before: fmtV(k, k in cur ? cur[k] : ev.record ?? ev[k]), after: fmtV(k, after) }));
+            const changes = Object.entries(fix.changes ?? {}).map(([k, after]) => ({ field: k, label: FIX_LABEL[k] ?? humanizeKey(k), before: valueText(k, k in cur ? cur[k] : ev.record ?? ev[k]), after: valueText(k, after) }));
             return (
-              <IssueFix key={String(i.id)} issueId={String(i.id)} rule={String(i.rule_id)}
-                title={i.rule_id === "leases.abstract_mismatch" ? `AI: fix ${String(ev.label ?? "term").toLowerCase()} from the signed lease` : String(i.rule_id).replace("leases.", "").replace(/_/g, " ")}
-                changes={changes} why={fix.why ?? []} confidence={Number(fix.confidence ?? 0.8)} source={fix.source === "rule" ? "rule" : agentName(fix.source)} />
+              <IssueFix key={String(i.id)} issueId={String(i.id)}
+                title={i.rule_id === "leases.abstract_mismatch" ? `AI: fix ${String(ev.label ?? "term").toLowerCase()} from the signed lease` : String(i.rule_name ?? humanizeKey(String(i.rule_id).replace("leases.", "")))}
+                changes={changes} why={(fix.why ?? []).map(readableText)} confidence={Number(fix.confidence ?? 0.8)} source={fix.source === "rule" ? "rule" : agentName(fix.source)} />
             );
           })}
         </section>

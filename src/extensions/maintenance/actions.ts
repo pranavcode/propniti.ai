@@ -12,6 +12,7 @@ import { registerAction } from "../actions";
 import { checkPhoto, nextDue, PHOTO_TAGS, policyCheck, usd, validateInvoice } from "./rules";
 import { insertStmt, newId, OPEN_STATUSES, parse, row as readRow, update, updateStmt } from "./store";
 import { invoiceInputs, latestTriage, policyFor, techCovers } from "./queries";
+import { formatDate } from "@/lib/format";
 
 // Named actions for the maintenance module. Each runs inside the generic action route, which has
 // already checked the role, module access, the record's scope and `when`, and audits success.
@@ -439,7 +440,7 @@ registerAction({
     const [res] = await c.db.batch([
       c.db.prepare(`INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, href, entity_type, entity_id, at) SELECT ?1, ?2, ?3, 'In-app', ?4, ?5, '/portal/vendor/jobs', 'turnovers', ?6, ?7
         WHERE NOT EXISTS (SELECT 1 FROM ${effectiveSql("notifications")} n WHERE n.entity_type = 'turnovers' AND n.entity_id = ?6 AND n.at >= ?8)`)
-        .bind(c.ws, gate, r.vendor_id, `Make-ready past its target: ${String(r.title).replace(/^Make-ready · /, "")}`, `This make-ready was due ${r.target_ready_on} and is ${days} day${days === 1 ? "" : "s"} late. Reply with a new ready date, or tell us what's blocking it.`, r.id, at, since),
+        .bind(c.ws, gate, r.vendor_id, `Make-ready past its target: ${String(r.title).replace(/^Make-ready · /, "")}`, `This make-ready was due ${formatDate(String(r.target_ready_on), "always")} and is ${days} day${days === 1 ? "" : "s"} late. Reply with a new ready date, or tell us what's blocking it.`, r.id, at, since),
       c.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) SELECT ?1, ?2, 'turnovers', ?3, ?4, ?5, 'staff', ?6, 'escalated', ?7, '{}' WHERE EXISTS (SELECT 1 FROM notifications WHERE workspace_id = ?1 AND id = ?8)")
         .bind(c.ws, newId("act"), r.id, r.property_id, at, c.actor.personaId, `${c.actor.name} escalated to ${vendor}: ${days} day${days === 1 ? "" : "s"} past target`, gate),
     ]);

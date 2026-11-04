@@ -26,7 +26,7 @@ test("Marcus sees his conversations, approvals and alerts, filters by kind and o
   await expect(page).toHaveURL(/tab=approvals/);
   const approval = list.locator("li[data-kind=approval]").first();
   await expect(approval.getByText(/^Why:/)).toBeVisible();
-  await expect(approval.getByText(/AI · saved|Rule-based fallback|^AI$/).first()).toBeVisible();
+  await expect(approval.getByText(/AI · saved|^Rules$|^AI$/).first()).toBeVisible();
   await expect(approval.getByRole("link", { name: /^Review/ })).toHaveAttribute("href", /\/app\/ai\/approvals\?proposal=/);
   await expect(list.locator("li[data-kind=message]")).toHaveCount(0);
 

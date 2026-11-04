@@ -17,12 +17,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import type { IssueFilters } from "@/ai/filters";
 import { cn } from "@/lib/utils";
 import { api } from "./client";
-import { actOnIssue, fixPreviewProps, type Issue } from "./IssueFix";
+import { actOnIssue, fixPreviewProps, issueRecord, type Issue } from "./IssueFix";
+import { humanizeKey } from "@/lib/fieldText";
 
 type Health = {
   score: number; open: number; formula: string;
   properties: { id: string; name: string; metro: string; open: number; critical: number; score: number }[];
-  modules: { module: string; open: number; entities: string[]; score: number }[];
+  modules: { module: string; open: number; entities: string[]; labels: string[]; score: number }[];
   rules: { id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }[];
 };
 type Mode = "safe" | "send";
@@ -120,7 +121,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             <Link key={m.module} href={qs({ entity: on ? undefined : m.entities[0], page: undefined })} scroll={false} onClick={pickFilter} aria-current={on || undefined} className={cn("rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40", on && "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.08]")}>
               <div className="flex items-center justify-between text-[12px]"><span className="font-medium capitalize">{m.module.replace(/_/g, " ")}</span><span className={cn("font-semibold tabular-nums", TEXT[tone(m.score)])}>{m.score}</span></div>
               <Meter value={m.score / 100} tone={tone(m.score)} className="mt-2" bare />
-              <div className="mt-1.5 text-[11.5px] text-muted-foreground">{m.open.toLocaleString("en-US")} open · {m.entities.map((e) => e.replace(/_/g, " ")).join(", ")}</div>
+              <div className="mt-1.5 text-[11.5px] text-muted-foreground">{m.open.toLocaleString("en-US")} open · {m.labels.join(", ").toLowerCase()}</div>
             </Link>
             );
           })}
@@ -134,7 +135,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             {["", "critical", "warn", "info"].map((s) => <Link key={s} href={qs({ severity: s || undefined, page: undefined })} scroll={false} onClick={pickFilter} aria-current={(filters.severity ?? "") === s || undefined} className={cn("rounded-full border px-2.5 py-0.5 capitalize", (filters.severity ?? "") === s ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>{s || "All severities"}</Link>)}
             {PILL.filter((x) => filters[x.key]).map((x) => (
               <span key={x.key} className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 py-0.5 pr-1 pl-2.5 text-primary">
-                {x.label}: {x.key === "rule" ? health.rules.find((r) => r.id === filters.rule)?.name ?? filters.rule : x.key === "property" ? health.properties.find((p) => p.id === filters.property)?.name ?? filters.property : String(filters[x.key]).replace(/_/g, " ")}
+                {x.label}: {x.key === "rule" ? health.rules.find((r) => r.id === filters.rule)?.name ?? filters.rule : x.key === "property" ? health.properties.find((p) => p.id === filters.property)?.name ?? filters.property : x.key === "entity" ? health.modules.flatMap((m) => m.entities.map((e, k) => [e, m.labels[k]])).find(([e]) => e === filters.entity)?.[1] ?? humanizeKey(String(filters.entity)) : String(filters[x.key])}
                 <Link href={qs({ [x.key]: undefined, page: undefined })} scroll={false} onClick={pickFilter} aria-label={`Remove ${x.label.toLowerCase()} filter`} className="rounded-full p-0.5 hover:bg-primary/15"><X className="size-3" /></Link>
               </span>
             ))}
@@ -145,7 +146,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             </span>
           </div>
           {issues.rows.length ? issues.rows.map((i) => done[i.id] ? (
-            <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? i.rule_id} on {i.entity_type.replace(/_/g, " ")} {i.entity_id}: {done[i.id]}.</div>
+            <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? "Data issue"} on {issueRecord(i)}: {done[i.id]}.</div>
           ) : (
             <FixPreview key={i.id} {...fixPreviewProps(i, (a) => act(i.id, a))} />
           )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health Agent re-checks the rules every morning." />}

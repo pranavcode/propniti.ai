@@ -3,7 +3,7 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
-import { formatTick, formatValue, seriesColor } from "./fmt";
+import { categoryLabel, formatTick, formatValue, seriesColor } from "./fmt";
 import type { ChartKind, ChartPoint, ChartSeries } from "./types";
 
 // Recharts lives only in this module. ChartCard loads it with next/dynamic (ssr: false), so the
@@ -21,7 +21,7 @@ function Tip({ active, payload, label, series, x }: { active?: boolean; payload?
   const fmt = series[0]?.format;
   return (
     <div className="min-w-40 rounded-md border bg-popover px-2.5 py-2 text-[12px] text-popover-foreground shadow-lg">
-      {head != null && <div className="mb-1 font-medium">{String(head)}</div>}
+      {head != null && <div className="mb-1 font-medium">{categoryLabel(head)}</div>}
       <div className="flex flex-col gap-0.5">
         {payload.map((p) => {
           const s = series.find((s) => s.key === p.dataKey) ?? series.find((s) => s.key === p.name);
@@ -52,7 +52,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
   const cursor = onPoint ? "cursor-pointer" : undefined;
   const tooltip = <ChartTooltip cursor={kind === "line" || kind === "area" ? { stroke: "var(--border)" } : { fill: "var(--muted)", opacity: 0.5 }} content={<Tip series={series} x={x} />} />;
   const yAxis = <YAxis tick={tick} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => formatTick(v, fmt)} />;
-  const xAxis = <XAxis dataKey={x} tick={tick} tickLine={false} axisLine={false} tickMargin={8} minTickGap={16} />;
+  const xAxis = <XAxis dataKey={x} tick={tick} tickLine={false} axisLine={false} tickMargin={8} minTickGap={16} tickFormatter={categoryLabel} />;
   const grid = <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />;
 
   if (kind === "donut") {

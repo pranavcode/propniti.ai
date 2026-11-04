@@ -5,6 +5,7 @@ import { Car, FileSignature, Home, Megaphone, MessagesSquare, Receipt, ShieldChe
 import { AS_OF, FINANCE, issuesField, LEADERS, OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 import { leaseSentence, residentSentence } from "@/ai/rules-sentences";
+import { formatDate } from "@/lib/format";
 
 // Stored balance (generator) plus the visitor's overlay ledger delta. Not sortable or filterable:
 // that would compute it for every row in scope (seconds on D1 for the whole portfolio). Every ledger read goes through
@@ -123,7 +124,7 @@ registerEntity({
   nav: { section: "operations", order: 30 },
   route: "/app/leases",
   titleField: "label",
-  subtitle: (r) => [r.property_id__label, r.start_on && r.end_on ? `${r.start_on} → ${r.end_on}` : r.start_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.property_id__label, r.start_on && r.end_on ? `${formatDate(String(r.start_on), "always")} → ${formatDate(String(r.end_on), "always")}` : r.start_on ? formatDate(String(r.start_on), "always") : null].filter(Boolean).join(" · "),
   scopePath: "leases.property_id",
   fields: {
     label: { type: "text", label: "Lease", sortable: true, list: { default: true, width: 240 },

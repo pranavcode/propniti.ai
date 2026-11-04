@@ -59,7 +59,7 @@ export function DispositionForm({ depositId, amount, leaseId, household, moveOut
     const total = settled.deductions.reduce((s, d) => s + d.amount, 0);
     return (
       <section className="flex flex-col gap-3 rounded-lg border p-4">
-        <h3 className="flex items-center gap-2 text-[14px] font-semibold"><CheckCircle2 className="size-4 text-tone-success" />Disposition {settled.status.toLowerCase()}{settled.sentOn ? ` on ${settled.sentOn}` : ""}</h3>
+        <h3 className="flex items-center gap-2 text-[14px] font-semibold"><CheckCircle2 className="size-4 text-tone-success" />Disposition {settled.status.toLowerCase()}{settled.sentOn ? ` on ${formatDate(settled.sentOn, "always")}` : ""}</h3>
         <table className="w-full text-[13px]">
           <tbody>
             {settled.deductions.map((d, i) => <tr key={i} className="border-t"><td className="py-1.5">{d.label}</td><td className="py-1.5 text-right tabular-nums">{usd(d.amount)}</td></tr>)}

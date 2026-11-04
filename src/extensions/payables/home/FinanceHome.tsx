@@ -11,14 +11,16 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { AIBadge } from "@/components/app/ai";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
-import { AGENT_LABEL, type ProposalJson } from "@/ai/ui/client";
+import type { ProposalJson } from "@/ai/ui/client";
+import { agentName } from "@/ai/ui/labels";
 import { ApprovalQueue, HomeAsk } from "@/extensions/portfolio/home/client";
 import { financeHome, type BriefingItem } from "./data";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // The accountant's home (Grace Kim): briefing and approvals first, then payables, cash and budget.
 // Receivables widgets come from the receivables lane through the widgets registry.
 
-const label = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const label = monthTick;
 const monthLong = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const TONE: Record<BriefingItem["tone"], string> = { danger: "bg-tone-danger", warning: "bg-tone-warning", info: "bg-tone-info", success: "bg-tone-success" };
 const SPAN = { sm: "xl:col-span-4", md: "xl:col-span-6", lg: "xl:col-span-8", full: "xl:col-span-12" } as const;
@@ -81,7 +83,7 @@ export async function FinanceHome({ session }: { session: Session }) {
                 </p>
                 <p className="text-[12.5px] text-muted-foreground">
                   <Bot className="mr-1 inline size-3.5" />
-                  {runs ? <>{runs} agent {runs === 1 ? "run" : "runs"} in 48 hours: {h.briefing.runs.map((r) => `${AGENT_LABEL[r.agent_key] ?? r.agent_key} ×${r.n}`).join(", ")}.</> : "No Payables or Reconciliation runs in the last 48 hours."}
+                  {runs ? <>{runs} agent {runs === 1 ? "run" : "runs"} in 48 hours: {h.briefing.runs.map((r) => `${agentName(r.agent_key)} ×${r.n}`).join(", ")}.</> : "No Payables or Reconciliation runs in the last 48 hours."}
                   {" "}<Link href="/app/agents" className="underline-offset-2 hover:underline">Agents</Link>
                 </p>
               </div>

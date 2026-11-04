@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowRight, Bot, Cpu, ExternalLink, Loader2, ShieldCheck, Sparkles, UserRound, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDelta } from "@/lib/format";
+import { formatDate, formatDelta } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -145,7 +145,7 @@ function ImproveSheet({ open, onOpenChange, improve, kpi }: { open: boolean; onO
       <SheetContent data-tour="improve-with-ai-panel" onOpenAutoFocus={(e) => e.preventDefault()} className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[540px]">
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle className="flex items-center gap-2 pr-8 text-[15px]"><Sparkles className="size-4 shrink-0 text-tone-ai" />{kpi.label}: improve with AI</SheetTitle>
-          <SheetDescription className="text-[12.5px]">{d ? `${d.scope} · from your records as of ${d.asOf}` : "Why it's red, and what agents can do about it."}</SheetDescription>
+          <SheetDescription className="text-[12.5px]">{d ? `${d.scope} · from your records as of ${formatDate(d.asOf, "always")}` : "Why it's red, and what agents can do about it."}</SheetDescription>
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4" aria-live="polite" aria-busy={state.status === "loading"}>

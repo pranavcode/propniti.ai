@@ -44,6 +44,12 @@ describe("parseDate", () => {
     expect(parseDate("02/30/2026")).toBeNull();
     expect(parseDate("soon")).toBeNull();
   });
+
+  it("reads US dates month first, as printed on US invoices", () => {
+    expect(parseDate("11/02/2026")).toBe("2026-11-02");
+    expect(parseDate("12/02/2026")).toBe("2026-12-02");
+    expect(parseDate("13/02/2026")).toBeNull();
+  });
 });
 
 describe("validateRows + importPortfolio", () => {
