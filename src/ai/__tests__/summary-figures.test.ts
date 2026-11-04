@@ -11,6 +11,7 @@ import type { DataCtx } from "../data";
 import { cachedSummary } from "../summaries";
 import { unknownNumbers } from "../rules";
 import { DANIEL, MARCUS } from "./fixture";
+import { AS_OF } from "@/seed/constants";
 
 // The record page shows the record's facts (from getRow) next to its AI summary. Every figure in the
 // summary must be the figure the facts panel shows, on the full seed and after a visitor's change.
@@ -47,6 +48,9 @@ describe("record summaries state the facts panel's figures", () => {
   it.each(["p01", "p02", "p03"])("property %s", async (id) => {
     const { row, s } = await shown({ db, ws: "base", actor: MARCUS }, "properties", id);
     expectPropertyFigures(row, s.summary);
+    // NOI is the last full month, never the month in progress.
+    expect(String(row.noi_period) < AS_OF.slice(0, 7)).toBe(true);
+    expect(s.summary).not.toMatch(/to date/);
   });
 
   it.each(["v01", "v05"])("vendor %s", async (id) => {
