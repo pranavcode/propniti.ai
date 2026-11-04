@@ -1,5 +1,6 @@
 import { demoIsoIn, demoNowIso } from "@/lib/clock";
 import { decidableSql } from "./decide";
+import { formatDate } from "@/lib/format";
 import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { Facts, Row } from "@/entities/types";
@@ -63,12 +64,17 @@ export async function factsFor(data: DataCtx, entity: string, id: string, known?
   return { facts, title };
 }
 
+// Fallback for entities without a template (rules-sentences.ts): the state, then a few facts as
+// "key value" with humanized keys, e.g. "Rent 2025-05 is paid: amount 1,385, due on May 1, 2025."
 export function rulesSummary(title: string, facts: Facts): string {
+  const state = facts.status ?? facts.stage;
+  const text = (v: Facts[string]) =>
+    typeof v === "boolean" ? (v ? "yes" : "no") : typeof v === "number" ? v.toLocaleString("en-US") : /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? formatDate(String(v)) : String(v);
   const parts = Object.entries(facts)
-    .filter(([k, v]) => v != null && v !== "" && v !== title && k !== "resident" && k !== "name")
-    .slice(0, 6)
-    .map(([k, v]) => `${k.replace(/_/g, " ")}: ${typeof v === "boolean" ? (v ? "yes" : "no") : v}`);
-  return parts.length ? `${title}. ${parts.join("; ")}.` : `${title}.`;
+    .filter(([k, v]) => v != null && v !== "" && v !== title && v !== state && k !== "resident" && k !== "name")
+    .slice(0, 5)
+    .map(([k, v]) => `${k.replace(/_/g, " ")} ${text(v)}`);
+  return `${title}${state ? ` is ${String(state).toLowerCase()}` : ""}${parts.length ? `: ${parts.join(", ")}` : ""}.`;
 }
 
 const Out = z.object({ summary: z.string() });

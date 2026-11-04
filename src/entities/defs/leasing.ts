@@ -5,6 +5,7 @@ import { AS_OF, LEADERS, OPS, STAFF, thumb } from "../common";
 import { z } from "zod";
 import { registerEntity } from "../registry";
 import type { Role } from "../types";
+import { prospectSentence } from "@/ai/rules-sentences";
 
 // Who works leads and listings, and who decides applications and concessions.
 const LEASING: Role[] = [...OPS, "leasing_agent", "broker"];
@@ -176,6 +177,7 @@ registerEntity({
   ],
   ai: {
     facts: (r) => ({ prospect: String(r.name), stage: String(r.stage), source: (r.source as string) ?? null, budget: r.budget == null ? null : Number(r.budget), desired_beds: r.desired_beds == null ? null : Number(r.desired_beds), days_since_contact: r.days_since_contact == null ? null : Number(r.days_since_contact) }),
+    rulesSummary: prospectSentence,
     summaryPrompt: "Summarise this lead for the leasing agent in 2 sentences: what they want, where they are in the funnel and the next step. Use only the facts.",
     agents: ["leasing"],
   },

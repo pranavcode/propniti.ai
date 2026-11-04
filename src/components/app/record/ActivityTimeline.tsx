@@ -5,6 +5,7 @@ import { Fragment, useMemo, useState } from "react";
 import { ArrowRight, Bot, ChevronRight, CircleDollarSign, FilePlus2, MessageSquare, Pencil, Sparkles, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMonth, toDate } from "@/lib/format";
+import { modelName } from "../ai/model";
 import { useMounted } from "@/hooks/use-mounted";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PersonAvatar, RelativeDate } from "../display";
@@ -39,7 +40,7 @@ export function changesOf(e: ActivityEvent): Change[] {
   if (Array.isArray(d.changes)) return d.changes as Change[];
   const before = parse(d.before), after = parse(d.after);
   if (!after) return [];
-  return Object.keys(after).filter((k) => !["updated_at", "workspace_id", "seq", "deleted"].includes(k) && JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after[k] ?? null)).slice(0, 4).map((k) => ({ field: k, from: before?.[k] ?? null, to: after[k] ?? null }));
+  return Object.keys(after).filter((k) => !["updated_at", "workspace_id", "seq", "deleted", "effects"].includes(k) && JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after[k] ?? null)).slice(0, 4).map((k) => ({ field: k, from: before?.[k] ?? null, to: after[k] ?? null }));
 }
 
 // A change value as short text. Agent events carry nested payloads (a message, a list of effects):
@@ -57,6 +58,37 @@ export function formatChange(v: unknown): string {
   return String(v);
 }
 const isAuto = (e: ActivityEvent) => e.actor_kind === "agent" || e.actor_kind === "system";
+
+// Audit rows carry the agent's display name ("Maintenance Triage agent") as the actor; agent keys
+// ("collections") get " agent" added.
+// Agents show their Title Case name whatever name was stored with the event.
+export function actorLabel(e: ActivityEvent, people?: Record<string, string>): string {
+  if (e.actor_kind === "agent") return agentName(e.actor_id);
+  if (e.actor_name ?? people?.[e.actor_id]) return (e.actor_name ?? people?.[e.actor_id])!;
+  return isAuto(e) ? agentName(e.actor_id) : e.actor_id;
+}
+
+// What an agent's applied proposal did, in words. Ids, timestamps and "$by" placeholders aren't
+// shown; an effect with nothing left to say is left out.
+export function describeEffects(e: ActivityEvent): string[] {
+  const effects = parse(parse(e.data)?.after)?.effects;
+  if (!Array.isArray(effects)) return [];
+  return effects.flatMap((x): string[] => {
+    const f = (x ?? {}) as Record<string, unknown>;
+    if (f.kind === "message") return [`Sent ${f.channel === "SMS" ? "a text" : "an email"} to the ${String(f.party_kind ?? "recipient")}${f.subject ? `: ${clip(String(f.subject))}` : ""}`];
+    if (f.kind === "task") return [`Created a task${f.title ? `: ${clip(String(f.title))}` : ""}`];
+    if (f.kind === "insert" && f.table === "renewal_offers") return ["Recorded a renewal offer"];
+    if (f.kind === "update" && f.changes && typeof f.changes === "object") {
+      const shown = Object.entries(f.changes as Record<string, unknown>).filter(([k, v]) => !/(_id|_at|_by)$/.test(k) && v !== "$by" && (v == null || typeof v !== "object"));
+      return shown.length ? [shown.map(([k, v]) => `${humanize(k)} set to ${formatChange(v)}`).join(", ")] : [];
+    }
+    return [];
+  });
+}
+
+// Seeded events on the demo day can sit a little after the demo clock early in the (Pacific) day;
+// an event never happened in the future, so show those as now.
+export const pastOnly = (at: string, now: Date = demoNow()) => ((toDate(at)?.getTime() ?? 0) > now.getTime() ? now.toISOString() : at);
 
 function bucket(at: string, now: Date) {
   const d = toDate(at);
@@ -76,9 +108,9 @@ function VerbIcon({ e }: { e: ActivityEvent }) {
 }
 
 function Item({ e, people }: { e: ActivityEvent; people?: Record<string, string> }) {
-  // Agents show their Title Case name whatever name was stored with the event.
-  const who = e.actor_kind === "agent" ? agentName(e.actor_id) : e.actor_name ?? people?.[e.actor_id] ?? (isAuto(e) ? agentName(e.actor_id) : e.actor_id);
+  const who = actorLabel(e, people);
   const changes = changesOf(e);
+  const effects = describeEffects(e);
   const d = parse(e.data);
   return (
     <li className="relative flex gap-3 pb-4 last:pb-0">
@@ -88,7 +120,7 @@ function Item({ e, people }: { e: ActivityEvent; people?: Record<string, string>
           {!isAuto(e) && <PersonAvatar name={who} size={16} className="self-center" />}
           <span className="font-medium">{who}</span>
           <span className="text-muted-foreground">{e.summary}</span>
-          <span className="ml-auto pl-2 text-[11.5px] text-muted-foreground"><RelativeDate value={e.at} /></span>
+          <span className="ml-auto pl-2 text-[11.5px] text-muted-foreground"><RelativeDate value={pastOnly(e.at)} /></span>
         </div>
         {changes.length > 0 && (
           <ul className="mt-1.5 flex flex-col gap-1">
@@ -102,7 +134,8 @@ function Item({ e, people }: { e: ActivityEvent; people?: Record<string, string>
             ))}
           </ul>
         )}
-        {isAuto(e) && typeof d?.model === "string" && <div className="mt-1 text-[11px] text-muted-foreground">Model {d.model}</div>}
+        {effects.length > 0 && <ul className="mt-1.5 flex flex-col gap-0.5 text-[12.5px]">{effects.map((t) => <li key={t} className="flex items-center gap-1.5"><ArrowRight className="size-3 shrink-0 text-muted-foreground" />{t}</li>)}</ul>}
+        {isAuto(e) && typeof d?.model === "string" && <div className="mt-1 text-[11px] text-muted-foreground" title={d.model}>Model {modelName(d.model)}</div>}
       </div>
     </li>
   );

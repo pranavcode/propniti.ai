@@ -152,7 +152,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
 
       <div className="flex flex-col gap-5 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {p.facts.length > 0 && (
-          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border">
+          <dl className="grid shrink-0 grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border">
             {p.facts.map((f) => (
               <div key={f.key} className="min-w-0 bg-card px-3 py-2 odd:last:col-span-2">
                 <dt className="truncate text-[11px] text-muted-foreground">{f.label}</dt>
@@ -163,7 +163,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
         )}
 
         {p.summary !== false && (
-          <RecordSummary key={id} entity={p.entity} id={id} title={p.title} label={p.label.one} initial={p.summary} heading="h3" onAsk={onAsk} />
+          <RecordSummary key={id} entity={p.entity} id={id} label={p.label.one} initial={p.summary} heading="h3" />
         )}
 
         {p.health && p.health.length > 0 && (

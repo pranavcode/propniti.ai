@@ -320,7 +320,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
 
         <aside className="space-y-3">
           {def.capabilities?.aiSummary && (
-            <RecordSummary entity={def.key} id={id} title={title} label={def.label.one}
+            <RecordSummary entity={def.key} id={id} label={def.label.one}
               initial={summary && { summary: summary.summary, model: summary.model, generated_at: summary.generated_at, source: summary.source }} />
           )}
           {issues.length > 0 && (

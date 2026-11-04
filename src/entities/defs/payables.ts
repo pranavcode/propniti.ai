@@ -7,6 +7,7 @@ import { z } from "zod";
 import { AS_OF, issuesField } from "../common";
 import { registerEntity } from "../registry";
 import type { Role, RuleKey } from "../types";
+import { billSentence } from "@/ai/rules-sentences";
 
 const AP: Role[] = ["principal", "regional_manager", "accountant"];
 const AP_READ: Role[] = ["principal", "regional_manager", "property_manager", "accountant", "maintenance_supervisor"];
@@ -97,6 +98,7 @@ registerEntity({
   ],
   ai: {
     facts: (r) => ({ bill: String(r.title), vendor: (r.vendor_id__label as string) ?? null, property: (r.property_id__label as string) ?? null, status: String(r.status), amount: Number(r.amount ?? 0), due_on: String(r.due_on), gl: (r.gl_account_id__label as string) ?? null }),
+    rulesSummary: billSentence,
     summaryPrompt: "Summarise this bill for an accountant in 2 sentences: what it's for, whether anything about it looks unusual, and the next step. Use only the facts.",
     agents: ["ap"],
   },
