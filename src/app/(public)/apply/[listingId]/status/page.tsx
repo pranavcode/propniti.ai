@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Circle, Loader2, Sparkles } from "lucide-react";
 import { PublicFooter, PublicHeader, usd } from "@/components/public/chrome";

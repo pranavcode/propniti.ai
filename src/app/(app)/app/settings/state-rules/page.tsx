@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Landmark } from "lucide-react";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { RelativeDate } from "@/components/app/display";

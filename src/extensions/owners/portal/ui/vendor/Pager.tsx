@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Button } from "@/components/ui/button";
 
 // Previous / next for portal lists; keeps the other query params.

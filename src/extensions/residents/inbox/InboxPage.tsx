@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Building2, HardHat, Inbox, Mail, Megaphone, MessageSquare, Phone, Search, Smartphone, UserRound } from "lucide-react";
 import { can } from "@/entities";
 import { list, QueryError } from "@/server/query";

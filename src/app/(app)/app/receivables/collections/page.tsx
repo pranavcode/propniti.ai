@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffSession } from "@/extensions/receivables/staff";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { PERMISSIONS } from "@/auth/personas";
 import { can } from "@/entities";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
