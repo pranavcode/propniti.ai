@@ -106,3 +106,17 @@ test("the portal's Ask button covers nothing at the end of the owner portal on a
   await expect(page.locator('[data-tour="portal-ask"]')).toBeVisible();
   expect(await coveredByBubble(page, '[data-tour="portal-ask"]')).toEqual([]);
 });
+
+for (const [persona, url, tab] of [["tom", "/app/compliance/insurance", "Active"], ["grace", "/app/receivables/payments", "Cleared"]] as const) {
+  test(`the ${tab} status tab on ${url} is selected the moment it is clicked`, async ({ page, context }) => {
+    await as(context, persona);
+    await go(page, `${BASE}${url}`);
+    // Hold the next page payload, so the check runs while the rows are still loading.
+    await page.route((u) => u.pathname === url && u.search.includes("f."), async (route) => { await new Promise((r) => setTimeout(r, 3_000)); await route.continue(); });
+    const target = page.getByRole("tablist", { name: "Status" }).getByRole("tab", { name: new RegExp(`^${tab}`) });
+    await target.click();
+    await expect(target).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+    await expect(page).toHaveURL(/f\.status=/);
+    await expect(target).toHaveAttribute("aria-selected", "true");
+  });
+}

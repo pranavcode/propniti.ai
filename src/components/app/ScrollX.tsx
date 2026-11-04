@@ -24,12 +24,14 @@ export function useScrollEdges(ref: React.RefObject<HTMLElement | null>) {
   return edges;
 }
 
-// Soft shadows on the sides that hide columns, so a wide table says it scrolls.
-export function EdgeFades({ left, right, className }: { left: boolean; right: boolean; className?: string }) {
+// Soft shadows on the sides that hide content, so a wide table says it scrolls. `onPage` fades the
+// cut content into the page background instead (tab strips, which sit on the page, not a card).
+export function EdgeFades({ left, right, onPage, className }: { left: boolean; right: boolean; onPage?: boolean; className?: string }) {
+  const tone = onPage ? "w-10 from-background" : "w-5 from-foreground/[0.12]";
   return (
     <>
-      <span aria-hidden className={cn("pointer-events-none absolute inset-y-0 left-0 z-10 w-5 bg-linear-to-r from-foreground/[0.12] to-transparent transition-opacity", left ? "opacity-100" : "opacity-0", className)} />
-      <span aria-hidden className={cn("pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-linear-to-l from-foreground/[0.12] to-transparent transition-opacity", right ? "opacity-100" : "opacity-0", className)} />
+      <span aria-hidden className={cn("pointer-events-none absolute inset-y-0 left-0 z-10 bg-linear-to-r to-transparent transition-opacity", tone, left ? "opacity-100" : "opacity-0", className)} />
+      <span aria-hidden className={cn("pointer-events-none absolute inset-y-0 right-0 z-10 bg-linear-to-l to-transparent transition-opacity", tone, right ? "opacity-100" : "opacity-0", className)} />
     </>
   );
 }

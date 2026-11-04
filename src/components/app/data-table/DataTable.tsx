@@ -30,6 +30,7 @@ import { listScope, resultsSummary } from "../results";
 import { fillTemplate, filterKeys, paramsToView, PAGE_SIZES, readSort, readValues, viewToParams } from "./params";
 import { serverViews, type SavedViewsAdapter } from "./views";
 import { PeekLink } from "../peek/PeekLink";
+import { EdgeFades, useScrollEdges } from "../ScrollX";
 import { usePeek, usePeekPageEntity } from "../peek/usePeek";
 import type { AiFilterFn, AiFilterResult, BulkAction, DataColumn, EmptyCopy, Facet, Row, SavedView, StatusTabs } from "./types";
 
@@ -200,6 +201,10 @@ export function DataTable(props: DataTableProps) {
 
   // ---- status tabs
   const tabValue = statusTabs ? readValues(params, statusTabs.field) : [];
+  // The clicked tab reads as selected at once, while its rows load (the URL changes when they arrive).
+  const [clickedTab, setClickedTab] = useState<string | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const tabEdges = useScrollEdges(tabsRef);
   const tabTotal = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
 
   const pages = Math.max(1, Math.ceil(total / size));
@@ -227,16 +232,17 @@ export function DataTable(props: DataTableProps) {
   return (
     <div className={cn("flex min-w-0 flex-col", className)} data-entity={entity}>
       {statusTabs && (
-        <div role="tablist" aria-label="Status" className="-mb-px flex items-end gap-0.5 overflow-x-auto border-b [scrollbar-width:none]">
+        <div className="relative">
+        <div ref={tabsRef} role="tablist" aria-label="Status" className="-mb-px flex items-end gap-0.5 overflow-x-auto border-b [scrollbar-width:none]">
           {[{ value: "", label: statusTabs.allLabel ?? "All", tone: undefined }, ...statusTabs.options].map((o) => {
-            const on = o.value ? tabValue.length === 1 && tabValue[0] === o.value : tabValue.length === 0;
+            const on = pending && clickedTab != null ? clickedTab === o.value : o.value ? tabValue.length === 1 && tabValue[0] === o.value : tabValue.length === 0;
             const n = o.value ? counts?.[o.value] : tabTotal;
             return (
               <button
                 key={o.value || "all"}
                 role="tab"
                 aria-selected={on}
-                onClick={() => setPatch({ [`f.${statusTabs.field}`]: o.value || null })}
+                onClick={(e) => { setClickedTab(o.value); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" }); setPatch({ [`f.${statusTabs.field}`]: o.value || null }); }}
                 className={cn("relative flex h-9 shrink-0 items-center gap-1.5 px-2.5 text-[13px] transition-colors", on ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
               >
                 {o.tone && <span className={cn("size-1.5 rounded-full", TONE_DOT[o.tone])} />}
@@ -246,6 +252,8 @@ export function DataTable(props: DataTableProps) {
               </button>
             );
           })}
+        </div>
+        <EdgeFades {...tabEdges} onPage className="bottom-px" />
         </div>
       )}
 
