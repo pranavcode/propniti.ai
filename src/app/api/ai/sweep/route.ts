@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       if (!(await cronTokenOk(token))) return json({ error: "Bad cron token" }, { status: 403 });
       // The scheduled handler waits for this response, so the runs finish inside the cron
       // invocation's own time limit instead of a request's 30-second waitUntil.
-      const report = await sweep(getPlatform().db, Date.now(), undefined, { deadlineMs: 120_000 });
+      const report = await sweep(getPlatform().db, Date.now(), undefined, { cron: true, deadlineMs: 120_000 });
       return json({ ok: true, report });
     }
     const w = await writeSession(request, null);

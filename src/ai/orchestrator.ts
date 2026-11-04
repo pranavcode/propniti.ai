@@ -145,11 +145,13 @@ async function finish(db: Db, ws: string, runId: string, r: { status: string; su
     .run();
 }
 
-// Claims the next 15-minute sweep slot. One statement, so two cron invocations (or a cron and a
-// visit) can't both run it.
-export async function claimSweep(db: Db, nowMs: number, everyMs = SWEEP_EVERY_MS): Promise<boolean> {
-  await db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES ('ai_last_sweep', '0')").run();
-  const r = await db.prepare("UPDATE meta SET value = ? WHERE key = 'ai_last_sweep' AND CAST(value AS INTEGER) <= ?").bind(String(nowMs), nowMs - everyMs + 30_000).run();
+// Claims the next 15-minute sweep slot. One statement, so two invocations can't both run it.
+// The cron has its own slot: a visit sweep at 02:37 must not make the 02:45 tick skip. A tick
+// still stamps ai_last_sweep, so visits back off for 15 minutes after it.
+export async function claimSweep(db: Db, nowMs: number, key: "ai_last_sweep" | "ai_cron_sweep" = "ai_last_sweep"): Promise<boolean> {
+  await db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '0')").bind(key).run();
+  const r = await db.prepare("UPDATE meta SET value = ? WHERE key = ? AND CAST(value AS INTEGER) <= ?").bind(String(nowMs), key, nowMs - SWEEP_EVERY_MS + 30_000).run();
+  if (r.meta.changes && key === "ai_cron_sweep") await db.prepare("INSERT INTO meta (key, value) VALUES ('ai_last_sweep', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value WHERE CAST(meta.value AS INTEGER) < CAST(excluded.value AS INTEGER)").bind(String(nowMs)).run();
   return r.meta.changes > 0;
 }
 
@@ -186,8 +188,8 @@ export async function reapStaleRuns(db: Db, nowMs: number) {
 // events outbox are the rotation state. The shared base is read-only and never gets runs.
 export const SWEEP_RUN_BUDGET_MS = 20_000;
 
-export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unknown>) => void, opts: { force?: boolean; deadlineMs?: number; workspaces?: string[] } = {}): Promise<SweepReport | null> {
-  if (!opts.force && !(await claimSweep(db, nowMs))) return null;
+export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unknown>) => void, opts: { force?: boolean; cron?: boolean; deadlineMs?: number; workspaces?: string[] } = {}): Promise<SweepReport | null> {
+  if (!opts.force && !(await claimSweep(db, nowMs, opts.cron ? "ai_cron_sweep" : "ai_last_sweep"))) return null;
   const report: SweepReport = { at: demoNowIso(nowMs), reaped: await reapStaleRuns(db, nowMs), scheduled: [], events: [] };
   const active = opts.workspaces ?? (await db.prepare("SELECT id FROM workspaces WHERE id <> 'base' AND last_seen_at > ? ORDER BY last_seen_at DESC LIMIT ?").bind(nowMs - 30 * 60_000, ACTIVE_WS).all<{ id: string }>()).results.map((a) => a.id);
   const deadlineMs = Math.min(opts.deadlineMs ?? SWEEP_RUN_BUDGET_MS, SWEEP_RUN_BUDGET_MS);

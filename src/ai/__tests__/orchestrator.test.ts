@@ -180,6 +180,20 @@ describe("sweep and events", () => {
     expect(await claimSweep(db, now + 15 * 60_000)).toBe(true);
   });
 
+  it("the cron tick runs even right after a visit swept, and visits back off after a tick", async () => {
+    setModelForTests(null);
+    const { db } = openFixture();
+    const visit = Date.parse("2026-11-04T02:37:00Z");
+    expect(await sweep(db, visit)).not.toBeNull();
+    const tick = Date.parse("2026-11-04T02:45:00Z");
+    expect(await sweep(db, tick, undefined, { cron: true })).not.toBeNull();
+    // A second invocation of the same tick doesn't run it again.
+    expect(await sweep(db, tick + 1_000, undefined, { cron: true })).toBeNull();
+    // A visit 15 minutes after the last visit still sees the tick's sweep and skips.
+    expect(await sweep(db, visit + 15 * 60_000)).toBeNull();
+    expect(await sweep(db, tick + 15 * 60_000, undefined, { cron: true })).not.toBeNull();
+  });
+
   it("does one unit of work per sweep: due scheduled agents in rotation and the outbox, never base, reaping stuck runs", async () => {
     setModelForTests(null);
     const { raw, db } = openFixture();

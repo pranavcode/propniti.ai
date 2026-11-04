@@ -2,8 +2,9 @@ import type { Db } from "@/lib/platform/types";
 import { lastSweep, reapStaleRuns, sweep, SWEEP_EVERY_MS } from "./orchestrator";
 
 // "Run on visit": if the Cron Trigger hasn't swept in 15 minutes (local dev, or cron not wired),
-// the first AI page or API request after that starts a sweep in the background. The sweep claims
-// its slot atomically, so this and the cron never both run it.
+// the first AI page or API request after that starts a sweep in the background. It claims the
+// visit slot atomically (the cron stamps it too), so two visits never both run, and a visit never
+// makes the next cron tick skip.
 let checkedAt = 0;
 export function maybeSweep(db: Db, waitUntil: (p: Promise<unknown>) => void, nowMs = Date.now()) {
   if (nowMs - checkedAt < 60_000) return;
