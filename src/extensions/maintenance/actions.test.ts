@@ -157,3 +157,21 @@ describe("dispatch as suggested", () => {
     expect((await act("work_orders.dispatch_suggested", "WO-16")).status).toBe(404);
   });
 });
+
+describe("escalate a late make-ready", () => {
+  const turn = (id: string, vendor: string | null, target = "2026-10-20") =>
+    db.prepare("INSERT INTO turnovers (workspace_id, id, property_id, unit_id, move_out_on, target_ready_on, status, vendor_id) VALUES ('base', ?, 'p01', 'p01-u1', '2026-10-10', ?, 'In progress', ?)").bind(id, target, vendor);
+
+  it("notifies the turn vendor once on a double click, with activity", async () => {
+    await db.batch([turn("to-1", "v01")]);
+    expect(await twice(() => act("turnovers.escalate", "to-1"))).toEqual([200, 409]);
+    expect(await db.prepare("SELECT user_id, href FROM notifications WHERE workspace_id = ? AND entity_type = 'turnovers' AND entity_id = 'to-1'").bind(WS).all().then((r) => r.results)).toEqual([{ user_id: "v01", href: "/portal/vendor/jobs" }]);
+    expect((await db.prepare("SELECT count(*) AS n FROM activity_events WHERE workspace_id = ? AND entity_id = 'to-1' AND verb = 'escalated'").bind(WS).first<{ n: number }>())?.n).toBe(1);
+  });
+
+  it("needs a turn vendor and a make-ready past its target", async () => {
+    await db.batch([turn("to-2", null), turn("to-3", "v01", "2026-12-01")]);
+    expect(await act("turnovers.escalate", "to-2")).toMatchObject({ status: 409, error: expect.stringContaining("no turn vendor") });
+    expect((await act("turnovers.escalate", "to-3")).status).toBe(409);
+  });
+});
