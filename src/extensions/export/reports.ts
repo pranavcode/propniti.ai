@@ -43,7 +43,11 @@ export async function reportDoc(ctx: Ctx, sp: URLSearchParams, branded: boolean)
     const size = 500;
     const first = await rentRoll(ctx, 1, size, property?.id);
     const rows = [...first.rows];
-    for (let page = 2; rows.length < Math.min(first.total, EXPORT_CAP); page++) rows.push(...(await rentRoll(ctx, page, size, property?.id)).rows);
+    for (let page = 2; rows.length < Math.min(first.total, EXPORT_CAP); page++) {
+      const pg = (await rentRoll(ctx, page, size, property?.id)).rows;
+      if (!pg.length) break;
+      rows.push(...pg);
+    }
     return { ...base, name: "rent-roll", title: "Rent roll", filters: [where], note: first.total > EXPORT_CAP ? capNote(first.total) : undefined,
       columns: [{ label: "Property" }, { label: "Unit" }, { label: "Unit status" }, { label: "Sq ft", kind: "number" }, money("Market rent"), { label: "Resident" }, { label: "Lease" }, { label: "Lease status" }, { label: "Start", kind: "date" }, { label: "End", kind: "date" }, money("Rent"), money("Deposit"), money("Balance")],
       rows: rows.slice(0, EXPORT_CAP).map((x) => [x.property, x.unit, x.status, x.sqft, x.market_rent, x.household, x.lease_id, x.lease_status, x.start_on, x.end_on, x.rent, x.deposit, x.balance]) };
