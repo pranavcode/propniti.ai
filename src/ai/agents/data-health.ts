@@ -27,14 +27,21 @@ export default defineAgent({
     // Detection: each SQL rule is a read-only SELECT returning offending ids.
     // Only the shipped rules (base rows) run their SQL; overlay edits can't inject a query.
     const rules = { rows: (await ctx.db.prepare("SELECT id, check_kind, check_sql FROM data_rules WHERE workspace_id = 'base' AND deleted = 0 AND enabled = 1 LIMIT 50").all<Row>()).results };
+    // Each check is capped (count of at most 1,000 matches) and the pass stops after 3 seconds, so
+    // detection never crowds the database; the open issues below are the fix list either way.
     const counts: Record<string, number | string> = {};
+    const stopAt = Date.now() + 3_000;
     for (const r of rules.rows) {
+      if (Date.now() > stopAt) {
+        counts[String(r.id)] = "skipped (time)";
+        continue;
+      }
       const q = String(r.check_sql ?? "").trim();
       if (r.check_kind !== "sql" || !/^select\b/i.test(q) || q.includes(";")) continue;
       try {
         // Rules name tables as {{table}}: the visitor's effective rows (overlay over base).
         const expanded = q.replace(/\{\{([a-z_]+)\}\}/g, (_, t: string) => effective(t, ctx.ws === "base" ? null : ctx.ws));
-        const { results } = await ctx.db.prepare(`SELECT count(*) AS n FROM (${expanded})`).all<{ n: number }>();
+        const { results } = await ctx.db.prepare(`SELECT count(*) AS n FROM (${expanded} LIMIT 1000)`).all<{ n: number }>();
         counts[String(r.id)] = results[0]?.n ?? 0;
       } catch {
         counts[String(r.id)] = "check failed";

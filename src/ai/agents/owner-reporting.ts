@@ -1,5 +1,5 @@
 import { sql } from "../data";
-import type { NoiExplanation } from "../facts";
+import { monthly, type NoiExplanation } from "../facts";
 import { defineAgent, money, type Candidate } from "./framework";
 import { explainText } from "../rules";
 export { explainText } from "../rules";
@@ -21,10 +21,19 @@ export default defineAgent({
   async collect(ctx) {
     const entities = await sql<{ id: string; name: string; owner_id: string; props: string }>(ctx.data,
       "SELECT e.id, e.name, e.owner_id, (SELECT json_group_array(p.id) FROM {properties} p WHERE p.owner_entity_id = e.id) AS props FROM {owner_entities} e", [], { unscoped: true });
+    // One cheap pass over the stored monthly NOI picks the entities whose NOI moved most; only
+    // those (at most three per run) get the full explanation, which reads the journal.
+    const months = await monthly(ctx.data, { months: 3 });
+    const latest = [...new Set(months.map((m) => String(m.month)))].sort().slice(-3, -1);
+    const noi = (ids: string[], month: string | undefined) => months.filter((m) => m.month === month && ids.includes(String(m.property_id))).reduce((s, m) => s + Number(m.noi_cents), 0);
+    const ranked = entities
+      .map((e) => ({ e, ids: (JSON.parse(e.props) as string[]).filter((id) => ctx.actor.propertyIds === "all" || ctx.actor.propertyIds.includes(id)) }))
+      .filter((x) => x.ids.length)
+      .map((x) => ({ ...x, move: Math.abs(noi(x.ids, latest[1]) - noi(x.ids, latest[0])) / Math.max(1, Math.abs(noi(x.ids, latest[0]))) }))
+      .sort((a, b) => b.move - a.move)
+      .slice(0, 3);
     const out: Candidate[] = [];
-    for (const e of entities) {
-      const ids = (JSON.parse(e.props) as string[]).filter((id) => ctx.actor.propertyIds === "all" || ctx.actor.propertyIds.includes(id));
-      if (!ids.length) continue;
+    for (const { e, ids } of ranked) {
       const x = await ctx.call<NoiExplanation | { error: string }>("metrics.explain_noi", { property_ids: ids });
       if ("error" in x || Math.abs(x.change_pct) < 3) continue;
       const text = explainText(x);

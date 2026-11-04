@@ -20,9 +20,16 @@ export default defineAgent({
     const soon = addDays(ctx.today, 30);
     const cois = await ctx.call<{ rows: Row[] }>("records.search", { entity: "vendor_cois", filters: [{ field: "expires_on", op: "lte", value: soon }], sort: ["expires_on", "asc"], size: 40 });
     const vendorIds = [...new Set(cois.rows.map((c) => String(c.vendor_id)))];
-    const vendors = vendorIds.length
-      ? await sql<Row>(ctx.data, "SELECT v.id, v.company, v.email, (SELECT count(*) FROM {work_orders} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs, (SELECT max(c.expires_on) FROM {vendor_cois} c WHERE c.vendor_id = v.id) AS latest, (SELECT c.id FROM {vendor_cois} c WHERE c.vendor_id = v.id ORDER BY c.expires_on DESC LIMIT 1) AS coi_id FROM {vendors} v WHERE v.id IN (SELECT value FROM json_each(?))", [JSON.stringify(vendorIds)], { unscoped: true })
-      : [];
+    // Grouped reads instead of per-vendor subqueries (D1 capacity is shared).
+    const ids = JSON.stringify(vendorIds);
+    const vrows = vendorIds.length ? await sql<Row>(ctx.data, "SELECT v.id, v.company, v.email FROM {vendors} v WHERE v.id IN (SELECT value FROM json_each(?))", [ids], { unscoped: true }) : [];
+    const jobs = new Map((vendorIds.length ? await sql<{ vendor_id: string; n: number }>(ctx.data, "SELECT vendor_id, count(*) AS n FROM {work_orders} WHERE status IN ('Assigned', 'Scheduled', 'In progress') AND vendor_id IN (SELECT value FROM json_each(?)) GROUP BY vendor_id", [ids], { unscoped: true }) : []).map((r) => [r.vendor_id, r.n]));
+    const latest = new Map<string, { latest: string; coi_id: string }>();
+    for (const c of vendorIds.length ? await sql<{ id: string; vendor_id: string; expires_on: string }>(ctx.data, "SELECT id, vendor_id, expires_on FROM {vendor_cois} WHERE vendor_id IN (SELECT value FROM json_each(?))", [ids], { unscoped: true }) : []) {
+      const cur = latest.get(c.vendor_id);
+      if (!cur || c.expires_on > cur.latest) latest.set(c.vendor_id, { latest: c.expires_on, coi_id: c.id });
+    }
+    const vendors: Row[] = vrows.map((v) => ({ ...v, open_jobs: jobs.get(String(v.id)) ?? 0, latest: latest.get(String(v.id))?.latest ?? null, coi_id: latest.get(String(v.id))?.coi_id ?? null }));
     const out: Candidate[] = [];
     for (const v of vendors) {
       // A newer certificate already on file covers the vendor.

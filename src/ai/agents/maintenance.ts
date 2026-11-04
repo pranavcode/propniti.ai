@@ -2,7 +2,7 @@ import type { Row } from "@/entities/types";
 import { parseJson, sql } from "../data";
 import { defineAgent, money, type Candidate } from "./framework";
 import { triage } from "../rules";
-import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
+import { coiVerifiedSql } from "@/extensions/risk/sql";
 export { triage } from "../rules";
 
 // Triage of new work orders: trade, urgency, a cost estimate from history, ranked vendors and the
@@ -27,14 +27,13 @@ export default defineAgent({
     const pol = policies.approval_policies.find((p) => p.owner_entity_id == null) ?? policies.approval_policies[0];
     const limit = pol?.limit_cents == null ? null : Number(pol.limit_cents);
     const ownerOver = pol?.owner_approval_over_cents == null ? null : Number(pol.owner_approval_over_cents);
-    const [costs, vendors, props] = await Promise.all([
-      sql<{ category: string; cost: number }>(ctx.data, "SELECT category, cost_cents AS cost FROM {work_orders} WHERE cost_cents > 0 AND status IN ('Completed', 'Paid') ORDER BY category, cost_cents", [], { unscoped: true }),
-      sql<Row>(ctx.data,
-        `SELECT v.id, v.company, v.trade, v.metros, v.rating, v.status, (SELECT count(*) FROM {work_orders} w WHERE w.vendor_id = v.id AND w.status IN ('Assigned', 'Scheduled', 'In progress')) AS open_jobs,
-                ${verifiedCoiExpirySql("{vendor_cois}", "v.id")} AS coi_expires
-         FROM {vendors} v WHERE v.status = 'Active'`, [], { unscoped: true }),
-      sql<{ id: string; metro: string; name: string }>(ctx.data, "SELECT id, metro, name FROM {properties}"),
-    ]);
+    // One query at a time and no per-vendor subqueries: D1 shares capacity with every visitor.
+    const costs = await sql<{ category: string; cost: number }>(ctx.data, "SELECT category, cost_cents AS cost FROM {work_orders} WHERE cost_cents > 0 AND status IN ('Completed', 'Paid') ORDER BY category, cost_cents LIMIT 5000", [], { unscoped: true });
+    const active = await sql<Row>(ctx.data, "SELECT v.id, v.company, v.trade, v.metros, v.rating, v.status FROM {vendors} v WHERE v.status = 'Active'", [], { unscoped: true });
+    const jobs = new Map((await sql<{ vendor_id: string; n: number }>(ctx.data, "SELECT vendor_id, count(*) AS n FROM {work_orders} WHERE vendor_id IS NOT NULL AND status IN ('Assigned', 'Scheduled', 'In progress') GROUP BY vendor_id", [], { unscoped: true })).map((r) => [r.vendor_id, r.n]));
+    const cois = new Map((await sql<{ vendor_id: string; e: string }>(ctx.data, `SELECT k.vendor_id, max(k.expires_on) AS e FROM {vendor_cois} k WHERE ${coiVerifiedSql("k")} GROUP BY k.vendor_id`, [], { unscoped: true })).map((r) => [r.vendor_id, r.e]));
+    const vendors: Row[] = active.map((v) => ({ ...v, open_jobs: jobs.get(String(v.id)) ?? 0, coi_expires: cois.get(String(v.id)) ?? null }));
+    const props = await sql<{ id: string; metro: string; name: string }>(ctx.data, "SELECT id, metro, name FROM {properties}");
     const median = (cat: string) => {
       const xs = costs.filter((c) => c.category === cat).map((c) => c.cost);
       return xs.length ? xs[Math.floor(xs.length / 2)] : null;

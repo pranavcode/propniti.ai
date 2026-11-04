@@ -29,6 +29,19 @@ export const TABLES = {
 } as const;
 export type Table = keyof typeof TABLES;
 
+// D1 sheds load with "overloaded" errors under bursts; a short backoff and one or two retries let a
+// run continue instead of failing on its first read.
+export async function retryBusy<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= tries - 1 || !/overloaded|too many|busy|locked/i.test(String((err as Error)?.message ?? err))) throw err;
+      await new Promise((r) => setTimeout(r, 200 * 2 ** i));
+    }
+  }
+}
+
 export const isTable = (t: string): t is Table => Object.hasOwn(TABLES, t);
 
 // Overlay rows replace base rows with the same id; tombstones (deleted = 1) hide them.
@@ -161,7 +174,7 @@ export async function sql<T = Row>(ctx: DataCtx, text: string, params: unknown[]
     all.push(...s.params);
     return `(SELECT * FROM ${e.sql} x WHERE ${s.sql})`;
   });
-  const { results } = await ctx.db.prepare(out).bind(...all).all<T>();
+  const { results } = await retryBusy(() => ctx.db.prepare(out).bind(...all).all<T>());
   return results;
 }
 

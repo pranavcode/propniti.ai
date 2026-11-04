@@ -1,7 +1,7 @@
 import { demoNowIso } from "@/lib/clock";
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
-import { asOf, eff, getRaw, insert, isTable, newId, type DataCtx } from "./data";
+import { asOf, eff, getRaw, insert, isTable, newId, retryBusy, type DataCtx } from "./data";
 import { snapshotOf } from "./effects";
 import { addUsage, currentModel, fromWire, RULES, toWire, ZERO, type ChatModel, type ModelInfo, type Turn, type Usage } from "./providers";
 import { getTool } from "./tools/registry";
@@ -89,11 +89,12 @@ export async function createRunContext(opts: {
     async step(s: Omit<Step, "idx" | "at">) {
       const id = `${runId}-s${idx}`;
       const i = idx++;
-      await (await insert(db, ws, "agent_steps", {
+      const stmt = await insert(db, ws, "agent_steps", {
         id, run_id: runId, idx: i, kind: s.kind, tool_key: s.toolKey ?? null,
         input: s.input === undefined ? null : truncate(s.input, 4000), output: s.output === undefined ? null : truncate(s.output),
         latency_ms: s.latencyMs ?? null, ok: s.ok ? 1 : 0, at: demoNowIso(),
-      })).run();
+      });
+      await retryBusy(() => stmt.run());
       return id;
     },
     addUsage(u) {
