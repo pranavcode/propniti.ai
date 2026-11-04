@@ -48,7 +48,7 @@ const TOOL_LABEL: Record<string, string> = {
 const DECIDED: Record<string, "approved" | "rejected" | "snoozed"> = { Approved: "approved", Edited: "approved", Rejected: "rejected", Snoozed: "snoozed" };
 const RESET_NOTE = "Your last conversation was cleared with the nightly demo reset (midnight Pacific), so this is a fresh one.";
 type Saved = { thread: { id: string; title: string }; turns: Turn[]; more: boolean };
-type ThreadRow = { id: string; title: string; updated_at: string };
+type ThreadRow = { id: string; title: string; updated_at: string; sample?: boolean };
 type Card = { type: string; title: string; href: string; status?: string; facts: { label: string; value: string }[]; summary?: { text: string; source: string; model: string }; questions: string[] };
 
 // Sends a question and reads the streamed progress ({"status"} lines) until the reply arrives.
@@ -246,6 +246,11 @@ function RightNow({ persona, nav, onAsk }: { persona: string; nav: string[]; onA
   );
 }
 
+// Marks a seeded sample conversation (ids smp-…) in the history lists.
+export function SampleTag() {
+  return <span title="A sample conversation that comes with the demo data. Its answers were computed from that data." className="rounded-sm border px-1 text-[10px] leading-[14px] font-medium text-muted-foreground">Sample</span>;
+}
+
 // The dock's history menu, rendered into the panel header: recent conversations, new, open as a page.
 function RecentMenu({ current, onOpen, onNew }: { current?: string; onOpen: (id: string) => void; onNew: () => void }) {
   const [rows, setRows] = useState<ThreadRow[] | null>(null);
@@ -269,7 +274,7 @@ function RecentMenu({ current, onOpen, onNew }: { current?: string; onOpen: (id:
           <DropdownMenuItem key={t.id} onSelect={() => onOpen(t.id)} className="items-start gap-2">
             <span className="min-w-0 flex-1 leading-tight">
               <span className="block truncate">{t.title}</span>
-              <span className="text-[11px] text-muted-foreground"><RelativeDate value={t.updated_at} /></span>
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><RelativeDate value={t.updated_at} />{t.sample && <SampleTag />}</span>
             </span>
             {t.id === current && <Check className="mt-0.5 text-primary" />}
           </DropdownMenuItem>

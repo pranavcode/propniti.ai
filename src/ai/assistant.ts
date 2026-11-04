@@ -4,7 +4,7 @@ import { getEntity } from "@/entities";
 import type { ActionKey, Row } from "@/entities/types";
 import type { Persona } from "@/auth/personas";
 import { addDays, money } from "./rules";
-import { columns, insert, newId, parseJson, sql, type DataCtx, type Table } from "./data";
+import { columns, eff, insert, newId, parseJson, sql, upsertOverlay, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
 import { openRun, runNow, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
@@ -67,7 +67,7 @@ async function catalog(db: DataCtx["db"]) {
 }
 
 // Every dollar figure in a model answer must appear in what the tools returned.
-function unverified(answer: string, outputs: string[]) {
+export function unverified(answer: string, outputs: string[]) {
   const seen = new Set<number>();
   for (const o of outputs) for (const m of o.matchAll(/"[a-z_]*cents":(-?\d+)/g)) seen.add(Math.abs(Number(m[1])));
   for (const o of outputs) for (const m of o.matchAll(/"total_balance_cents":(\d+)/g)) seen.add(Number(m[1]));
@@ -226,13 +226,15 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
   const nowIso = demoNowIso();
   const { db, ws } = data;
 
+  // Threads are read over the base, so a persona can continue one of the seeded sample conversations.
+  const threadsT = eff("assistant_threads", ws), messagesT = eff("assistant_messages", ws);
   let threadId = o.threadId;
-  const owned = threadId ? await db.prepare("SELECT id FROM assistant_threads WHERE workspace_id = ? AND id = ? AND user_id = ?").bind(ws, threadId, persona.id).first() : null;
+  const owned = threadId ? await db.prepare(`SELECT id FROM ${threadsT.sql} t WHERE t.id = ? AND t.user_id = ?`).bind(...threadsT.params, threadId, persona.id).first() : null;
   if (!owned) {
     threadId = newId("thr");
     await (await insert(db, ws, "assistant_threads", { id: threadId, user_id: persona.id, title: question.slice(0, 80), context_type: context?.entity ?? null, context_id: context?.id ?? null, created_at: nowIso, updated_at: nowIso })).run();
   }
-  const history = await db.prepare("SELECT role, content FROM assistant_messages WHERE workspace_id = ? AND thread_id = ? ORDER BY seq DESC LIMIT 6").bind(ws, threadId).all<{ role: string; content: string }>();
+  const history = await db.prepare(`SELECT role, content FROM ${messagesT.sql} m WHERE m.thread_id = ? ORDER BY m.seq DESC LIMIT 6`).bind(...messagesT.params, threadId).all<{ role: string; content: string }>();
   await (await insert(db, ws, "assistant_messages", { id: newId("msg"), thread_id: threadId, role: "user", content: question, at: nowIso })).run();
 
   const start = { db, ws, actor: data.actor, agent: "copilot" as const, trigger: { kind: "chat" as const, input: { question, mode, context } }, waitUntil: o.waitUntil };
@@ -373,17 +375,23 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
     // The plan keeps what the reply showed (source, table, note), so a reopened thread renders the same.
     await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace, live: res.live, source: model.label, note, table: res.out.table, agent_run: res.out.run }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
     ...(await Promise.all(proposals.map(async (p) => insert(db, ws, "assistant_actions", { id: newId("act"), message_id: messageId, action: p.action, params: JSON.stringify({ proposal_id: p.id }), status: "Proposed", at: demoNowIso() })))),
-    db.prepare("UPDATE assistant_threads SET updated_at = ? WHERE workspace_id = ? AND id = ?").bind(demoNowIso(), ws, threadId),
   ]);
+  // Copy-on-write, so a continued sample thread (a base row) moves up in this visitor's list only.
+  await upsertOverlay(data, "assistant_threads", threadId!, { updated_at: demoNowIso() });
   return {
     threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals, note, run: res.out.run,
   };
 }
 
-// Saved conversations (⌘J panel and /app/copilot). Only the persona's own threads, in this workspace.
+// Seeded sample conversations (src/seed/samples) have ids starting smp-; the lists label them.
+export const isSampleThread = (id: string) => id.startsWith("smp-");
+
+// Saved conversations (⌘J panel and /app/copilot). Only the persona's own threads: this workspace's
+// and the seeded samples in the base.
 export async function threads(data: DataCtx, personaId: string, size = 20) {
-  const { results } = await data.db.prepare("SELECT id, title, updated_at FROM assistant_threads WHERE workspace_id = ? AND user_id = ? AND deleted = 0 ORDER BY updated_at DESC, seq DESC LIMIT ?").bind(data.ws, personaId, Math.min(Math.max(1, size), 30)).all<{ id: string; title: string; updated_at: string }>();
-  return results;
+  const t = eff("assistant_threads", data.ws);
+  const { results } = await data.db.prepare(`SELECT id, title, updated_at FROM ${t.sql} t WHERE t.user_id = ? ORDER BY t.updated_at DESC, t.seq DESC LIMIT ?`).bind(...t.params, personaId, Math.min(Math.max(1, size), 30)).all<{ id: string; title: string; updated_at: string }>();
+  return results.map((r) => ({ id: r.id, title: r.title, updated_at: r.updated_at, sample: isSampleThread(r.id) }));
 }
 
 export type SavedTurn = { role: "user"; text: string } | { role: "assistant"; reply: AssistantReply };
@@ -392,15 +400,16 @@ type SavedPlan = { run_id?: string; mode?: Mode; trace?: TraceItem[]; live?: boo
 // The last `limit` messages of a thread as the chat renders them. Proposals come back with their
 // current decision; nothing is run again.
 export async function threadMessages(data: DataCtx, personaId: string, threadId: string, limit = 30) {
-  const thread = await data.db.prepare("SELECT id, title, updated_at FROM assistant_threads WHERE workspace_id = ? AND id = ? AND user_id = ? AND deleted = 0").bind(data.ws, threadId, personaId).first<{ id: string; title: string; updated_at: string }>();
+  const t = eff("assistant_threads", data.ws), m = eff("assistant_messages", data.ws), a = eff("assistant_actions", data.ws);
+  const thread = await data.db.prepare(`SELECT id, title, updated_at FROM ${t.sql} t WHERE t.id = ? AND t.user_id = ?`).bind(...t.params, threadId, personaId).first<{ id: string; title: string; updated_at: string }>();
   if (!thread) return null;
   const n = Math.min(Math.max(1, limit), 100);
-  const { results } = await data.db.prepare("SELECT id, role, content, plan, citations, model FROM assistant_messages WHERE workspace_id = ? AND thread_id = ? AND deleted = 0 ORDER BY seq DESC LIMIT ?").bind(data.ws, threadId, n + 1).all<{ id: string; role: string; content: string; plan: string | null; citations: string; model: string | null }>();
+  const { results } = await data.db.prepare(`SELECT id, role, content, plan, citations, model FROM ${m.sql} m WHERE m.thread_id = ? ORDER BY m.seq DESC LIMIT ?`).bind(...m.params, threadId, n + 1).all<{ id: string; role: string; content: string; plan: string | null; citations: string; model: string | null }>();
   const more = results.length > n;
   const messages = results.slice(0, n).reverse();
   const answers = messages.filter((m) => m.role === "assistant").map((m) => m.id);
   const actions = answers.length
-    ? (await data.db.prepare("SELECT message_id, params FROM assistant_actions WHERE workspace_id = ? AND deleted = 0 AND message_id IN (SELECT value FROM json_each(?)) ORDER BY seq").bind(data.ws, JSON.stringify(answers)).all<{ message_id: string; params: string }>()).results
+    ? (await data.db.prepare(`SELECT message_id, params FROM ${a.sql} a WHERE a.message_id IN (SELECT value FROM json_each(?)) ORDER BY a.seq`).bind(...a.params, JSON.stringify(answers)).all<{ message_id: string; params: string }>()).results
     : [];
   const ids = actions.map((a) => parseJson<{ proposal_id?: string }>(a.params, {}).proposal_id).filter((x): x is string => !!x);
   const rows = ids.length
@@ -420,5 +429,5 @@ export async function threadMessages(data: DataCtx, personaId: string, threadId:
       },
     };
   });
-  return { thread, turns, more };
+  return { thread: { ...thread, sample: isSampleThread(thread.id) }, turns, more };
 }

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/app/page";
 import { RelativeDate } from "@/components/app/display";
 import { cn } from "@/lib/utils";
 import { threadMessages, threads } from "@/ai/assistant";
-import { AssistantChat } from "@/ai/ui/AssistantChat";
+import { AssistantChat, SampleTag } from "@/ai/ui/AssistantChat";
 import { pageData } from "@/ai/ui/server";
 import { modelInfo } from "@/ai/providers";
 
@@ -14,8 +14,8 @@ export const metadata = { title: "Copilot · Propniti" };
 export default async function CopilotPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { data, persona } = await pageData();
-  const list = data.ws === "base" ? [] : await threads(data, persona.id, 30);
-  const open = sp.thread && data.ws !== "base" ? await threadMessages(data, persona.id, sp.thread, 100) : null;
+  const list = await threads(data, persona.id, 30);
+  const open = sp.thread ? await threadMessages(data, persona.id, sp.thread, 100) : null;
   const m = modelInfo();
   return (
     <main className="flex h-full flex-col">
@@ -29,7 +29,7 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
                 <li key={String(t.id)}>
                   <Link href={`/app/copilot?thread=${t.id}`} className={cn("block px-3 py-1.5 hover:bg-muted/50", sp.thread === t.id && "bg-muted")}>
                     <span className="block truncate text-[12.5px]">{String(t.title)}</span>
-                    <span className="text-[11px] text-muted-foreground"><RelativeDate value={String(t.updated_at)} /></span>
+                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><RelativeDate value={String(t.updated_at)} />{t.sample && <SampleTag />}</span>
                   </Link>
                 </li>
               ))}
@@ -37,6 +37,7 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
           ) : <p className="p-3 text-[12px] text-muted-foreground">Your conversations are saved here.</p>}
         </aside>
         <section className="min-h-[60vh] overflow-hidden rounded-lg border bg-card">
+          {open?.thread.sample && <p className="border-b bg-muted/40 px-4 py-2 text-[12px] text-muted-foreground"><SampleTag /> <span className="ml-1">A sample conversation from the demo data. The answers were computed from that data by the rules assistant; ask a follow-up to continue it.</span></p>}
           <AssistantChat key={sp.thread ?? "new"} page threadId={open ? sp.thread : undefined} initialTurns={open?.turns} suggestions={persona.assistantPrompts} />
         </section>
       </div>
