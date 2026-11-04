@@ -21,7 +21,7 @@ type Health = {
 };
 type Issue = {
   id: string; rule_id: string; rule_name: string | null; rule_description: string | null; entity_type: string; entity_id: string; property: string | null; severity: string; detected_at: string;
-  suggested_fix: { why?: string[]; confidence?: number; source?: string; merge_into?: string } | null; before: Record<string, unknown> | null; after: Record<string, unknown>; needsPerson: boolean; href?: string; evidence: Record<string, unknown>;
+  suggested_fix: { why?: string[]; confidence?: number; source?: string; merge_into?: string } | null; before: Record<string, unknown> | null; after: Record<string, unknown>; needsPerson: string | null; href?: string; evidence: Record<string, unknown>;
 };
 
 const tone = (score: number) => (score >= 95 ? "success" : score >= 85 ? "warning" : "danger") as "success" | "warning" | "danger";
@@ -29,24 +29,26 @@ const TEXT = { success: "text-tone-success", warning: "text-tone-warning", dange
 
 export function DataHealthCenter({ health, issues, filters }: { health: Health; issues: { rows: Issue[]; total: number; page: number; size: number }; filters: Record<string, string | undefined> }) {
   const router = useRouter();
-  const [done, setDone] = useState<Record<string, "applied" | "dismissed">>({});
+  const [done, setDone] = useState<Record<string, "applied" | "dismissed" | "sent for approval">>({});
   const qs = (o: Record<string, string | undefined>) => "?" + new URLSearchParams(Object.entries({ ...filters, ...o }).filter(([, v]) => v).map(([k, v]) => [k, v!])).toString();
 
   const act = async (id: string, action: "apply" | "dismiss") => {
     try {
-      const r = await api<{ message: string }>(`/api/ai/data-health/issues/${id}`, "POST", { action });
-      setDone((d) => ({ ...d, [id]: action === "apply" ? "applied" : "dismissed" }));
-      toast.success(r.message);
+      const r = await api<{ message: string; queued?: boolean; proposalId?: string }>(`/api/ai/data-health/issues/${id}`, "POST", { action });
+      setDone((d) => ({ ...d, [id]: r.queued ? "sent for approval" : action === "apply" ? "applied" : "dismissed" }));
+      if (r.queued) toast.info(r.message, { action: { label: "Open approvals", onClick: () => router.push(`/app/ai/approvals?proposal=${r.proposalId}`) } });
+      else toast.success(r.message);
     } catch (e) {
       toast.error((e as Error).message);
       throw e;
     }
   };
+  const noFix = (i: Issue) => !Object.keys(i.after ?? {}).length && !i.suggested_fix?.merge_into;
   const safe = issues.rows.filter((i) => !i.needsPerson && !done[i.id] && Object.keys(i.after ?? {}).length);
   const bulk = async () => {
     try {
-      const r = await api<{ applied: number; runId: string }>("/api/ai/data-health/bulk", "POST", { ids: safe.map((i) => i.id) });
-      toast.success(`Applied ${r.applied} safe fixes`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
+      const r = await api<{ applied: number; queued: number; runId: string }>("/api/ai/data-health/bulk", "POST", { ids: safe.map((i) => i.id) });
+      toast.success(`Applied ${r.applied} safe fixes${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
       router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -97,8 +99,8 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
               why={i.suggested_fix?.why ?? [i.rule_description ?? "Flagged by a data rule"]}
               confidence={i.suggested_fix?.confidence ?? 0.7}
               source={i.suggested_fix?.source === "rule" || !i.suggested_fix?.source ? "rule" : "Data Health agent"}
-              needsPerson={i.needsPerson ? "Touches money, fraud or legal status: a person reviews it in the approvals inbox" : !Object.keys(i.after ?? {}).length && !i.suggested_fix?.merge_into ? "No automatic fix: open the record to correct it" : null}
-              onApply={i.needsPerson || (!Object.keys(i.after ?? {}).length && !i.suggested_fix?.merge_into) ? undefined : () => act(i.id, "apply")}
+              needsPerson={noFix(i) ? "No automatic fix: open the record to correct it" : i.needsPerson}
+              onApply={noFix(i) ? undefined : () => act(i.id, "apply")}
               onDismiss={() => act(i.id, "dismiss")}
             />
           )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health agent re-checks the rules every morning." />}

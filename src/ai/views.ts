@@ -4,6 +4,7 @@ import type { AgentKey, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
 import { computeFix, proposalSource, type AiSource } from "./rules";
+import { fixProposal, queueReason } from "./tools/write";
 import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
@@ -254,8 +255,8 @@ export async function issuesPage(data: DataCtx, f: { status?: string; severity?:
     }
     const changes = (fix?.changes ?? {}) as Record<string, unknown>;
     if (rec) before = Object.fromEntries(Object.keys(changes).map((k) => [k, rec[k] ?? null]));
-    const human = /^(payments\.|owner_distributions\.|bank_transactions\.|vendors\.unverified_bank_change|leases\.rent_outlier)/.test(String(i.rule_id));
-    return { ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson: human, href: hrefOf(table, String(i.entity_id)) };
+    const needsPerson = queueReason(fixProposal({ ...i, suggested_fix: JSON.stringify(fix ?? {}) }), data.actor.role);
+    return { ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)) };
   }));
   return { rows: out, total: total[0]?.n ?? 0, page, size };
 }
