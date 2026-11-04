@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- image optimisation is off on Workers; files are pre-sized webp */
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowLeft, ArrowRight, Lock } from "lucide-react";
 import { PERSONAS, type Persona } from "@/auth/personas";
 import { Wordmark } from "@/components/Logo";

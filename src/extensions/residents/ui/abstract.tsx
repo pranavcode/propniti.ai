@@ -54,7 +54,7 @@ export function AbstractControls({ leaseId, hasResult }: { leaseId: string; hasR
           <Textarea value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} rows={8} placeholder="Paste the lease text. Page breaks like “Page 2” keep page references accurate…" className="font-mono text-[12px]" maxLength={60_000} />
           <div className="flex items-center gap-2">
             <Button size="sm" disabled={busy || paste.text.trim().length < 200} onClick={() => run({ name: paste.name, text: paste.text })}>{busy ? <Loader2 className="animate-spin" /> : <Sparkles />}Abstract this document</Button>
-            <span className="text-[11.5px] text-muted-foreground">{paste.text.length.toLocaleString()} characters · the text is treated as data, never as instructions</span>
+            <span className="text-[11.5px] text-muted-foreground">{paste.text.length.toLocaleString("en-US")} characters · the text is treated as data, never as instructions</span>
           </div>
         </div>
       )}

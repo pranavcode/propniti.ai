@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate, formatDateTime, formatFull, formatNumber } from "@/lib/format";

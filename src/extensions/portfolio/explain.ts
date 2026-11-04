@@ -47,7 +47,7 @@ const fmtChange = (kind: Agg["kind"], d: number) => (kind === "pct" ? `${d >= 0 
 // Driver deltas are signed by their effect on NOI: for a cost line, a positive effect means it fell.
 function driverText(d: NoiExplanation["drivers"][number]) {
   const amt = formatMoney(Math.abs(d.delta_cents) / 100, "whole");
-  const income = d.label === "Rent collected";
+  const income = d.label === "Other income";
   const moved = income === d.delta_cents > 0 ? "rose" : "fell";
   return `${d.label} ${moved}, ${d.delta_cents > 0 ? "adding" : "taking"} ${amt} ${d.delta_cents > 0 ? "to" : "from"} NOI.`;
 }

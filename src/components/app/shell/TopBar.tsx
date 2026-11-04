@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { Fragment, useMemo } from "react";
 import { BookOpen, Check, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";

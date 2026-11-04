@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ExternalLink, MapPin } from "lucide-react";
 import type { TabProps } from "@/extensions/tabs";
 import { metrics, type QueryCtx } from "@/server/query";

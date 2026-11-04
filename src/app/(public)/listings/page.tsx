@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { SearchX } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/public/chrome";
 import { metroSummary, parseFilters, searchListings, SORTS, today, visitorWorkspace, type Filters as F, type SearchParams } from "@/components/public/data";

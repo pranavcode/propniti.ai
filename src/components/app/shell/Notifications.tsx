@@ -1,7 +1,7 @@
 "use client";
 import { demoNowIso } from "@/lib/clock";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- image optimisation is off on Workers; files are pre-sized webp */
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowLeft } from "lucide-react";
 import { Wordmark } from "@/components/Logo";
 import { MK_VARS } from "./ui";

@@ -1,6 +1,6 @@
 import "server-only";
 import { currentModel } from "@/ai/providers";
-import { COMPARE_LABEL, GROUP_LABEL, MEASURES, METROS, RawSpecSchema, rulesSpec, validateSpec, type QuerySpec, type RawSpec, type ScopeProperty } from "./spec";
+import { COMPARE_LABEL, GROUP_LABEL, groundInText, MEASURES, METROS, RawSpecSchema, rulesSpec, validateSpec, type QuerySpec, type RawSpec, type ScopeProperty } from "./spec";
 
 // Question → QuerySpec. The model fills the spec when one is configured; the rules parser does
 // otherwise (or when the model fails). Either way validateSpec() has the last word.
@@ -24,7 +24,7 @@ export async function askReport(text: string, scope: ScopeProperty[], lastClosed
         question,
         { timeoutMs: 15_000 },
       );
-      raw = value;
+      raw = groundInText(value, question, lastClosed);
     } catch (err) {
       console.error("[reports] model spec failed, using rules:", err instanceof Error ? err.message : err);
     }

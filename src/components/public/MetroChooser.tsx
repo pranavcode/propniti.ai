@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { cn } from "@/lib/utils";
 import { METRO_INFO, project, US_PATH, type Metro } from "./catalog";
 import { usd } from "./chrome";
