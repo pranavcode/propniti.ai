@@ -66,6 +66,7 @@ const REAL_CLOCK_OK = new Set([
   "src/ai/providers/openai.ts", // latency
   "src/ai/providers/workers.ts", // latency
   "src/ai/__tests__/fixture.ts", // test fixture
+  "src/components/app/guide/ChatBubble.tsx", // nudge cooldown, cache age and the visitor's own day (elapsed real time)
 ]);
 
 function* sources(dir: string): Generator<string> {

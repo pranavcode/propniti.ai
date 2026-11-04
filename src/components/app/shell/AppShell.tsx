@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, LogOut, UserRoundCog } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { ChatBubble, showsBubble } from "../guide/ChatBubble";
+import { pageGuide } from "../guide/pages";
 import { SetupChecklist } from "../onboarding/SetupChecklist";
 import { TourOverlay, useTour } from "../tour/TourEngine";
 import { AI_MAX_W, AI_MIN_W, AssistantPanel } from "./AssistantPanel";
@@ -27,6 +29,7 @@ const setCookie = (k: string, v: string) => (document.cookie = `${k}=${v}; Path=
 // `assistant` is the dock body (lane E); `children` is the page.
 export function AppShell({ data, assistant: assistantBody, children }: { data: ShellData; assistant?: React.ReactNode; children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(data.sidebarOpen);
   const [mobileNav, setMobileNav] = useState(false);
   const [palette, setPalette] = useState<{ open: boolean; q: string }>({ open: false, q: "" });
@@ -38,9 +41,11 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   const [aiOpen, setAiOpen] = useLocalStorage<boolean>("pn_ai_open", false);
   const [aiWidth, setAiWidth] = useLocalStorage<number>("pn_ai_w", 400);
   const [pending, setPending] = useState<{ query: string; context?: AssistantContext; id: number } | null>(null);
+  const [aiFrom, setAiFrom] = useState<"bubble" | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const tour = useTour(data.tours);
+  const touring = !!tour.active;
 
   // Theme: .dark on <html> so portals (dialogs, popovers) match. Removed when leaving the app.
   useEffect(() => {
@@ -63,24 +68,32 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
 
   const assistant = useMemo(() => ({
     open: aiOpen,
-    setOpen: setAiOpen,
-    toggle: () => setAiOpen((o) => !o),
-    ask: (query: string, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); setAiOpen(true); },
+    setOpen: (open: boolean, from?: "bubble") => { setAiFrom(open ? from ?? null : null); setAiOpen(open); },
+    openedFrom: aiOpen ? aiFrom : null,
+    toggle: () => { setAiFrom(null); setAiOpen((o) => !o); },
+    ask: (query: string, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); if (!aiOpen) setAiFrom(null); setAiOpen(true); },
     pending,
     take: () => setPending(null),
     width: Math.min(AI_MAX_W, Math.max(AI_MIN_W, aiWidth)),
-  }), [aiOpen, setAiOpen, pending, aiWidth]);
+  }), [aiOpen, setAiOpen, aiFrom, pending, aiWidth]);
+
+  // The assistant's suggested questions follow the page (property, collections, approvals…), then the persona's.
+  const prompts = pageGuide(pathname, { nav: data.nav.flatMap((s) => s.items), personaPrompts: data.assistantPrompts }).prompts;
+  const promptsKey = prompts.join("\n");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const pageData = useMemo(() => ({ ...data, assistantPrompts: prompts }), [data, promptsKey]);
 
   const ctx: ShellContext = useMemo(() => ({
-    data,
+    data: pageData,
     assistant,
     openPalette: (q = "") => setPalette({ open: true, q }),
     openShortcuts: () => setShortcuts(true),
     theme, setTheme, density, setDensity,
     crumbTitle, setCrumbTitle,
     startTour: tour.start,
+    tourActive: touring,
     openSetup: () => setSetup(true),
-  }), [data, assistant, theme, setTheme, density, setDensity, crumbTitle, tour.start]);
+  }), [pageData, assistant, theme, setTheme, density, setDensity, crumbTitle, tour.start, touring]);
 
   const goto = useMemo(() => Object.fromEntries(gotoTargets(data.nav).map((g) => [`g ${g.key}`, () => router.push(g.href)])), [data.nav, router]);
   useHotkeys({
@@ -135,7 +148,9 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
           </DialogContent>
         </Dialog>
         <TourOverlay active={tour.active} go={tour.go} dismiss={tour.dismiss} />
-        <Toaster theme={theme} position="bottom-right" closeButton />
+        <ChatBubble />
+        {/* Toasts sit above the chat bubble. */}
+        <Toaster theme={theme} position="bottom-right" closeButton {...(showsBubble(pathname) && { offset: { bottom: 76 }, mobileOffset: { bottom: 76 } })} />
       </TooltipProvider>
     </ShellCtx.Provider>
   );
