@@ -276,7 +276,7 @@ export async function PropertyFinancials({ id, actor }: TabProps) {
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 lg:grid-cols-2">
         {card(noi, <ChartCard title="NOI vs budget, trailing 12 months" kind="line" data={pts(noi)} x="label" series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]} help="Net operating income per closed month: collected income less operating expenses." />)}
-        {card(ie, <ChartCard title="Income vs expenses" kind="bar" data={pts(ie)} x="label" series={[{ key: "income", label: "Collected income", format: "money" }, { key: "expenses", label: "Operating expenses", format: "money" }]} />)}
+        {card(ie, <ChartCard title="Charges paid vs expenses" kind="bar" data={pts(ie)} x="label" series={[{ key: "income", label: "Paid toward the month's charges", format: "money" }, { key: "expenses", label: "Operating expenses", format: "money" }]} />)}
         {card(occ, <ChartCard title="Occupancy, physical vs economic" kind="line" data={pts(occ)} x="label" series={[{ key: "physical", label: "Physical", format: "pct" }, { key: "economic", label: "Economic", format: "pct" }]} drill={`/app/units?f.property_id=${encodeURIComponent(id)}&f.status=Vacant`} help="Physical: occupied units over rentable units. Economic: rent collected over gross potential rent." />)}
         {card(coll, <ChartCard title="Charged vs collected" kind="bar" data={pts(coll)} x="label" series={[{ key: "charged", label: "Charged", format: "money" }, { key: "collected", label: "Collected", format: "money" }]} drill={`/app/receivables/charges?f.property_id=${encodeURIComponent(id)}`} />)}
       </div>
@@ -286,7 +286,7 @@ export async function PropertyFinancials({ id, actor }: TabProps) {
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead className="text-[11.5px] text-muted-foreground">
-                <tr className="border-b">{["Month", "GPR", "Collected", "Vacancy loss", "Opex", "NOI", "Budget", "Variance", "Occupancy"].map((h, i) => <th key={h} className={cn("px-3 py-1.5 font-medium whitespace-nowrap", i ? "text-right" : "text-left")}>{h}</th>)}</tr>
+                <tr className="border-b">{["Month", "GPR", "Charges paid", "Vacancy loss", "Opex", "NOI", "Budget", "Variance", "Occupancy"].map((h, i) => <th key={h} className={cn("px-3 py-1.5 font-medium whitespace-nowrap", i ? "text-right" : "text-left")}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {months.map((m) => {

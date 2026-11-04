@@ -117,7 +117,8 @@ monthly("portfolio.noi", "Net operating income", (m) => dollars(m.noi_cents), {
   noi: (m) => dollars(m.noi_cents),
   budget: (m) => (m.budget_noi_cents ? dollars(m.budget_noi_cents) : null),
 }, "flow");
-monthly("portfolio.income_expense", "Income vs expenses", (m) => dollars(m.collected_cents - m.opex_cents), {
+// Income here is what each month's charges were paid (collected_cents), not cash received.
+monthly("portfolio.income_expense", "Charges paid vs expenses", (m) => dollars(m.collected_cents - m.opex_cents), {
   income: (m) => dollars(m.collected_cents),
   expenses: (m) => dollars(m.opex_cents),
 }, "flow");
