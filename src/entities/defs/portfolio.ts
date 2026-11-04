@@ -13,6 +13,8 @@ const OWNER_PORTAL: Role[] = ["owner"];
 // Latest precomputed month for the property (metrics_monthly), for list columns that would be
 // too costly to aggregate from 150k ledger rows per page.
 const latest = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id ORDER BY mm.month DESC LIMIT 1)`;
+// The last closed month: the month in progress has a full month of rent against a few days of expenses.
+const lastClosed = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id AND mm.month < substr(${AS_OF}, 1, 7) ORDER BY mm.month DESC LIMIT 1)`;
 
 function monthName(period: string) {
   const name = new Date(`${period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -56,8 +58,8 @@ registerEntity({
     occupancy: { type: "number", label: "Occupancy", format: "pct", sortable: true, list: { default: true, align: "right" },
       sql: "(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u WHERE u.property_id = properties.id AND u.status <> 'Model')",
       help: { summary: "Physical occupancy: occupied and on-notice units over rentable units, live from the unit list.", article: "occupancy" } },
-    noi_month: { type: "money", label: "NOI (month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: latest("mm.noi_cents"), help: { summary: "Net operating income for the latest month in the monthly figures (the current month is month to date): collected income less operating expenses.", article: "noi" } },
-    noi_period: { type: "text", label: "NOI month", sql: latest("mm.month") },
+    noi_month: { type: "money", label: "NOI (last month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: lastClosed("mm.noi_cents"), help: { summary: "Net operating income for the last closed month: collected income less operating expenses.", article: "noi" } },
+    noi_period: { type: "text", label: "NOI month", sql: lastClosed("mm.month") },
     delinquent: { type: "money", label: "Delinquent", format: "compact", sortable: true, list: { default: true, align: "right" },
       sql: latest("mm.aging_0_30_cents + mm.aging_31_60_cents + mm.aging_61_90_cents + mm.aging_90p_cents"), help: { summary: "Unpaid resident balances past due, all aging buckets.", article: "delinquency" } },
     open_work_orders: { type: "number", label: "Open WOs", sortable: true, list: { default: false, align: "right" },
