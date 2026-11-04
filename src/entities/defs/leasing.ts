@@ -155,7 +155,7 @@ registerEntity({
       { key: "new", label: "New inquiries", filters: { stage: "Inquiry" } },
       { key: "touring", label: "Touring this week", filters: { stage: "Tour scheduled" } },
     ],
-    bulkActions: ["prospects.mark_lost"],
+    bulkActions: ["prospects.follow_up", "prospects.mark_lost"],
   },
   detail: {
     facts: ["stage", "property_id", "source", "desired_beds", "budget", "desired_move_in", "last_contact_at", "assigned_to"],
@@ -181,7 +181,7 @@ registerEntity({
   },
   permissions: { read: [...STAFF], create: [...LEASING], update: [...LEASING], delete: [...LEADERS, "broker"] },
   writes: "generic",
-  actions: ["prospects.move_stage", "prospects.mark_lost"],
+  actions: ["prospects.move_stage", "prospects.follow_up", "prospects.mark_lost"],
   help: { summary: "Everyone who asked about a home, from first inquiry to a signed lease or a lost lead.", article: "leasing-pipeline-board" },
 });
 

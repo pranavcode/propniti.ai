@@ -6,6 +6,7 @@ import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded 
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
 import { AGENT_NAME, followUps, kpis, localTime, sourceOf, leasingCtx, leasingProposals, overnight, todaysTours } from "@/extensions/leasing/data";
 import { AskPanel, FollowUpList, ProposalQueue, TourList, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
+import { SendFollowUps } from "@/extensions/leasing/ui/BulkLeads";
 import { AS_OF } from "@/seed/constants";
 
 export const metadata = { title: "My leasing day · Propniti" };
@@ -109,7 +110,7 @@ export default async function LeasingToday() {
               <TourList canAct tours={tours.map((t) => ({ id: String(t.id), at: String(t.scheduled_at), time: localTime(t.scheduled_at, t.metro) ?? "—", status: String(t.status), kind: String(t.kind), prospect: String(t.prospect), prospectId: String(t.prospect_id), unit: (t.unit as string) ?? null, property: String(t.property), beds: t.desired_beds == null ? null : Number(t.desired_beds), budget: t.budget_cents == null ? null : Number(t.budget_cents) / 100, agent: (t.agent as string) ?? null, feedback: String(t.feedback ?? "") }))} />
             </div>
           </Section>
-          <Section title="Follow-ups due" description={`${follow.total} lead${follow.total === 1 ? "" : "s"} with no contact in 3 to 30 days`} actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/prospects?view=follow-up">All {follow.total}</Link></Button>}>
+          <Section title="Follow-ups due" description={`${follow.total} lead${follow.total === 1 ? "" : "s"} with no contact in 3 to 30 days`} actions={<><SendFollowUps ids={follow.ids} label={`Send all ${follow.ids.length}`} who="these leads" /><Button asChild size="sm" variant="ghost"><Link href="/app/leasing/prospects?view=follow-up">All {follow.total}</Link></Button></>}>
             <div className={card} data-tour="leasing-followups">
               <FollowUpList rows={follow.rows.map((r) => ({ id: String(r.id), name: String(r.name), stage: String(r.stage), property: String(r.property), days: Number(r.days), beds: r.desired_beds == null ? null : Number(r.desired_beds), budget: r.budget_cents == null ? null : Number(r.budget_cents) / 100, source: String(r.source ?? "") }))} />
             </div>
