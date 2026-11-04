@@ -11,8 +11,8 @@ import { canEditPolicies } from "@/ai/policy-editors";
 import { wizardOptions } from "@/extensions/import/options";
 import { IMPORT_TABLES, mayCreate } from "@/extensions/import/server";
 import { ORG_ID, one, prefsData, rows } from "@/extensions/settings/data";
-import { canEditSettings } from "@/extensions/settings/nav";
-import { loadState, portfolioStats } from "@/extensions/onboarding/server";
+import { canInvite } from "@/extensions/settings/nav";
+import { loadState, portfolioStats, setupAllowed } from "@/extensions/onboarding/server";
 import { canOnboard, ONBOARD_ROLES } from "@/extensions/onboarding/state";
 import { suggestAutonomy, suggestPolicies } from "@/extensions/onboarding/suggest";
 import { Onboarding, type OnboardingData } from "@/extensions/onboarding/ui/Onboarding";
@@ -54,13 +54,14 @@ export default async function OnboardingPage() {
     options,
     canImportProperties: mayCreate(session.actor.role, "properties"),
     canEditPolicies: canEditPolicies(session.actor.role),
-    canInvite: canEditSettings(session.actor.role),
+    canInvite: canInvite(session.actor.role),
+    setupKeys: ["company", "import", "payments", "roles", "team"].filter((k) => setupAllowed(session.actor.role, k)),
     stats: { units: stats.units, unitsFrom: stats.unitsFrom, ...stats.counts! },
     policies: suggestPolicies(stats, policyNow),
     fixedPolicies: policyNow.filter((p) => p.alwaysHuman || p.category === "Owner distribution").map((p) => p.category),
     autonomy: suggestAutonomy(stats.units, stats.unitsFrom, agents),
     team: staff.map((s) => ({ id: s.id, name: s.name, title: s.title, status: s.active ? "Active" : s.last_active_at ? "Inactive" : "Invited", roles: (s.roles ?? "").split(",").filter(Boolean).map(roleTitle) })),
-    roles: INTERNAL_ROLES.filter((r) => r !== "platform_admin").map((r) => ({ value: r, label: roleTitle(r) })),
+    roles: INTERNAL_ROLES.filter((r) => r !== "platform_admin" && (r !== "admin" || session.actor.role === "admin")).map((r) => ({ value: r, label: roleTitle(r) })),
     regions: regions.map((r) => ({ value: r.id, label: r.name })),
     properties: properties.map((p) => ({ value: p.id, label: `${p.name} · ${p.metro}`, imported: /-i[0-9a-f]{10}-/.test(p.id) })),
     routes: Object.fromEntries(IMPORT_TABLES.flatMap((t) => { const r = getEntity(t)?.route; return r ? [[t, r]] : []; })),

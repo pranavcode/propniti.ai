@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { INTERNAL_ROLES } from "@/entities/types";
-import { ORG_ID, expandSql } from "@/extensions/settings/data";
+import { ORG_ID, expandSql, rows } from "@/extensions/settings/data";
+import { canEditSettings, canInvite } from "@/extensions/settings/nav";
 import { audit, settingsPost, setupStep } from "@/extensions/settings/write";
 
 const body = z.strictObject({
@@ -15,8 +16,18 @@ const body = z.strictObject({
 // An invite is a staff row that can't sign in yet (active 0, never active) plus its role
 // assignments. The email check is in the INSERT itself, so two clicks create one invite; the
 // role rows only follow a staff row that exists. Accepting the invite is outside the demo.
+// Admins and the principal add people. Only an admin grants the admin role, and a principal names
+// only regions and properties that exist in the org and sit inside their own scope.
 export const POST = settingsPost(body, async (ctx, b) => {
   if (b.scope_kind !== "org" && !b.scope_ids.length) return { error: "Pick at least one region or property" };
+  if (!canEditSettings(ctx.actor.role)) {
+    if (b.role === "admin") return { error: "Only an administrator can grant the administrator role", status: 403 };
+    if (b.scope_kind !== "org") {
+      const known = new Set((await rows<{ id: string }>(ctx, `SELECT id FROM {${b.scope_kind === "region" ? "regions" : "properties"}} WHERE id IN (SELECT value FROM json_each(?))`, [JSON.stringify(b.scope_ids)])).map((r) => r.id));
+      const mine = ctx.actor.propertyIds;
+      if (b.scope_ids.some((id) => !known.has(id) || (b.scope_kind === "property" && mine !== "all" && !mine.includes(id)))) return { error: "Pick regions or properties within your scope", status: 403 };
+    }
+  }
   const id = `s-${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
   const scopes = b.scope_kind === "org" ? [ORG_ID] : b.scope_ids;
   const [created] = await ctx.db.batch([
@@ -30,4 +41,4 @@ export const POST = settingsPost(body, async (ctx, b) => {
     setupStep(ctx, "team", "Done"),
   ]);
   return { id, href: `/app/settings/users/${id}`, message: `Invite sent to ${b.email}` };
-}, { adminOnly: true });
+}, { allow: canInvite, refused: "Only an administrator or the principal adds people" });

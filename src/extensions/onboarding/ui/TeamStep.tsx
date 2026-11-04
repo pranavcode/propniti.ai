@@ -90,7 +90,7 @@ export function TeamStep({ data, state, save, footer, complete }: StepProps) {
             <div><Button type="submit" variant="outline" disabled={busy || (v.scope_kind !== "org" && !v.scope_ids.length)}>{busy ? <Loader2 className="animate-spin" /> : <UserPlus />}Add to team</Button></div>
           </form>
         ) : (
-          <p className="rounded-md border px-3 py-2.5 text-[12.5px] text-muted-foreground">Only an administrator adds people and assigns roles, in <Link href="/app/settings/users" className="text-primary hover:underline">Settings › Users</Link>. To try it, switch to Sam Okafor (Administrator) from your avatar menu; your progress here is kept.</p>
+          <p className="rounded-md border px-3 py-2.5 text-[12.5px] text-muted-foreground">Only an administrator or the principal adds people and assigns roles, in <Link href="/app/settings/users" className="text-primary hover:underline">Settings › Users</Link>. Ask one of them; your progress here is kept.</p>
         )}
 
         {invited.length > 0 && (
