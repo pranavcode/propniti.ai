@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { CheckCircle2 } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import { APPLICATION_FEE_CENTS } from "@/server/money";

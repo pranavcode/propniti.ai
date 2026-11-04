@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { LogoMark } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { METROS } from "./catalog";

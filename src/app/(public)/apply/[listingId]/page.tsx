@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 /* eslint-disable @next/next/no-img-element -- every photo ships pre-sized (400 px thumbnail + full WebP), so plain lazy <img> with fixed dimensions is enough and works the same on the Workers build */
-import Link from "next/link";
+import Link from "@/components/Link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ShieldCheck } from "lucide-react";
 import { ApplyWizard } from "@/components/public/ApplyWizard";

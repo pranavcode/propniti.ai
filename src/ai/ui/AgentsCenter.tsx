@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import type { AgentCard as Card } from "@/ai/views";
 import type { ApprovalPolicy, Autonomy } from "@/ai/types";
 import { ProposalCard } from "./RunView";
 import { AGENT_LABEL, api, toTrace, useRunStream } from "./client";
+import { POLICY_EDITORS_TEXT } from "../policy-editors";
 
 const ICONS: Record<string, React.ReactNode> = {
   collections: <Banknote />, leasing: <KeyRound />, renewals: <RefreshCw />, maintenance_triage: <Wrench />, ap: <FileSpreadsheet />,
@@ -51,7 +52,7 @@ function LiveRun({ runId, agent, onClose }: { runId: string; agent: string; onCl
   );
 }
 
-export function AgentsCenter({ agents, status, canManage, canRun }: { agents: Card[]; status: Status; canManage: boolean; canRun: boolean }) {
+export function AgentsCenter({ agents, status, canManage, canRun, canEditPolicies }: { agents: Card[]; status: Status; canManage: boolean; canRun: boolean; canEditPolicies: boolean }) {
   const router = useRouter();
   const [live, setLive] = useState<{ runId: string; agent: string } | null>(null);
   const [cards, setCards] = useState(agents);
@@ -121,7 +122,7 @@ export function AgentsCenter({ agents, status, canManage, canRun }: { agents: Ca
         ))}
       </section>
 
-      <PolicyEditor policies={status.policies} canEdit={canManage} onSaved={() => router.refresh()} />
+      <PolicyEditor policies={status.policies} canEdit={canEditPolicies} onSaved={() => router.refresh()} />
       {live && <LiveRun runId={live.runId} agent={live.agent} onClose={() => { setLive(null); router.refresh(); }} />}
     </div>
   );
@@ -149,6 +150,7 @@ function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolic
         <h2 className="font-semibold">Approval policies</h2>
         <span className="text-[12px] text-muted-foreground">What agents may apply on their own (autonomy “Auto within policy”), and when the owner decides. Legal and safety always need a person.</span>
       </div>
+      {!canEdit && <p className="border-b px-4 py-2 text-[12px] text-muted-foreground">{POLICY_EDITORS_TEXT}</p>}
       <table className="w-full text-[13px]">
         <thead className="text-left text-[11.5px] text-muted-foreground">
           <tr className="border-b"><th className="px-4 py-2 font-medium">Category</th><th className="px-4 py-2 font-medium">Auto-approve up to</th><th className="px-4 py-2 font-medium">Owner approves over</th><th className="px-4 py-2 font-medium">Approver</th><th /></tr>
@@ -160,8 +162,8 @@ function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolic
             return (
               <tr key={p.category} className="border-b last:border-0">
                 <td className="px-4 py-2 font-medium">{p.category}</td>
-                <td className="px-4 py-2">{p.alwaysHuman ? <span className="text-muted-foreground">Always a person</span> : <Input inputMode="decimal" className="h-7 w-32" disabled={!canEdit} value={d.limit} placeholder="Always a person" onChange={(e) => set("limit", e.target.value)} aria-label={`${p.category} auto-approve limit in dollars`} />}</td>
-                <td className="px-4 py-2"><Input inputMode="decimal" className="h-7 w-32" disabled={!canEdit || p.alwaysHuman} value={d.owner} placeholder="Never" onChange={(e) => set("owner", e.target.value)} aria-label={`${p.category} owner approval threshold in dollars`} /></td>
+                <td className="px-4 py-2">{p.alwaysHuman ? <span className="text-muted-foreground">Always a person</span> : !canEdit ? <span className="tabular-nums">{d.limit ? `$${Number(d.limit).toLocaleString("en-US")}` : <span className="text-muted-foreground">Always a person</span>}</span> : <Input inputMode="decimal" className="h-7 w-32" disabled={!canEdit} value={d.limit} placeholder="Always a person" onChange={(e) => set("limit", e.target.value)} aria-label={`${p.category} auto-approve limit in dollars`} />}</td>
+                <td className="px-4 py-2">{!canEdit || p.alwaysHuman ? <span className="tabular-nums">{d.owner ? `$${Number(d.owner).toLocaleString("en-US")}` : <span className="text-muted-foreground">Never</span>}</span> : <Input inputMode="decimal" className="h-7 w-32" value={d.owner} placeholder="Never" onChange={(e) => set("owner", e.target.value)} aria-label={`${p.category} owner approval threshold in dollars`} />}</td>
                 <td className="px-4 py-2 capitalize text-muted-foreground">{p.approverRole.replace(/_/g, " ")}</td>
                 <td className="px-4 py-2 text-right">{canEdit && draft[p.category] && <Button size="sm" variant="outline" onClick={() => void save(p)}>Save</Button>}</td>
               </tr>

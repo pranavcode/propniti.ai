@@ -55,25 +55,28 @@ export function formatDays(value: number | null | undefined): string {
 
 export type DateInput = string | number | Date | null | undefined;
 
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function toDate(v: DateInput): Date | null {
   if (v == null || v === "") return null;
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
-  // Bare dates are calendar days: parse as local midnight, not UTC, so "Nov 4" never shows as Nov 3.
-  const d = typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
+  // Dates and times are demo wall time written as UTC (clock.ts), and every formatter below reads
+  // them in UTC, so a bare date is UTC midnight and "Nov 4" shows as Nov 4 in any viewer's zone.
+  const d = typeof v === "string" && BARE_DATE.test(v) ? new Date(`${v}T00:00:00Z`) : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-const md = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const mdy = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
-const my = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
-const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
-const full = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+const md = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+const mdy = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+const my = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", year: "numeric" });
+const time = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" });
+const full = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
 // "Nov 4" within the current year, "Nov 4, 2025" otherwise. "always" forces the year (tables).
 export function formatDate(v: DateInput, year: "auto" | "always" = "auto", now = demoNow()): string {
   const d = toDate(v);
   if (!d) return "—";
-  return year === "always" || d.getFullYear() !== now.getFullYear() ? mdy.format(d) : md.format(d);
+  return year === "always" || d.getUTCFullYear() !== now.getUTCFullYear() ? mdy.format(d) : md.format(d);
 }
 
 export const formatMonth = (v: DateInput) => { const d = toDate(v); return d ? my.format(d) : "—"; };
@@ -111,14 +114,11 @@ export function formatDue(v: DateInput, now = demoNow()): { text: string; late: 
   return { text: formatDate(d, "auto", now), late: false, soon: false };
 }
 
-function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-function calendarDays(d: Date, now: Date) {
-  const a = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  const b = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((a - b) / 86_400_000);
-}
+// Relative wording counts calendar days by UTC date (the demo date), never the viewer's time zone:
+// Kolkata and Los Angeles read the same "Due today".
+const dayNumber = (d: Date) => Math.floor(d.getTime() / 86_400_000);
+const sameDay = (a: Date, b: Date) => dayNumber(a) === dayNumber(b);
+const calendarDays = (d: Date, now: Date) => dayNumber(d) - dayNumber(now);
 
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 

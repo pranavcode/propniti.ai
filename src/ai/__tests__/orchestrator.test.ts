@@ -80,18 +80,18 @@ describe("orchestrator, rules only", () => {
     expect(raw.prepare("SELECT recommendation, score, stage FROM applications WHERE workspace_id = ? AND id = 'app-new'").get(WS)).toEqual({ recommendation: "Approve", score: 100, stage: "Started" });
   });
 
-  it("Data Health fills a missing fix and applying it writes the overlay, fix log and issue status", async () => {
+  it("Data Health fills a missing fix and, within policy, applies it: overlay, fix log and issue status", async () => {
     setModelForTests(null);
     const { raw, db } = openFixture();
     const r = await (await startRun({ db, ws: WS, actor: DANIEL, agent: "data_health", trigger: { kind: "manual" } })).done;
     const [p] = proposals(raw, r.runId);
     expect(p.action).toBe("data_issues.apply_fix");
-    const res = await executeProposal({ db, ws: WS, actor: DANIEL }, p, { id: "daniel", name: "Daniel Reyes" });
-    expect(res.ok).toBe(true);
+    // A low-risk formatting fix: the agent runs auto within policy, so it applied itself.
+    expect(p.queue_state).toBe("auto_handled");
     expect(raw.prepare("SELECT street FROM properties WHERE workspace_id = ? AND id = 'p02'").get(WS)!.street).toBe("123 Main St");
-    expect(raw.prepare("SELECT status FROM data_issues WHERE workspace_id = ? AND id = 'di1'").get(WS)!.status).toBe("fixed");
+    expect(raw.prepare("SELECT status FROM data_issues WHERE workspace_id = ? AND id = 'di1'").get(WS)!.status).toBe("auto-fixed");
     expect(raw.prepare("SELECT count(*) AS n FROM data_fix_log WHERE workspace_id = ?").get(WS)!.n).toBe(1);
-    // A second approval of the same proposal is refused.
+    // A person approving it afterwards is refused: it already ran once.
     expect((await executeProposal({ db, ws: WS, actor: DANIEL }, p, { id: "daniel", name: "Daniel Reyes" })).status).toBe(409);
   });
 

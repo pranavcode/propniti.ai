@@ -31,12 +31,14 @@ const REAL_CLOCK_OK = new Set([
   "src/lib/clock.ts", // the demo clock itself reads the real time of day
   "src/lib/format.ts", // greetings: time of day only
   "src/lib/guard.ts", // rate limiting
+  "src/extensions/inbox/counts.ts", // badge cache expiry
   "src/app/(app)/app/leasing/today/page.tsx", // greeting: time of day only
   "src/app/(portal)/portal/resident/page.tsx", // greeting: time of day only
   "src/app/api/ai/sweep/route.ts", // cron trigger
   "src/app/api/ai/events/route.ts", // request clock, converted where stamped
   "src/app/api/ai/runs/[id]/stream/route.ts", // stream deadline
   "src/app/api/e/_lib/http.ts", // request clock, converted with nowIso where stamped
+  "src/extensions/import/http.ts", // request clock, converted with demoNowIso where stamped
   "src/app/api/e/[entity]/export.csv/route.ts", // download file name
   "src/server/permissions.ts", // ACH settle timer
   "src/extensions/receivables/queries.ts", // ACH settle timer, cache TTL
@@ -55,6 +57,7 @@ const REAL_CLOCK_OK = new Set([
   "src/ai/session.ts", // request clock
   "src/ai/sweep.ts", // cron throttle
   "src/ai/views.ts", // request clock, converted for stamps and schedules
+  "src/ai/automations.ts", // real cron tick timing; schedules go through views.ts
   "src/ai/orchestrator.ts", // deadlines, cron claims
   "src/ai/runtime.ts", // deadlines, latency
   "src/ai/assistant.ts", // run clock, converted where stamped
@@ -64,6 +67,7 @@ const REAL_CLOCK_OK = new Set([
   "src/ai/providers/openai.ts", // latency
   "src/ai/providers/workers.ts", // latency
   "src/ai/__tests__/fixture.ts", // test fixture
+  "src/components/app/guide/ChatBubble.tsx", // nudge cooldown, cache age and the visitor's own day (elapsed real time)
 ]);
 
 function* sources(dir: string): Generator<string> {

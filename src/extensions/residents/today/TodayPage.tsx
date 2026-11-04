@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertTriangle, ArrowRight, Bot, CalendarClock, CircleDollarSign, HeartPulse, MessageSquare, ShieldAlert, Sparkles, Wrench, Zap } from "lucide-react";
 import { ApprovalsInbox } from "@/ai/ui/ApprovalsInbox";
 import { pageData } from "@/ai/ui/server";
@@ -106,12 +106,12 @@ export async function TodayPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className="rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_60%)]" data-tour="briefing" aria-labelledby="briefing-h">
           <header className="flex items-center gap-2 border-b border-tone-ai/15 px-4 py-2.5">
             <Sparkles className="size-4 text-tone-ai" />
-            <h2 id="briefing-h" className="text-[13.5px] font-semibold">Your briefing</h2>
-            <span className="ml-auto text-[11.5px] text-muted-foreground" title="Every figure is computed from your properties' records when the page loads; no model writes or changes them.">Computed from your records just now · figures link to the rows behind them</span>
+            <h2 id="briefing-h" className="shrink-0 text-[13.5px] font-semibold">Your briefing</h2>
+            <span className="ml-auto min-w-0 text-right text-[11.5px] text-muted-foreground" title="Every figure is computed from your properties' records when the page loads; no model writes or changes them.">Computed from your records just now · figures link to the rows behind them</span>
           </header>
           {bullets.length === 0 ? <p className="px-4 py-6 text-[13px] text-muted-foreground">Nothing needs you right now. Agents will flag anything new here.</p> : (
             <ul className="divide-y divide-tone-ai/10">

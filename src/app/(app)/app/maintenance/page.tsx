@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertTriangle, ArrowRight, Bot, CalendarRange, ChevronRight, ClipboardPlus, KanbanSquare, ShieldAlert, Smartphone, Sparkles } from "lucide-react";
 import { can } from "@/entities";
 import type { Row } from "@/entities/types";

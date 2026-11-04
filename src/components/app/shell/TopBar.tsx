@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { Fragment, useMemo } from "react";
 import { BookOpen, Check, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";
@@ -21,10 +21,10 @@ type Crumb = { label: string; href?: string };
 export function useCrumbs(): Crumb[] {
   const pathname = usePathname();
   const { data, crumbTitle } = useShell();
-  return useMemo(() => crumbsFor(pathname, data.nav, crumbTitle), [pathname, data.nav, crumbTitle]);
+  return useMemo(() => crumbsFor(pathname, data.nav, crumbTitle, data.persona.home), [pathname, data.nav, crumbTitle, data.persona.home]);
 }
 
-export function crumbsFor(pathname: string, nav: ShellNavSection[], title: string | null): Crumb[] {
+export function crumbsFor(pathname: string, nav: ShellNavSection[], title: string | null, home = "/app"): Crumb[] {
   const href = activeHref(pathname, nav);
   const section = nav.find((s) => s.items.some((i) => i.href === href));
   const item = section?.items.find((i) => i.href === href);
@@ -32,9 +32,11 @@ export function crumbsFor(pathname: string, nav: ShellNavSection[], title: strin
     const segs = pathname.replace(/^\/app\/?/, "").split("/").filter(Boolean);
     return [{ label: "Home", href: "/app" }, ...segs.map((s, i) => ({ label: i === segs.length - 1 && title ? title : humanize(decodeURIComponent(s).replace(/^%5F|^_/, "")), href: i < segs.length - 1 ? "/app/" + segs.slice(0, i + 1).join("/") : undefined }))];
   }
-  const out: Crumb[] = [{ label: section.label }];
-  if (item.group) out.push({ label: item.group });
   const rest = pathname.slice(href.length).split("/").filter(Boolean);
+  // Section and group crumbs open their first page (Home opens the persona's home), except the page you're on.
+  const here = (to: string) => (to === href && !rest.length ? undefined : to);
+  const out: Crumb[] = [{ label: section.label, href: here(section.section === "home" ? home : section.items[0].href) }];
+  if (item.group) out.push({ label: item.group, href: here(section.items.find((i) => i.group === item.group)!.href) });
   out.push({ label: item.label, href: rest.length ? item.href : undefined });
   rest.forEach((seg, i) => out.push({ label: i === rest.length - 1 && title ? title : humanize(decodeURIComponent(seg)) }));
   // A section and its item can share a name ("Settings › Settings"); keep the later, linked one.

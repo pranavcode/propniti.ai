@@ -3,6 +3,7 @@
 import { Cpu, Database, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { modelName } from "./model";
 
 // Honest provenance for any AI output (plan addendum 4): a live model call, a stored result from
 // an earlier run, or the deterministic rule fallback when no model was available.
@@ -31,7 +32,7 @@ export function AIBadge({ source = "live", model, className, size = "sm" }: { so
         >
           <Icon className="size-3" aria-hidden />
           {c.label}
-          {model && source !== "rules" && <span className="font-normal opacity-75">· {model}</span>}
+          {model && source !== "rules" && <span className="font-normal opacity-75" title={model}>· {modelName(model)}</span>}
         </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-64">{c.tip}{model ? ` Model: ${model}.` : ""}</TooltipContent>

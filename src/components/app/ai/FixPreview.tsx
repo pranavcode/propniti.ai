@@ -27,12 +27,15 @@ export type FixPreviewProps = {
 const show = (v: unknown) => (v == null || v === "" ? <span className="italic text-muted-foreground">empty</span> : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 export function FixPreview({ title, rule, changes, why, confidence, source, needsPerson, onApply, onDismiss, className }: FixPreviewProps) {
-  const [state, setState] = useState<"open" | "applied" | "dismissed">("open");
+  const [state, setState] = useState<"open" | "applied" | "queued" | "dismissed">("open");
   const [busy, setBusy] = useState(false);
+  // The server decides whether a fix applied or went to the approvals inbox: onApply may return { queued }.
   const act = async (k: "applied" | "dismissed") => {
     setBusy(true);
-    try { await (k === "applied" ? onApply : onDismiss)?.(); setState(k); }
-    finally { setBusy(false); }
+    try {
+      const r = await (k === "applied" ? onApply : onDismiss)?.();
+      setState(k === "applied" && (r as { queued?: boolean } | undefined)?.queued ? "queued" : k);
+    } finally { setBusy(false); }
   };
 
   return (
@@ -86,7 +89,7 @@ export function FixPreview({ title, rule, changes, why, confidence, source, need
           </>
         ) : (
           <span className={cn("flex items-center gap-1.5 text-[12px] font-medium", state === "applied" ? "text-tone-success" : "text-muted-foreground")}>
-            {state === "applied" ? <><Check className="size-3.5" />{needsPerson ? "Sent for approval" : "Fix applied · logged"}</> : <><X className="size-3.5" />Dismissed</>}
+            {state === "applied" ? <><Check className="size-3.5" />Fix applied · logged</> : state === "queued" ? <><Lock className="size-3.5" />Sent for approval</> : <><X className="size-3.5" />Dismissed</>}
           </span>
         )}
       </div>

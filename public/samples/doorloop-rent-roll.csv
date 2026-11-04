@@ -1,0 +1,13 @@
+Property,Unit,Tenants,Lease Start,Lease End,Rent,Deposit,Balance
+Riverbend Cottages,101,Hannah Mora,07/01/2026,06/30/2027,"$1,075.00",$500.00,$0.00
+Riverbend Cottages,102,Ravi Ortiz,10/01/2026,09/30/2027,"$1,120.00",$500.00,$325.50
+Riverbend Cottages,103,Lena Nair,02/01/2026,01/31/2027,"$1,145.00",$500.00,$0.00
+Riverbend Cottages,201,Tomas Park,05/01/2026,04/30/2027,"$1,190.00",$500.00,"$1,210.00"
+Riverbend Cottages,202,VACANT,,,"$1,240.00",,
+Riverbend Cottages,203,Kevin Khan,11/01/2026,,"$1,260.00",$500.00,$0.00
+Dogwood Court,A1,Sofia Liu,03/01/2026,02/28/2027,"$1,225.00",$500.00,$0.00
+Dogwood Court,A2,Jordan Diaz,06/01/2026,05/31/2027,"$1,270.00",$500.00,$325.50
+Dogwood Court,A3,Mei Novak,09/01/2026,08/31/2027,"$1,295.00",$500.00,$0.00
+Dogwood Court,A4,Andre Chen,01/01/2026,12/31/2027,"$1,340.00",$500.00,"$1,210.00"
+Dogwood Court,A5,VACANT,,,"$1,390.00",,
+Dogwood Court,A6,Luis Okafor,07/01/2026,,"$1,410.00",$500.00,$0.00

@@ -25,7 +25,7 @@ export function settingsNav(role: Role): SettingsGroup[] {
         { href: "/app/settings/approvals", label: "Approval policies", icon: "shield" },
         { href: "/app/settings/state-rules", label: "State rules", icon: "landmark" },
         { href: "/app/settings/payments", label: "Fees and payments", icon: "percent" },
-        { href: "/app/settings/automations", label: "Automations", icon: "workflow" },
+        { href: "/app/automations", label: "Automations", icon: "workflow" },
       ] },
       { label: "AI and governance", items: [
         { href: "/app/settings/ai", label: "AI settings", icon: "sparkles" },

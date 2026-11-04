@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Archive, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { textareaClass } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AIBadge, Confidence } from "@/components/app/ai";
@@ -48,7 +49,10 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
     if (!pathname.endsWith("/communications/inbox") || search.get("t") === threadId) return router.refresh();
     const sp = new URLSearchParams(search.toString());
     sp.set("t", threadId);
-    router.replace(`${pathname}?${sp}`, { scroll: false });
+    // Write ?t= through the history API (the router syncs it) and re-render once: refresh also
+    // updates the layout's Inbox count, which a search-param navigation would leave alone.
+    window.history.replaceState(null, "", `${pathname}?${sp}`);
+    router.refresh();
   };
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<string>(CHANNELS.includes(initialChannel as (typeof CHANNELS)[number]) ? initialChannel : "Email");
@@ -120,7 +124,7 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
           </div>
         )}
         <label htmlFor={`reply-${threadId}`} className="sr-only">Reply</label>
-        <Textarea id={`reply-${threadId}`} value={body} onChange={(e) => setBody(e.target.value)} rows={4} maxLength={2000} placeholder={closed ? "This conversation is closed. Reply to reopen it…" : `Write a reply${language === "es" ? " (resident prefers Spanish)" : ""}…`}
+        <AutoTextarea id={`reply-${threadId}`} className={textareaClass} value={body} onChange={(e) => setBody(e.target.value)} rows={4} maxLength={2000} placeholder={closed ? "This conversation is closed. Reply to reopen it…" : `Write a reply${language === "es" ? " (resident prefers Spanish)" : ""}…`}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && body.trim() && !busy) void send(false); }} />
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <ToggleGroup type="single" variant="outline" size="sm" aria-label="Channel" value={channel} onValueChange={(v) => v && setChannel(v)}>

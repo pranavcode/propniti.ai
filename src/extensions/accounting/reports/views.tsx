@@ -1,5 +1,5 @@
 import "server-only";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, TriangleAlert } from "lucide-react";
 import type { MetricCtx } from "@/extensions/metrics";
 import { ChartCard, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";

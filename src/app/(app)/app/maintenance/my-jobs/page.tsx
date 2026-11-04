@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { can } from "@/entities";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
-import { useMemo } from "react";
-import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,7 +37,19 @@ function entries(items: ShellNavItem[]): Entry[] {
 export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collapsed: boolean; onToggle?: () => void; className?: string; onNavigate?: () => void }) {
   const { data, openPalette, openSetup } = useShell();
   const pathname = usePathname();
-  const active = activeHref(pathname, data.nav);
+  // The clicked item lights up at once; the pathname only changes once the next page arrives.
+  const [clicked, setClicked] = useState<{ href: string; from: string } | null>(null);
+  const active = clicked?.from === pathname ? clicked.href : activeHref(pathname, data.nav);
+  // A navigation that never lands (cancelled, failed) gives the highlight back to the current page.
+  useEffect(() => {
+    if (!clicked) return;
+    const t = setTimeout(() => setClicked(null), 15_000);
+    return () => clearTimeout(t);
+  }, [clicked]);
+  const navigate = (e: React.MouseEvent, href: string) => {
+    if (href !== pathname && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) setClicked({ href, from: pathname });
+    onNavigate?.();
+  };
   const [closed, setClosed] = useLocalStorage<string[]>("pn_nav_closed", []);
   const toggleSection = (key: string) => setClosed((c) => (c.includes(key) ? c.filter((k) => k !== key) : [...c, key]));
 
@@ -61,7 +73,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
         )}
       </div>
 
-      <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3 [scrollbar-width:thin]", collapsed ? "px-2" : "px-2.5")}>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3", collapsed ? "px-2" : "px-2.5")}>
         {data.nav.map((section) => {
           const isClosed = closed.includes(section.section);
           return (
@@ -77,10 +89,10 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
               {!(isClosed && !collapsed) && (
                 <ul className="flex flex-col gap-px">
                   {entries(section.items).map((e) => e.kind === "item"
-                    ? <li key={e.item.key}><NavLink item={e.item} active={active === e.item.href} collapsed={collapsed} onNavigate={onNavigate} /></li>
+                    ? <li key={e.item.key}><NavLink item={e.item} active={active === e.item.href} collapsed={collapsed} onNavigate={navigate} /></li>
                     : collapsed
-                      ? e.items.map((i) => <li key={i.key}><NavLink item={i} active={active === i.href} collapsed onNavigate={onNavigate} /></li>)
-                      : <NavGroup key={e.label} label={e.label} items={e.items} active={active} onNavigate={onNavigate} />)}
+                      ? e.items.map((i) => <li key={i.key}><NavLink item={i} active={active === i.href} collapsed onNavigate={navigate} /></li>)
+                      : <NavGroup key={e.label} label={e.label} items={e.items} active={active} onNavigate={navigate} />)}
                 </ul>
               )}
             </div>
@@ -102,12 +114,12 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
   );
 }
 
-function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellNavItem; active: boolean; collapsed?: boolean; nested?: boolean; onNavigate?: () => void }) {
+function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellNavItem; active: boolean; collapsed?: boolean; nested?: boolean; onNavigate: (e: React.MouseEvent, href: string) => void }) {
   const count = item.count ? (item.count > 999 ? "999+" : String(item.count)) : null;
   const link = (
     <Link
       href={item.href}
-      onClick={onNavigate}
+      onClick={(e) => onNavigate(e, item.href)}
       aria-current={active ? "page" : undefined}
       className={cn(
         "group/nav relative flex items-center gap-2 rounded-md text-[13px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
@@ -117,17 +129,23 @@ function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellN
       )}
     >
       {!nested && <span className={cn("shrink-0 [&_svg]:size-4", active ? "text-primary" : "text-muted-foreground group-hover/nav:text-foreground")}>{item.icon}</span>}
-      {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+      {!collapsed && <span className={cn("min-w-0 truncate", !item.ai && "flex-1")}>{item.label}</span>}
+      {item.ai && !collapsed && (
+        <Tooltip>
+          <TooltipTrigger asChild><span data-ai-mark className="mr-auto flex shrink-0 text-tone-ai"><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span></TooltipTrigger>
+          <TooltipContent side="right">AI-powered: agents propose, you approve</TooltipContent>
+        </Tooltip>
+      )}
       {count && !collapsed && (
         <span className={cn("ml-auto rounded px-1.5 text-[11px] leading-[18px] font-medium tabular-nums", item.countTone === "attention" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{count}</span>
       )}
       {count && collapsed && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />}
     </Link>
   );
-  return collapsed ? <RailTip label={item.label} extra={count ?? undefined}>{link}</RailTip> : link;
+  return collapsed ? <RailTip label={item.label} extra={count ?? undefined} ai={item.ai}>{link}</RailTip> : link;
 }
 
-function NavGroup({ label, items, active, onNavigate }: { label: string; items: ShellNavItem[]; active: string; onNavigate?: () => void }) {
+function NavGroup({ label, items, active, onNavigate }: { label: string; items: ShellNavItem[]; active: string; onNavigate: (e: React.MouseEvent, href: string) => void }) {
   const hasActive = items.some((i) => i.href === active);
   const [openGroups, setOpenGroups] = useLocalStorage<string[]>("pn_nav_groups", []);
   const open = hasActive || openGroups.includes(label);
@@ -153,12 +171,12 @@ function NavGroup({ label, items, active, onNavigate }: { label: string; items: 
   );
 }
 
-function RailTip({ label, kbd, extra, children, show = true }: { label: string; kbd?: string; extra?: string; children: React.ReactElement; show?: boolean }) {
+function RailTip({ label, kbd, extra, ai, children, show = true }: { label: string; kbd?: string; extra?: string; ai?: boolean; children: React.ReactElement; show?: boolean }) {
   if (!show) return children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="right" className="flex items-center gap-2">{label}{extra && <span className="opacity-70">{extra}</span>}{kbd && <span className="opacity-60">{kbd}</span>}</TooltipContent>
+      <TooltipContent side="right" className="flex items-center gap-2">{label}{ai && <span className="flex items-center gap-1 opacity-80"><Sparkles className="size-3" aria-hidden />AI-powered</span>}{extra && <span className="opacity-70">{extra}</span>}{kbd && <span className="opacity-60">{kbd}</span>}</TooltipContent>
     </Tooltip>
   );
 }

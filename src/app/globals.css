@@ -221,4 +221,22 @@
     border-color: var(--border);
     outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
   }
+
+  /* Scrollbars: thin, and the thumb only shows while the pointer is over the scroll area or focus is
+     inside it. Width never changes, so [scrollbar-gutter:stable] layouts don't shift. In the base
+     layer so utilities such as no-scrollbar and [scrollbar-width:none] still win. */
+  html:has(> body[data-surface="app"]), [data-surface="app"], [data-surface="app"] * {
+    --pn-thumb: color-mix(in oklab, var(--muted-foreground, #737373) 35%, transparent);
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  html:has(> body[data-surface="app"]):hover, [data-surface="app"]:hover, [data-surface="app"] :is(:hover, :focus-within) {
+    scrollbar-color: var(--pn-thumb) transparent;
+  }
+  /* Safari has no scrollbar-color; Chrome and Firefox ignore these once scrollbar-color is set. */
+  [data-surface="app"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+  [data-surface="app"] ::-webkit-scrollbar-track, [data-surface="app"] ::-webkit-scrollbar-corner { background: transparent; }
+  [data-surface="app"] ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 9999px; background: transparent padding-box; }
+  [data-surface="app"] :is(:hover, :focus-within)::-webkit-scrollbar-thumb { background-color: var(--pn-thumb); }
+  [data-surface="app"] ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent); }
 }

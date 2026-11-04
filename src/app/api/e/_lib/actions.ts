@@ -1,5 +1,6 @@
 import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
+import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { can } from "@/entities";
 import type { ActionDef, ActionResult } from "@/entities/types";
 import { getAction } from "@/extensions/actions";
@@ -32,6 +33,7 @@ export async function runAction(ctx: WriteCtx, a: ActionDef, id: string, input: 
   if (a.when && !a.when(row)) return { status: 409, error: `${a.label} isn't available for this ${def.label.one.toLowerCase()} right now` };
   const result = await a.handler({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, nowMs: ctx.nowMs }, row, input);
   forgetOverlay(ctx.actor);
+  forgetInboxCounts(ctx.ws);
   if (result.status === 200) {
     await ctx.db.prepare("INSERT INTO audit (workspace_id, id, at, actor, actor_id, role, action, entity_type, entity_id, property_id, detail, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(ctx.ws, crypto.randomUUID(), demoNowIso(ctx.nowMs), ctx.actor.name, ctx.actor.personaId, ctx.actor.role, a.key, def.key, id, typeof row.property_id === "string" ? row.property_id : null, result.message ?? a.label, JSON.stringify(input ?? {}).slice(0, 4000))

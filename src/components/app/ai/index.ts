@@ -1,4 +1,5 @@
 export { AIBadge, Confidence, confidenceLabel, type AISource } from "./AIBadge";
+export { modelName } from "./model";
 export { AISuggestion, type AISuggestionProps, type Evidence } from "./AISuggestion";
 export { ApprovalItem, RiskBadge, type ApprovalItemProps, type Risk } from "./ApprovalItem";
 export { AgentCard, AutonomyMeter, type AgentCardProps, type AgentStatus } from "./AgentCard";

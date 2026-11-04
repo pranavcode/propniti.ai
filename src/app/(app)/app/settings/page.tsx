@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Settings } from "lucide-react";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { settingsSession } from "@/extensions/settings/pages";
@@ -8,7 +8,7 @@ import { INTEGRATIONS } from "@/extensions/settings/integrations";
 
 export const metadata = { title: "Settings · Propniti" };
 
-type Counts = { active: number; invited: number; policies: number; overrides: number; rules: number; autos: number; autos_on: number; failed: number; audit7: number; ai7: number; banks: number };
+type Counts = { active: number; invited: number; policies: number; overrides: number; rules: number; audit7: number; ai7: number; banks: number };
 
 export default async function SettingsHome() {
   const { session, ctx } = await settingsSession();
@@ -22,9 +22,6 @@ export default async function SettingsHome() {
         (SELECT count(*) FROM {approval_policies} WHERE owner_entity_id IS NULL) AS policies,
         (SELECT count(*) FROM {approval_policies} WHERE owner_entity_id IS NOT NULL) AS overrides,
         (SELECT count(DISTINCT state || rule) FROM {state_rules}) AS rules,
-        (SELECT count(*) FROM {automation_rules}) AS autos,
-        (SELECT count(*) FROM {automation_rules} WHERE enabled = 1) AS autos_on,
-        (SELECT count(*) FROM {automation_runs} WHERE status = 'Failed' AND started_at >= date($AS_OF, '-30 days')) AS failed,
         (SELECT count(*) FROM {audit} WHERE at >= date($AS_OF, '-7 days')) AS audit7,
         (SELECT count(*) FROM {audit} WHERE agent IS NOT NULL AND at >= date($AS_OF, '-7 days')) AS ai7,
         (SELECT count(*) FROM {bank_accounts}) AS banks`),
@@ -41,12 +38,12 @@ export default async function SettingsHome() {
     "/app/settings/integrations": `${connected} of ${INTEGRATIONS.length} connected${attention ? ` · ${attention} need attention` : ""}`,
     "/app/settings/approvals": `${n(c.policies)} org defaults · ${n(c.overrides)} owner overrides`,
     "/app/settings/state-rules": `${n(c.rules)} rules across TX, GA and AZ`,
-    "/app/settings/automations": `${n(c.autos_on)} of ${n(c.autos)} on${c.failed ? ` · ${n(c.failed)} failed runs in 30 days` : ""}`,
+    "/app/automations": "What agents run on their own, when, and under which rules",
     "/app/settings/audit": `${n(c.audit7)} entries this week · ${n(c.ai7)} by agents`,
     "/app/settings/payments": "Management fee, late fees and payment methods",
     "/app/settings/company": "Legal name, EIN, address and time zone",
     "/app/settings/ai": "Model, agent autonomy and data use",
-    "/app/settings/import": "Properties and units from a rent roll",
+    "/app/settings/import": "Portfolio, leases, owners and vendors from another tool",
   } : {};
   hint["/app/settings/notifications"] = "What reaches you, and where";
   return (

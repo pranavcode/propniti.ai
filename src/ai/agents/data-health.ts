@@ -3,6 +3,7 @@ import { effective } from "@/server/query";
 import { fixProposal } from "../tools/write";
 import { defineAgent, type Candidate } from "./framework";
 import { computeFix } from "../rules";
+import { isRunnableRule, RUNNABLE_RULES_SQL } from "../data-rules";
 export { computeFix, normalizeStreet, phoneInEmail } from "../rules";
 
 // Detects and fixes data problems. Detection re-runs each enabled SQL rule (read-only) and reports
@@ -19,14 +20,14 @@ export default defineAgent({
   goal: "Find bad data before owners or auditors do: re-check the data rules, then propose a fix for each open issue with before/after, a reason and a confidence. Merge duplicates, recode miscoded bills and normalize contact details and addresses.",
   tools: ["data.issues", "records.get", "records.search", "data.propose_fix"],
   triggers: { schedule: "0 6 * * *", events: ["data_issue.detected", "import.completed"] },
-  autonomy: "act_with_approval",
+  autonomy: "auto_within_policy",
   entities: ["data_issues", "data_rules"],
   actions: ["data_issues.apply_fix"],
   maxProposals: 12,
   async collect(ctx) {
     // Detection: each SQL rule is a read-only SELECT returning offending ids.
     // Only the shipped rules (base rows) run their SQL; overlay edits can't inject a query.
-    const rules = { rows: (await ctx.db.prepare("SELECT id, check_kind, check_sql FROM data_rules WHERE workspace_id = 'base' AND deleted = 0 AND enabled = 1 LIMIT 50").all<Row>()).results };
+    const rules = { rows: (await ctx.db.prepare(RUNNABLE_RULES_SQL).all<Row>()).results };
     // Each check is capped (count of at most 1,000 matches) and the pass stops after 3 seconds, so
     // detection never crowds the database; the open issues below are the fix list either way.
     const counts: Record<string, number | string> = {};
@@ -37,7 +38,7 @@ export default defineAgent({
         continue;
       }
       const q = String(r.check_sql ?? "").trim();
-      if (r.check_kind !== "sql" || !/^select\b/i.test(q) || q.includes(";")) continue;
+      if (!isRunnableRule(r)) continue;
       try {
         // Rules name tables as {{table}}: the visitor's effective rows (overlay over base).
         const expanded = q.replace(/\{\{([a-z_]+)\}\}/g, (_, t: string) => effective(t, ctx.ws === "base" ? null : ctx.ws));

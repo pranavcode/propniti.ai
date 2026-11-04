@@ -4,8 +4,9 @@ import type { AgentKey, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
 import { computeFix, proposalSource, type AiSource } from "./rules";
+import { fixProposal, queueReason } from "./tools/write";
 import { nextRun } from "./cron";
-import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx } from "./data";
+import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
 import { modelInfo } from "./providers";
 
@@ -15,19 +16,31 @@ import { modelInfo } from "./providers";
 export type AgentCard = {
   key: AgentKey; name: string; goal: string; ownerRole: string; enabled: boolean; autonomy: string; schedule: string | null; events: string[];
   lastRun: { id: string; status: string; started_at: string; summary: string | null; model: string | null; trigger_kind: string } | null;
-  nextRunAt: string | null; runs30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
+  nextRunAt: string | null; runs30: number; ok30: number; failed30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
 };
+
+// The runs a person may open: all of them org-wide; for property-scoped roles, runs they started
+// and runs that proposed something in their properties (runDetail shows those).
+function runScope(data: DataCtx, alias: string): { sql: string; params: unknown[] } {
+  if (data.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  return {
+    sql: `(${alias}.started_by = ? OR EXISTS (SELECT 1 FROM {ai_proposals} sp WHERE sp.run_id = ${alias}.id AND sp.property_id IN (SELECT value FROM json_each(?))))`,
+    params: [data.actor.personaId, JSON.stringify(data.actor.propertyIds)],
+  };
+}
 
 export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<AgentCard[]> {
   await loadAgents();
   const configs = await agentConfigs(data.db, data.ws);
   const since = demoIsoIn(-30 * 86_400_000, nowMs);
+  const rs = runScope(data, "r");
+  const ls = runScope(data, "l");
   const [runs, props, last] = await Promise.all([
-    sql<{ agent_key: string; n: number; ok: number }>(data, "SELECT agent_key, count(*) AS n, sum(status IN ('done', 'waiting_approval')) AS ok FROM {agent_runs} WHERE started_at >= ? GROUP BY agent_key", [since], { unscoped: true }),
+    sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, `SELECT r.agent_key, count(*) AS n, sum(r.status IN ('done', 'waiting_approval')) AS ok, sum(r.status = 'failed') AS failed FROM {agent_runs} r WHERE r.started_at >= ? AND ${rs.sql} GROUP BY r.agent_key`, [since, ...rs.params], { unscoped: true }),
     sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
       `SELECT p.agent, count(*) AS n, sum(d.decision IN ('Approved', 'Edited') AND p.queue_state <> 'auto_handled') AS approved, sum(p.queue_state = 'auto_handled') AS auto, sum(d.id IS NULL AND p.queue_state <> 'auto_handled') AS pending
        FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`),
-    sql<Row>(data, "SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(seq) FROM {agent_runs} GROUP BY agent_key)", [], { unscoped: true }),
+    sql<Row>(data, `SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(l.seq) FROM {agent_runs} l WHERE ${ls.sql} GROUP BY l.agent_key)`, ls.params, { unscoped: true }),
   ]);
   return AGENT_ORDER.map((key) => {
     const def = getAgent(key)!;
@@ -39,7 +52,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
     return {
       key, name: def.name, goal: def.goal, ownerRole: def.ownerRole, enabled: cfg.enabled, autonomy: cfg.autonomy, schedule: cfg.schedule ?? null, events: cfg.events,
       lastRun: l ? { id: String(l.id), status: String(l.status), started_at: String(l.started_at), summary: (l.summary as string) ?? null, model: (l.model as string) ?? null, trigger_kind: String(l.trigger_kind) } : null,
-      nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
+      nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, ok30: Number(r?.ok ?? 0), failed30: Number(r?.failed ?? 0), successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
       proposed: p?.n ?? 0, approved: Number(p?.approved ?? 0), auto: Number(p?.auto ?? 0), pending: Number(p?.pending ?? 0), tools: def.tools, actions: def.actions,
     };
   });
@@ -57,11 +70,8 @@ export async function runsPage(data: DataCtx, f: { agent?: string; status?: stri
   if (f.agent) { where.push("agent_key = ?"); params.push(f.agent); }
   if (f.status) { where.push("status = ?"); params.push(f.status); }
   if (f.trigger) { where.push("trigger_kind = ?"); params.push(f.trigger); }
-  // Property-scoped roles see runs they started and runs that proposed something in their scope.
-  if (data.actor.propertyIds !== "all") {
-    where.push("(started_by = ? OR EXISTS (SELECT 1 FROM {ai_proposals} sp WHERE sp.run_id = r.id AND sp.property_id IN (SELECT value FROM json_each(?))))");
-    params.push(data.actor.personaId, JSON.stringify(data.actor.propertyIds));
-  }
+  const scope = runScope(data, "r");
+  if (data.actor.propertyIds !== "all") { where.push(scope.sql); params.push(...scope.params); }
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const w = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -104,7 +114,7 @@ const hrefOf = (t: string, id: string) => {
 };
 
 export type Queue = "needs_you" | "auto_handled" | "waiting" | "decided";
-const QUEUE_SQL: Record<Queue, string> = {
+export const QUEUE_SQL: Record<Queue, string> = {
   needs_you: "p.queue_state = 'needs_you' AND d.id IS NULL",
   waiting: "p.queue_state = 'waiting' AND d.id IS NULL",
   auto_handled: "p.queue_state = 'auto_handled'",
@@ -172,6 +182,30 @@ export function healthScore(parts: { weighted: number; records: number }[], floo
   return Math.max(0, Math.min(100, Math.round(100 - (300 * shares.reduce((x, y) => x + y, 0)) / shares.length)));
 }
 
+// Records checked per entity, in total and per property (for tables scoped by property). Counting
+// reads every row of each table, and record counts barely move, so they are cached per workspace
+// and scope for a minute; the open-issue counts above stay live.
+type RecordCount = { entity: Table; total: number; byProp: Map<string, number>; scoped: boolean };
+const COUNTS_TTL_MS = 60_000;
+// Only finished counts are cached: a pending promise can outlive a cancelled request on Workers and
+// would hang every render that awaits it. Overlapping first renders each count; that's fine.
+const countCache = new WeakMap<object, Map<string, { at: number; v: RecordCount[] }>>();
+async function recordCounts(data: DataCtx, entities: Table[]) {
+  const cache = countCache.get(data.db) ?? countCache.set(data.db, new Map()).get(data.db)!;
+  const key = JSON.stringify([data.ws, data.actor.propertyIds, entities]);
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < COUNTS_TTL_MS) return hit.v;
+  const v = await Promise.all(entities.map(async (t) => {
+    const col = TABLES[t];
+    const total = (await sql<{ n: number }>(data, `SELECT count(*) AS n FROM {${t}}`))[0]?.n ?? 0;
+    const byProp = col ? await sql<{ p: string; n: number }>(data, `SELECT ${col} AS p, count(*) AS n FROM {${t}} GROUP BY ${col}`) : [];
+    return { entity: t, total, byProp: new Map(byProp.map((r) => [r.p, r.n])), scoped: !!col };
+  }));
+  if (cache.size >= 200) cache.clear();
+  cache.set(key, { at: Date.now(), v });
+  return v;
+}
+
 export async function dataHealth(data: DataCtx) {
   const [issues, rules, props] = await Promise.all([
     sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, "SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' GROUP BY rule_id, entity_type, property_id, severity"),
@@ -180,13 +214,7 @@ export async function dataHealth(data: DataCtx) {
     sql<{ id: string; name: string; metro: string }>(data, "SELECT id, name, metro FROM {properties} ORDER BY id"),
   ]);
   const entities = [...new Set([...rules.map((r) => r.entity_type), ...issues.map((i) => i.entity_type)])].filter(isTable);
-  // Records checked per entity, in total and per property (for tables scoped by property).
-  const counts = await Promise.all(entities.map(async (t) => {
-    const col = TABLES[t];
-    const total = (await sql<{ n: number }>(data, `SELECT count(*) AS n FROM {${t}}`))[0]?.n ?? 0;
-    const byProp = col ? await sql<{ p: string; n: number }>(data, `SELECT ${col} AS p, count(*) AS n FROM {${t}} GROUP BY ${col}`) : [];
-    return { entity: t, total, byProp: new Map(byProp.map((r) => [r.p, r.n])), scoped: !!col };
-  }));
+  const counts = await recordCounts(data, entities);
   const weightOf = (rows: typeof issues) => rows.reduce((s, r) => s + issueWeight(r.rule_id, r.severity) * r.n, 0);
   const count = (rows: typeof issues) => rows.reduce((s, r) => s + r.n, 0);
 
@@ -237,8 +265,8 @@ export async function issuesPage(data: DataCtx, f: { status?: string; severity?:
     }
     const changes = (fix?.changes ?? {}) as Record<string, unknown>;
     if (rec) before = Object.fromEntries(Object.keys(changes).map((k) => [k, rec[k] ?? null]));
-    const human = /^(payments\.|owner_distributions\.|bank_transactions\.|vendors\.unverified_bank_change|leases\.rent_outlier)/.test(String(i.rule_id));
-    return { ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson: human, href: hrefOf(table, String(i.entity_id)) };
+    const needsPerson = queueReason(fixProposal({ ...i, suggested_fix: JSON.stringify(fix ?? {}) }), data.actor.role);
+    return { ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)) };
   }));
   return { rows: out, total: total[0]?.n ?? 0, page, size };
 }

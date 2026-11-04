@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, ExternalLink, GitMerge, Loader2, Sparkles } from "lucide-react";
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 // data-health fix cards. All writes go through the named-action API (audited server-side).
 
 export async function runAction(entity: string, id: string, action: string, body: unknown = {}) {
-  return apiJson<{ ok: true; message?: string; href?: string }>("POST", `/api/e/${entity}/${encodeURIComponent(id)}/actions/${action}`, body);
+  return apiJson<{ ok: boolean; queued?: boolean; message?: string; href?: string }>("POST", `/api/e/${entity}/${encodeURIComponent(id)}/actions/${action}`, body);
 }
 
 export function ActionButton({ entity, id, action, body, label, icon, variant = "outline", size = "sm", className, refresh = true }: {
@@ -28,7 +28,8 @@ export function ActionButton({ entity, id, action, body, label, icon, variant = 
       setBusy(true);
       try {
         const r = await runAction(entity, id, action, body);
-        toast.success(r.message ?? "Done");
+        if (r.queued) toast.info(r.message ?? "Sent to the approvals inbox");
+        else toast.success(r.message ?? "Done");
         if (r.href) router.push(r.href);
         else if (refresh) router.refresh();
       } catch (e) {
@@ -54,9 +55,11 @@ export function IssueFix({ issueId, title, rule, changes, why, confidence, sourc
     try {
       const r = kind === "apply" && applyVia
         ? await runAction(applyVia.entity, applyVia.id, applyVia.action)
-        : await apiJson<{ message?: string }>("POST", `/api/ai/data-health/issues/${encodeURIComponent(issueId!)}`, { action: kind });
-      toast.success(r.message ?? (kind === "apply" ? "Fix applied" : "Dismissed"));
+        : await apiJson<{ message?: string; queued?: boolean }>("POST", `/api/ai/data-health/issues/${encodeURIComponent(issueId!)}`, { action: kind });
+      if (r.queued) toast.info(r.message ?? "Sent to the approvals inbox");
+      else toast.success(r.message ?? (kind === "apply" ? "Fix applied" : "Dismissed"));
       router.refresh();
+      return r;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Nothing was changed.");
       throw e;
