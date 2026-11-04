@@ -42,6 +42,7 @@ const REAL_CLOCK_OK = new Set([
   "src/extensions/receivables/queries.ts", // ACH settle timer, cache TTL
   "src/extensions/platform/console.ts", // platform health check time
   "src/extensions/leasing/ai.ts", // model timeout
+  "src/ai/agents/data-health.ts", // rule-check time box
   "src/extensions/residents/ai.ts", // run deadline, latency
   "src/extensions/risk/timeline.ts", // as_of fallback (risk lane)
   "src/components/public/writes.ts", // request clock
