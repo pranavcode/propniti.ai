@@ -70,11 +70,19 @@ test("rules only: company, import, a suggested limit, Data Health and the summar
   }
   await page.getByRole("button", { name: /^Continue with 1 saved/ }).click();
 
-  // 4. Team: the principal can't add people (an admin does), and the flow says so.
+  // 4. Team: the principal adds a person to the imported properties; the admin role isn't offered.
   await expect(page.getByRole("heading", { name: "Your team", exact: true })).toBeVisible();
   await expect(page.getByText(/No email is sent/)).toBeVisible();
-  await expect(page.getByText(/Only an administrator adds people/)).toBeVisible();
-  await page.getByRole("button", { name: "Skip this step" }).click();
+  const form = page.getByRole("form", { name: "Add a person" });
+  await expect(form.locator("select option[value=admin]")).toHaveCount(0);
+  await form.locator("input[name=name]").fill("Ana Diaz");
+  await form.locator("input[name=email]").fill(`ana.diaz.${Date.now()}@lakeside.example`);
+  await form.locator("input[name=title]").fill("Property manager");
+  // The properties this import added are pre-selected as the person's scope.
+  for (const name of [/^Maple Court Apartments/, /^Cedar Row Townhomes/]) await expect(form.getByRole("checkbox", { name })).toBeChecked();
+  await form.getByRole("button", { name: "Add to team" }).click();
+  await expect(page.getByRole("region", { name: "Added during setup" })).toContainText("Ana Diaz");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
 
   // 5. Check: Data Health over the imported records, then the summary.
   await expect(page.getByRole("heading", { name: "Check and finish", exact: true })).toBeVisible();
@@ -86,6 +94,7 @@ test("rules only: company, import, a suggested limit, Data Health and the summar
   const summary = page.getByTestId("onboarding-summary");
   await expect(summary).toContainText("2 properties, 12 units, 10 residents, 10 leases");
   await expect(summary).toContainText("1 approval limit, 0 agent settings");
+  await expect(summary).toContainText("1 added");
   await expect(page.getByText(/operating in AZ, TX · about 420 units/)).toBeVisible();
 
   // Progress is kept: a reload resumes at the same step, with earlier steps marked.
@@ -93,9 +102,9 @@ test("rules only: company, import, a suggested limit, Data Health and the summar
   await expect(page.getByRole("heading", { name: "Check and finish", exact: true })).toBeVisible();
   const steps = page.getByRole("navigation", { name: "Setup steps" });
   await expect(steps.getByRole("button", { name: /Company\s*Done/ })).toBeVisible();
-  await expect(steps.getByRole("button", { name: /Team\s*Skipped/ })).toBeVisible();
+  await expect(steps.getByRole("button", { name: /Team\s*Done/ })).toBeVisible();
   const setup = await page.evaluate(() => JSON.parse(localStorage.getItem("pn_setup") ?? "{}"));
-  expect(setup).toMatchObject({ company: true, import: true, payments: true });
+  expect(setup).toMatchObject({ company: true, import: true, payments: true, roles: true, team: true });
 
   expect(aiCalls).toBe(0);
   expect(errors).toEqual([]);

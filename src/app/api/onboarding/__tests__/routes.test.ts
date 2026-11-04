@@ -83,6 +83,18 @@ describe("portfolioStats", () => {
   });
 });
 
+describe("setup checklist ticks", () => {
+  const ticked = async (step: string) => (await db().prepare("SELECT count(*) AS n FROM onboarding_progress WHERE workspace_id = ? AND step = ?").bind(WS, step).first<{ n: number }>())!.n;
+  it("ticks only the items the role can do itself", async () => {
+    // A regional manager can't add people, so finishing the team step leaves roles and team open.
+    expect((await stateRoute.POST(post("/api/onboarding", { done: ["team"] }, { persona: "priya" }))).status).toBe(200);
+    expect([await ticked("roles"), await ticked("team")]).toEqual([0, 0]);
+    // An admin can't create properties, so a finished data step doesn't tick the import.
+    expect((await stateRoute.POST(post("/api/onboarding", { done: ["data"] }, { persona: "sam" }))).status).toBe(200);
+    expect(await ticked("import")).toBe(0);
+  });
+});
+
 describe("POST /api/onboarding/detect", () => {
   const body = { files: [{ id: "f1", name: "export.csv", headers: ["Property", "Unit", "Tenant", "Rent"], samples: [["Maple Court", "101", "Ana Diaz", "1450"]] }] };
 

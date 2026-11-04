@@ -63,7 +63,7 @@ describe("steps", () => {
   it("map to the setup checklist items they complete", () => {
     expect(setupKeysFor("data")).toEqual(["import"]);
     expect(setupKeysFor("rules")).toEqual(["payments"]);
-    expect(setupKeysFor("team")).toEqual(["roles", "team"]);
+    expect(setupKeysFor("team")).toEqual(["roles"]);
   });
 });
 

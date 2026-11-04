@@ -71,8 +71,9 @@ const at = (k: StepKey) => KEYS.indexOf(k);
 export const nextStep = (k: StepKey): StepKey | null => KEYS[at(k) + 1] ?? null;
 export const prevStep = (k: StepKey): StepKey | null => (at(k) > 0 ? KEYS[at(k) - 1]! : null);
 
-// The sidebar setup checklist items (SETUP_ITEMS keys) a finished step completes.
-const SETUP: Record<StepKey, string[]> = { company: ["company"], data: ["import"], rules: ["payments"], team: ["roles", "team"], check: [] };
+// The sidebar setup checklist items (SETUP_ITEMS keys) a finished step completes. "team" is ticked
+// by the invite route itself, when someone is actually added.
+const SETUP: Record<StepKey, string[]> = { company: ["company"], data: ["import"], rules: ["payments"], team: ["roles"], check: [] };
 export const setupKeysFor = (k: StepKey) => SETUP[k];
 
 // Who runs onboarding: the people who set the org up. Each step still applies its own route's

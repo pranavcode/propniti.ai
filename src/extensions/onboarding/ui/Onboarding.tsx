@@ -27,6 +27,8 @@ export type OnboardingData = {
   canImportProperties: boolean;
   canEditPolicies: boolean;
   canInvite: boolean;
+  setupKeys: string[]; // checklist items this role can tick
+
   stats: { units: number; unitsFrom: Stats["unitsFrom"]; workOrders: number; bills: number; rents: number };
   policies: PolicySuggestion[];
   fixedPolicies: string[];
@@ -73,7 +75,7 @@ export function Onboarding({ data }: { data: OnboardingData }) {
     try {
       const r = await apiJson<{ state: OnboardingState }>("POST", "/api/onboarding", patch);
       setState(r.state);
-      for (const k of patch.done ?? []) for (const key of setupKeysFor(k)) if (key !== "team" || r.state.team?.invited.length) setup.setDone(key, true);
+      for (const k of patch.done ?? []) for (const key of setupKeysFor(k)) if (data.setupKeys.includes(key)) setup.setDone(key, true);
       return r.state;
     } catch (e) {
       setError((e as Error).message);

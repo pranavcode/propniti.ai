@@ -7,6 +7,10 @@ import { isRunnableRule } from "@/ai/data-rules";
 import { effective, forgetOverlay, type QueryCtx, type WriteCtx } from "@/server/query";
 import { ORG_ID, prefsData } from "@/extensions/settings/data";
 import { mergePrefs, setupStep } from "@/extensions/settings/write";
+import { canInvite } from "@/extensions/settings/nav";
+import { canEditPolicies } from "@/ai/policy-editors";
+import { mayCreate } from "@/extensions/import/server";
+import type { Role } from "@/entities/types";
 import { applyPatch, parseState, setupKeysFor, type OnboardingPatch, type OnboardingState } from "./state";
 import type { Stats } from "./suggest";
 
@@ -22,9 +26,18 @@ export async function saveState(ctx: WriteCtx, patch: OnboardingPatch): Promise<
   const next = applyPatch(before, patch);
   await mergePrefs(ctx, ORG_ID, "onboarding", next as Record<string, unknown>, `Onboarding: ${patch.done?.length ? `finished ${patch.done.join(", ")}` : patch.skipped?.length ? `skipped ${patch.skipped.join(", ")}` : "progress saved"}`);
   const newly = (patch.done ?? []).filter((k) => !before.done.includes(k));
-  const keys = newly.flatMap(setupKeysFor);
+  const keys = newly.flatMap(setupKeysFor).filter((k) => setupAllowed(ctx.actor.role, k));
   if (keys.length) await ctx.db.batch(keys.map((k) => setupStep(ctx, k, "Done")));
   return next;
+}
+
+// A finished step ticks a checklist item only when the role can do that item's work; a skip-through
+// by someone who can't import, set policies or add people leaves it open for someone who can.
+export function setupAllowed(role: Role, key: string) {
+  if (key === "import") return mayCreate(role, "properties");
+  if (key === "payments") return canEditPolicies(role);
+  if (key === "roles" || key === "team") return canInvite(role);
+  return true;
 }
 
 const batchPattern = (batch: string) => `%-i${batch}-%`;
