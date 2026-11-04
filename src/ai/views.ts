@@ -12,6 +12,7 @@ import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
 import { modelInfo } from "./providers";
+import type { IssueFilters, ProposalFilters } from "./filters";
 import { wantedRefs, type RecordRef, type TraceRefs, type TraceStepLike } from "./trace";
 
 // Read models for the AI pages (agents command center, runs, approvals inbox, data health). Server
@@ -209,26 +210,70 @@ export const QUEUE_SQL: Record<Queue, string> = {
 };
 
 const RANK = "CASE p.risk WHEN 'High' THEN 2 WHEN 'Medium' THEN 1 ELSE 0 END";
-const QUEUE_OF = "CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' ELSE p.queue_state END";
 
-// "Needs you" holds only what this persona may decide (decide.ts); the rest stays with its approvers.
-export async function proposalsPage(data: DataCtx, f: { queue?: Queue; agent?: string; risk?: string; page?: number; size?: number }) {
-  const queue = f.queue ?? "needs_you";
-  const mine = decidableSql(data.actor.role);
-  const where = [QUEUE_SQL[queue]];
+// The inbox filters as SQL over `p` (ai_proposals), shared by the page and "approve all matching".
+export function proposalWhere(f: ProposalFilters) {
+  const where: string[] = [];
   const params: unknown[] = [];
-  if (queue === "needs_you") { where.push(mine.sql); params.push(...mine.params); }
   if (f.agent) { where.push("p.agent = ?"); params.push(f.agent); }
   if (f.risk) { where.push("p.risk = ?"); params.push(f.risk); }
+  if (f.property) { where.push("p.property_id = ?"); params.push(f.property); }
+  if (f.entity) { where.push("p.entity_type = ?"); params.push(f.entity); }
+  return { where, params };
+}
+
+// A persona's tabs (decide.ts): "Needs you" holds only what they may decide; an open item another
+// role must decide shows under "Waiting on others", where they can notify that approver.
+export function queueSql(role: Role, q: Queue) {
+  const mine = decidableSql(role);
+  if (q === "needs_you") return { sql: `${QUEUE_SQL.needs_you} AND ${mine.sql}`, params: mine.params };
+  if (q === "waiting") return { sql: `(${QUEUE_SQL.waiting} OR (${QUEUE_SQL.needs_you} AND NOT ${mine.sql}))`, params: mine.params };
+  return { sql: QUEUE_SQL[q], params: [] as unknown[] };
+}
+const queueOf = (role: Role) => {
+  const mine = decidableSql(role);
+  return { sql: `CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' WHEN p.queue_state = 'needs_you' AND NOT ${mine.sql} THEN 'waiting' ELSE p.queue_state END`, params: mine.params };
+};
+
+export type Facet = { key: string; label: string; n: number };
+
+// facets: also list the filter options (the approvals page; home widgets skip the extra query).
+export async function proposalsPage(data: DataCtx, f: ProposalFilters & { queue?: Queue; page?: number; size?: number; facets?: boolean }) {
+  const queue = f.queue ?? "needs_you";
+  const q = queueSql(data.actor.role, queue);
+  const w = proposalWhere(f);
+  const where = [q.sql, ...w.where];
+  const params = [...q.params, ...w.params];
+  const of = queueOf(data.actor.role);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
-  const [rows, total, counts] = await Promise.all([
+  const [rows, total, counts, groups] = await Promise.all([
     sql<Row>(data, `SELECT p.*, d.decision, d.decided_by, d.decided_at, d.note AS decision_note ${from} WHERE ${where.join(" AND ")} ORDER BY ${RANK} DESC, p.created_at DESC, p.id LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n ${from} WHERE ${where.join(" AND ")}`, params),
-    sql<{ q: string; n: number }>(data, `SELECT ${QUEUE_OF} AS q, count(*) AS n ${from} WHERE NOT coalesce(${QUEUE_SQL.needs_you} AND NOT ${mine.sql}, 0) GROUP BY q`, mine.params),
+    sql<{ q: string; n: number }>(data, `SELECT ${of.sql} AS q, count(*) AS n ${from} GROUP BY q`, of.params),
+    // Filter options: what this queue holds, before the filters narrow it.
+    !f.facets ? [] : sql<{ agent: string; risk: string; property_id: string | null; property: string | null; entity_type: string; n: number }>(data,
+      `SELECT p.agent, p.risk, p.property_id, pr.name AS property, p.entity_type, count(*) AS n ${from} LEFT JOIN {properties} pr ON pr.id = p.property_id WHERE ${q.sql} GROUP BY p.agent, p.risk, p.property_id, p.entity_type`, q.params),
   ]);
-  return { rows: rows.map((r) => proposalOut(r, data.actor.role)), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number> };
+  const facet = (key: (g: (typeof groups)[number]) => string | null, label: (g: (typeof groups)[number]) => string) => {
+    const m = new Map<string, Facet>();
+    for (const g of groups) {
+      const k = key(g);
+      if (!k) continue;
+      const cur = m.get(k) ?? { key: k, label: label(g), n: 0 };
+      cur.n += Number(g.n);
+      m.set(k, cur);
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+  };
+  const facets = !f.facets ? undefined : {
+    agent: facet((g) => g.agent, (g) => g.agent),
+    risk: facet((g) => g.risk, (g) => g.risk),
+    property: facet((g) => g.property_id, (g) => g.property ?? String(g.property_id)),
+    entity: facet((g) => g.entity_type, (g) => getEntity(g.entity_type)?.label.many ?? g.entity_type.replace(/_/g, " ")),
+  };
+  return { rows: rows.map((r) => proposalOut(r, data.actor.role)), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number>, ...(facets && { facets }) };
 }
 
 // Where a deep link lands: the proposal (by id, or the newest one on a record such as
@@ -237,13 +282,14 @@ export async function proposalFocus(data: DataCtx, f: { proposal?: string; recor
   const [type, id] = f.record?.split(/\/(.*)/) ?? [];
   if (!f.proposal && !(type && id)) return null;
   const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
+  const of = queueOf(data.actor.role);
   const [hit] = await sql<{ id: string; q: Queue; rank: number; created_at: string }>(data,
-    `SELECT p.id, ${QUEUE_OF} AS q, ${RANK} AS rank, p.created_at ${from} WHERE ${f.proposal ? "p.id = ?" : "p.entity_type = ? AND p.entity_id = ?"} ORDER BY p.created_at DESC LIMIT 1`,
-    f.proposal ? [f.proposal] : [type, id]);
+    `SELECT p.id, ${of.sql} AS q, ${RANK} AS rank, p.created_at ${from} WHERE ${f.proposal ? "p.id = ?" : "p.entity_type = ? AND p.entity_id = ?"} ORDER BY p.created_at DESC LIMIT 1`,
+    [...of.params, ...(f.proposal ? [f.proposal] : [type, id])]);
   if (!hit) return null;
-  const mine = hit.q === "needs_you" ? decidableSql(data.actor.role) : { sql: "1 = 1", params: [] };
+  const mine = queueSql(data.actor.role, hit.q);
   const [ahead] = await sql<{ n: number }>(data,
-    `SELECT count(*) AS n ${from} WHERE ${QUEUE_SQL[hit.q]} AND ${mine.sql} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
+    `SELECT count(*) AS n ${from} WHERE ${mine.sql} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
     [...mine.params, hit.rank, hit.rank, hit.created_at, hit.created_at, hit.id]);
   return { id: hit.id, queue: hit.q, page: Math.floor((ahead?.n ?? 0) / size) + 1 };
 }
@@ -331,17 +377,26 @@ export async function dataHealth(data: DataCtx) {
   };
 }
 
-export async function issuesPage(data: DataCtx, f: { status?: string; severity?: string; rule?: string; property?: string; entity?: string; page?: number; size?: number }) {
+// The Data Health filters as SQL over `i` (data_issues), shared by the page and the bulk actions.
+export function issueWhere(f: IssueFilters & { status?: string }) {
   const where = ["i.status = ?"];
   const params: unknown[] = [f.status ?? "open"];
   if (f.severity) { where.push("i.severity = ?"); params.push(f.severity); }
   if (f.rule) { where.push("i.rule_id = ?"); params.push(f.rule); }
   if (f.property) { where.push("i.property_id = ?"); params.push(f.property); }
   if (f.entity) { where.push("i.entity_type = ?"); params.push(f.entity); }
+  if (f.entity_id) { where.push("i.entity_id = ?"); params.push(f.entity_id); }
+  if (f.issue) { where.push("i.id = ?"); params.push(f.issue); }
+  return { where, params };
+}
+export const ISSUE_ORDER = "CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC, i.id";
+
+export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: string; page?: number; size?: number }) {
+  const { where, params } = issueWhere(f);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const [rows, total] = await Promise.all([
-    sql<Row>(data, `SELECT i.*, r.name AS rule_name, r.description AS rule_description, p.name AS property FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id LEFT JOIN {properties} p ON p.id = i.property_id WHERE ${where.join(" AND ")} ORDER BY CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
+    sql<Row>(data, `SELECT i.*, r.name AS rule_name, r.description AS rule_description, p.name AS property FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id LEFT JOIN {properties} p ON p.id = i.property_id WHERE ${where.join(" AND ")} ORDER BY ${ISSUE_ORDER} LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n FROM {data_issues} i WHERE ${where.join(" AND ")}`, params),
   ]);
   const out = await Promise.all(rows.map(async (i) => {

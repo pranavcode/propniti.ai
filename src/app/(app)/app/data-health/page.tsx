@@ -5,15 +5,17 @@ import { Button } from "@/components/ui/button";
 import { DataHealthCenter } from "@/ai/ui/DataHealthCenter";
 import { pageData } from "@/ai/ui/server";
 import { dataHealth, issuesPage } from "@/ai/views";
+import { healthFilters } from "@/ai/filters";
 
 export const metadata = { title: "Data health · Propniti" };
 
 // Data Health center: a score per property and module, the open issues with before/after fixes,
 // one-click apply for safe fixes and a person's review for money, fraud and legal ones.
-export default async function DataHealthPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function DataHealthPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const { data } = await pageData();
-  const filters = { severity: sp.severity, rule: sp.rule, property: sp.property, entity: sp.entity };
+  // Links from records, drawers, PM Today and reconciliation use ?f.entity_id= and ?f.rule_id=.
+  const filters = healthFilters(sp);
   const [health, issues] = await Promise.all([dataHealth(data), issuesPage(data, { ...filters, page: Number(sp.page) || 1 })]);
   return (
     <main>

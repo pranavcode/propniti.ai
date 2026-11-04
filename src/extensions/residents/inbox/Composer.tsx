@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "@/components/Link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Archive, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";
+import { Archive, ArrowRight, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { textareaClass } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
@@ -38,8 +38,9 @@ export function ThreadActions({ id, status, unread }: { id: string; status: stri
   );
 }
 
-export function Composer({ threadId, channel: initialChannel, closed, suggestion, templates, vars, language }: {
+export function Composer({ threadId, channel: initialChannel, closed, suggestion, templates, vars, language, next }: {
   threadId: string; channel: string; closed: boolean; suggestion: Suggestion | null; templates: Template[]; vars: Record<string, string | null>; language: string;
+  next?: string | null;                  // the next conversation waiting on a reply, for "Send and next"
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,7 +58,7 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<string>(CHANNELS.includes(initialChannel as (typeof CHANNELS)[number]) ? initialChannel : "Email");
   const [from, setFrom] = useState<{ kind: "ai"; id: string; text: string } | { kind: "template"; id: string } | null>(null);
-  const [busy, setBusy] = useState<"send" | "close" | "draft" | null>(null);
+  const [busy, setBusy] = useState<"send" | "close" | "next" | "draft" | null>(null);
   const [hidden, setHidden] = useState(false);
   const smsOver = channel === "SMS" && body.length > 320;
 
@@ -75,8 +76,15 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
     }
   };
 
-  const send = async (close: boolean) => {
-    setBusy(close ? "close" : "send");
+  // Send and next opens the next conversation waiting on a reply in the conversations inbox.
+  const openNext = (id: string) => {
+    const sp = new URLSearchParams(pathname.endsWith("/communications/inbox") ? search.toString() : "");
+    sp.set("t", id);
+    router.push(`/app/communications/inbox?${sp}`, { scroll: false });
+  };
+
+  const send = async (close: boolean, andNext = false) => {
+    setBusy(andNext ? "next" : close ? "close" : "send");
     try {
       const ai = from?.kind === "ai" ? from : null;
       const r = await runAction("message_threads", threadId, "message_threads.reply", {
@@ -86,7 +94,8 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
       toast.success(r.message ?? "Sent");
       setBody("");
       setFrom(null);
-      stay();
+      if (andNext && next) openNext(next);
+      else stay();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Not sent. Try again.");
     } finally {
@@ -151,6 +160,7 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
           {suggestion && hidden && <Button size="sm" variant="ghost" onClick={() => setHidden(false)}><Sparkles className="text-tone-ai" />Show suggestion</Button>}
           <span className={cn("ml-auto text-[11px] tabular-nums", smsOver ? "text-tone-warning" : "text-muted-foreground")}>{channel === "SMS" ? `${body.length}/320` : ""}</span>
           <Button size="sm" variant="outline" disabled={!body.trim() || !!busy || smsOver} onClick={() => send(true)}>{busy === "close" ? <Loader2 className="animate-spin" /> : <Archive />}Send and close</Button>
+          {next && <Button size="sm" variant="outline" disabled={!body.trim() || !!busy || smsOver} onClick={() => send(false, true)} title="Send, then open the next conversation waiting on a reply">{busy === "next" ? <Loader2 className="animate-spin" /> : <ArrowRight />}Send and next</Button>}
           <Button size="sm" disabled={!body.trim() || !!busy || smsOver} onClick={() => send(false)}>{busy === "send" ? <Loader2 className="animate-spin" /> : <Send />}Send</Button>
         </div>
         <p className="mt-1.5 text-[11px] text-muted-foreground">Sending is simulated in this demo: the message is recorded on the conversation and the audit trail, and nothing leaves the system. ⌘↵ sends.</p>

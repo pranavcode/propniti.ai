@@ -209,9 +209,21 @@ async function runProposal(data: DataCtx, proposal: Row, by: By, edited: unknown
   const payload = withEdits(parseJson<Record<string, unknown>>(proposal.payload, {}), edited);
   const action = String(proposal.action) as ActionKey;
   const d = eff("ai_decisions", ws);
+  // A data issue is fixed once: two clicks that raced into two proposals for the same issue
+  // can't both apply.
+  const p2 = eff("ai_proposals", ws);
+  const once = proposal.entity_type === "data_issues"
+    ? { sql: ` AND NOT EXISTS (SELECT 1 FROM ${d.sql} d2 JOIN ${p2.sql} p2 ON p2.id = d2.proposal_id WHERE p2.entity_type = 'data_issues' AND p2.entity_id = ? AND d2.decision IN ('Approved', 'Edited'))`, params: [...d.params, ...p2.params, proposal.entity_id] }
+    : { sql: "", params: [] };
   const decide = db
-    .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)`)
-    .bind(ws, decisionId, proposal.id, edited === undefined ? "Approved" : "Edited", by.id, note, edited === undefined ? null : JSON.stringify(edited), now, ...d.params, proposal.id);
+    .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)${once.sql}`)
+    .bind(ws, decisionId, proposal.id, edited === undefined ? "Approved" : "Edited", by.id, note, edited === undefined ? null : JSON.stringify(edited), now, ...d.params, proposal.id, ...once.params);
+  // The racing proposal that lost is closed, so it leaves "Needs you". The decisions table allows
+  // only Approved/Rejected/Edited/Snoozed, so it is a Rejected row whose note says it was superseded.
+  const superseded = once.sql
+    ? [db.prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, decided_at) SELECT ?, ?, ?, 'Rejected', ?, 'Superseded: another approval already fixed this issue', ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?) AND${once.sql.slice(" AND NOT".length)}`)
+      .bind(ws, newId("dec"), proposal.id, by.id, now, ...d.params, proposal.id, ...once.params)]
+    : [];
   const gate = { decisionId };
   const record = async (message: string) => [
     await insertGated(db, ws, "audit", {
@@ -240,8 +252,8 @@ async function runProposal(data: DataCtx, proposal: Row, by: By, edited: unknown
       return { ok: false, status: 400, message: err instanceof Error ? err.message : String(err) };
     }
     const message = plans.map((p) => p.note).join(" · ");
-    const results = await db.batch([decide, ...plans.flatMap((p) => p.stmts), ...(await record(message))]);
-    if (!results[0].meta.changes) return { ok: false, status: 409, message: "Already decided" };
+    const results = await db.batch([decide, ...superseded, ...plans.flatMap((p) => p.stmts), ...(await record(message))]);
+    if (!results[0].meta.changes) return { ok: false, status: 409, message: superseded.length && results[1].meta.changes ? "Already fixed by another approval" : "Already decided" };
     return { ok: true, message };
   }
 

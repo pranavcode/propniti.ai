@@ -9,6 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { threadContext } from "../ai";
 import { pageCtx, sql } from "../server";
+import { nextNeedingReply } from "@/extensions/inbox/data";
 import { Composer, ThreadActions, type Suggestion } from "./Composer";
 
 // One conversation: header, messages oldest to newest, the open AI suggestion and the composer.
@@ -34,6 +35,7 @@ export async function ThreadPane({ id, actor }: { id: string; actor: Actor }) {
     sql(ctx, "SELECT id, name, category, channel, language, subject, body FROM {templates} ORDER BY category, name LIMIT 100"),
   ]);
   const canReply = can(actor.role, "message_threads.reply", "message_threads");
+  const next = canReply ? await nextNeedingReply({ db: ctx.db, ws: ctx.ws, actor }, id).catch(() => null) : null;
   const p = suggestionRow[0];
   const payload = p ? JSON.parse(String(p.payload ?? "{}")) : null;
   const suggestion: Suggestion | null = p ? {
@@ -84,7 +86,7 @@ export async function ThreadPane({ id, actor }: { id: string; actor: Actor }) {
       </ol>
 
       {canReply ? (
-        <Composer threadId={id} channel={c.channel} closed={t.status === "Closed"} suggestion={suggestion} templates={templates.map((x) => ({ id: String(x.id), name: String(x.name), category: String(x.category), channel: String(x.channel), language: String(x.language), body: String(x.body) }))} vars={vars} language={c.language} />
+        <Composer threadId={id} channel={c.channel} closed={t.status === "Closed"} suggestion={suggestion} templates={templates.map((x) => ({ id: String(x.id), name: String(x.name), category: String(x.category), channel: String(x.channel), language: String(x.language), body: String(x.body) }))} vars={vars} language={c.language} next={next} />
       ) : <p className="border-t px-4 py-3 text-[12.5px] text-muted-foreground">Your role can read this conversation but not reply.</p>}
     </div>
   );

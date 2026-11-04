@@ -1,3 +1,4 @@
+import { healthFilters } from "@/ai/filters";
 import { dataOf, guarded, json, staffSession } from "@/ai/http";
 import { dataHealth, issuesPage } from "@/ai/views";
 
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
     const data = dataOf(s);
     const [health, issues] = await Promise.all([
       sp.get("scores") === "0" ? null : dataHealth(data),
-      issuesPage(data, { status: sp.get("status") ?? "open", severity: sp.get("severity") ?? undefined, rule: sp.get("rule") ?? undefined, property: sp.get("property") ?? undefined, entity: sp.get("entity") ?? undefined, page: Number(sp.get("page")) || 1, size: Number(sp.get("size")) || 25 }),
+      issuesPage(data, { status: sp.get("status") ?? "open", ...healthFilters(sp), page: Number(sp.get("page")) || 1, size: Number(sp.get("size")) || 25 }),
     ]);
     return json({ health, issues });
   });

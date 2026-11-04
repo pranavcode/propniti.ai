@@ -88,6 +88,15 @@ export async function inboxCounts(ctx: QueryCtx, ws?: Ws): Promise<InboxCounts> 
   return { ...c, needsYou: c.needsReply + c.approvals + c.unreadAlerts };
 }
 
+// "Send and next" in a conversation: the newest other open conversation this persona would see in
+// the inbox where the other party wrote last.
+export async function nextNeedingReply(ctx: QueryCtx, after: string): Promise<string | null> {
+  const [b] = branches(ctx, "message");
+  if (!b) return null;
+  const rows = await all<{ id: string }>(ctx, await readWs(ctx), `SELECT id FROM (${b.sql}) WHERE needs = 1 AND id <> ? ORDER BY at DESC, id LIMIT 1`, [...b.params, after]);
+  return rows[0]?.id ?? null;
+}
+
 export async function inboxPage(ctx: QueryCtx, f: { filter?: InboxFilter; page?: number; size?: number }, known?: InboxCounts) {
   const ws = await readWs(ctx);
   const size = Math.min(100, Math.max(1, f.size ?? 25));

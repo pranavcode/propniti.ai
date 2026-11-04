@@ -6,7 +6,7 @@ import { canDecide } from "@/ai/http";
 import { actorFor } from "@/server/permissions";
 import { seed, WS } from "@/server/query.fixture";
 import { staffDecision } from "@/ai/decide";
-import { inApp, inboxCounts, inboxPage } from "./data";
+import { inApp, inboxCounts, inboxPage, nextNeedingReply } from "./data";
 import { cachedCounts } from "./counts";
 
 vi.mock("@/lib/platform", async () => {
@@ -187,5 +187,15 @@ describe("inbox for other roles", () => {
     const got = new Set(ids(await inboxPage(await ctx("daniel"), {})));
     for (const id of ["pr-renewal", "pr-bill-high", "pr-dallas", "t-unassigned", "t-org"]) expect(got.has(id)).toBe(true);
     for (const id of ["t-mine", "t-other", "n-m1"]) expect(got.has(id)).toBe(false);
+  });
+});
+
+describe("inbox: send and next", () => {
+  it("picks the next open conversation in scope where the other party wrote last", async () => {
+    const marcus = await ctx("marcus");
+    expect(await nextNeedingReply(marcus, "t-unassigned")).toBe("t-mine");
+    // t-unassigned waits on the resident, t-other is someone else's, t-dallas is out of scope.
+    expect(await nextNeedingReply(marcus, "t-mine")).toBeNull();
+    expect(await nextNeedingReply(await ctx("sam"), "t-unassigned")).toBeNull();
   });
 });
