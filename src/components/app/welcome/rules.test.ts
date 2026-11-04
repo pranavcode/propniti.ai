@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GuideFacts } from "../guide/nudges";
 import {
-  askAutoDue, askAutoOpened, askGate, demoDay, dismissWelcome, FEATURES, isHome, markSeen, neverWelcome, newDot, pickToast, recordOffer, restoreWelcome, toastBlockedBy,
+  askAutoDue, askAutoOpened, askGate, demoDay, dismissWelcome, FEATURES, isHome, markSeen, neverWelcome, newDot, offerPlace, pickToast, recordOffer, restoreWelcome, toastBlockedBy,
   waitingItems, welcomeDue, whatsNewBullets, type OfferTour, type ToastGate,
 } from "./rules";
 
@@ -131,6 +131,17 @@ describe("feature-tour toasts", () => {
     const tours = [...TOURS, tour("pm-today", { title: "Your day", steps: 5, paths: ["/app/today"] })];
     expect(pickToast({ path: "/app/today", tours, present: [], state: {} })).toEqual({ tour: "pm-today", text: "New to this page? “Your day” walks through it in 5 steps." });
     expect(pickToast({ path: "/app", tours: [tour("app-basics", { paths: ["/app"] })], present: [], state: {} })).toBeNull();
+  });
+
+  it("offers one tour per browser session", () => {
+    expect(pickToast({ path: "/app/inbox", tours: TOURS, present: [], state: {}, offeredThisSession: true })).toBeNull();
+  });
+
+  it("shows the offer as a toast only beside an open desktop sidebar; elsewhere the bubble offers it", () => {
+    expect(offerPlace({ viewport: 1440, sidebar: 244 })).toBe("toast");
+    expect(offerPlace({ viewport: 1440, sidebar: 52 })).toBe("bubble");
+    expect(offerPlace({ viewport: 900, sidebar: 0 })).toBe("bubble");
+    expect(offerPlace({ viewport: 390, sidebar: 0 })).toBe("bubble");
   });
 
   it("only for tours the persona has", () => {

@@ -10,7 +10,7 @@ import { readLocal, useLocalStorage, writeLocal } from "@/hooks/use-local-storag
 import { useShell } from "../shell/context";
 import { localTourStore } from "../tour/TourEngine";
 import type { TourDef } from "../tour/types";
-import { FEATURES, markSeen, newDot, pickToast, recordOffer, splashDue, toastBlockedBy, WHATS_NEW_KEY, type OfferOutcome, type WhatsNew as WhatsNewState } from "./rules";
+import { FEATURES, markSeen, newDot, OFFER_SESSION_KEY, offerPlace, pickToast, recordOffer, splashDue, toastBlockedBy, WHATS_NEW_KEY, type Offer, type OfferOutcome, type WhatsNew as WhatsNewState } from "./rules";
 
 // New-feature hints: a "new" dot on a feature's sidebar item until its page is visited, and one small
 // toast per page view offering the feature's tour the first time it's met (rules in rules.ts).
@@ -27,6 +27,21 @@ const offerTours = (tours: TourDef[]) => tours.map((t) => ({
   id: t.id, title: t.title, steps: t.steps.length, paths: t.steps.flatMap((s) => (s.href ? [s.href.split("?")[0]] : [])), status: localTourStore.get(t.id)?.status ?? null,
 }));
 const record = (tour: string, outcome: OfferOutcome) => writeLocal(WHATS_NEW_KEY, recordOffer(readLocal(WHATS_NEW_KEY, EMPTY), tour, outcome));
+const offeredThisSession = () => { try { return sessionStorage.getItem(OFFER_SESSION_KEY) === "1"; } catch { return false; } };
+const OFFER_W = 228;                 // the open sidebar (244 px) less the toast's 8 px side offsets
+
+// Where this page view's tour offer goes, and the offer itself (null: none due).
+export function pendingOffer(path: string, tours: TourDef[]): { place: "toast" | "bubble"; offer: Offer } | null {
+  const sidebar = document.querySelector('nav[aria-label="Main"]')?.getBoundingClientRect().width ?? 0;
+  const present = FEATURES.filter((f) => f.requires && document.querySelector(f.requires)).map((f) => f.id);
+  const offer = pickToast({ path, tours: offerTours(tours), present, state: readLocal(WHATS_NEW_KEY, EMPTY), offeredThisSession: offeredThisSession() });
+  return offer && { place: offerPlace({ viewport: window.innerWidth, sidebar }), offer };
+}
+// An offer counts as made once shown, wherever it was shown.
+export function offerShown(tour: string) {
+  record(tour, "shown");
+  try { sessionStorage.setItem(OFFER_SESSION_KEY, "1"); } catch { /* unavailable */ }
+}
 
 export function WhatsNew() {
   const { data, startTour, tourActive, assistant } = useShell();
@@ -60,18 +75,18 @@ export function WhatsNew() {
         shownThisView: false,
       });
       if (why) { if (++tries < 6) timer = setTimeout(attempt, RETRY_MS); return; }
-      const state = readLocal(WHATS_NEW_KEY, EMPTY);
-      const present = FEATURES.filter((f) => f.requires && document.querySelector(f.requires)).map((f) => f.id);
-      const offer = pickToast({ path: pathname, tours: offerTours(live.current.tours), present, state });
-      if (!offer) return;
-      record(offer.tour, "shown");
+      const pending = pendingOffer(pathname, live.current.tours);
+      // No room for a toast: the chat bubble offers it (guide/ChatBubble.tsx).
+      if (pending?.place !== "toast") return;
+      const { offer } = pending;
+      offerShown(offer.tour);
       shown = toast.custom((id) => (
         <FeatureToast
           text={offer.text}
           onStart={() => { record(offer.tour, "started"); toast.dismiss(id); live.current.startTour(offer.tour); }}
           onLater={() => { record(offer.tour, "dismissed"); toast.dismiss(id); }}
         />
-      ), { duration: SHOW_MS });
+      ), { duration: SHOW_MS, position: "bottom-left", style: { width: OFFER_W } });
     };
     timer = setTimeout(attempt, FIRST_LOOK_MS);
     // The offer belongs to this page view.
@@ -83,7 +98,7 @@ export function WhatsNew() {
 
 function FeatureToast({ text, onStart, onLater }: { text: string; onStart: () => void; onLater: () => void }) {
   return (
-    <div data-feature-toast="" className="flex w-[356px] max-w-[calc(100vw-2rem)] items-start gap-2.5 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
+    <div data-feature-toast="" className="flex w-full items-start gap-2.5 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
       <Compass className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-[13px] leading-snug">{text}</p>

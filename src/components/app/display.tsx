@@ -92,12 +92,13 @@ export function Thumb({ src, size = 28, className, icon: Icon = Building2 }: { s
 }
 
 // Tiny progress bar for percentages in table cells (occupancy, collections).
-export function Meter({ value, tone, className }: { value: number; tone?: Tone; className?: string }) {
+// `bare`: the bar alone, where the same figure is already printed beside it.
+export function Meter({ value, tone, className, bare }: { value: number; tone?: Tone; className?: string; bare?: boolean }) {
   const pct = Math.max(0, Math.min(1, Math.abs(value) <= 1.5 ? value : value / 100));
   const t = tone ?? (pct >= 0.93 ? "success" : pct >= 0.85 ? "warning" : "danger");
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
-      <span className="tabular-nums w-11 text-right">{formatPct(pct)}</span>
+      {bare ? <span className="sr-only">{formatPct(pct)}</span> : <span className="tabular-nums w-11 text-right">{formatPct(pct)}</span>}
       <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"><span className={cn("block h-full rounded-full", TONE_DOT[t])} style={{ width: `${pct * 100}%` }} /></span>
     </span>
   );

@@ -130,3 +130,14 @@ describe("memory", () => {
     expect(pickNudge(input({ session }))!.id).toBe("pastdue");
   });
 });
+
+describe("a page tour the toast had no room for", () => {
+  const offer = { tour: "maintenance-supervisor", text: "New to this page? “Make-ready” walks through it in 4 steps." };
+  it("is offered in the bubble, after work that's waiting", () => {
+    expect(pickNudge(input({ offer }))?.id).toBe("approvals");
+    expect(pickNudge(input({ offer, facts: NONE }))).toMatchObject({ id: "tour.offer", key: offer.tour, text: offer.text, action: { kind: "tour", tour: offer.tour } });
+  });
+  it("isn't offered without one", () => {
+    expect(pickNudge(input({ facts: NONE }))).toBeNull();
+  });
+});

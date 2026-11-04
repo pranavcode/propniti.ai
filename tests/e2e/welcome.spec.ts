@@ -93,3 +93,49 @@ test("Inbox is marked new until its first visit, which offers its tour once", as
   await expect(inbox.locator("[data-new-dot]")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("a page tour offer sits over the sidebar's foot, comes once a session, and never as a toast on a phone", async ({ page, browser }) => {
+  await go(page, `${BASE}/app/units`);
+  await page.evaluate(() => localStorage.removeItem("pn_tours"));
+  await reload(page);
+  const toast = page.locator("[data-feature-toast]");
+  await expect(toast).toBeVisible();
+  const box = (await toast.boundingBox())!;
+  const nav = (await page.getByRole("navigation", { name: "Main" }).boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(nav.x + nav.width);
+  await toast.getByRole("button", { name: "Not now" }).click();
+  await go(page, `${BASE}/app/maintenance/work-orders`);
+  await page.waitForTimeout(4000);
+  await expect(toast).toHaveCount(0);
+
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await as(phone, "daniel");
+  const p = await phone.newPage();
+  await go(p, `${BASE}/app/units`);
+  await p.waitForTimeout(4000);
+  await expect(p.locator("[data-feature-toast]")).toHaveCount(0);
+  await phone.close();
+});
+
+test("a tour offer held back in the bubble isn't spent until it's shown", async ({ browser }) => {
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await as(phone, "daniel");
+  // Nothing waiting, so the bubble's tip is the page's tour offer.
+  await phone.addInitScript(() => sessionStorage.setItem("pn_guide_facts", JSON.stringify({ persona: "daniel", at: Date.now(), facts: { approvals: 0, pastDue: { cents: 0, properties: 0 }, dataIssues: { critical: 0 } } })));
+  const p = await phone.newPage();
+  const errors = watch(p);
+  await go(p, `${BASE}/app/units`);
+  await p.locator("[data-table-search]").focus();
+  await expect(p.locator("[data-guide-pending]")).toBeVisible();
+  const spent = () => p.evaluate(() => ({ offers: JSON.parse(localStorage.getItem("pn_whats_new") ?? "{}").offers ?? {}, session: sessionStorage.getItem("pn_offer_session") }));
+  expect(await spent()).toEqual({ offers: {}, session: null });
+
+  await p.getByRole("button", { name: "Show a tip from Propniti" }).click();
+  const nudge = p.locator("[data-guide-nudge]");
+  await expect(nudge.getByRole("button", { name: "Start tour" })).toBeVisible();
+  const after = await spent();
+  expect(Object.values(after.offers)).toEqual(["shown"]);
+  expect(after.session).toBe("1");
+  expect(errors).toEqual([]);
+  await phone.close();
+});

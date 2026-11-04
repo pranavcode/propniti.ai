@@ -4,7 +4,7 @@ import { can } from "@/entities";
 import type { Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
-import { formatDate, formatMoney, formatPct, formatRelative, personaGreeting } from "@/lib/format";
+import { formatDate, formatMoney, formatNumber, formatPct, formatRelative, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { metrics } from "@/server/query";
 import { proposalOut } from "@/ai/views";
@@ -123,13 +123,13 @@ export default async function MaintenanceHome() {
             <div className="grid flex-1 md:grid-cols-3 md:divide-x">
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">What happened</h3>
-                <p className="text-[13px] leading-relaxed"><b className="font-semibold tabular-nums">{Number(c.open ?? 0)}</b> work orders open. <b className={cn("font-semibold tabular-nums", sla.v?.value != null && sla.v.value < 0.9 && "text-tone-danger")}>{formatPct(sla.v?.value ?? null, 1)}</b> of jobs due this month met their SLA{sla.v?.previous != null ? `, against ${formatPct(sla.v.previous, 1)} last month` : ""}.</p>
-                <p className="text-[12.5px] text-muted-foreground"><Bot className="mr-1 inline size-3.5" />{h?.overnight.runs ? `${h.overnight.runs} triage and compliance runs in the last day, ${h.overnight.proposals} proposals.` : "No agent runs in the last day in this workspace yet."}</p>
+                <p className="text-[13px] leading-relaxed"><b className="font-semibold tabular-nums">{formatNumber(Number(c.open ?? 0))}</b> work orders open. <b className={cn("font-semibold tabular-nums", sla.v?.value != null && sla.v.value < 0.9 && "text-tone-danger")}>{formatPct(sla.v?.value ?? null, 1)}</b> of jobs due this month met their SLA{sla.v?.previous != null ? `, against ${formatPct(sla.v.previous, 1)} last month` : ""}.</p>
+                <p className="text-[12.5px] text-muted-foreground"><Bot className="mr-1 inline size-3.5" />{h?.overnight.runs ? `${formatNumber(h.overnight.runs)} triage and compliance runs in the last day, ${formatNumber(h.overnight.proposals)} proposals.` : "No agent runs in the last day in this workspace yet."}</p>
               </div>
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">Needs you</h3>
                 <Link href="#triage" className="group flex items-baseline gap-2">
-                  <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{Number(c.untriaged ?? 0)}</span>
+                  <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{formatNumber(Number(c.untriaged ?? 0))}</span>
                   <span className="text-[12.5px] text-muted-foreground group-hover:text-foreground">new requests to dispatch <ArrowRight className="inline size-3" /></span>
                 </Link>
                 <Link href="/app/maintenance/work-orders?view=awaiting-approval" className="text-[12.5px] text-muted-foreground hover:text-foreground">{h?.invoices.length ?? 0} vendor invoices to approve ({formatMoney(invoiceTotal / 100, "whole")}) · {proposals.length} agent proposals</Link>

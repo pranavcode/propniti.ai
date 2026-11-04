@@ -29,4 +29,8 @@ describe("breadcrumb links", () => {
     const c = crumbsFor("/app/residents/r1", nav, "Jordan Lee", "/app/today");
     expect(c.map((x) => x.href)).toEqual(["/app/leasing/pipeline", "/app/residents", undefined]);
   });
+  it("shows a record id as written until the record's title arrives", () => {
+    expect(crumbsFor("/app/residents/L-10601", nav, null, "/app/today").at(-1)).toEqual({ label: "L-10601" });
+    expect(crumbsFor("/app/residents/L-10601", nav, "Wilson household", "/app/today").at(-1)).toEqual({ label: "Wilson household" });
+  });
 });

@@ -11,6 +11,7 @@ import { useShell } from "../shell/context";
 import { localTourStore } from "../tour/TourEngine";
 import type { TourDef } from "../tour/types";
 import { splashDue } from "../welcome/rules";
+import { offerShown, pendingOffer } from "../welcome/WhatsNew";
 import { blockedBy, dismissNudge, EXPLAIN_SELECTOR, PEEK_ROW_SELECTOR, pickNudge, recordShown, type GuideFacts, type GuidePrefs, type GuideSession, type Nudge, type TourState } from "./nudges";
 
 // The "Ask Propniti" chat bubble, bottom right on every staff page. It toggles the same assistant
@@ -33,6 +34,11 @@ function readSession(): GuideSession {
 }
 function writeSession(s: GuideSession) {
   try { sessionStorage.setItem(SESSION, JSON.stringify(s)); } catch { /* unavailable */ }
+}
+// Recorded only when the nudge is on screen, so a tour offer deferred behind a dot isn't spent.
+function markShown(n: Nudge) {
+  if (n.id === "tour.offer") offerShown(n.key);
+  writeSession(recordShown(readSession(), n, Date.now()));
 }
 
 // One small request, reused for two minutes across page views (and shared by concurrent callers).
@@ -162,16 +168,18 @@ export function ChatBubble() {
       const retry = () => { if (++tries < 6) timer = setTimeout(attempt, RETRY_MS); };
       const facts = await loadFacts(personaId);
       if (cancelled) return;
+      const offerSlot = pendingOffer(pathname, tours);
       const n = pickNudge({
         path: pathname, search: window.location.search, day: new Date().toLocaleDateString("en-CA"), nav: nav.flatMap((s) => s.items.map((i) => i.href)), facts, tours: tourStates(tours),
         page: { explain: !!document.querySelector(EXPLAIN_SELECTOR), peekRows: !!document.querySelector(PEEK_ROW_SELECTOR) }, prefs: p, session,
+        offer: offerSlot?.place === "bubble" ? offerSlot.offer : null,
       });
       if (!n) return;
       if (typing() || dialogOpen() || live.current.open || live.current.tourActive || toastShowing()) {
         setPending({ path: pathname, nudge: n });
         return retry();
       }
-      writeSession(recordShown(session, n, Date.now()));
+      markShown(n);
       setPending(null);
       setShown({ path: pathname, nudge: n });
     };
@@ -217,7 +225,7 @@ export function ChatBubble() {
     else document.querySelector<HTMLElement>(a.selector)?.click();
   };
   const reveal = (n: Nudge) => {
-    writeSession(recordShown(readSession(), n, Date.now()));
+    markShown(n);
     setPending(null);
     setShown({ path: pathname, nudge: n });
   };

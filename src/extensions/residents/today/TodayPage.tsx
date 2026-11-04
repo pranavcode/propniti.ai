@@ -13,7 +13,7 @@ import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
-import { formatDate, personaGreeting } from "@/lib/format";
+import { formatDate, formatNumber, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { asOfDate, scopeIn, sql } from "../server";
 import { AskToday } from "./AskToday";
@@ -86,10 +86,10 @@ export async function TodayPage() {
 
   // The briefing: what happened, then what needs you, most urgent first. Figures are computed here.
   const bullets: Bullet[] = [];
-  if (runN) bullets.push({ icon: Bot, tone: "ai", text: <>Agents ran <b>{runN}</b> time{runN === 1 ? "" : "s"} in the last 24 hours{runs.length ? ` (${runs.slice(0, 3).map((r) => `${agentName(r.agent_key)} ${r.n}`).join(", ")})` : ""} and handled <b>{autoN}</b> low-risk item{autoN === 1 ? "" : "s"} on their own.</>, href: "/app/ai/activity", cta: "See activity" });
-  if (needN) bullets.push({ icon: Zap, tone: highN ? "danger" : "warning", text: <><b>{needN}</b> proposal{needN === 1 ? " needs" : "s need"} your decision{highN ? <>, <b>{highN}</b> high risk</> : ""}.</>, href: "/app/ai/approvals", cta: "Review" });
-  if (lateCents) bullets.push({ icon: CircleDollarSign, tone: over30 ? "danger" : "warning", text: <><b>{lateHouseholds}</b> household{lateHouseholds === 1 ? " owes" : "s owe"} <b>{usd(lateCents)}</b> past due, <b>{usd(over30)}</b> of it over 30 days{worst && late.length > 1 ? <>; most at {worst.name} ({usd(Number(worst.total))})</> : ""}.</>, href: "/app/receivables/delinquency", cta: "Delinquency" });
-  if (w.late || w.urgent) bullets.push({ icon: Wrench, tone: w.late ? "danger" : "warning", text: <><b>{w.open}</b> open work orders: <b>{w.urgent}</b> emergency or urgent, <b>{w.late}</b> past SLA.</>, href: `/app/maintenance/work-orders?view=past-sla`, cta: "Work orders" });
+  if (runN) bullets.push({ icon: Bot, tone: "ai", text: <>Agents ran <b>{formatNumber(runN)}</b> time{runN === 1 ? "" : "s"} in the last 24 hours{runs.length ? ` (${runs.slice(0, 3).map((r) => `${agentName(r.agent_key)} ${r.n}`).join(", ")})` : ""} and handled <b>{formatNumber(autoN)}</b> low-risk item{autoN === 1 ? "" : "s"} on their own.</>, href: "/app/ai/activity", cta: "See activity" });
+  if (needN) bullets.push({ icon: Zap, tone: highN ? "danger" : "warning", text: <><b>{formatNumber(needN)}</b> proposal{needN === 1 ? " needs" : "s need"} your decision{highN ? <>, <b>{formatNumber(highN)}</b> high risk</> : ""}.</>, href: "/app/ai/approvals", cta: "Review" });
+  if (lateCents) bullets.push({ icon: CircleDollarSign, tone: over30 ? "danger" : "warning", text: <><b>{formatNumber(lateHouseholds)}</b> household{lateHouseholds === 1 ? " owes" : "s owe"} <b>{usd(lateCents)}</b> past due, <b>{usd(over30)}</b> of it over 30 days{worst && late.length > 1 ? <>; most at {worst.name} ({usd(Number(worst.total))})</> : ""}.</>, href: "/app/receivables/delinquency", cta: "Delinquency" });
+  if (w.late || w.urgent) bullets.push({ icon: Wrench, tone: w.late ? "danger" : "warning", text: <><b>{formatNumber(w.open)}</b> open work orders: <b>{formatNumber(w.urgent)}</b> emergency or urgent, <b>{formatNumber(w.late)}</b> past SLA.</>, href: `/app/maintenance/work-orders?view=past-sla`, cta: "Work orders" });
   if (leases.length) bullets.push({ icon: CalendarClock, tone: soon30 ? "warning" : "info", text: <><b>{leases.length}</b> lease{leases.length === 1 ? " ends" : "s end"} in the next 60 days with no renewal offer, <b>{soon30}</b> within 30 days.</>, href: "/app/leases?view=expiring-60", cta: "Leases" });
   if (unreadN) bullets.push({ icon: MessageSquare, tone: "info", text: <><b>{unreadN}</b> unread conversation{unreadN === 1 ? "" : "s"} from residents, vendors and owners.</>, href: "/app/communications/inbox?unread=1", cta: "Inbox" });
   if (issueN) bullets.push({ icon: HeartPulse, tone: "warning", text: <><b>{issueN}</b> data issue{issueN === 1 ? "" : "s"} on residents and leases, such as {issues.slice(0, 2).map((i) => i.rule_id.split(".")[1].replace(/_/g, " ")).join(" and ")}. Each has a suggested fix.</>, href: "/app/data-health", cta: "Fix" });

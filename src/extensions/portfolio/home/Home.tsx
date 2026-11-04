@@ -4,7 +4,7 @@ import { ArrowRight, Bot, Calculator, ChevronRight, CircleAlert, FlaskConical, I
 import type { Session } from "@/auth/session";
 import type { Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatPct, personaGreeting } from "@/lib/format";
+import { formatMoney, formatNumber, formatPct, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
@@ -58,10 +58,10 @@ function Briefing({ b, m, rows, scope }: { b: Awaited<ReturnType<typeof briefing
         <div className="flex flex-col gap-2 px-4 py-3">
           <h3 className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">Needs you</h3>
           <Link href="/app/ai/approvals" className="group flex items-baseline gap-2">
-            <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{b.queue.total}</span>
+            <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{formatNumber(b.queue.total)}</span>
             <span className="text-[12.5px] text-muted-foreground group-hover:text-foreground">{b.queue.total === 1 ? "proposal waits" : "proposals wait"} for a decision{highRisk ? `, ${highRisk} high risk` : ""} <ArrowRight className="inline size-3" /></span>
           </Link>
-          <p className="text-[12.5px] text-muted-foreground">{Number(b.queue.counts.auto_handled ?? 0)} handled automatically inside policy · {Number(b.queue.counts.waiting ?? 0)} waiting on owners</p>
+          <p className="text-[12.5px] text-muted-foreground">{formatNumber(Number(b.queue.counts.auto_handled ?? 0))} handled automatically inside policy · {formatNumber(Number(b.queue.counts.waiting ?? 0))} waiting on owners</p>
         </div>
         <div className="flex flex-col gap-2 px-4 py-3">
           <h3 className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">Watch</h3>

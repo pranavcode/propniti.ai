@@ -15,6 +15,9 @@ describe("format", () => {
 
   it("formats numbers, percents and deltas", () => {
     expect(formatNumber(3312)).toBe("3,312");
+    expect(formatNumber(3620)).toBe("3,620");
+    expect(formatNumber(1_234_567)).toBe("1,234,567");
+    expect(formatNumber(999)).toBe("999");
     expect(formatNumber(48_200, { compact: true })).toBe("48.2K");
     expect(formatPct(0.953)).toBe("95.3%");
     expect(formatPct(95)).toBe("95%");
