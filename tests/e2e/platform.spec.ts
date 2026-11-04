@@ -112,3 +112,29 @@ test("sidebar marks only AI-powered pages with a sparkle", async ({ context, pag
     await expect(link.locator("[data-ai-mark]")).toHaveCount(0);
   }
 });
+
+// Skip to content, the welcome splash and the sidebar all target #main, so the shell's <main> is the
+// only main landmark and keeps its id after hydration.
+for (const path of ["/app/today", "/app/copilot"]) {
+  test(`${path} keeps one #main landmark after load`, async ({ context, page }) => {
+    await as(context, "daniel");
+    await go(page, `${BASE}${path}`);
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.locator("main")).toHaveAttribute("id", "main");
+    expect(await page.evaluate(() => document.getElementById("main")?.tagName)).toBe("MAIN");
+  });
+}
+
+// The Copilot chat fills the space under the page header: the composer stays fully on screen and
+// the message list scrolls on its own, also under a sample conversation's banner.
+for (const path of ["/app/copilot", "/app/copilot?thread=smp-thr-001"]) for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  test(`${path} composer is fully visible at ${viewport.width}x${viewport.height}`, async ({ context, page }) => {
+    await page.setViewportSize(viewport);
+    await as(context, "daniel");
+    await go(page, `${BASE}${path}`);
+    const box = page.locator("main").getByRole("textbox").last();
+    const send = page.locator("main").getByRole("button", { name: "Send", exact: true }).last();
+    await expect(box).toBeInViewport({ ratio: 1 });
+    await expect(send).toBeInViewport({ ratio: 1 });
+  });
+}

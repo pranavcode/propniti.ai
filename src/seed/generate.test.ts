@@ -221,7 +221,8 @@ describe("seed generator", () => {
   it("seeds platform usage per org and a change history for policies and state rules", () => {
     expect(new Set(T.org_usage_monthly.map((u) => u.org_id)).size).toBe(5);
     const summit = T.org_usage_monthly.filter((u) => u.org_id === "org-summit");
-    expect(summit.reduce((s, u) => s + (u.agent_runs as number), 0)).toBe(T.agent_runs.filter((r) => (r.started_at as string) >= "2025-09").length);
+    // Sample Copilot conversations (smp-…) are added after usage is counted.
+    expect(summit.reduce((s, u) => s + (u.agent_runs as number), 0)).toBe(T.agent_runs.filter((r) => (r.started_at as string) >= "2025-09" && !String(r.id).startsWith("smp-")).length);
     const changes = T.audit.filter((a) => ["approval_policies", "late_fee_policies", "state_rules"].includes(a.entity_type as string));
     expect(changes.length).toBeGreaterThanOrEqual(12);
     for (const a of changes) expect(a.before_json, a.id as string).not.toBeNull();

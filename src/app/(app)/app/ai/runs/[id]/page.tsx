@@ -18,11 +18,11 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const run = r.run as Record<string, unknown>;
   const trigger = TRIGGER[String(run.trigger_kind)] ?? "Run";
   return (
-    <main>
+    <div>
       <PageHeader icon={<Activity />} title={`${agentName(String(run.agent_key))} run`} description="Every step the agent took: what it looked up, what the model said, and what it proposed." meta={<><span>{trigger}</span><span>Run {String(run.id)}</span></>} />
       <div className="mt-5">
         <RunView runId={id} initial={JSON.parse(JSON.stringify(r))} />
       </div>
-    </main>
+    </div>
   );
 }

@@ -128,7 +128,7 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
   const aiTotal = m.series.ai.reduce((s, p) => s + Number(p.hours ?? 0), 0);
 
   return (
-    <main>
+    <div>
       <PageHeader
         title={personaGreeting(persona)}
         meta={<><span>{persona.title}</span><span>·</span><span>{persona.scope.label}</span><span>·</span><span>Books closed through {monthLong(LAST_CLOSED)}</span></>}
@@ -188,7 +188,7 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
           <div data-tour="approvals"><ApprovalQueue rows={b.queue.rows as ProposalJson[]} total={b.queue.total} /></div>
         </Section>
       </PageBody>
-    </main>
+    </div>
   );
 }
 

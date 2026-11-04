@@ -23,11 +23,11 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   const [type, id] = sp.record?.split(/\/(.*)/) ?? [];
   const route = type && id ? getEntity(type)?.route : undefined;
   return (
-    <main>
+    <div>
       <PageHeader icon={<ShieldCheck />} title="Approvals" description="Agents propose, people approve. Each item shows why, the records it used, its confidence and the run that produced it. Anything that moves money or carries legal risk waits for you." />
       <div className="mt-4">
         <ApprovalsInbox initial={JSON.parse(JSON.stringify(initial))} initialQueue={queue} initialFilters={focus ? {} : filters} focusId={focus?.id} missing={!focus && (sp.proposal || sp.record) ? { href: route && `${route}/${encodeURIComponent(id)}` } : undefined} />
       </div>
-    </main>
+    </div>
   );
 }

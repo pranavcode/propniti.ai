@@ -39,7 +39,7 @@ export default async function TasksPage({ searchParams }: Props) {
   const { actor } = session;
   const def = getEntity("tasks");
   if (!def || !can(actor.role, "read", "tasks")) {
-    return <main className="p-6"><EmptyState kind="tasks" title="Tasks aren't part of your role" description="Switch role from your avatar menu to see a work list." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState kind="tasks" title="Tasks aren't part of your role" description="Switch role from your avatar menu to see a work list." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor };
   const view = taskView(sp.get("due"));
@@ -63,7 +63,7 @@ export default async function TasksPage({ searchParams }: Props) {
     f.key === "entity_type" && "options" in f ? { ...f, options: f.options.map((o) => ({ ...o, label: getEntity(o.value)?.label.many ?? o.value })) } : f);
 
   return (
-    <main>
+    <div>
       <PageHeader
         icon={<CheckSquare />}
         title="My tasks"
@@ -89,6 +89,6 @@ export default async function TasksPage({ searchParams }: Props) {
           today={AS_OF}
         />
       </PageBody>
-    </main>
+    </div>
   );
 }

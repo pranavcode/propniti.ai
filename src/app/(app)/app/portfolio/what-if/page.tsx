@@ -25,7 +25,7 @@ export default async function WhatIfPage({ searchParams }: Props) {
   const sp = await searchParams;
   const session = await currentSession();
   if (!can(session.actor.role, "read", "properties")) {
-    return <main className="p-6"><EmptyState title="Scenarios aren't part of your role" description="Switch role from your avatar menu to model rent, occupancy and expense changes." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="Scenarios aren't part of your role" description="Switch role from your avatar menu to model rent, occupancy and expense changes." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const { rows, from, to } = await loadBaselines(getPlatform().db, session.ws, session.actor.propertyIds);
   const property = typeof sp.property === "string" && rows.some((r) => r.property_id === sp.property) ? sp.property : null;
@@ -36,7 +36,7 @@ export default async function WhatIfPage({ searchParams }: Props) {
   const period = `${formatMonth(`${from}-01T12:00:00Z`)} – ${formatMonth(`${to}-01T12:00:00Z`)}`;
 
   return (
-    <main>
+    <div>
       <PageHeader
         icon={<FlaskConical />}
         title="What-if scenarios"
@@ -47,6 +47,6 @@ export default async function WhatIfPage({ searchParams }: Props) {
       <PageBody>
         <Simulator key={`${scope.kind}:${property ?? metro ?? ""}`} baselines={rows} initialScope={scope} initialLevers={levers} period={period} />
       </PageBody>
-    </main>
+    </div>
   );
 }

@@ -7,15 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AIBadge, AskBox } from "@/components/app/ai";
 import type { AskReply } from "../ask";
+import type { SampleThread } from "../samples";
 
 export const ASK_EVENT = "propniti:ask";
 export const askPortal = (q: string) => window.dispatchEvent(new CustomEvent(ASK_EVENT, { detail: q }));
 
-type Turn = { q: string; a?: AskReply; error?: string };
+type Turn = { q: string; a?: AskReply; error?: string; sample?: boolean };
 
 // The portal's AI help: a floating button and a side panel. Anything on the page can open it with
 // a question (askPortal / the ASK_EVENT event). Answers show what was looked up and their source.
-export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: { endpoint: string; prompts: string[]; title?: string }) {
+export function PortalAssistant({ endpoint, prompts, samples = [], title = "Ask Propniti" }: { endpoint: string; prompts: string[]; samples?: SampleThread[]; title?: string }) {
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -69,6 +70,16 @@ export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: {
                 {prompts.map((p) => (
                   <button key={p} type="button" onClick={() => ask(p)} className="block w-full rounded-lg border bg-card px-3 py-2.5 text-left text-[13px] transition-colors hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">{p}</button>
                 ))}
+                {!!samples.length && (
+                  <>
+                    <p className="pt-3 text-[12.5px] font-medium text-muted-foreground">Sample conversations</p>
+                    {samples.map((s) => (
+                      <button key={s.id} type="button" onClick={() => { count.current = s.turns.length; setTurns(s.turns.map((t) => ({ ...t, sample: true }))); }} className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">
+                        <span className="min-w-0 flex-1 truncate">{s.title}</span><SampleTag />
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
             {turns.map((t, i) => <TurnView key={i} t={t} />)}
@@ -85,6 +96,10 @@ export function PortalAssistant({ endpoint, prompts, title = "Ask Propniti" }: {
   );
 }
 
+function SampleTag() {
+  return <span title="A sample conversation that comes with the demo data. Its answers were computed from that data." className="rounded-sm border px-1 text-[10px] leading-[14px] font-medium text-muted-foreground">Sample</span>;
+}
+
 function TurnView({ t }: { t: Turn }) {
   const [show, setShow] = useState(false);
   return (
@@ -93,7 +108,7 @@ function TurnView({ t }: { t: Turn }) {
       {t.error && <p className="rounded-lg border border-tone-danger/30 bg-tone-danger/5 px-3 py-2 text-[13px] text-tone-danger">{t.error}</p>}
       {t.a && (
         <div className="rounded-2xl rounded-bl-sm border bg-card px-3 py-2.5">
-          <div className="mb-1.5 flex items-center justify-between gap-2"><AIBadge source={t.a.source} model={t.a.model} size="xs" /></div>
+          <div className="mb-1.5 flex items-center justify-between gap-2"><AIBadge source={t.a.source} model={t.a.model} size="xs" />{t.sample && <SampleTag />}</div>
           <p className="text-[13.5px] leading-relaxed whitespace-pre-line text-pretty">{t.a.answer}</p>
           {!!t.a.links?.length && (
             <div className="mt-2 flex flex-wrap gap-1.5">

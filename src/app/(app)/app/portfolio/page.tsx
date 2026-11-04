@@ -30,7 +30,7 @@ export default async function PortfolioDashboard() {
   const session = await currentSession();
   const q = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   if (!can(session.actor.role, "read", "properties")) {
-    return <main className="p-6"><EmptyState title="The portfolio isn't part of your role" description="Switch role from your avatar menu to see the portfolio dashboard." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="The portfolio isn't part of your role" description="Switch role from your avatar menu to see the portfolio dashboard." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const closed = { month: LAST_CLOSED, months: 12 };
   const settle = <T,>(p: Promise<T>) => p.then((v) => v, () => null);
@@ -50,7 +50,7 @@ export default async function PortfolioDashboard() {
   const role = session.actor.role;
 
   return (
-    <main>
+    <div>
       <PageHeader
         title="Portfolio"
         meta={<><span>{session.actor.scope.label}</span><span>·</span><span>{props?.total ?? 0} properties</span><span>·</span><span>{monthLong(LAST_CLOSED)} close</span></>}
@@ -109,6 +109,6 @@ export default async function PortfolioDashboard() {
           ) : <EmptyState kind="table" title="No properties in your scope" description="Properties you manage appear here with photos, occupancy and NOI." />}
         </Section>
       </PageBody>
-    </main>
+    </div>
   );
 }
