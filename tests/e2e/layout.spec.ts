@@ -120,3 +120,41 @@ for (const [persona, url, tab] of [["tom", "/app/compliance/insurance", "Active"
     await expect(target).toHaveAttribute("aria-selected", "true");
   });
 }
+
+// Import source step: the tool tiles keep their own space with the Ask panel open beside them.
+async function tilesClear(page: Page) {
+  const boxes = await page.locator("[data-tool-tile]").evaluateAll((els) => els.map((el) => {
+    const r = el.getBoundingClientRect();
+    const radio = el.querySelector("[role=radio]") as HTMLElement;
+    return { l: r.left, r: r.right, t: r.top, b: r.bottom, clipped: radio.scrollWidth > radio.clientWidth + 1 };
+  }));
+  expect(boxes.length).toBe(10);
+  for (const [i, a] of boxes.entries()) {
+    expect(a.clipped).toBe(false);
+    for (const b of boxes.slice(i + 1)) expect(a.r <= b.l + 0.5 || b.r <= a.l + 0.5 || a.b <= b.t + 0.5 || b.b <= a.t + 0.5).toBe(true);
+  }
+}
+
+for (const width of [1440, 1280]) {
+  test(`import tool tiles don't overlap with the Ask panel open at ${width}px`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await as(context, "daniel");
+    await go(page, `${BASE}/app/settings/import`);
+    const dock = page.getByRole("complementary", { name: "Ask Propniti" });
+    if (!(await dock.isVisible())) await page.keyboard.press("ControlOrMeta+j");
+    await expect(dock).toBeVisible();
+    await tilesClear(page);
+  });
+}
+
+for (const [tool, files] of [["AppFolio", 3], ["Buildium", 3]] as const) {
+  test(`one click on the first import step loads the ${tool} sample files`, async ({ page, context }) => {
+    await as(context, "daniel");
+    await go(page, `${BASE}/app/settings/import`);
+    await tilesClear(page);
+    await page.getByRole("button", { name: `Try ${tool} sample files` }).click();
+    await expect(page.getByRole("button", { name: `Load ${tool} sample files` })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(files);
+    await expect(page.getByText(new RegExp(`matches the typical ${tool} `)).first()).toBeVisible();
+  });
+}
