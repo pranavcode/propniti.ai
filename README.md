@@ -21,7 +21,7 @@ This README describes v2 (branch `v2-saas`). Product goals and principles are in
 
 ## Personas
 
-Pick a persona on the sign-in page (`/login`). There are no passwords. Each persona sees only its own scope.
+Sign in on `/login` with a demo account (`<persona id>@propniti.demo`, for example `marcus@propniti.demo`; every account uses the password `propniti-demo`), or click a person's card to fill the form. `/login?as=<id>` prefills a person and `next` deep links are kept. Each persona sees only its own scope.
 
 | Persona | Role | Scope | Lands on |
 | --- | --- | --- | --- |
@@ -118,7 +118,7 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 
 Measured on 2026-11-04 at commit `a5fc28d`.
 
-- **Vitest:** 580 tests in 68 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
+- **Vitest:** 590 tests in 69 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
 - **Playwright:** 44 browser tests in 10 flows in `tests/e2e/`, one per module plus portals and public listings. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches. `src/ai` and `src/extensions` are outside that scope.
 
@@ -168,7 +168,7 @@ Data is a SQLite file at `DATABASE_PATH` (default `/data/propniti.db`), migrated
 
 ## Limits of this demo
 
-- Personas are picked from a list. There are no accounts or passwords, and anyone can act as any persona.
+- Personas are demo accounts with one published password (`propniti-demo`), or a one-click card. There are no real accounts or stored passwords, and anyone can act as any persona.
 - Payments are simulated in SQL; transfers settle 8 seconds after they start. SMS, email and voice are not sent.
 - The v1 API routes (`/api/state`, `/api/work-orders/*` and others) are still mounted but read tables the v2 schema drops.
 - See [docs/security-review.md](docs/security-review.md) for the controls and known gaps.

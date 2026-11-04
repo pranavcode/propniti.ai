@@ -5,8 +5,8 @@ import { Wordmark } from "@/components/Logo";
 import { MK_VARS } from "./ui";
 
 // Shell for the small account pages (signup, forgot password): content on the left, property
-// photography on the right. The demo has no accounts, so these pages explain that and route to the
-// persona picker.
+// photography on the right. The demo has no real accounts, so these pages explain the shared demo
+// password and route to the sign-in page.
 export function AuthShell({ title, subtitle, children }: { title: React.ReactNode; subtitle: React.ReactNode; children: React.ReactNode }) {
   return (
     <div style={MK_VARS} className="grid min-h-[100dvh] grid-cols-1 bg-(--mk-bg) font-sans text-(--mk-text) antialiased lg:grid-cols-[1fr_1.1fr]">
