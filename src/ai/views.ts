@@ -5,7 +5,7 @@ import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
 import { computeFix, proposalSource, type AiSource } from "./rules";
 import { nextRun } from "./cron";
-import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx } from "./data";
+import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
 import { modelInfo } from "./providers";
 
@@ -172,6 +172,29 @@ export function healthScore(parts: { weighted: number; records: number }[], floo
   return Math.max(0, Math.min(100, Math.round(100 - (300 * shares.reduce((x, y) => x + y, 0)) / shares.length)));
 }
 
+// Records checked per entity, in total and per property (for tables scoped by property). Counting
+// reads every row of each table, and record counts barely move, so they are cached per workspace
+// and scope for a minute; the open-issue counts above stay live.
+type RecordCount = { entity: Table; total: number; byProp: Map<string, number>; scoped: boolean };
+const COUNTS_TTL_MS = 60_000;
+const countCache = new WeakMap<object, Map<string, { at: number; v: Promise<RecordCount[]> }>>();
+function recordCounts(data: DataCtx, entities: Table[]) {
+  const cache = countCache.get(data.db) ?? countCache.set(data.db, new Map()).get(data.db)!;
+  const key = JSON.stringify([data.ws, data.actor.propertyIds, entities]);
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < COUNTS_TTL_MS) return hit.v;
+  const v = Promise.all(entities.map(async (t) => {
+    const col = TABLES[t];
+    const total = (await sql<{ n: number }>(data, `SELECT count(*) AS n FROM {${t}}`))[0]?.n ?? 0;
+    const byProp = col ? await sql<{ p: string; n: number }>(data, `SELECT ${col} AS p, count(*) AS n FROM {${t}} GROUP BY ${col}`) : [];
+    return { entity: t, total, byProp: new Map(byProp.map((r) => [r.p, r.n])), scoped: !!col };
+  }));
+  if (cache.size >= 200) cache.clear();
+  cache.set(key, { at: Date.now(), v });
+  v.catch(() => cache.delete(key));
+  return v;
+}
+
 export async function dataHealth(data: DataCtx) {
   const [issues, rules, props] = await Promise.all([
     sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, "SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' GROUP BY rule_id, entity_type, property_id, severity"),
@@ -180,13 +203,7 @@ export async function dataHealth(data: DataCtx) {
     sql<{ id: string; name: string; metro: string }>(data, "SELECT id, name, metro FROM {properties} ORDER BY id"),
   ]);
   const entities = [...new Set([...rules.map((r) => r.entity_type), ...issues.map((i) => i.entity_type)])].filter(isTable);
-  // Records checked per entity, in total and per property (for tables scoped by property).
-  const counts = await Promise.all(entities.map(async (t) => {
-    const col = TABLES[t];
-    const total = (await sql<{ n: number }>(data, `SELECT count(*) AS n FROM {${t}}`))[0]?.n ?? 0;
-    const byProp = col ? await sql<{ p: string; n: number }>(data, `SELECT ${col} AS p, count(*) AS n FROM {${t}} GROUP BY ${col}`) : [];
-    return { entity: t, total, byProp: new Map(byProp.map((r) => [r.p, r.n])), scoped: !!col };
-  }));
+  const counts = await recordCounts(data, entities);
   const weightOf = (rows: typeof issues) => rows.reduce((s, r) => s + issueWeight(r.rule_id, r.severity) * r.n, 0);
   const count = (rows: typeof issues) => rows.reduce((s, r) => s + r.n, 0);
 
