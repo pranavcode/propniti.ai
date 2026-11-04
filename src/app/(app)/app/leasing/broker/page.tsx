@@ -49,7 +49,7 @@ export default async function BrokerDesk() {
       />
       <PageBody>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <Collapsible id="briefing" label="Briefing" className="relative overflow-hidden rounded-lg border bg-card" aria-labelledby="brief-h">
+          <Collapsible id="briefing" label="Briefing" className="peer/brief xl:data-collapsed:col-span-full relative overflow-hidden rounded-lg border bg-card" aria-labelledby="brief-h">
             <div className="flex items-center gap-2 border-b px-4 py-2.5 group-data-collapsed/collapse:border-b-0">
               <Sparkles className="size-3.5 text-tone-ai" />
               <h2 id="brief-h" className="shrink-0 text-[13px] font-semibold">Briefing</h2>
@@ -69,7 +69,7 @@ export default async function BrokerDesk() {
             </div>
             </CollapseBody>
           </Collapsible>
-          <div className="grid grid-cols-2 gap-3 self-start">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
+          <div className="grid grid-cols-2 gap-3 self-start xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid-cols-4">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>
 
         <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>

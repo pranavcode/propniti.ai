@@ -109,7 +109,7 @@ export async function TodayPage() {
       </header>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <Collapsible id="briefing" label="Your briefing" className="rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_60%)]" data-tour="briefing" aria-labelledby="briefing-h">
+        <Collapsible id="briefing" label="Your briefing" className="peer/brief xl:data-collapsed:col-span-full rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_60%)]" data-tour="briefing" aria-labelledby="briefing-h">
           <header className="flex items-center gap-2 border-b border-tone-ai/15 px-4 py-2.5 group-data-collapsed/collapse:border-b-0">
             <Sparkles className="size-4 text-tone-ai" />
             <h2 id="briefing-h" className="shrink-0 text-[13.5px] font-semibold">Your briefing</h2>
@@ -133,7 +133,7 @@ export async function TodayPage() {
           </CollapseBody>
         </Collapsible>
 
-        <aside className="flex flex-col gap-3">
+        <aside className="flex flex-col gap-3 xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid xl:peer-data-collapsed/brief:grid-cols-2 xl:peer-data-collapsed/brief:items-start">
           <Collapsible id="conversations" label="Conversations waiting" className="rounded-lg border bg-card">
             <header className="flex items-center gap-2 border-b px-3 py-2 group-data-collapsed/collapse:border-b-0">
               <h2 className="flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold"><MessageSquare className="size-3.5 text-muted-foreground" />Conversations waiting</h2>

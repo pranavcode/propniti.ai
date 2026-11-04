@@ -88,7 +88,7 @@ export default async function MaintenanceHome() {
         {failed && <ErrorBanner title="Some figures didn't load" message="The rest of the page is current. Reload to try again." />}
 
         <div className="grid gap-3 xl:grid-cols-12">
-          <Collapsible id="briefing" label="Briefing" data-tour="mx-briefing" className="flex flex-col rounded-xl border bg-card xl:col-span-8">
+          <Collapsible id="briefing" label="Briefing" data-tour="mx-briefing" className="peer/brief flex flex-col rounded-xl border bg-card xl:col-span-8 xl:data-collapsed:col-span-full">
             <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3 group-data-collapsed/collapse:flex-nowrap group-data-collapsed/collapse:border-b-0">
               <span className="flex size-6 items-center justify-center rounded-md bg-tone-ai/10 text-tone-ai"><Sparkles className="size-3.5" /></span>
               <h2 className="shrink-0 text-[13.5px] font-semibold">Briefing</h2>
@@ -124,7 +124,7 @@ export default async function MaintenanceHome() {
             </div>
             </CollapseBody>
           </Collapsible>
-          <div className="flex flex-col gap-3 xl:col-span-4">
+          <div className="flex flex-col gap-3 xl:col-span-4 xl:peer-data-collapsed/brief:col-span-full">
             <MxAsk suggestions={persona.role === "maintenance_supervisor" ? persona.assistantPrompts : ["Which work orders will breach SLA today?", "Which vendors have expiring insurance?", "How many units are not rent-ready?"]} />
             <div className="flex flex-wrap gap-1.5">
               <Button asChild size="sm" variant="outline"><Link href={`/app/maintenance/work-orders?f.status=New`}>Unassigned work orders</Link></Button>

@@ -138,8 +138,8 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
       <PageBody>
         {failed && <ErrorBanner title="Some figures didn't load" message="The rest of the page is current. Reload to try again." />}
         <div className="grid gap-3 xl:grid-cols-12">
-          <div className="xl:col-span-8"><Briefing b={b} m={m} rows={rows} scope={persona.scope.label.split(" · ")[0]} /></div>
-          <div className="flex flex-col gap-3 xl:col-span-4" data-tour="ask-home">
+          <div className="peer/brief xl:col-span-8 xl:has-[>[data-collapsed]]:col-span-full"><Briefing b={b} m={m} rows={rows} scope={persona.scope.label.split(" · ")[0]} /></div>
+          <div className="flex flex-col gap-3 xl:col-span-4 xl:peer-has-[>[data-collapsed]]/brief:col-span-full" data-tour="ask-home">
             <HomeAsk suggestions={persona.assistantPrompts} />
             <QuickActions actions={persona.quickActions} extra={[{ label: `Approvals${b.queue.total ? ` (${b.queue.total})` : ""}`, href: "/app/ai/approvals", icon: Inbox }]} />
           </div>

@@ -56,7 +56,7 @@ export async function FinanceHome({ session }: { session: Session }) {
       />
       <PageBody>
         <div className="grid gap-3 xl:grid-cols-12">
-          <Collapsible id="briefing" label="Briefing" data-tour="briefing" className="flex flex-col rounded-xl border bg-card xl:col-span-8">
+          <Collapsible id="briefing" label="Briefing" data-tour="briefing" className="peer/brief flex flex-col rounded-xl border bg-card xl:col-span-8 xl:data-collapsed:col-span-full">
             <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3 group-data-collapsed/collapse:flex-nowrap group-data-collapsed/collapse:border-b-0">
               <span className="flex size-6 items-center justify-center rounded-md bg-tone-ai/10 text-tone-ai"><Sparkles className="size-3.5" /></span>
               <h2 className="shrink-0 text-[13.5px] font-semibold">Briefing</h2>
@@ -93,7 +93,7 @@ export async function FinanceHome({ session }: { session: Session }) {
             </div>
             </CollapseBody>
           </Collapsible>
-          <div className="flex flex-col gap-3 xl:col-span-4" data-tour="ask-home">
+          <div className="flex flex-col gap-3 xl:col-span-4 xl:peer-data-collapsed/brief:col-span-full" data-tour="ask-home">
             <HomeAsk suggestions={persona.assistantPrompts} />
             <div className="flex flex-wrap gap-1.5">
               <Button asChild size="sm" variant="outline"><Link href="/app/ai/approvals?agent=ap"><Inbox />Approvals{h.queue.total ? ` (${h.queue.total})` : ""}</Link></Button>
