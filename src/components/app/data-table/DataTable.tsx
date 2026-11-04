@@ -205,6 +205,7 @@ export function DataTable(props: DataTableProps) {
   const [clickedTab, setClickedTab] = useState<string | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const tabEdges = useScrollEdges(tabsRef);
+  const tableEdges = useScrollEdges(scrollRef);
   const tabTotal = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
 
   const pages = Math.max(1, Math.ceil(total / size));
@@ -342,7 +343,7 @@ export function DataTable(props: DataTableProps) {
                       const meta = cell.column.columnDef.meta as DataColumn | undefined;
                       const content = flexRender(cell.column.columnDef.cell, cell.getContext());
                       return (
-                        <td key={cell.id} className={cn("max-w-[360px] px-3 align-middle", meta && isRight(meta) && "text-right", cell.column.id === "__select" && "w-9 pr-0")}>
+                        <td key={cell.id} style={meta?.width ? { maxWidth: meta.width } : undefined} className={cn("max-w-[360px] px-3 align-middle", meta && isRight(meta) && "text-right", cell.column.id === "__select" && "w-9 pr-0")}>
                           <div className={cn("flex min-w-0 items-center", meta && isRight(meta) && "justify-end")}>
                             {meta?.primary && rowHref && r.original.id != null
                               ? <PeekLink entity={entity} id={String(r.original.id)} href={fillTemplate(rowHref, r.original)} className="min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{content}</PeekLink>
@@ -380,6 +381,7 @@ export function DataTable(props: DataTableProps) {
               : <EmptyState kind="table" title={empty?.title ?? `No ${label.many.toLowerCase()} yet`} description={empty?.description} action={empty?.action} />
           )}
         </div>
+        <EdgeFades {...tableEdges} />
       </div>
 
       {total > 0 && (
