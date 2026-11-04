@@ -8,7 +8,7 @@ import { notFoundView } from "./not-found/view";
 export function NotInScope({ scope, name, home, lists }: { scope: string; name: string; home: string; lists: string[] }) {
   const { record, list } = notFoundView(usePathname() ?? "", lists);
   return (
-    <main className="px-4 pt-6 md:px-6">
+    <div className="px-4 pt-6 md:px-6">
       <EmptyState
         kind="filtered"
         title={record ? "This record isn't in your scope or doesn't exist" : "This page doesn't exist or isn't part of your role"}
@@ -18,6 +18,6 @@ export function NotInScope({ scope, name, home, lists }: { scope: string; name: 
         action={list ? { label: "Back to the list", href: list } : { label: "Go to your home", href: home }}
         secondary={list ? { label: "Go to your home", href: home } : undefined}
       />
-    </main>
+    </div>
   );
 }

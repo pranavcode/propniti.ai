@@ -18,7 +18,7 @@ export default async function DataHealthPage({ searchParams }: { searchParams: P
   const filters = healthFilters(sp);
   const [health, issues] = await Promise.all([dataHealth(data), issuesPage(data, { ...filters, page: Number(sp.page) || 1 })]);
   return (
-    <main>
+    <div>
       <PageHeader
         icon={<HeartPulse />}
         title="Data health"
@@ -28,6 +28,6 @@ export default async function DataHealthPage({ searchParams }: { searchParams: P
       <div className="mt-5">
         <DataHealthCenter health={JSON.parse(JSON.stringify(health))} issues={JSON.parse(JSON.stringify(issues))} filters={filters} />
       </div>
-    </main>
+    </div>
   );
 }

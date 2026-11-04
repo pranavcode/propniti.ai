@@ -25,9 +25,9 @@ export async function settingsSession(): Promise<{ session: Session; ctx: QueryC
 
 export function NoAccess({ what = "Organization settings" }: { what?: string }) {
   return (
-    <main className="p-6">
+    <div className="p-6">
       <EmptyState kind="table" title={`${what} aren't part of your role`} description="Admins change org settings; principals and regional managers can read them. Switch role from your avatar menu to see this page as an admin." action={{ label: "Your notification settings", href: "/app/settings/notifications" }} secondary={{ label: "Go to your home", href: "/app" }} />
-    </main>
+    </div>
   );
 }
 
