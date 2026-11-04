@@ -6,7 +6,7 @@ import type { Persona } from "@/auth/personas";
 import { addDays, money } from "./rules";
 import { columns, insert, newId, parseJson, sql, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
-import { openRun, runWithContext } from "./orchestrator";
+import { openRun, runNow, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
 import { amountsIn } from "./tools/write";
 import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
@@ -32,6 +32,8 @@ export type AssistantReply = {
   citations: Citation[]; trace: TraceItem[];
   // decision: set when the proposal was approved or rejected after the reply (restored threads).
   proposals: { id: string; title: string; why: string[]; risk: string; queue_state: string; action: string; decision?: string | null }[];
+  // An agent run the assistant started (Do mode); the panel follows it live.
+  run?: { id: string; agent: string; label: string; already: boolean };
   note?: string;
 };
 
@@ -72,7 +74,8 @@ function unverified(answer: string, outputs: string[]) {
 
 const NO_OFFER = /\b(without|no|missing|lacking)\s+(an?\s+|any\s+)?(renewal\s+)?offers?\b|\b(not|n't|never)\s+(yet\s+)?(been\s+)?(sent|made|given|received|gotten|got)?\s*(an?\s+)?(renewal\s+)?offer/i;
 
-type RulesOut = { answer: string; table?: AssistantReply["table"]; citations: Citation[]; proposals?: boolean };
+type RulesOut = { answer: string; table?: AssistantReply["table"]; citations: Citation[]; proposals?: boolean; run?: AssistantReply["run"] };
+type StartAgent = (key: string) => ReturnType<typeof runNow>;
 
 const fmtDays = (d: Delinquent) => `${d.days_late} days`;
 const lateTable = (rows: Delinquent[]): AssistantReply["table"] => ({
@@ -162,10 +165,24 @@ async function helpAnswer(ctx: AgentCtx, q: string): Promise<RulesOut & { articl
   return { answer: `${a.title}: ${a.snippet}`, citations: articles.map((x) => ({ help: x.slug, label: x.title, href: x.href })), articles };
 }
 
+const AGENT_WORDS: [string, RegExp][] = [["collections", /collections?/i], ["maintenance_triage", /triage|work orders?/i], ["ap", /bills?|payables?|invoices?/i], ["renewals", /renewals?/i], ["leasing", /applica\w+|prospects?|leasing/i], ["data_health", /data (health|issues?)|fix/i], ["compliance", /coi|insurance|complian\w+/i], ["owner_reporting", /owner|noi|variance/i]];
+
 // Action mode: recognised requests become proposals; nothing runs until the person confirms each.
-async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
+async function planActions(ctx: AgentCtx, q: string, start: StartAgent): Promise<RulesOut> {
   const metro = matchMetro(q);
   const days = Number(q.match(/(\d+)\s*\+?\s*(?:days?|d\b)/i)?.[1] ?? 0);
+  // "Run the collections agent", "triage new work orders": start the agent as Run now does.
+  const agent = AGENT_WORDS.find(([, re]) => re.test(q))?.[0];
+  if (agent && !/\b(remind\w*|reminders?|nudge)\b/i.test(q) && /\b(agent|run|start|triage|review|check|fix)\b/i.test(q)) {
+    const r = await start(agent);
+    const name = r.ok ? r.name : r.name ?? agent.replace(/_/g, " ");
+    if (!r.ok) return { answer: `I can't start the ${name} for you: ${r.error}. ${r.status === 403 ? "A property manager, regional manager or the principal can run it from Agents." : ""}`.trim(), citations: [] };
+    await ctx.step({ kind: "message", output: { started_run: r.runId, agent, already: r.already }, ok: true });
+    return {
+      answer: r.already ? `The ${name} is already running, so I didn't start another. Watch the run below.` : `Started the ${name}. Watch the run below; anything it proposes waits for approval.`,
+      citations: [{ label: "Watch the run", href: r.href }], run: { id: r.runId, agent, label: name, already: r.already },
+    };
+  }
   if (/\b(remind\w*|reminders?|nudge|collections?)\b/i.test(q) || (/\b(send|email|text)\b/i.test(q) && /\b(late|delinquen\w*|owe|overdue|rent)\b/i.test(q))) {
     const r = await ctx.call<{ rows: Delinquent[]; total: number }>("ledger.delinquency", { min_days: days || 5, metro, limit: 25 });
     const { reminder } = await import("./rules");
@@ -181,8 +198,6 @@ async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
     }
     return { answer: r.rows.length ? `I drafted ${r.rows.length} reminder${r.rows.length === 1 ? "" : "s"} for residents ${days || 5}+ days late${metro ? ` in ${metro}` : ""}. Review and confirm below; nothing is sent until you do.` : `Nobody${metro ? ` in ${metro}` : ""} is ${days || 5}+ days late, so there's nothing to send.`, table: lateTable(r.rows), citations: [], proposals: true };
   }
-  const agent = [["collections", /collections?/], ["maintenance_triage", /triage|work orders?/], ["ap", /bills?|payables?|invoices?/], ["renewals", /renewals?/], ["leasing", /applica\w+|prospects?|leasing/], ["data_health", /data (health|issues?)|fix/], ["compliance", /coi|insurance|complian\w+/], ["owner_reporting", /owner|noi|variance/]].find(([, re]) => (re as RegExp).test(q))?.[0];
-  if (agent && /\b(run|start|triage|review|check|fix)\b/i.test(q)) return { answer: `That's the ${String(agent).replace(/_/g, " ")} agent's job. Open it in the command center and press Run now to watch it work.`, citations: [{ label: "Agents", href: `/app/agents?agent=${agent}` }] };
   return { answer: "I can turn these into actions you confirm: send rent reminders (\"remind everyone 30+ days late in Austin\"), or run an agent (\"triage new work orders\"). Anything that moves money goes to the approvals inbox.", citations: [] };
 }
 
@@ -255,7 +270,7 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
         }
       }
     } else if (mode === "actions") {
-      out = await planActions(ctx, question);
+      out = await planActions(ctx, question, (key) => runNow({ db, ws, actor: data.actor, persona, waitUntil: o.waitUntil }, key));
     } else {
       // A question about the record in view ("Ask about this") starts from that record's facts.
       // Fact questions the rules cover are answered from the computed result, sentence included;
@@ -352,12 +367,12 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
   const messageId = newId("msg");
   await db.batch([
     // The plan keeps what the reply showed (source, table, note), so a reopened thread renders the same.
-    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace, live: res.live, source: model.label, note, table: res.out.table }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
+    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace, live: res.live, source: model.label, note, table: res.out.table, agent_run: res.out.run }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
     ...(await Promise.all(proposals.map(async (p) => insert(db, ws, "assistant_actions", { id: newId("act"), message_id: messageId, action: p.action, params: JSON.stringify({ proposal_id: p.id }), status: "Proposed", at: demoNowIso() })))),
     db.prepare("UPDATE assistant_threads SET updated_at = ? WHERE workspace_id = ? AND id = ?").bind(demoNowIso(), ws, threadId),
   ]);
   return {
-    threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals, note,
+    threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals, note, run: res.out.run,
   };
 }
 
@@ -368,7 +383,7 @@ export async function threads(data: DataCtx, personaId: string, size = 20) {
 }
 
 export type SavedTurn = { role: "user"; text: string } | { role: "assistant"; reply: AssistantReply };
-type SavedPlan = { run_id?: string; mode?: Mode; trace?: TraceItem[]; live?: boolean; source?: string; note?: string; table?: AssistantReply["table"] };
+type SavedPlan = { run_id?: string; mode?: Mode; trace?: TraceItem[]; live?: boolean; source?: string; note?: string; table?: AssistantReply["table"]; agent_run?: AssistantReply["run"] };
 
 // The last `limit` messages of a thread as the chat renders them. Proposals come back with their
 // current decision; nothing is run again.
@@ -397,7 +412,7 @@ export async function threadMessages(data: DataCtx, personaId: string, threadId:
       reply: {
         threadId, messageId: m.id, runId: plan.run_id ?? "", mode: plan.mode ?? "chat", answer: m.content,
         source: plan.source ?? (!m.model || m.model === RULES.model ? RULES.label : m.model), model: m.model ?? RULES.model, live: plan.live ?? false,
-        table: plan.table, citations: parseJson<Citation[]>(m.citations, []), trace: plan.trace ?? [], proposals, note: plan.note,
+        table: plan.table, citations: parseJson<Citation[]>(m.citations, []), trace: plan.trace ?? [], proposals, note: plan.note, run: plan.agent_run,
       },
     };
   });

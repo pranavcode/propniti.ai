@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { api } from "./client";
+import { api, useRunStream } from "./client";
 
 // The assistant conversation, used in the ⌘J dock and on /app/copilot. It sends the current page
 // (and record) as context, shows what it looked up, renders tables and links, and turns action
@@ -27,6 +27,7 @@ type Reply = {
   citations: { label: string; href?: string; help?: string }[];
   trace: { tool: string; input: unknown; summary: string; ms?: number; ok: boolean }[];
   proposals: { id: string; title: string; why: string[]; risk: string; queue_state: string; action: string; decision?: string | null }[];
+  run?: { id: string; agent: string; label: string; already: boolean };
   note?: string;
 };
 type Turn = { role: "user"; text: string; mode?: Mode } | { role: "assistant"; reply: Reply } | { role: "error"; text: string };
@@ -140,6 +141,24 @@ function Trace({ reply }: { reply: Reply }) {
   );
 }
 
+// An agent run started from Do mode, followed live (the same stream the run page uses).
+function AgentRun({ id, label }: { id: string; label: string }) {
+  const { run, steps, proposals } = useRunStream(id);
+  const status = run?.status ?? "running";
+  const tone = status === "failed" ? "text-tone-danger" : status === "running" ? "text-muted-foreground" : "text-tone-success";
+  return (
+    <div data-agent-run={status} className="flex items-start gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5 text-[12px]">
+      {status === "running" ? <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" /> : <span className={cn("mt-1 size-2 shrink-0 rounded-full", status === "failed" ? "bg-tone-danger" : "bg-tone-success")} />}
+      <div className="min-w-0 flex-1">
+        <div className={cn("font-medium", tone)}>
+          {label} · {status === "running" ? `running, ${steps.length} step${steps.length === 1 ? "" : "s"} so far` : status === "failed" ? "stopped" : status === "waiting_approval" ? `finished, ${proposals.length} waiting for approval` : "finished"}
+        </div>
+        {run?.summary && status !== "running" && <p className="text-muted-foreground">{run.summary}</p>}
+      </div>
+    </div>
+  );
+}
+
 function Answer({ reply }: { reply: Reply }) {
   const decide = async (id: string, decision: "approve" | "reject") => {
     try {
@@ -154,6 +173,7 @@ function Answer({ reply }: { reply: Reply }) {
     <div className="space-y-2">
       <div className="flex items-center gap-2"><AIBadge size="xs" source={reply.live ? "live" : "rules"} model={reply.source} /></div>
       <p className="whitespace-pre-line">{reply.answer}</p>
+      {reply.run && <AgentRun id={reply.run.id} label={reply.run.label} />}
       {reply.table && reply.table.rows.length > 0 && (
         <div className="max-h-72 overflow-auto rounded-md border">
           <table className="w-full text-[12px]">
