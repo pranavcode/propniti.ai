@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { changesPage, navReducer, type NavEvent, type NavPhase } from "./progress";
 
 const run = (events: NavEvent[], from: NavPhase = "idle") => events.reduce(navReducer, from);
@@ -33,5 +33,39 @@ describe("navigation progress", () => {
     expect(changesPage("/app/data-health", at)).toBe(false);
     expect(changesPage("#issues", at)).toBe(false);
     expect(changesPage("https://example.com/app/inbox", at)).toBe(false);
+  });
+});
+
+describe("afterNav", () => {
+  it("runs at once with no navigation in flight, and never on a later one after giving up", async () => {
+    vi.useFakeTimers();
+    const { afterNav, navDone, navStart } = await import("./progress");
+    const now = vi.fn();
+    afterNav(now);
+    expect(now).toHaveBeenCalledTimes(1);
+
+    const late = vi.fn();
+    navStart();
+    afterNav(late);
+    vi.advanceTimersByTime(15_000);
+    navDone();
+    vi.advanceTimersByTime(1_000);
+    navStart();
+    navDone();
+    expect(late).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("runs when the current navigation commits", async () => {
+    vi.useFakeTimers();
+    const { afterNav, navDone, navStart } = await import("./progress");
+    const fn = vi.fn();
+    navStart();
+    afterNav(fn);
+    expect(fn).not.toHaveBeenCalled();
+    navDone();
+    expect(fn).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1_000);
+    vi.useRealTimers();
   });
 });

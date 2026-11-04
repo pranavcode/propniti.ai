@@ -33,9 +33,12 @@ function send(event: NavEvent) {
 }
 
 export const navStart = () => send("start");
-// Runs `fn` once the current navigation or refresh has committed (the bar's "done").
+// Runs `fn` once the current navigation or refresh has committed (the bar's "done"), or now if
+// none is in flight. Gives up after GIVE_UP_MS so it never fires on a later, unrelated navigation.
 export function afterNav(fn: () => void) {
-  const off = subscribeNav(() => { if (phase === "finishing" || phase === "idle") { off(); fn(); } });
+  if (phase === "idle") return fn();
+  const off = subscribeNav(() => { if (phase === "finishing" || phase === "idle") { clearTimeout(stop); off(); fn(); } });
+  const stop = setTimeout(off, GIVE_UP_MS);
 }
 export const navDone = () => send("done");
 export const navPhase = () => phase;
