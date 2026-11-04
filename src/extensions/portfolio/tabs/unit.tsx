@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import type { TabProps } from "@/extensions/tabs";
 import { ChartCard } from "@/components/app/dashboard";
 import { EmptyState, ErrorBanner } from "@/components/app/states";

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Activity, Building } from "lucide-react";
 import { getEntity } from "@/entities";
 import { currentSession } from "@/auth/session";

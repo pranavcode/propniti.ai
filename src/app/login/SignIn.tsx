@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- image optimisation is off on Workers; files are pre-sized webp */
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, LoaderCircle, Lock } from "lucide-react";
 import { DEMO_PASSWORD, LAST_PERSONA } from "@/auth/personas";
 import { Wordmark } from "@/components/Logo";

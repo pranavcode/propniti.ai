@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { FlaskConical } from "lucide-react";
 import { currentSession } from "@/auth/session";
 import { can } from "@/entities";

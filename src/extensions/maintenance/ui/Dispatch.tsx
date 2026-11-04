@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, Loader2, ShieldAlert, ShieldCheck, Star, Truck } from "lucide-react";
 import { toast } from "sonner";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertTriangle, CheckCircle2, CircleDashed, Clock, FileText, HelpCircle, ScanSearch, Sparkles, XCircle } from "lucide-react";
 import type { Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";

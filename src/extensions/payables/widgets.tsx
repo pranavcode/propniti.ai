@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Receipt } from "lucide-react";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";

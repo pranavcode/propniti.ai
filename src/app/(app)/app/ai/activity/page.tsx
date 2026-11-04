@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/app/page";
 import { RelativeDate, StatusBadge } from "@/components/app/display";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { toast } from "sonner";
 import { ApprovalItem, RunTrace } from "@/components/app/ai";
 import { RelativeDate } from "@/components/app/display";
