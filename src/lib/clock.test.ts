@@ -57,6 +57,7 @@ const REAL_CLOCK_OK = new Set([
   "src/ai/session.ts", // request clock
   "src/ai/sweep.ts", // cron throttle
   "src/ai/views.ts", // request clock, converted for stamps and schedules
+  "src/ai/automations.ts", // real cron tick timing; schedules go through views.ts
   "src/ai/orchestrator.ts", // deadlines, cron claims
   "src/ai/runtime.ts", // deadlines, latency
   "src/ai/assistant.ts", // run clock, converted where stamped
