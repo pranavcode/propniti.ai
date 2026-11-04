@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { inboxPage, type InboxFilter } from "@/extensions/inbox/data";
 import { sessionInboxCounts } from "@/extensions/inbox/server";
 import { InboxList } from "@/extensions/inbox/InboxList";
+import { ResultsSummary } from "@/components/app/ResultsSummary";
+import { resultsSummary } from "@/components/app/results";
 
 export const metadata = { title: "Inbox · Propniti" };
 
@@ -66,6 +68,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
           </div>
         ) : (
           <>
+            {tab.key !== "all" && <ResultsSummary text={resultsSummary(res.total, { one: tab.label.toLowerCase().replace(/s$/, ""), many: tab.label.toLowerCase() }, "waiting on you")} clear={href("all")} />}
             <InboxList items={res.items} />
             {res.total > PAGE && (
               <div className="flex items-center justify-between text-[12px] text-muted-foreground">

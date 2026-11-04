@@ -14,6 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ApprovalItem } from "@/components/app/ai";
 import { cn } from "@/lib/utils";
+import { pickFilter, ResultsSummary } from "@/components/app/ResultsSummary";
+import { resultsSummary } from "@/components/app/results";
 import { RISKS, type ProposalFilters } from "@/ai/filters";
 import { AGENT_LABEL, api, sourceOf, type ProposalJson } from "./client";
 
@@ -28,6 +30,7 @@ type Facet = { key: string; label: string; n: number };
 type Page = { rows: ProposalJson[]; total: number; page: number; size: number; counts: Partial<Record<Queue, number>>; facets?: Record<keyof ProposalFilters, Facet[]> };
 type Bulk = { count: number; more: boolean; cap: number };
 const FILTER_KEYS = ["agent", "risk", "property", "entity"] as const;
+const FILTER_LABEL = { agent: "Agent", risk: "Risk", property: "Property", entity: "Record type" } as const;
 const ALIASES = ["f.agent", "f.risk", "f.property_id", "f.entity_type", "page"];
 
 type MessageEffect = { kind: "message"; subject?: string; body?: string };
@@ -93,6 +96,7 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
   };
 
   const setFilter = (k: keyof ProposalFilters, v: string | undefined) => {
+    pickFilter();
     const f = { ...filters, [k]: v };
     if (!v) delete f[k];
     setFilters(f);
@@ -147,6 +151,9 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
   };
 
   const message = (p: ProposalJson) => ((p.payload.effects as MessageEffect[] | undefined) ?? []).find((e) => e.kind === "message");
+  const filterText = (k: keyof ProposalFilters) => k === "risk" ? `${filters.risk} risk`
+    : `${FILTER_LABEL[k]}: ${(k === "agent" && AGENT_LABEL[filters.agent!]) || data.facets?.[k]?.find((f) => f.key === filters[k])?.label || filters[k]}`;
+  const clearFilters = () => { setFilters({}); setPage(1); void load(queue, 1, {}); syncUrl(queue, {}); };
   const pages = Math.max(1, Math.ceil(data.total / data.size));
   const tab = TABS.find((t) => t.key === queue)!;
 
@@ -173,9 +180,10 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
         <FilterChip label="Agent" value={filters.agent} options={(data.facets?.agent ?? []).map((f) => ({ ...f, label: AGENT_LABEL[f.key] ?? f.label }))} onChange={(v) => setFilter("agent", v)} />
         <FilterChip label="Property" value={filters.property} options={data.facets?.property ?? []} onChange={(v) => setFilter("property", v)} />
         <FilterChip label="Record type" value={filters.entity} options={data.facets?.entity ?? []} onChange={(v) => setFilter("entity", v)} />
-        {FILTER_KEYS.some((k) => filters[k]) && <button className="text-[12px] text-primary hover:underline" onClick={() => { setFilters({}); setPage(1); void load(queue, 1, {}); syncUrl(queue, {}); }}>Clear filters</button>}
+        {FILTER_KEYS.some((k) => filters[k]) && <button className="text-[12px] text-primary hover:underline" onClick={clearFilters}>Clear filters</button>}
       </div>}
       <p className="text-[12px] text-muted-foreground">{tab.hint}</p>
+      {filterable && <ResultsSummary text={!loading && FILTER_KEYS.some((k) => filters[k]) ? resultsSummary(data.total, { one: "item", many: "items" }, `matching ${FILTER_KEYS.filter((k) => filters[k]).map(filterText).join(", ")}`) : undefined} clear={clearFilters} />}
       {missing && (
         <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-[12.5px]">
           No agent proposal for this record yet. It appears here once the agent has scored it.{missing.href && <> <Link href={missing.href} className="font-medium text-primary hover:underline">Open the record</Link></>}

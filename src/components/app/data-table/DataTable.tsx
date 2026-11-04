@@ -25,6 +25,8 @@ import { TONE_DOT } from "../status";
 import { Term } from "../Term";
 import { Cell, isRight } from "./cells";
 import { AiFilter, FacetChip, SearchBox } from "./FilterBar";
+import { ResultsSummary } from "../ResultsSummary";
+import { listScope, resultsSummary } from "../results";
 import { fillTemplate, filterKeys, paramsToView, PAGE_SIZES, readSort, readValues, viewToParams } from "./params";
 import { serverViews, type SavedViewsAdapter } from "./views";
 import { PeekLink } from "../peek/PeekLink";
@@ -266,6 +268,7 @@ export function DataTable(props: DataTableProps) {
         </div>
       </div>
 
+      <ResultsSummary text={filtersActive && !pending ? resultsSummary(total, { one: label.one.toLowerCase(), many: label.many.toLowerCase() }, listScope(params, facets, statusTabs) ?? "matching the filters") : undefined} className="-mt-1 [&>p]:pb-2" />
       {error && <ErrorBanner className="mb-2.5" title={`Couldn't load ${label.many.toLowerCase()}`} message={error} onRetry={() => router.refresh()} />}
 
       <div className="relative overflow-hidden rounded-lg border bg-card">
