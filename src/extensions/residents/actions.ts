@@ -108,11 +108,14 @@ registerAction({
     const body = `Hi ${res.first_name}, our records show your renters insurance policy ${row.policy_number} ${row.status === "Lapsed" ? "has lapsed" : `expires on ${row.expires_on}`}. Your lease requires active coverage. Please upload your current policy in the resident portal.`;
     // One reminder per policy per day: the message id carries the date, so a double click or a
     // repeat in a bulk run conflicts instead of sending twice.
+    const msgId = `msg-ins-${row.id}-${at.slice(0, 10)}`;
+    // The thread upsert runs only when this call inserted the message (same transaction), so a
+    // duplicate leaves the thread's status and last_message_at alone.
     const [sent] = await ctx.db.batch([
       ctx.db.prepare("INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES (?, ?, ?, ?, 'out', 'staff', ?, ?, ?) ON CONFLICT (workspace_id, id) DO NOTHING")
-        .bind(ctx.ws, `msg-ins-${row.id}-${at.slice(0, 10)}`, thread, channel, ctx.actor.personaId, body, at),
-      ctx.db.prepare("INSERT INTO message_threads (workspace_id, id, property_id, party_kind, party_id, subject, entity_type, entity_id, status, last_message_at, unread) VALUES (?, ?, ?, 'resident', ?, 'Renters insurance', 'renters_insurance', ?, 'Waiting', ?, 0) ON CONFLICT (workspace_id, id) DO UPDATE SET status = 'Waiting', last_message_at = excluded.last_message_at")
-        .bind(ctx.ws, thread, row.property_id, res.id, row.id, at),
+        .bind(ctx.ws, msgId, thread, channel, ctx.actor.personaId, body, at),
+      ctx.db.prepare("INSERT INTO message_threads (workspace_id, id, property_id, party_kind, party_id, subject, entity_type, entity_id, status, last_message_at, unread) SELECT ?, ?, ?, 'resident', ?, 'Renters insurance', 'renters_insurance', ?, 'Waiting', ?, 0 WHERE (SELECT sent_at FROM messages WHERE workspace_id = ? AND id = ?) = ? ON CONFLICT (workspace_id, id) DO UPDATE SET status = 'Waiting', last_message_at = excluded.last_message_at")
+        .bind(ctx.ws, thread, row.property_id, res.id, row.id, at, ctx.ws, msgId, at),
     ]);
     if (!sent.meta.changes) return fail(409, `A reminder for ${row.policy_number} already went out today`);
     await activity(ctx, "renters_insurance", String(row.id), row.property_id, "messaged", `${ctx.actor.name} sent an insurance reminder by ${channel}`);
