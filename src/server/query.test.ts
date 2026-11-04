@@ -262,6 +262,16 @@ describe("rows", () => {
     expect(unit).toMatchObject({ market_rent: 1500, rent: 1450, property_id: "p01", property_id__label: "The Lofts at Riverside", label: "The Lofts at Riverside #101" });
   });
 
+  it("names a unit whose property id has the wrong case, for an org-wide actor, and sorts it with its property", async () => {
+    await db.prepare("UPDATE units SET property_id = 'P01' WHERE id = 'p01-u2'").run();
+    const res = await list(await ctx("daniel"), "units", { size: 100 });
+    const bad = res.rows.find((r) => r.id === "p01-u2")!;
+    expect(bad).toMatchObject({ property_id: "P01", property_id__label: "The Lofts at Riverside", label: "The Lofts at Riverside #102" });
+    const lofts = res.rows.filter((r) => String(r.label).startsWith("The Lofts")).map((r) => r.id);
+    expect(lofts).toEqual(["p01-u1", "p01-u2", "p01-u3"]);
+    expect(res.rows.every((r) => r.label != null)).toBe(true);
+  });
+
   it("derives charge status from payments", async () => {
     const c = await ctx("daniel");
     expect((await getRow(c, "charges", "c-p01-u1"))!.status).toBe("Paid");

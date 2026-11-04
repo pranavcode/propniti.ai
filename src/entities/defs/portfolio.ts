@@ -168,7 +168,7 @@ registerEntity({
   image: (r) => thumb(r.photo),
   scopePath: "units.property_id",
   fields: {
-    label: { type: "text", label: "Unit", sortable: true, list: { default: true, width: 200 }, sql: "(SELECT p.name FROM {properties} p WHERE p.id = units.property_id) || ' #' || units.number" },
+    label: { type: "text", label: "Unit", sortable: true, list: { default: true, width: 200 }, sql: "(SELECT p.name FROM {properties} p WHERE p.id = lower(units.property_id)) || ' #' || units.number" },
     number: { type: "text", label: "Unit number", required: true, search: true, sortable: true },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
