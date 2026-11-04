@@ -77,7 +77,7 @@ export function ImportWizard({ options }: { options: WizardOptions }) {
   async function toColumns() {
     setError(null);
     if (aiOn && !ai) {
-      setBusy("Asking the model for suggestions…");
+      setBusy("Asking the model for suggestions (up to a minute)…");
       try {
         setAi(await apiJson<AiResult>("POST", "/api/import/ai", buildAiRequest(files, assembled)));
       } catch (e) {
