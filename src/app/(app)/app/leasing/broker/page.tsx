@@ -110,12 +110,12 @@ export default async function BrokerDesk() {
               {flags.length ? (
                 <ul className="divide-y">
                   {flags.slice(0, 8).map((f) => (
-                    <li key={f.id} className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/app/leasing/listings/${f.id}`} className="min-w-0 flex-1 truncate font-medium hover:text-primary hover:underline">{f.property}{f.unit ? ` #${f.unit}` : ""} · {f.headline}</Link>
-                        <Button asChild size="sm" variant="outline"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
+                    <li key={f.id} className="flex items-center gap-2 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/app/leasing/listings/${f.id}`} className="block truncate font-medium hover:text-primary hover:underline">{f.property}{f.unit ? ` #${f.unit}` : ""} · {f.headline}</Link>
+                        <p className="mt-1 text-[12.5px]">{f.flags.map((x) => <span key={x.phrase + x.index} className="mr-2 inline-block"><span className="rounded bg-tone-danger/10 px-1 text-tone-danger">“{x.phrase}”</span> <span className="text-muted-foreground">{x.category}</span></span>)}</p>
                       </div>
-                      <p className="mt-1 text-[12.5px]">{f.flags.map((x) => <span key={x.phrase + x.index} className="mr-2 inline-block"><span className="rounded bg-tone-danger/10 px-1 text-tone-danger">“{x.phrase}”</span> <span className="text-muted-foreground">{x.category}</span></span>)}</p>
+                      <Button asChild size="sm" variant="outline" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
                     </li>
                   ))}
                 </ul>
