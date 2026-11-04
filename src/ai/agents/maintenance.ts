@@ -70,17 +70,18 @@ export default defineAgent({
     const month = Number(ctx.today.slice(5, 7));
     return wos.rows.flatMap((w): Candidate[] => {
       const prop = props.find((p) => p.id === w.property_id);
-      // Plans: a job already with a vendor moves only to one with capacity; untriaged jobs are triaged below.
-      if (plan && !["New", "Triaged"].includes(String(w.status))) {
-        const r = ["Assigned", "Scheduled"].includes(String(w.status)) ? reassignTarget(w, vendors, prop?.metro ?? "", ctx.today) : null;
+      // Plans: only New jobs are triaged. A job a person already triaged keeps its priority and trade
+      // and only gets a vendor proposal; a job with a vendor moves only to one with capacity.
+      if (plan && w.status !== "New") {
+        const r = ["Triaged", "Assigned", "Scheduled"].includes(String(w.status)) ? reassignTarget(w, vendors, prop?.metro ?? "", ctx.today) : null;
         if (!r) return [];
         const late = w.sla_due_at ? Math.max(0, Math.round((demoNow(ctx.nowMs).getTime() - Date.parse(String(w.sla_due_at))) / 3_600_000)) : null;
         return [{
           entity: "work_orders", entityId: String(w.id), propertyId: String(w.property_id), action: "work_orders.assign_vendor",
-          title: `${w.id}: move to ${r.to.company} (${r.to.open_jobs} open jobs${r.from ? ` vs ${r.from.open_jobs} with ${r.from.company}` : ""})`,
+          title: `${w.id}: ${r.from ? "move" : "assign"} to ${r.to.company} (${r.to.open_jobs} open jobs${r.from ? ` vs ${r.from.open_jobs} with ${r.from.company}` : ""})`,
           why: [
             late != null ? `Past its SLA due time by about ${late} hours (${String(w.priority).toLowerCase()} priority)` : "Open past its SLA due time",
-            r.from ? `${r.from.company} has ${r.from.open_jobs} open jobs` : "No vendor on the job",
+            r.from ? `${r.from.company} has ${r.from.open_jobs} open jobs` : `Triaged as ${String(w.category).toLowerCase()}, ${String(w.priority).toLowerCase()} priority, with no vendor yet`,
             `${r.to.company}: rating ${r.to.rating ?? "n/a"}, ${r.to.open_jobs} open jobs, insurance valid to ${r.to.coi_expires}`,
           ],
           confidence: 0.75, risk: "Medium",

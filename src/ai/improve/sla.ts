@@ -53,8 +53,10 @@ export const slaImprover: Improver = {
 
     // Untriaged jobs: late first, then the soonest due. Jobs with a vendor: only past-SLA ones that
     // the agent's ranking would move to a vendor with fewer open jobs.
-    const toTriage = open.filter((w) => w.status === "New" || w.status === "Triaged");
-    const movable = withVendor.filter((w) => w.status !== "In progress" && reassignTarget(w, vendors, w.metro, c.today));
+    // A Triaged job was triaged by a person or an earlier run: it never gets triaged again (that
+    // would overwrite its priority and trade), only a vendor proposal that someone approves.
+    const toTriage = open.filter((w) => w.status === "New");
+    const movable = [...open.filter((w) => w.status === "Triaged"), ...withVendor.filter((w) => w.status !== "In progress")].filter((w) => reassignTarget(w, vendors, w.metro, c.today));
     const proposed = await openProposals(c, "maintenance_triage", [...toTriage, ...movable].map((w) => w.id));
     const triage = pick(toTriage, (w) => w.id, "work_orders.triage", proposed, CAP);
     const move = pick(movable, (w) => w.id, "work_orders.assign_vendor", proposed, CAP);
@@ -66,8 +68,8 @@ export const slaImprover: Improver = {
       href: "/app/maintenance/work-orders?f.status=New,Triaged", risk: "Low", spend: true, mixedRisk: true, estimate: null,
     });
     if (move.eligible) steps.push({
-      key: "reassign", title: `Move ${plural(move.chosen.length, "late job")} to vendors with capacity`,
-      detail: "Only to an insured vendor for the same trade and metro with fewer open jobs than the current one. A person approves each switch.",
+      key: "reassign", title: `Assign or move ${plural(move.chosen.length, "job")} to vendors with capacity`,
+      detail: "Triaged jobs waiting for a vendor, and late jobs whose vendor has more open work. Only an insured vendor for the same trade and metro; a person approves each one.",
       agent: "maintenance_triage", action: "work_orders.assign_vendor", ids: move.chosen.map((w) => w.id), records: move.chosen.length, eligible: move.eligible, waiting: move.waiting,
       href: list, risk: "Medium", estimate: null,
     });

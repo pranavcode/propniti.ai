@@ -278,6 +278,18 @@ describe("improve: review fixes", () => {
     expect(stored.steps.flatMap((x: { ids: string[] }) => x.ids).sort()).toEqual(["l1", "l2", "l3", "l4"]);
   });
 
+  it("never re-triages a job a person already triaged: it only proposes a vendor, for approval", async () => {
+    const f = setup();
+    ins(f.raw, "work_orders", [{ id: "WO-20003", property_id: "p01", title: "Shower drain slow", category: "Plumbing", priority: "Low", status: "Triaged", opened_at: "2026-11-03T10:00:00Z", sla_due_at: "2026-11-06T10:00:00Z" }]);
+    const p = await preview(s(f, MARCUS), "sla", null);
+    expect(p.steps.find((x) => x.key === "triage")!.ids).toEqual(["WO-10001"]);
+    expect(p.steps.find((x) => x.key === "reassign")!.ids).toContain("WO-20003");
+    await executePlan(s(f, MARCUS), "sla", null);
+    const mine = proposals(f.raw, "entity_id = 'WO-20003'");
+    expect(mine.map((x) => `${x.action}:${x.queue_state}`)).toEqual(["work_orders.assign_vendor:needs_you"]);
+    expect(f.raw.prepare("SELECT count(*) AS n FROM work_orders WHERE workspace_id = ? AND id = 'WO-20003'").get(WS)!.n).toBe(0);
+  });
+
   it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {
     const f = setup();
     const r = await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "event", input: { plan: "x", improve: "delinquency", steps: [{ action: "leases.send_reminder", ids: ["l4"] }] } } })).done;
