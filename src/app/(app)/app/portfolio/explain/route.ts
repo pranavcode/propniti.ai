@@ -3,7 +3,7 @@ import { guarded, json, writeSession } from "@/ai/http";
 import { narrate } from "@/extensions/portfolio/ai";
 import { EXPLAINABLE, explainMetric, isExplainable } from "@/extensions/portfolio/explain";
 
-// POST /app/portfolio/explain: "Explain this number" on a KPI. Runs the Owner Reporting agent
+// POST /app/portfolio/explain: "Explain this number" on a KPI. Runs the Owner Reporting Agent
 // over computed facts for the persona's scope (optionally one property) and returns the wording,
 // its source and the run id. Same origin, AI rate limit and the visitor's own workspace.
 const Body = z.object({

@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Compliance · Propniti" };
 
 // Compliance dashboard: what lapses next across vendor certificates, property insurance and
-// compliance items, the legal docket, and what the Compliance agent proposes. Lists and records
+// compliance items, the legal docket, and what the Compliance Agent proposes. Lists and records
 // are the generic pages under /app/compliance/*.
 
 const KPIS: (KpiDef & { needs: EntityKey })[] = [
@@ -171,7 +171,7 @@ export default async function CompliancePage() {
         title="Compliance"
         description="Property insurance, vendor certificates, inspections, permits and legal cases, with what lapses next."
         meta={<><span>{session.actor.scope.label}</span>{timeline?.today && <span>As of <RelativeDate value={timeline.today} mode="date" /></span>}</>}
-        actions={<Button asChild size="sm" variant="outline"><Link href="/app/agents"><Bot /> Run Compliance agent</Link></Button>}
+        actions={<Button asChild size="sm" variant="outline"><Link href="/app/agents"><Bot /> Run Compliance Agent</Link></Button>}
       >
         <nav aria-label="Compliance lists" className="flex flex-wrap gap-1.5">
           {readable.map((l) => (
@@ -191,12 +191,12 @@ export default async function CompliancePage() {
             </Section>
           )}
           <Section
-            title="Compliance agent proposals"
+            title="Compliance Agent proposals"
             description="Renewal requests and escalations waiting for a person."
             actions={<Link href="/app/ai/approvals?agent=compliance" className="inline-flex items-center gap-1 text-[12px] text-primary hover:underline">All approvals <ArrowRight className="size-3" /></Link>}
           >
             {!props ? <ErrorBanner message="Proposals couldn't load. Refresh to try again." /> : props.length === 0 ? (
-              <div className="rounded-lg border bg-card"><EmptyState compact kind="table" title="Nothing waiting on you" description="The Compliance agent checks certificates and due dates daily. Its handled items are in AI activity." action={{ label: "Open agents", href: "/app/agents" }} /></div>
+              <div className="rounded-lg border bg-card"><EmptyState compact kind="table" title="Nothing waiting on you" description="The Compliance Agent checks certificates and due dates daily. Its handled items are in AI activity." action={{ label: "Open agents", href: "/app/agents" }} /></div>
             ) : (
               <div className="flex flex-col gap-2">
                 {props.map((p) => <ProposalCard key={p.id} p={p} variant="card" canApprove={canApprove} />)}

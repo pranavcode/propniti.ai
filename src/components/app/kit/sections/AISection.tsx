@@ -48,16 +48,16 @@ export function AISection() {
 
           <div className="flex flex-col gap-2">
             <ApprovalItem
-              agent="Payables agent" title="Approve bill from ABC HVAC · INV-88213" amount={2140} risk="High"
+              agent="Payables Agent" title="Approve bill from ABC HVAC · INV-88213" amount={2140} risk="High"
               why={["Amount is 2.4× this vendor's median for a service call", "Vendor bank details changed 6 days ago, not yet verified", "Matches PO-1182 for the rooftop unit at Uptown Tower"]}
               evidence={[{ label: "INV-88213", href: "/app/payables/bills/b-88213" }, { label: "PO-1182" }, { label: "Bank change log" }]}
               confidence={0.62} policy="Over the $1,500 approval limit · needs a principal or accountant" runHref="/app/ai/activity?run=run-31" createdAt={ago(42)} canApprove={false}
               onApprove={() => wait()} onReject={() => wait()} onEdit={() => {}}
             />
             <div className="overflow-hidden rounded-lg border bg-card">
-              <ApprovalItem variant="row" agent="Collections agent" title="Send 14 late-rent reminders (EN/ES)" risk="Low" why={["All 14 are 30+ days late with no payment plan", "Drafts use the approved template; 3 in Spanish by resident preference"]} confidence={0.93} createdAt={ago(12)} runHref="/app/ai/activity?run=run-29" onApprove={() => wait()} onReject={() => wait()} />
-              <ApprovalItem variant="row" agent="Collections agent" title="Post 9 late fees in Austin" amount={1284} risk="Medium" why={["Within the Texas 10% cap after the 2-day grace period", "Skipped 5 residents: fee already posted or a hardship note"]} confidence={0.86} createdAt={ago(12)} onApprove={() => wait()} onReject={() => wait()} />
-              <ApprovalItem variant="row" agent="Renewals agent" title="Offer renewal at $1,945 (+3.2%) to Maya Patel, #208" amount={1945} risk="Low" why={["Comparable 1-beds leased at $1,960–$2,010 last 60 days", "On-time payer for 26 months; renewal likelihood 81%"]} confidence={0.81} createdAt={ago(95)} onApprove={() => wait()} onReject={() => wait()} />
+              <ApprovalItem variant="row" agent="Collections Agent" title="Send 14 late-rent reminders (EN/ES)" risk="Low" why={["All 14 are 30+ days late with no payment plan", "Drafts use the approved template; 3 in Spanish by resident preference"]} confidence={0.93} createdAt={ago(12)} runHref="/app/ai/activity?run=run-29" onApprove={() => wait()} onReject={() => wait()} />
+              <ApprovalItem variant="row" agent="Collections Agent" title="Post 9 late fees in Austin" amount={1284} risk="Medium" why={["Within the Texas 10% cap after the 2-day grace period", "Skipped 5 residents: fee already posted or a hardship note"]} confidence={0.86} createdAt={ago(12)} onApprove={() => wait()} onReject={() => wait()} />
+              <ApprovalItem variant="row" agent="Renewals Agent" title="Offer renewal at $1,945 (+3.2%) to Maya Patel, #208" amount={1945} risk="Low" why={["Comparable 1-beds leased at $1,960–$2,010 last 60 days", "On-time payer for 26 months; renewal likelihood 81%"]} confidence={0.81} createdAt={ago(95)} onApprove={() => wait()} onReject={() => wait()} />
             </div>
           </div>
 
@@ -65,7 +65,7 @@ export function AISection() {
             title="Lease rent looks like a typo" rule="leases.rent_outlier"
             changes={[{ field: "rent", label: "Monthly rent", before: "$18,950.00", after: "$1,895.00" }]}
             why={["Unit market rent is $1,880; every other lease at this floor plan is $1,820–$1,960", "Ledger charges for the last 3 months were posted at $1,895.00"]}
-            confidence={0.97} source="Data Health agent" onApply={() => wait()} onDismiss={() => wait()}
+            confidence={0.97} source="Data Health Agent" onApply={() => wait()} onDismiss={() => wait()}
           />
           <FixPreview
             title="Deposit doesn't match a transfer batch" rule="bank_transactions.unmatched_deposit"
@@ -83,7 +83,7 @@ export function AISection() {
             ask={{ entity: "residents", id: "res-p01-0001", title: "Jordan Lee" }}
           />
           <AISummaryCard title="Property summary" bullets={[]} loading />
-          <RunTrace agent="Collections agent" status="waiting_approval" model="llama-3.3-70b" tokensIn={6120} tokensOut={1844} costCents={3} steps={STEPS} />
+          <RunTrace agent="Collections Agent" status="waiting_approval" model="llama-3.3-70b" tokensIn={6120} tokensOut={1844} costCents={3} steps={STEPS} />
           <RunTrace agent="Maintenance Triage" status="running" live steps={STEPS.slice(0, 3)} />
         </div>
       </div>

@@ -111,8 +111,8 @@ export default async function LeasingToday() {
           </Section>
         </div>
 
-        <Section title={<span id="proposals" className="scroll-mt-16">Waiting on you from the agents</span>} description="Follow-ups and renewal offers the Leasing and Renewals agents prepared. Approving sends exactly what's shown; every one links to its run." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">All approvals</Link></Button>}>
-          <ProposalQueue items={items} empty="When the Leasing or Renewals agent drafts a follow-up or an offer for you, it waits here with its reasons." />
+        <Section title={<span id="proposals" className="scroll-mt-16">Waiting on you from the agents</span>} description="Follow-ups and renewal offers the Leasing and Renewals Agents prepared. Approving sends exactly what's shown; every one links to its run." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">All approvals</Link></Button>}>
+          <ProposalQueue items={items} empty="When the Leasing or Renewals Agent drafts a follow-up or an offer for you, it waits here with its reasons." />
         </Section>
       </PageBody>
     </>

@@ -13,9 +13,9 @@ registerTour({
   id: "persona-property_manager", title: "Your day as a property manager", roles: ["property_manager"],
   steps: [
     { href: "/app", title: "Start with your briefing", body: "Home shows what the agents handled overnight, what needs your decision and the risks across your three Austin properties." },
-    { href: "/app/receivables/delinquency", title: "Delinquency, oldest first", body: "Balances by age for your residents. The Collections agent drafts reminders and payment plans; you approve before anything is sent." },
+    { href: "/app/receivables/delinquency", title: "Delinquency, oldest first", body: "Balances by age for your residents. The Collections Agent drafts reminders and payment plans; you approve before anything is sent." },
     { href: "/app/maintenance/work-orders?view=open", title: "Open work orders against SLA", body: "Emergency SLAs are 4 hours, urgent 24, normal 72. Past-SLA jobs sort to the top." },
-    { href: "/app/leases?view=expiring-60", title: "Renewals coming up", body: "Leases ending in the next 60 days. The Renewals agent suggests an offer from market rent and payment history." },
+    { href: "/app/leases?view=expiring-60", title: "Renewals coming up", body: "Leases ending in the next 60 days. The Renewals Agent suggests an offer from market rent and payment history." },
     approvals,
     ask("Who is late on rent?"),
     bell,
@@ -72,7 +72,7 @@ registerTour({
 registerTour({
   id: "persona-accountant", title: "Month-end as an accountant", roles: ["accountant"],
   steps: [
-    { href: "/app/payables/bills", title: "Bills, coded and checked", body: "The Payables agent reads invoices, suggests GL codes and flags duplicates, outliers and recent vendor bank changes." },
+    { href: "/app/payables/bills", title: "Bills, coded and checked", body: "The Payables Agent reads invoices, suggests GL codes and flags duplicates, outliers and recent vendor bank changes." },
     { href: "/app/payables/bills?f.status=Pending%20approval", title: "Approve within policy", body: "Bills over the approval limit route to the owner. Money moves only after a person approves." },
     { href: "/app/banking/reconciliations", title: "Reconcile the trust accounts", body: "Bank lines matched to ledger entries, with suggested matches for unexplained deposits." },
     { href: "/app/owner-statements", title: "Owner statements", body: "Draft statements per owner entity. Ask why any line changed from last month." },

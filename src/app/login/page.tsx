@@ -14,7 +14,7 @@ const SEES: Record<string, string> = {
   daniel: "Portfolio NOI against budget, occupancy and collections across all 30 properties, and approvals over limit.",
   priya: "Her 14 Texas properties side by side, concessions waiting on her, and work orders running past SLA.",
   marcus: "Today's queue for 3 Austin communities: late rent, expiring leases, vendor invoices and what the agents already handled.",
-  lena: "The leasing pipeline: new prospects, today's tours, available units and follow-ups the Leasing agent drafted.",
+  lena: "The leasing pipeline: new prospects, today's tours, available units and follow-ups the Leasing Agent drafted.",
   rachel: "Applications to decide with the screening summary and reasons, leases to sign and owner agreements.",
   grace: "Bills to approve with anomaly flags, trust reconciliation, vendor bank changes and owner statements.",
   tom: "The work-order board by SLA, make-ready turns, preventive maintenance and vendor insurance expiries.",

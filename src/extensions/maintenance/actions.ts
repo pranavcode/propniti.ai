@@ -33,7 +33,7 @@ async function woEvent(c: ActionContext, wo: Row, kind: string, detail: object, 
 }
 
 // ---------------------------------------------------------------------------------------------
-// Intake: triage with the Maintenance Triage agent, then dispatch
+// Intake: triage with the Maintenance Triage Agent, then dispatch
 // ---------------------------------------------------------------------------------------------
 
 registerAction({
@@ -44,7 +44,7 @@ registerAction({
   roles: SUP,
   icon: Sparkles,
   when: (r) => ["New", "Triaged"].includes(String(r.status)),
-  help: { summary: "Runs the Maintenance Triage agent on this request: trade, urgency, estimate, ranked vendors and the owner approval limit.", article: "maintenance-triage-agent" },
+  help: { summary: "Runs the Maintenance Triage Agent on this request: trade, urgency, estimate, ranked vendors and the owner approval limit.", article: "maintenance-triage-agent" },
   handler: async (c, r) => {
     const { runId, done } = await startRun({ db: c.db, ws: c.ws, actor: c.actor, agent: "maintenance_triage", trigger: { kind: "manual", input: { work_order_id: r.id } }, deadlineMs: 20_000 });
     const res = await done;

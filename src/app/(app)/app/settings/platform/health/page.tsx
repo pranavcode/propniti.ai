@@ -11,6 +11,7 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { StatusBadge } from "@/components/app/display";
 import { health } from "@/extensions/platform/console";
 import { PlatformOnly } from "../gate";
+import { agentName } from "@/ai/ui/labels";
 
 export const metadata: Metadata = { title: "System health · Propniti" };
 export const dynamic = "force-dynamic";
@@ -77,7 +78,7 @@ export default async function HealthPage() {
               <ul className="divide-y rounded-lg border">
                 {h.failed.map((f) => (
                   <li key={f.id} className="px-3 py-2">
-                    <Link href={`/app/ai/runs/${f.id}`} className="font-medium hover:text-primary hover:underline">{f.agent.replace(/_/g, " ")}</Link>
+                    <Link href={`/app/ai/runs/${f.id}`} className="font-medium hover:text-primary hover:underline">{agentName(f.agent)}</Link>
                     <span className="ml-2 text-[12px] text-muted-foreground" title={formatDateTime(f.at)}>{formatRelative(f.at)}</span>
                     {f.error && <p className="mt-0.5 line-clamp-2 font-mono text-[11.5px] text-tone-danger">{f.error}</p>}
                   </li>

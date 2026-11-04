@@ -149,7 +149,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
             )}
           </header>
           <div className="flex flex-col gap-3 p-4">
-            {busy === "draft" && <p role="status" className="flex items-center gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.04] px-3 py-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Leasing agent is reading the unit, building and amenities…</p>}
+            {busy === "draft" && <p role="status" className="flex items-center gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.04] px-3 py-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Leasing Agent is reading the unit, building and amenities…</p>}
             {draft && (
               <div role="status" className="relative overflow-hidden rounded-md border border-tone-ai/30 bg-tone-ai/[0.04] p-3">
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">

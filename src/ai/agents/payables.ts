@@ -12,7 +12,7 @@ export { billChecks } from "../rules";
 
 export default defineAgent({
   key: "ap",
-  name: "Payables agent",
+  name: "Payables Agent",
   ownerRole: "accountant",
   goal: "Review every bill waiting for approval: check the scanned invoice, GL coding, amount against the vendor's history and duplicates, and stop payment to any vendor whose bank details changed without verification. Clean bills get an approval proposal.",
   tools: ["records.search", "records.get", "records.related", "policy.lookup", "actions.propose"],

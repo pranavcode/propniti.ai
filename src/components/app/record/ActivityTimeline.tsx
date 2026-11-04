@@ -9,6 +9,7 @@ import { useMounted } from "@/hooks/use-mounted";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PersonAvatar, RelativeDate } from "../display";
 import { humanize } from "../status";
+import { agentName } from "@/ai/ui/labels";
 
 // Record activity (activity_events + audit). Grouped by day bucket; field changes show as
 // "Status: Open → Paid"; runs of agent/system events fold into "N automation events" (Attio).
@@ -75,7 +76,8 @@ function VerbIcon({ e }: { e: ActivityEvent }) {
 }
 
 function Item({ e, people }: { e: ActivityEvent; people?: Record<string, string> }) {
-  const who = e.actor_name ?? people?.[e.actor_id] ?? (isAuto(e) ? `${humanize(e.actor_id)} agent` : e.actor_id);
+  // Agents show their Title Case name whatever name was stored with the event.
+  const who = e.actor_kind === "agent" ? agentName(e.actor_id) : e.actor_name ?? people?.[e.actor_id] ?? (isAuto(e) ? agentName(e.actor_id) : e.actor_id);
   const changes = changesOf(e);
   const d = parse(e.data);
   return (

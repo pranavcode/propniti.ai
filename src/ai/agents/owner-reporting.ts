@@ -9,7 +9,7 @@ export { explainText } from "../rules";
 
 export default defineAgent({
   key: "owner_reporting",
-  name: "Owner Reporting agent",
+  name: "Owner Reporting Agent",
   ownerRole: "accountant",
   goal: "Explain every owner's NOI change of more than 3% month over month in plain English, built only from computed drivers (rent collected, expenses, vacancy, concessions, expense lines), and offer the note to the owner.",
   tools: ["metrics.explain_noi", "metrics.monthly", "records.search", "messages.draft", "actions.propose"],

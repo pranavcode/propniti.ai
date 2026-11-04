@@ -37,7 +37,7 @@ export type AgentCardProps = {
 const STATUS: Record<AgentStatus, { label: string; dot: string; text: string }> = {
   idle: { label: "Idle", dot: "bg-tone-success", text: "text-muted-foreground" },
   running: { label: "Running", dot: "bg-tone-ai animate-pulse motion-reduce:animate-none", text: "text-tone-ai" },
-  waiting_approval: { label: "Waiting on approval", dot: "bg-tone-warning", text: "text-tone-warning" },
+  waiting_approval: { label: "Waiting for approval", dot: "bg-tone-warning", text: "text-tone-warning" },
   failed: { label: "Last run failed", dot: "bg-tone-danger", text: "text-tone-danger" },
   paused: { label: "Paused", dot: "bg-tone-neutral", text: "text-muted-foreground" },
 };

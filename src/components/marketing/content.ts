@@ -37,7 +37,7 @@ export const PILLARS: Pillar[] = [
     body: "Each KPI and chart opens the filtered list it was computed from. Ask why NOI fell in Atlanta and the answer is built from computed drivers: income, vacancy, concessions and individual expense lines. The model writes the sentence, but every figure in it comes from your ledger.",
     points: [
       "Drill from portfolio NOI to property, month and GL line",
-      "Variance notes the Owner Reporting agent offers to owners",
+      "Variance notes the Owner Reporting Agent offers to owners",
       "Answers show the records the assistant looked up",
     ],
     shot: "/img/marketing/shots/explained.webp",
