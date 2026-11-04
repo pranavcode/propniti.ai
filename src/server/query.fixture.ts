@@ -1,10 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
-import { applyMigrations, sqliteDb } from "@/lib/platform/sqlite";
+import { applyMigrations, D1_LIMITS, sqliteDb } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 
 // A fresh database with the schema only (no generated base), for the fixture below.
 export function emptyDb(): Db {
-  const raw = new DatabaseSync(":memory:");
+  const raw = new DatabaseSync(":memory:", { limits: D1_LIMITS });
   raw.exec("PRAGMA foreign_keys = ON");
   applyMigrations(raw);
   return sqliteDb(raw);

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { BASE_VERSION, baseHash, generate, type Base, type Value } from "@/seed/generate";
 
 // Loads the generated base dataset (workspace_id = 'base'). Node/SQLite runs the generator in
@@ -23,31 +23,12 @@ const columnsOf = (rows: Record<string, Value>[]) => {
   return groups;
 };
 
+// Loads the base with the same statements the D1 load runs (baseSql), so local SQLite and D1 take
+// the identical path and both stay inside D1's statement limits.
 export function writeBase(raw: DatabaseSync, b: Base = baseData()) {
   raw.exec("BEGIN");
   try {
-    raw.exec("DELETE FROM workspaces WHERE id <> 'base'");
-    for (const t of baseTables(b)) raw.prepare(`DELETE FROM ${t} WHERE workspace_id = 'base'`).run();
-    raw.exec("DELETE FROM base_balances; DELETE FROM meta");
-    // Multi-row inserts: far fewer statement executions than one row at a time.
-    for (const t of baseTables(b)) {
-      for (const [cols, rows] of columnsOf(b.tables[t])) {
-        const names = cols.split(",");
-        const per = Math.max(1, Math.min(200, Math.floor(30_000 / names.length)));
-        const tuple = `('base', ${names.map(() => "?").join(", ")})`;
-        const sql = (n: number) => `INSERT INTO ${t} (workspace_id, ${cols}) VALUES ${Array(n).fill(tuple).join(", ")}`;
-        const full = raw.prepare(sql(per));
-        for (let i = 0; i < rows.length; i += per) {
-          const chunk = rows.slice(i, i + per);
-          const params = chunk.flatMap((r) => names.map((n) => r[n] as SQLInputValue));
-          (chunk.length === per ? full : raw.prepare(sql(chunk.length))).run(...params);
-        }
-      }
-    }
-    const bal = raw.prepare("INSERT INTO base_balances (account_id, cleared_cents) VALUES (?, ?)");
-    for (const x of b.balances) bal.run(x.account_id, x.cleared_cents);
-    const meta = raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)");
-    for (const [k, v] of Object.entries({ ...b.meta, base_hash: baseHash(b) })) meta.run(k, v);
+    for (const sql of baseSql(b)) raw.exec(sql);
     raw.exec("COMMIT");
   } catch (e) {
     raw.exec("ROLLBACK");

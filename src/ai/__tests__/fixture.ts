@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { applyMigrations, sqliteDb } from "@/lib/platform/sqlite";
+import { applyMigrations, D1_LIMITS, sqliteDb } from "@/lib/platform/sqlite";
 import type { Actor } from "@/entities/types";
 
 // A small base dataset for the AI tests: two Austin properties and one in Atlanta, three leases at
@@ -18,7 +18,7 @@ function ins(raw: DatabaseSync, table: string, rows: R[]) {
 }
 
 export function openFixture() {
-  const raw = new DatabaseSync(":memory:");
+  const raw = new DatabaseSync(":memory:", { limits: D1_LIMITS });
   applyMigrations(raw);
   raw.exec(`INSERT INTO workspaces (id, kind, created_at, last_seen_at) VALUES ('${WS}', 'demo', 0, ${Date.now()})`);
   raw.exec(`INSERT INTO meta (key, value) VALUES ('as_of', '${TODAY}')`);

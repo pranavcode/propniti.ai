@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { describe, expect, it } from "vitest";
-import { applyMigrations } from "@/lib/platform/sqlite";
+import { applyMigrations, D1_LIMITS } from "@/lib/platform/sqlite";
 
 // 0002_v2 replaces the 0001 domain. These checks hold the schema to the conventions in its header.
 
 const open = () => {
-  const raw = new DatabaseSync(":memory:");
+  const raw = new DatabaseSync(":memory:", { limits: D1_LIMITS });
   raw.exec("PRAGMA foreign_keys = ON");
   return raw;
 };

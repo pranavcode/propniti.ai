@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { applyMigrations, sqliteDb } from "@/lib/platform/sqlite";
+import { applyMigrations, sqliteDb, D1_LIMITS } from "@/lib/platform/sqlite";
 import { writeBase } from "@/server/base";
 import { AS_OF } from "@/seed/constants";
 import { daysBetween, sql, type DataCtx } from "../data";
@@ -86,7 +86,7 @@ async function ledgerDelinquency(ctx: DataCtx, today: string, f: { minDays?: num
 
 describe("delinquency from stored charge columns", () => {
   it("matches the ledger-summing version on the full seed", async () => {
-    const raw = new DatabaseSync(":memory:");
+    const raw = new DatabaseSync(":memory:", { limits: D1_LIMITS });
     applyMigrations(raw);
     writeBase(raw);
     const ctx: DataCtx = { db: sqliteDb(raw), ws: "base", actor: DANIEL };

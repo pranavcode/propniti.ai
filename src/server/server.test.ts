@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Actor } from "@/entities/types";
 import { SETTLE_MS } from "@/lib/ledger";
-import { applyMigrations, openSqlite } from "@/lib/platform/sqlite";
+import { applyMigrations, openSqlite, D1_LIMITS } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { chargeOpenSql, chargeStatusSql, chargeStatusStoredSql, get, householdBalanceSql, leaseBalanceSql, leaseLastPaymentSql, list, ownerStatement, trustBalances, withEffective } from "./data";
 import { effective } from "./effective";
@@ -43,7 +43,7 @@ const overlayRows = async (ws: string) => {
 
 describe("migrations and base", () => {
   it("apply to an empty database, and running them again changes nothing", () => {
-    const raw = new DatabaseSync(":memory:");
+    const raw = new DatabaseSync(":memory:", { limits: D1_LIMITS });
     applyMigrations(raw);
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
