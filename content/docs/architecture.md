@@ -12,6 +12,10 @@ Key choices:
 
 Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
 
+![System architecture: browsers reach one Cloudflare Worker at propniti.ai, which serves pages and APIs, checks scope, runs the AI runtime, reads a D1 database with a shared base and per-visitor overlays, and calls models through one provider layer; a Cron Trigger starts the sweep every 15 minutes](/docs/architecture/system-architecture.svg#1000x560)
+
+*System architecture. One Worker serves everything; data is a shared read-only base plus a private overlay per visitor; models sit behind one provider layer, with rules as the fallback.*
+
 ## Runtime
 
 | Part | What it is |
@@ -65,6 +69,11 @@ All rows live in one database. Every table has a `workspace_id`.
 
 ## Record types and permissions
 
+
+![Access model: persona, role, module permission and scope decide what is visible; writes re-check scope; agent proposals follow the decide rule, with life-safety items reserved for the regional manager or principal; portal personas are self-scoped](/docs/architecture/access-model.svg#1000x420)
+
+*Who sees and does what. Scope filters every read in SQL; the decide rule sets who may approve each proposal.*
+
 - **`EntityDef`** (`src/entities/types.ts`) describes a record type once: table, route, fields, list columns, KPIs, charts, tabs, actions, permissions, help text, data rules and AI facts. Modules register them in `src/entities/defs/<module>.ts`.
 - **Named actions** (`src/extensions/*/actions.ts`), keyed `<entity>.<verb>`, carry workflow and money changes. Status and approval fields are `system` fields that only actions set. Ledger tables (charges, payments, credits, deposits, bank accounts and transactions, reconciliations, journal entries, owner distributions) accept actions only.
 - **Locked records.** `lockedWhen` refuses edits and deletes of paid bills, sent renewal offers, decided concessions and ended leases.
@@ -106,6 +115,11 @@ Every agent runs the same loop (`framework.ts`):
 **Tools** (`src/ai/tools`): `records.search`, `records.get`, `records.related`, `ledger.delinquency`, `ledger.lookup`, `metrics.monthly`, `metrics.explain_noi`, `data.issues`, `help.search`, `policy.lookup`, `messages.draft`, `actions.propose`, `data.propose_fix`, `actions.execute`. Inputs are zod-checked, each tool checks the caller's role, and read tools use the scoped query layer. Write tools never touch ledger tables.
 
 ### Orchestrator and triggers
+
+
+![Agent run flow: six triggers start a run in the orchestrator; the agent collects candidates with read tools and an optional model; each proposal is routed by autonomy, policy limits and always-a-person rules; it applies on its own or waits for a person allowed by the decide rule; the registered action re-checks the record and runs once](/docs/architecture/agent-run-flow.svg#1000x622)
+
+*How an agent run turns into a change. Agents only propose; every change runs through a registered action that re-checks scope and the record first.*
 
 `src/ai/orchestrator.ts` turns a trigger into an `agent_runs` row, runs the agent under a time limit, and records every step in `agent_steps`. The run page streams those steps over server-sent events. `src/ai/trace.ts` turns each step into a plain sentence and links the records it touched by name, filling names only for records the viewer may see; raw input and output stay under *Technical details*.
 
