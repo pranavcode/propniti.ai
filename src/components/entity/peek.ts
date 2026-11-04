@@ -4,6 +4,7 @@ import type { HealthIssue } from "@/components/app/ai/DataHealthBadge";
 import type { DataColumn } from "@/components/app/data-table/types";
 import { effective, relations, type QueryCtx } from "@/server/query";
 import { actionsForRow } from "@/server/permissions";
+import { cachedSummary, type Summary } from "@/ai/summaries";
 import { columnKind, formFields, refHref, type FormField } from "./spec";
 import type { ActionButton } from "./RecordActions";
 
@@ -15,10 +16,12 @@ export async function healthIssues(ctx: QueryCtx, entity: string, id: string): P
   return res.results.map((r) => ({ id: String(r.id), rule: String(r.rule_id), severity: r.severity as HealthIssue["severity"], summary: String(r.name) }));
 }
 
-export type AiSummary = { summary: string; model: string; generated_at: string };
+export type AiSummary = Pick<Summary, "summary" | "model" | "generated_at" | "source">;
 
-export async function aiSummary(ctx: QueryCtx, entity: string, id: string) {
-  return ctx.db.prepare(`SELECT summary, model, generated_at FROM ${effective("ai_summaries", ctx.ws)} WHERE entity_type = ? AND entity_id = ? ORDER BY generated_at DESC LIMIT 1`).bind(entity, id).first<AiSummary>();
+// Built from the row's current figures (see cachedSummary), so it matches the facts shown beside it.
+export async function aiSummary(ctx: QueryCtx, entity: string, id: string, row: Row): Promise<AiSummary | null> {
+  const s = await cachedSummary({ db: ctx.db, ws: ctx.ws ?? "base", actor: ctx.actor }, entity, id, row);
+  return s && { summary: s.summary, model: s.model, generated_at: s.generated_at, source: s.source };
 }
 
 export const statusKeyOf = (def: EntityDef) => (def.list.statusTabs && def.fields[def.list.statusTabs]?.type === "enum" ? def.list.statusTabs : def.fields.status ? "status" : null);
@@ -55,7 +58,7 @@ export async function peekData(ctx: QueryCtx, def: EntityDef, row: Row): Promise
     // Counts only: the first row of each relation carries its total.
     relations(ctx, def, row, names, 1),
     def.dataRules?.length ? healthIssues(ctx, def.key, id) : Promise.resolve(null),
-    def.capabilities?.aiSummary ? aiSummary(ctx, def.key, id) : Promise.resolve(false as const),
+    def.capabilities?.aiSummary ? aiSummary(ctx, def.key, id, row) : Promise.resolve(false as const),
   ]);
   const statusKey = statusKeyOf(def);
   const related = names.flatMap((name): PeekRelated[] => {

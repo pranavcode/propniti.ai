@@ -5,6 +5,8 @@ import { ClipboardCheck, KeyRound, Package, PaintRoller, Receipt, RefreshCcw, Ha
 import { AS_OF, issuesField, LEADERS, OPS, STAFF } from "../common";
 import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
 import { registerEntity } from "../registry";
+import { formatDate, formatMoney } from "@/lib/format";
+import { AS_OF as AS_OF_DATE } from "@/seed/constants";
 import type { Role } from "../types";
 
 const OPEN = "('Completed', 'Paid', 'Cancelled')";
@@ -203,6 +205,15 @@ registerEntity({
   capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
   ai: {
     facts: (r) => ({ vendor: String(r.company), trade: String(r.trade), status: String(r.status), rating: r.rating == null ? null : Number(r.rating), open_jobs: Number(r.open_jobs ?? 0), spend_12m: r.spend_12m == null ? null : Number(r.spend_12m), coi_expires: (r.coi_expires as string) ?? null, bank_changed_recently: !!r.bank_changed_at }),
+    rulesSummary: (f) => {
+      const jobs = Number(f.open_jobs ?? 0);
+      return [
+        `${f.vendor} (${f.trade}, ${String(f.status).toLowerCase()}) has ${jobs} open job${jobs === 1 ? "" : "s"}${f.rating == null ? "" : ` and a ${f.rating} rating`}.`,
+        f.spend_12m == null ? null : `Spend over the last 12 months is ${formatMoney(Number(f.spend_12m), "whole")}.`,
+        f.coi_expires ? `The verified insurance certificate on file ${String(f.coi_expires) < AS_OF_DATE ? "expired" : "expires"} ${formatDate(String(f.coi_expires), "always")}.` : "No verified insurance certificate is on file.",
+        f.bank_changed_recently ? "Bank details have been changed." : null,
+      ].filter(Boolean).join(" ");
+    },
     agents: ["ap", "compliance"],
   },
   permissions: { read: [...STAFF, "vendor"], create: [...OPS, "maintenance_supervisor", "accountant"], update: [...OPS, "maintenance_supervisor", "accountant", "vendor"], delete: [...LEADERS] },

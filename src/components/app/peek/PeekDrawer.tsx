@@ -165,7 +165,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
             {p.summary
               ? <>
                   <p className="mt-1.5 text-[13px] leading-relaxed">{p.summary.summary}</p>
-                  <p className="mt-2 text-[11px] text-muted-foreground">Precomputed · {p.summary.model} · {formatRelative(p.summary.generated_at)}</p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">{p.summary.source === "rules" ? "Rules · from this record's current figures" : `${p.summary.source === "live" ? "Generated" : "Precomputed"} · ${p.summary.model} · ${formatRelative(p.summary.generated_at)}`}</p>
                 </>
               : <p className="mt-1.5 text-[12.5px] text-muted-foreground">No summary yet for this {p.label.one.toLowerCase()}. Ask the assistant about it instead.</p>}
           </section>
