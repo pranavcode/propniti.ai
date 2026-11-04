@@ -257,3 +257,39 @@ describe("pipeline undo", () => {
     expect(await count("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND entity_id = 'pr-u' AND action = 'prospects.move_stage'", WS)).toBe(2);
   });
 });
+
+describe("approving an edited proposal sends the edited wording", () => {
+  const proposalFor = async (id: string, action: string, payload: Record<string, unknown>) => {
+    const db = getPlatform().db;
+    const pid = `prop-edit-${id}`;
+    await db.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, payload, why, confidence, risk, queue_state, created_at) VALUES (?, ?, 'leasing', 'prospects', ?, 'p01', ?, 'Follow up', ?, '[]', 0.8, 'Low', 'needs_you', '2026-11-04T10:00:00Z')")
+      .bind(WS, pid, id, action, JSON.stringify(payload)).run();
+    return (await db.prepare("SELECT * FROM ai_proposals WHERE workspace_id = ? AND id = ?").bind(WS, pid).first<Record<string, unknown>>())!;
+  };
+  const original = { subject: "Still looking?", body: "Hi there, thanks for your interest. Reply with a time to tour.", effects: [{ kind: "message", party_kind: "prospect", party_id: "x", subject: "Still looking?", body: "Hi there, thanks for your interest. Reply with a time to tour." }] };
+
+  it("sends the approver's edited body for a registered action, and audits it as edited", async () => {
+    const db = getPlatform().db;
+    await db.prepare("INSERT INTO prospects (workspace_id, id, property_id, name, stage, created_at) VALUES ('base', 'pr-e1', 'p01', 'Eve Grant', 'Contacted', '2026-10-20T15:00:00Z')").run();
+    const { executeProposal } = await import("@/ai/effects");
+    const ctx = await ctxFor("lena");
+    const p = await proposalFor("pr-e1", "prospects.send_follow_up", original);
+    const edited = "Hi Eve, we have a 2-bed opening up this month. Want to see it Saturday?";
+    const r = await executeProposal({ db, ws: WS, actor: ctx.actor }, p, { id: "lena", name: "Lena Ortiz", role: "leasing_agent" }, { message: { body: edited } });
+    expect(r).toMatchObject({ ok: true });
+    const msg = await db.prepare("SELECT m.body FROM messages m JOIN message_threads t ON t.id = m.thread_id AND t.workspace_id = m.workspace_id WHERE m.workspace_id = ? AND t.party_id = 'pr-e1'").bind(WS).first<{ body: string }>();
+    expect(msg?.body).toBe(edited);
+    expect(await count("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND entity_id = 'pr-e1' AND action LIKE '%edited and approved%'", WS)).toBe(1);
+  });
+
+  it("refuses an edit that breaks the fair-housing check, and sends nothing", async () => {
+    const db = getPlatform().db;
+    await db.prepare("INSERT INTO prospects (workspace_id, id, property_id, name, stage, created_at) VALUES ('base', 'pr-e2', 'p01', 'Abe Lin', 'Contacted', '2026-10-20T15:00:00Z')").run();
+    const { executeProposal } = await import("@/ai/effects");
+    const ctx = await ctxFor("lena");
+    const p = await proposalFor("pr-e2", "prospects.send_follow_up", original);
+    const r = await executeProposal({ db, ws: WS, actor: ctx.actor }, p, { id: "lena", name: "Lena Ortiz", role: "leasing_agent" }, { message: { body: "Hi Abe, it's a quiet adult building, no kids, perfect for you." } });
+    expect(r.ok).toBe(false);
+    expect(await count("SELECT count(*) AS n FROM message_threads WHERE workspace_id = ? AND party_id = 'pr-e2'", WS)).toBe(0);
+  });
+});

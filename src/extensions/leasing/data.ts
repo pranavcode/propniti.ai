@@ -1,7 +1,6 @@
 import "server-only";
-import { getEntity } from "@/entities";
 import type { Actor, Role, Row } from "@/entities/types";
-import { PERMISSIONS } from "@/auth/personas";
+import { staffDecision } from "@/ai/decide";
 import { currentSession } from "@/auth/session";
 import { sql } from "@/ai/data";
 import { proposalOut, type ProposalOut } from "@/ai/views";
@@ -81,12 +80,8 @@ export async function leasingProposals(c: LeasingCtx, opts: { actions?: string[]
   return rows.map((r): ProposalOut & { canApprove: boolean } => Object.assign(proposalOut(r), { canApprove: mayDecide(c.actor.role, r) }));
 }
 
-// Mirrors canDecide in src/ai/http.ts (the API enforces it): low-risk items need write access to
-// the record's module, anything else needs approve access.
-function mayDecide(role: Role, p: Row) {
-  const access = PERMISSIONS[role][getEntity(String(p.entity_type))?.module ?? "intelligence"] ?? "none";
-  return p.risk !== "Low" || p.amount_cents != null ? access === "approve" : access === "write" || access === "approve";
-}
+// The approvals API's own rule (src/ai/decide.ts), so the page offers exactly what the API allows.
+const mayDecide = (role: Role, p: Row) => staffDecision(role, p).ok;
 
 // Applications waiting on the broker, with the latest Leasing agent score if there is one.
 export async function waitingApplications(c: LeasingCtx, limit = 10) {
@@ -252,7 +247,7 @@ export async function renewalDrafts(c: LeasingCtx, window: number): Promise<Prep
     const body = x?.payload?.body;
     return {
       offerId: String(r.id), leaseId: String(r.lease_id), resident: String(r.resident), property: String(r.property), unit: String(r.unit), endOn: String(r.end_on ?? ""), rent: Number(r.current_cents) / 100, offerRent: Number(r.rent_cents) / 100,
-      proposal: x && typeof body === "string" ? { id: x.id, title: x.title, risk: x.risk, why: x.why ?? [], subject: String(x.payload?.subject ?? ""), body, runId: x.run, canApprove: mayDecide(c.actor.role, { risk: x.risk, amount_cents: x.amount, queue_state: x.queue, entity_type: "renewal_offers" }) } : null,
+      proposal: x && typeof body === "string" ? { id: x.id, title: x.title, risk: x.risk, why: x.why ?? [], subject: String(x.payload?.subject ?? ""), body, runId: x.run, canApprove: mayDecide(c.actor.role, { risk: x.risk, amount_cents: x.amount, queue_state: x.queue, entity_type: "renewal_offers"}) } : null,
     };
   });
 }

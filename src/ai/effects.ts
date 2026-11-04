@@ -103,8 +103,13 @@ export const Edits = z.object({ message: z.object({ subject: z.string().max(200)
 function withEdits(payload: Record<string, unknown>, edited: unknown) {
   if (edited === undefined) return payload;
   const e = Edits.parse(edited);
-  const effects = (Array.isArray(payload.effects) ? payload.effects : []).map((x: Record<string, unknown>) => (x.kind === "message" && e.message ? { ...x, ...e.message } : x));
-  return { ...payload, effects };
+  if (!e.message) return payload;
+  const message = Object.fromEntries(Object.entries(e.message).filter(([, v]) => v !== undefined));
+  const effects = (Array.isArray(payload.effects) ? payload.effects : []).map((x: Record<string, unknown>) => (x.kind === "message" ? { ...x, ...message } : x));
+  // Registered actions read their input from payload.input, or else the payload itself (subject and
+  // body at the top): the edit goes there too, so the action sends and re-checks the edited text.
+  const input = payload.input && typeof payload.input === "object" ? { input: { ...(payload.input as Record<string, unknown>), ...message } } : {};
+  return { ...payload, ...message, ...input, effects };
 }
 
 // Proposals written before effects existed (the seeded history) carry only a few params. Their
