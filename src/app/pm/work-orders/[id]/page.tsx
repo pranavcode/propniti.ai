@@ -1,6 +1,6 @@
-import { WorkOrderPage } from "@/components/views/DetailViews";
+import { redirect } from "next/navigation";
 
-export default async function Page({ params }: PageProps<"/pm/work-orders/[id]">) {
-  const { id } = await params;
-  return <WorkOrderPage id={decodeURIComponent(id)} />;
+// v1 route; v2 lives at /app/maintenance/work-orders.
+export default function Page() {
+  redirect("/app/maintenance/work-orders");
 }

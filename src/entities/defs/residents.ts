@@ -1,0 +1,529 @@
+// Entity defs for the residents module. Call registerEntity() from "../registry" for each def.
+// Owned by the residents module lane; see AGENTS.md "v2 lanes and ownership".
+// Residents and leases are written by lane C as the reference pattern for module lanes.
+import { Car, FileSignature, Home, Megaphone, MessagesSquare, Receipt, ShieldCheck, TextQuote, UserRound, Wrench } from "lucide-react";
+import { AS_OF, FINANCE, issuesField, LEADERS, OPS, STAFF } from "../common";
+import { registerEntity } from "../registry";
+
+// Stored balance (generator) plus the visitor's overlay ledger delta. Not sortable or filterable:
+// that would compute it for every row in scope (seconds on D1 for the whole portfolio). Every ledger read goes through
+// a lease_id index: overlay rows count, and base rows that an overlay copy shadows (a moved
+// payment) are taken back out. Base-only reads cost one index probe per lease.
+const LEDGER_DELTA = [["charges", "+", "-", ""], ["payments", "-", "+", " AND x.nsf = 0"], ["credits", "-", "+", ""]] as const;
+function balanceSql(stored: string, leases: string) {
+  return `(${stored} ${LEDGER_DELTA.map(([t, sign, back, extra]) =>
+    `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${t}} AS x WHERE x.workspace_id <> 'base' AND x.lease_id IN ${leases}${extra}), 0) ${back} coalesce((SELECT sum(x.amount_cents) FROM ${t} AS x WHERE x.workspace_id = 'base' AND x.lease_id IN ${leases}${extra} AND EXISTS (SELECT 1 FROM {${t}} AS o WHERE o.workspace_id <> 'base' AND o.id = x.id)), 0)`).join(" ")})`;
+}
+const leaseBalance = (alias: string) => balanceSql(`${alias}.balance_cents`, `(${alias}.id)`);
+const householdBalance = (alias: string) => balanceSql(`${alias}.balance_cents`, `(SELECT hl.id FROM {leases} AS hl WHERE hl.household_id = ${alias}.id)`);
+
+const CURRENT_LEASE = "l.household_id = residents.household_id AND l.status IN ('Active', 'Notice', 'Month-to-month', 'Eviction')";
+
+registerEntity({
+  key: "residents",
+  table: "residents",
+  label: { one: "Resident", many: "Residents" },
+  icon: UserRound,
+  module: "residents",
+  nav: { section: "operations", order: 20 },
+  route: "/app/residents",
+  titleField: "name",
+  subtitle: (r) => [r.unit, r.property_id__label].filter(Boolean).join(" · "),
+  scopePath: "residents.property_id",
+  fields: {
+    name: { type: "text", label: "Name", sortable: true, list: { default: true, width: 220 }, sql: "residents.first_name || ' ' || residents.last_name" },
+    first_name: { type: "text", label: "First name", required: true, search: true },
+    last_name: { type: "text", label: "Last name", required: true, search: true, sortable: true },
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "Current", tone: "success" }, { value: "Notice", tone: "warning" }, { value: "Future", tone: "info" },
+      { value: "Past", tone: "neutral" }, { value: "Eviction", tone: "danger" },
+    ] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
+    unit: { type: "text", label: "Unit", list: { default: true },
+      sql: `(SELECT '#' || u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE ${CURRENT_LEASE} ORDER BY l.start_on DESC LIMIT 1)` },
+    // Stored per household by the generator, plus the visitor's overlay ledger delta (no per-row ledger scan).
+    balance: { type: "money", label: "Balance", sortable: false, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [],
+      sql: `(SELECT ${householdBalance("h")} FROM {households} h WHERE h.id = residents.household_id)`,
+      help: { summary: "Charges less payments and credits for the household. Positive means the resident owes money.", article: "resident-ledger" } },
+    lease_end: { type: "date", label: "Lease ends", sortable: true, list: { default: true }, sql: `(SELECT l.end_on FROM {leases} l WHERE ${CURRENT_LEASE} ORDER BY l.start_on DESC LIMIT 1)` },
+    email: { type: "text", label: "Email", search: true, list: { default: false } },
+    phone: { type: "text", label: "Phone", search: true, list: { default: true } },
+    preferred_channel: { type: "enum", label: "Preferred channel", facet: true, enum: [{ value: "Email", tone: "neutral" }, { value: "SMS", tone: "neutral" }, { value: "Portal", tone: "neutral" }, { value: "Phone", tone: "neutral" }] },
+    language: { type: "enum", label: "Language", facet: true, enum: [{ value: "en", tone: "neutral", label: "English" }, { value: "es", tone: "neutral", label: "Spanish" }] },
+    autopay: { type: "bool", label: "Autopay", facet: true, list: { default: false } },
+    risk_score: { type: "number", label: "Delinquency risk", sortable: true, list: { default: false, align: "right" }, hiddenFor: ["resident", "leasing_agent", "maintenance_supervisor"], editable: [],
+      help: { summary: "0–100 score from payment history: late payments, NSF returns and balance trend. Higher means more likely to fall behind.", article: "delinquency-risk" } },
+    is_primary: { type: "bool", label: "Primary on lease" },
+    household_id: { type: "ref", ref: "households", label: "Household", required: true, editable: [] },
+    open_issues: issuesField("residents"),
+  },
+  relations: [
+    { name: "property", entity: "properties", fk: "property_id", kind: "one" },
+    { name: "household", entity: "households", fk: "household_id", kind: "one" },
+    { name: "leases", entity: "leases", fk: "household_id=household_id", kind: "many" },
+    { name: "charges", label: "Ledger", entity: "charges", fk: "household_id=household_id", kind: "many" },
+    { name: "payments", entity: "payments", fk: "household_id=household_id", kind: "many" },
+    { name: "co_residents", label: "Household members", entity: "residents", fk: "household_id=household_id", kind: "many" },
+    { name: "requests", label: "Service requests", entity: "service_requests", fk: "resident_id", kind: "many" },
+    { name: "threads", label: "Conversations", entity: "message_threads", fk: "party_id", kind: "many" },
+  ],
+  list: {
+    defaultSort: ["last_name", "asc"],
+    statusTabs: "status",
+    savedViews: [
+      { key: "high-risk", label: "High delinquency risk", filters: { "risk_score.min": "70" }, sort: ["risk_score", "desc"] },
+      { key: "no-autopay", label: "Not on autopay", filters: { autopay: "false", status: "Current" } },
+      { key: "spanish", label: "Prefer Spanish", filters: { language: "es" } },
+    ],
+  },
+  detail: {
+    facts: ["status", "property_id", "unit", "balance", "lease_end", "phone", "email", "risk_score"],
+    tabs: [
+      { custom: "residents.overview" },
+      { key: "profile", label: "Profile", fields: ["first_name", "last_name", "email", "phone", "preferred_channel", "language", "autopay", "is_primary", "status", "property_id", "household_id", "risk_score"] },
+      { key: "ledger", label: "Ledger", relation: "charges", roles: [...FINANCE, "resident"] },
+      { key: "payments", label: "Payments", relation: "payments", roles: [...FINANCE, "resident"] },
+      { key: "leases", label: "Leases", relation: "leases" },
+      { key: "requests", label: "Requests", relation: "requests" },
+      { key: "threads", label: "Messages", relation: "threads" },
+    ],
+    related: ["property", "household", "co_residents"],
+  },
+  capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
+  kpis: [
+    { key: "delinquent", label: "Past due today", metric: "receivables.aging_live", format: "money", goodWhen: "down", drill: "/app/receivables/delinquency", help: { summary: "Unpaid charges past their due date as of today, the same figure the receivables pages show.", article: "resident-ledger" } },
+    { key: "collections", label: "Collections rate", metric: "receivables.collections_rate", format: "pct", delta: "mom", goodWhen: "up", drill: "/app/receivables/payments" },
+    { key: "high_risk", label: "High delinquency risk", metric: "residents.high_risk", format: "count", goodWhen: "down", drill: "/app/residents?view=high-risk", help: { summary: "Current residents scoring 70 or more on delinquency risk.", article: "delinquency-risk" } },
+    { key: "insurance_gaps", label: "Insurance lapsed or expiring", metric: "residents.insurance_gaps", format: "count", goodWhen: "down", drill: "/app/residents/insurance?f.status=Lapsed,Expiring", help: { summary: "Active leases whose renters insurance has lapsed or expires within 30 days.", article: "renters-insurance" } },
+  ],
+  charts: [
+    { key: "risk_bands", title: "Delinquency risk, current residents", kind: "bar", metric: "residents.risk_bands", x: "band", series: [{ key: "count", label: "Residents", format: "count" }], drill: "/app/residents?f.risk_score.min={min}&f.risk_score.max={max}&f.status=Current", help: { summary: "Residents by risk score band. Click a bar for the residents in it.", article: "delinquency-risk" } },
+    { key: "status_mix", title: "Residents by status", kind: "donut", metric: "residents.status_mix", x: "status", series: [{ key: "count", label: "Residents", format: "count" }], drill: "/app/residents?f.status={status}" },
+    { key: "insurance", title: "Renters insurance on active leases", kind: "donut", metric: "residents.insurance_status", x: "status", series: [{ key: "count", label: "Policies", format: "count" }], drill: "/app/residents/insurance?f.status={status}" },
+  ],
+  ai: {
+    facts: (r, rel) => ({ resident: String(r.name), status: String(r.status), unit: (r.unit as string) ?? null, balance: r.balance == null ? null : Number(r.balance), lease_end: (r.lease_end as string) ?? null, risk_score: r.risk_score == null ? null : Number(r.risk_score), autopay: !!r.autopay, nsf_payments: rel.payments?.filter((p) => p.nsf).length ?? 0 }),
+    summaryPrompt: "Summarise this resident's standing for the property manager in 2-3 sentences: balance and payment pattern, lease timing, and any follow-up. Use only the facts; never promise a waiver.",
+    agents: ["collections", "renewals"],
+  },
+  permissions: { read: [...STAFF, "resident"], create: [...OPS, "leasing_agent"], update: [...OPS, "leasing_agent", "resident"], delete: [...LEADERS] },
+  writes: "generic",
+  dataRules: ["residents.possible_duplicate", "residents.phone_in_email"],
+  help: { summary: "Everyone living in your units, with their balance, lease timing and how they like to be contacted.", article: "residents" },
+});
+
+registerEntity({
+  key: "leases",
+  table: "leases",
+  label: { one: "Lease", many: "Leases" },
+  icon: FileSignature,
+  module: "residents",
+  nav: { section: "operations", order: 30 },
+  route: "/app/leases",
+  titleField: "label",
+  subtitle: (r) => [r.property_id__label, r.start_on && r.end_on ? `${r.start_on} → ${r.end_on}` : r.start_on].filter(Boolean).join(" · "),
+  scopePath: "leases.property_id",
+  fields: {
+    label: { type: "text", label: "Lease", sortable: true, list: { default: true, width: 240 },
+      sql: "coalesce((SELECT h.name FROM {households} h WHERE h.id = leases.household_id), leases.id) || ' · #' || coalesce((SELECT u.number FROM {units} u WHERE u.id = leases.unit_id), '?')" },
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "Active", tone: "success" }, { value: "Future", tone: "info" }, { value: "Notice", tone: "warning" }, { value: "Month-to-month", tone: "warning" },
+      { value: "Expired", tone: "neutral" }, { value: "Terminated", tone: "neutral" }, { value: "Eviction", tone: "danger" },
+    ] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
+    unit_id: { type: "ref", ref: "units", label: "Unit", required: true, list: { default: false }, editable: [] },
+    household_id: { type: "ref", ref: "households", label: "Household", required: true, search: false, editable: [] },
+    kind: { type: "enum", label: "Kind", facet: true, enum: [{ value: "Residential", tone: "neutral" }, { value: "Commercial", tone: "neutral" }] },
+    start_on: { type: "date", label: "Starts", required: true, sortable: true, list: { default: true } },
+    end_on: { type: "date", label: "Ends", sortable: true, list: { default: true } },
+    days_to_end: { type: "number", label: "Days to end", sortable: true, list: { default: false, align: "right" }, sql: `CAST(julianday(leases.end_on) - julianday(${AS_OF}) AS INTEGER)` },
+    term_months: { type: "number", label: "Term (months)", facet: true },
+    rent: { type: "money", label: "Rent", column: "rent_cents", required: true, sortable: true, list: { default: true, align: "right" }, editable: [...OPS],
+      help: { summary: "Monthly base rent. Changing it here does not re-bill past months; future charges follow the new amount.", article: "rent-changes" } },
+    deposit: { type: "money", label: "Deposit", column: "deposit_cents", list: { default: false, align: "right" }, editable: [...OPS] },
+    market_rent: { type: "money", label: "Market rent", list: { default: false, align: "right" }, sql: "(SELECT u.market_rent_cents FROM {units} u WHERE u.id = leases.unit_id)" },
+    balance: { type: "money", label: "Balance", sortable: false, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [], sql: leaseBalance("leases") },
+    move_in_on: { type: "date", label: "Move-in" },
+    move_out_on: { type: "date", label: "Move-out" },
+    notice_on: { type: "date", label: "Notice given" },
+    renewal_of: { type: "ref", ref: "leases", label: "Renews lease", editable: [] },
+    escalations: { type: "json", label: "Escalations" },
+    nnn_share_pct: { type: "number", label: "Pro-rata share", format: "pct" },
+    cam: { type: "money", label: "CAM estimate", column: "cam_cents" },
+    tax: { type: "money", label: "Tax estimate", column: "tax_cents" },
+    insurance: { type: "money", label: "Insurance estimate", column: "insurance_cents" },
+    signed_by: { system: true, type: "ref", ref: "staff", label: "Signed by", editable: ["broker", "principal"] },
+    signed_at: { system: true, type: "datetime", label: "Signed", editable: ["broker", "principal"] },
+    open_issues: issuesField("leases"),
+  },
+  relations: [
+    { name: "unit", entity: "units", fk: "unit_id", kind: "one" },
+    { name: "property", entity: "properties", fk: "property_id", kind: "one" },
+    { name: "household", entity: "households", fk: "household_id", kind: "one" },
+    { name: "residents", entity: "residents", fk: "household_id=household_id", kind: "many" },
+    { name: "charges", label: "Ledger", entity: "charges", fk: "lease_id", kind: "many" },
+    { name: "payments", entity: "payments", fk: "lease_id", kind: "many" },
+    { name: "previous", label: "Previous lease", entity: "leases", fk: "renewal_of", kind: "one" },
+    { name: "recurring_charges", label: "Recurring charges", entity: "recurring_charges", fk: "lease_id", kind: "many" },
+    { name: "insurance", label: "Renters insurance", entity: "renters_insurance", fk: "lease_id", kind: "many" },
+  ],
+  list: {
+    defaultSort: ["end_on", "asc"],
+    statusTabs: "status",
+    savedViews: [
+      { key: "expiring-60", label: "Ending in 60 days", filters: { "days_to_end.min": "0", "days_to_end.max": "60", status: ["Active", "Notice"] }, sort: ["end_on", "asc"] },
+      { key: "expiring-90", label: "Ending in 90 days", filters: { "days_to_end.min": "0", "days_to_end.max": "90", status: ["Active", "Notice"] }, sort: ["end_on", "asc"] },
+      { key: "mtm", label: "Month-to-month", filters: { status: "Month-to-month" } },
+      { key: "commercial", label: "Commercial NNN", filters: { kind: "Commercial" } },
+    ],
+    footer: [{ field: "rent", fn: "sum", label: "Rent" }],
+  },
+  detail: {
+    facts: ["status", "unit_id", "start_on", "end_on", "rent", "balance", "market_rent", "days_to_end"],
+    tabs: [
+      { key: "overview", label: "Overview", fields: ["status", "kind", "property_id", "unit_id", "household_id", "start_on", "end_on", "term_months", "move_in_on", "move_out_on", "notice_on", "rent", "deposit", "market_rent", "renewal_of", "signed_by", "signed_at"] },
+      { key: "ledger", label: "Ledger", relation: "charges", roles: [...FINANCE, "resident"] },
+      { key: "payments", label: "Payments", relation: "payments", roles: [...FINANCE, "resident"] },
+      { key: "residents", label: "Residents", relation: "residents" },
+      { custom: "residents.terms" },
+      { custom: "residents.abstraction" },
+      { key: "charges_setup", label: "Recurring charges", relation: "recurring_charges" },
+      { key: "insurance_tab", label: "Insurance", relation: "insurance" },
+    ],
+    related: ["unit", "property", "residents", "previous"],
+  },
+  capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
+  kpis: [
+    { key: "move_ins", label: "Move-ins", metric: "leasing.move_ins", format: "count", delta: "mom", goodWhen: "up", drill: "/app/leases?f.status=Future" },
+    { key: "expiring_60", label: "Ending in 60 days", metric: "residents.expiring_60", format: "count", goodWhen: "down", drill: "/app/leases?view=expiring-60" },
+    { key: "mtm", label: "Month-to-month", metric: "residents.mtm", format: "count", goodWhen: "down", drill: "/app/leases?view=mtm" },
+  ],
+  charts: [
+    { key: "expirations", title: "Lease expirations, next 12 months", kind: "bar", metric: "residents.expirations", x: "label", series: [{ key: "count", label: "Leases ending", format: "count" }], drill: "/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice", help: { summary: "Active and on-notice leases by the month they end. Click a month for the leases.", article: "leases" } },
+    { key: "lease_status", title: "Leases by status", kind: "donut", metric: "residents.lease_status", x: "status", series: [{ key: "count", label: "Leases", format: "count" }], drill: "/app/leases?f.status={status}" },
+  ],
+  ai: {
+    facts: (r, rel) => ({ lease: String(r.label), status: String(r.status), start: String(r.start_on), end: (r.end_on as string) ?? null, rent: Number(r.rent ?? 0), market_rent: r.market_rent == null ? null : Number(r.market_rent), balance: r.balance == null ? null : Number(r.balance), residents: rel.residents?.length ?? 0, days_to_end: r.days_to_end == null ? null : Number(r.days_to_end) }),
+    summaryPrompt: "Summarise this lease for the property manager in 2-3 sentences: term and timing, rent versus market, balance, and the renewal decision if it ends within 90 days. Use only the facts.",
+    agents: ["renewals", "collections"],
+  },
+  permissions: { read: [...STAFF, "resident", "owner"], create: [...OPS, "leasing_agent", "broker"], update: [...OPS, "broker"], delete: [...LEADERS] },
+  writes: "generic",
+  // A finished lease is history: generic edits and deletes are refused.
+  lockedWhen: { field: "status", in: ["Expired", "Terminated"] },
+  dataRules: ["leases.end_before_start", "leases.rent_outlier"],
+  help: { summary: "Every residential and commercial lease: term, rent, balance and renewal timing. Ledgers and payments hang off the lease.", article: "leases" },
+});
+
+// Households, recurring charges, renters insurance, parking/storage, conversations, templates,
+// announcements and service requests: the rest of the residents lane (module key "residents";
+// messaging entities use module "communications" so leasing and maintenance roles can reply).
+
+registerEntity({
+  key: "households",
+  table: "households",
+  label: { one: "Household", many: "Households" },
+  icon: Home,
+  module: "residents",
+  route: "/app/residents/households",
+  titleField: "name",
+  subtitle: (r) => [r.unit, r.property_id__label].filter(Boolean).join(" · "),
+  scopePath: "households.property_id",
+  fields: {
+    name: { type: "text", label: "Household", required: true, search: true, sortable: true, list: { default: true, width: 240 } },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
+    unit: { type: "text", label: "Unit", list: { default: true },
+      sql: "(SELECT '#' || u.number FROM {leases} l JOIN {units} u ON u.id = l.unit_id WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
+    members: { type: "number", label: "Members", sortable: true, list: { default: true, align: "right" }, sql: "(SELECT count(*) FROM {residents} r WHERE r.household_id = households.id)" },
+    lease_status: { type: "text", label: "Lease status", list: { default: true }, sql: "(SELECT l.status FROM {leases} l WHERE l.household_id = households.id ORDER BY l.start_on DESC LIMIT 1)" },
+    balance: { type: "money", label: "Balance", sortable: false, list: { default: true, align: "right" }, hiddenFor: ["leasing_agent", "maintenance_supervisor"], editable: [], sql: householdBalance("households") },
+  },
+  relations: [
+    { name: "property", entity: "properties", fk: "property_id", kind: "one" },
+    { name: "residents", label: "Members", entity: "residents", fk: "household_id", kind: "many" },
+    { name: "leases", entity: "leases", fk: "household_id", kind: "many" },
+  ],
+  list: { defaultSort: ["name", "asc"] },
+  detail: {
+    facts: ["property_id", "unit", "members", "lease_status", "balance"],
+    tabs: [{ key: "residents", label: "Members", relation: "residents" }, { key: "leases", label: "Leases", relation: "leases" }],
+    related: ["property"],
+  },
+  capabilities: { notes: true, activity: true },
+  permissions: { read: [...STAFF, "resident"], create: [...OPS, "leasing_agent"], update: [...OPS, "leasing_agent"], delete: [...LEADERS] },
+  writes: "generic",
+  help: { summary: "Everyone who shares a lease. Balances and leases belong to the household; each member is a resident.", article: "residents" },
+});
+
+registerEntity({
+  key: "recurring_charges",
+  table: "recurring_charges",
+  label: { one: "Recurring charge", many: "Recurring charges" },
+  icon: Receipt,
+  module: "residents",
+  route: "/app/leases/recurring-charges",
+  titleField: "label",
+  subtitle: (r) => [r.lease_id__label, r.frequency].filter(Boolean).join(" · "),
+  scopePath: "recurring_charges.property_id",
+  fields: {
+    label: { type: "text", label: "Charge", search: true, sortable: true, list: { default: true }, facet: true },
+    lease_id: { type: "ref", ref: "leases", label: "Lease", list: { default: true } },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, sortable: true, list: { default: true } },
+    amount: { type: "money", label: "Amount", column: "amount_cents", sortable: true, list: { default: true, align: "right" } },
+    frequency: { type: "text", label: "Frequency", facet: true, list: { default: true } },
+    gl_account_id: { type: "ref", ref: "gl_accounts", label: "GL account", facet: true },
+    start_on: { type: "date", label: "Starts", sortable: true, list: { default: true } },
+    end_on: { type: "date", label: "Ends", sortable: true, list: { default: true } },
+  },
+  relations: [{ name: "lease", entity: "leases", fk: "lease_id", kind: "one" }, { name: "property", entity: "properties", fk: "property_id", kind: "one" }],
+  list: { defaultSort: ["start_on", "desc"], footer: [{ field: "amount", fn: "sum", label: "Amount" }] },
+  detail: { facts: ["lease_id", "amount", "frequency", "start_on", "end_on", "gl_account_id"], tabs: [{ key: "overview", label: "Overview", fields: ["label", "lease_id", "property_id", "amount", "frequency", "gl_account_id", "start_on", "end_on"] }], related: ["lease"] },
+  permissions: { read: [...FINANCE, "leasing_agent", "broker"] },
+  writes: "none",
+  help: { summary: "What each lease bills every month: rent, pet rent, parking, utilities and NNN recoveries. Charges post from these schedules.", article: "leases" },
+});
+
+registerEntity({
+  key: "renters_insurance",
+  table: "renters_insurance",
+  label: { one: "Renters insurance policy", many: "Renters insurance" },
+  icon: ShieldCheck,
+  module: "residents",
+  nav: { section: "operations", order: 22, label: "Renters insurance" },
+  route: "/app/residents/insurance",
+  titleField: "policy_number",
+  subtitle: (r) => [r.carrier, r.lease_id__label].filter(Boolean).join(" · "),
+  scopePath: "renters_insurance.property_id",
+  fields: {
+    policy_number: { type: "text", label: "Policy", required: true, search: true, sortable: true, list: { default: true } },
+    lease_id: { type: "ref", ref: "leases", label: "Lease", required: true, list: { default: true }, editable: [] },
+    property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true }, editable: [] },
+    carrier: { type: "text", label: "Carrier", required: true, facet: true, search: true, list: { default: true } },
+    liability: { type: "money", label: "Liability", column: "liability_cents", required: true, format: "compact", sortable: true, list: { default: true, align: "right" } },
+    starts_on: { type: "date", label: "Starts", required: true, sortable: true },
+    expires_on: { type: "date", label: "Expires", required: true, sortable: true, list: { default: true } },
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" },
+    ] },
+  },
+  relations: [{ name: "lease", entity: "leases", fk: "lease_id", kind: "one" }, { name: "property", entity: "properties", fk: "property_id", kind: "one" }],
+  list: {
+    defaultSort: ["expires_on", "asc"],
+    statusTabs: "status",
+    savedViews: [{ key: "gaps", label: "Lapsed or expiring", filters: { status: ["Lapsed", "Expiring"] }, sort: ["expires_on", "asc"] }],
+  },
+  detail: { facts: ["status", "carrier", "lease_id", "liability", "starts_on", "expires_on"], tabs: [{ key: "overview", label: "Overview", fields: ["policy_number", "carrier", "lease_id", "property_id", "liability", "starts_on", "expires_on", "status"] }], related: ["lease", "property"] },
+  capabilities: { notes: true, activity: true, documents: true },
+  permissions: { read: [...STAFF, "resident"], create: [...OPS, "leasing_agent", "resident"], update: [...OPS, "leasing_agent"], delete: [...OPS] },
+  writes: "generic",
+  help: { summary: "Proof of renters insurance on each lease. Lapsed policies are a lease violation and a liability gap for the owner.", article: "renters-insurance" },
+});
+
+registerEntity({
+  key: "rentable_items",
+  table: "rentable_items",
+  label: { one: "Parking or storage", many: "Parking and storage" },
+  icon: Car,
+  module: "residents",
+  nav: { section: "operations", order: 32, label: "Parking and storage" },
+  route: "/app/parking-storage",
+  titleField: "label",
+  subtitle: (r) => [r.kind, r.subtype, r.property_id__label].filter(Boolean).join(" · "),
+  scopePath: "rentable_items.property_id",
+  fields: {
+    label: { type: "text", label: "Space", required: true, search: true, sortable: true, list: { default: true } },
+    kind: { type: "enum", label: "Kind", required: true, facet: true, sortable: true, list: { default: true }, enum: [{ value: "Parking", tone: "neutral" }, { value: "Storage", tone: "neutral" }] },
+    subtype: { type: "text", label: "Type", facet: true, list: { default: true } },
+    property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true }, editable: [] },
+    rent: { type: "money", label: "Monthly rent", column: "rent_cents", sortable: true, list: { default: true, align: "right" } },
+  },
+  relations: [{ name: "property", entity: "properties", fk: "property_id", kind: "one" }],
+  list: { defaultSort: ["label", "asc"], statusTabs: "kind", footer: [{ field: "rent", fn: "sum", label: "Monthly rent" }] },
+  detail: { facts: ["kind", "subtype", "property_id", "rent"], tabs: [{ key: "overview", label: "Overview", fields: ["label", "kind", "subtype", "property_id", "rent"] }], related: ["property"] },
+  capabilities: { notes: true, activity: true },
+  permissions: { read: [...STAFF], create: [...OPS], update: [...OPS, "leasing_agent"], delete: [...OPS] },
+  writes: "generic",
+  help: { summary: "Parking spaces and storage units you rent alongside apartments, with their monthly price.", article: "parking-storage" },
+});
+
+const PARTY_NAME = `(CASE message_threads.party_kind
+  WHEN 'resident' THEN (SELECT r.first_name || ' ' || r.last_name FROM {residents} r WHERE r.id = message_threads.party_id)
+  WHEN 'vendor' THEN (SELECT v.company FROM {vendors} v WHERE v.id = message_threads.party_id)
+  WHEN 'owner' THEN (SELECT o.name FROM {owners} o WHERE o.id = message_threads.party_id)
+  ELSE message_threads.party_id END)`;
+
+registerEntity({
+  key: "message_threads",
+  table: "message_threads",
+  label: { one: "Conversation", many: "Conversations" },
+  icon: MessagesSquare,
+  module: "communications",
+  nav: { section: "operations", group: "Communications", order: 55, label: "Messages" },
+  route: "/app/communications/inbox",
+  titleField: "subject",
+  subtitle: (r) => [r.party, r.property_id__label].filter(Boolean).join(" · "),
+  scopePath: "message_threads.property_id",
+  fields: {
+    subject: { type: "text", label: "Subject", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
+    party: { type: "text", label: "With", search: true, list: { default: true }, sql: PARTY_NAME },
+    party_kind: { type: "enum", label: "Party", facet: true, list: { default: true }, editable: [], enum: [
+      { value: "resident", tone: "neutral", label: "Resident" }, { value: "vendor", tone: "neutral", label: "Vendor" }, { value: "owner", tone: "neutral", label: "Owner" },
+      { value: "applicant", tone: "neutral", label: "Applicant" }, { value: "prospect", tone: "neutral", label: "Prospect" },
+    ] },
+    party_id: { type: "text", label: "Party id", editable: [] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, sortable: true, list: { default: true }, editable: [] },
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "Open", tone: "warning" }, { value: "Waiting", tone: "info" }, { value: "Closed", tone: "neutral" },
+    ] },
+    channel: { type: "text", label: "Channel", facet: true, list: { default: true },
+      sql: "(SELECT m.channel FROM {messages} m WHERE m.thread_id = message_threads.id ORDER BY m.sent_at DESC LIMIT 1)" },
+    last_message_at: { type: "datetime", label: "Last message", sortable: true, list: { default: true }, editable: [] },
+    unread: { type: "bool", label: "Unread", facet: true, list: { default: false } },
+    preview: { type: "text", label: "Last message", list: { default: false }, sortable: false,
+      sql: "(SELECT substr(m.body, 1, 140) FROM {messages} m WHERE m.thread_id = message_threads.id ORDER BY m.sent_at DESC LIMIT 1)" },
+    last_direction: { type: "text", label: "Last from", sortable: false, sql: "(SELECT m.direction FROM {messages} m WHERE m.thread_id = message_threads.id ORDER BY m.sent_at DESC LIMIT 1)" },
+    message_count: { type: "number", label: "Messages", list: { default: false, align: "right" }, sql: "(SELECT count(*) FROM {messages} m WHERE m.thread_id = message_threads.id)" },
+    assigned_to: { type: "ref", ref: "staff", label: "Assigned to", facet: true, list: { default: false } },
+    entity_type: { type: "text", label: "About (type)", editable: [] },
+    entity_id: { type: "text", label: "About", editable: [] },
+  },
+  relations: [{ name: "property", entity: "properties", fk: "property_id", kind: "one" }],
+  list: {
+    defaultSort: ["last_message_at", "desc"],
+    statusTabs: "status",
+    savedViews: [
+      { key: "unread", label: "Unread", filters: { unread: "true" } },
+      { key: "residents", label: "Residents", filters: { party_kind: "resident" } },
+      { key: "vendors", label: "Vendors", filters: { party_kind: "vendor" } },
+      { key: "owners", label: "Owners", filters: { party_kind: "owner" } },
+    ],
+  },
+  detail: {
+    facts: ["status", "party", "party_kind", "property_id", "channel", "last_message_at"],
+    tabs: [{ custom: "residents.conversation" }, { key: "overview", label: "Details", fields: ["subject", "party", "party_kind", "property_id", "status", "assigned_to", "entity_type", "entity_id", "last_message_at"] }],
+    related: ["property"],
+  },
+  capabilities: { notes: true, activity: true, tasks: true },
+  kpis: [
+    { key: "open_threads", label: "Open conversations", metric: "communications.open_threads", format: "count", goodWhen: "down", drill: "/app/communications/inbox?status=Open" },
+  ],
+  charts: [
+    { key: "by_channel", title: "Messages by channel, last 30 days", kind: "donut", metric: "communications.by_channel", x: "channel", series: [{ key: "count", label: "Messages", format: "count" }] },
+  ],
+  permissions: { read: [...STAFF, "resident", "vendor", "owner"], create: [], update: [...OPS, "leasing_agent", "maintenance_supervisor"], delete: [...LEADERS] },
+  writes: "generic",
+  help: { summary: "Every conversation with residents, vendors and owners across email, SMS, portal and phone, with AI-suggested replies.", article: "unified-inbox" },
+});
+
+registerEntity({
+  key: "templates",
+  table: "templates",
+  label: { one: "Template", many: "Templates" },
+  icon: TextQuote,
+  module: "communications",
+  nav: { section: "operations", group: "Communications", order: 57 },
+  route: "/app/communications/templates",
+  titleField: "name",
+  subtitle: (r) => [r.category, r.channel, r.language === "es" ? "Spanish" : "English"].join(" · "),
+  scopePath: null,
+  fields: {
+    name: { type: "text", label: "Template", required: true, search: true, sortable: true, list: { default: true, width: 260 } },
+    category: { type: "enum", label: "Category", required: true, facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "Collections", tone: "neutral" }, { value: "Renewals", tone: "neutral" }, { value: "Maintenance", tone: "neutral" }, { value: "Leasing", tone: "neutral" }, { value: "Notices", tone: "neutral" },
+    ] },
+    channel: { type: "enum", label: "Channel", required: true, facet: true, list: { default: true }, enum: [{ value: "Email", tone: "neutral" }, { value: "SMS", tone: "neutral" }, { value: "Portal", tone: "neutral" }, { value: "Letter", tone: "neutral" }] },
+    language: { type: "enum", label: "Language", facet: true, list: { default: true }, enum: [{ value: "en", tone: "neutral", label: "English" }, { value: "es", tone: "neutral", label: "Spanish" }] },
+    subject: { type: "text", label: "Subject", search: true },
+    body: { type: "text", label: "Body", required: true, search: true, help: { summary: "Merge fields in double braces fill from the record: {{first_name}}, {{unit}}, {{property}}, {{balance}}, {{due_date}}, {{lease_end}}, {{rent}}.", article: "message-templates" } },
+  },
+  relations: [],
+  list: { defaultSort: ["name", "asc"], statusTabs: "category" },
+  detail: { facts: ["category", "channel", "language"], tabs: [{ key: "overview", label: "Template", fields: ["name", "category", "channel", "language", "subject", "body"] }], related: [] },
+  capabilities: { activity: true },
+  permissions: { read: [...STAFF], create: [...OPS], update: [...OPS], delete: [...OPS] },
+  writes: "generic",
+  help: { summary: "Reusable messages with merge fields, in English and Spanish, for collections, renewals, maintenance and notices.", article: "message-templates" },
+});
+
+registerEntity({
+  key: "announcements",
+  table: "announcements",
+  label: { one: "Announcement", many: "Announcements" },
+  icon: Megaphone,
+  module: "communications",
+  nav: { section: "operations", group: "Communications", order: 56 },
+  route: "/app/communications/announcements",
+  titleField: "title",
+  subtitle: (r) => [r.property_id__label, r.status].filter(Boolean).join(" · "),
+  scopePath: "json_extract(announcements.audience, '$.property_ids[0]')",
+  fields: {
+    title: { type: "text", label: "Announcement", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, list: { default: true }, editable: [], sql: "json_extract(announcements.audience, '$.property_ids[0]')" },
+    status: { system: true, initial: ["Draft"], type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "Draft", tone: "neutral" }, { value: "Scheduled", tone: "info" }, { value: "Sent", tone: "success" },
+    ] },
+    send_at: { type: "datetime", label: "Send at", sortable: true, list: { default: true } },
+    recipients: { type: "number", label: "Recipients", sortable: true, list: { default: true, align: "right" }, editable: [] },
+    // Set by the composer's actions only: a generic edit could point the audience at a property
+    // outside the editor's scope.
+    channels: { type: "json", label: "Channels", editable: [] },
+    audience: { type: "json", label: "Audience", editable: [] },
+    body: { type: "text", label: "Message", required: true, search: true },
+    created_by: { system: true, type: "ref", ref: "staff", label: "Created by", editable: [] },
+  },
+  relations: [],
+  list: { defaultSort: ["send_at", "desc"], statusTabs: "status" },
+  detail: { facts: ["status", "property_id", "send_at", "recipients"], tabs: [{ key: "overview", label: "Announcement", fields: ["title", "body", "property_id", "channels", "status", "send_at", "recipients", "created_by"] }], related: [] },
+  capabilities: { activity: true },
+  // Created from a property (properties.new_announcement) in the composer, not the generic form.
+  permissions: { read: [...STAFF], create: [], update: [...OPS], delete: [...OPS] },
+  writes: "generic",
+  actions: ["announcements.ai_draft", "announcements.send"],
+  help: { summary: "One message to every resident of a property: water shutoffs, pest treatment, holiday hours. Write it yourself or start from an AI draft.", article: "announcements" },
+});
+
+registerEntity({
+  key: "service_requests",
+  table: "service_requests",
+  label: { one: "Service request", many: "Service requests" },
+  icon: Wrench,
+  module: "maintenance",
+  nav: { section: "operations", group: "Maintenance", order: 41, label: "Service requests" },
+  route: "/app/maintenance/requests",
+  titleField: "summary",
+  subtitle: (r) => [r.resident_id__label, r.property_id__label].filter(Boolean).join(" · "),
+  scopePath: "service_requests.property_id",
+  fields: {
+    summary: { type: "text", label: "Request", list: { default: true, width: 320 }, sql: "substr(service_requests.body, 1, 80)" },
+    body: { type: "text", label: "Resident wrote", required: true, search: true },
+    resident_id: { type: "ref", ref: "residents", label: "Resident", required: true, list: { default: true }, editable: [] },
+    property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true }, editable: [] },
+    unit_id: { type: "ref", ref: "units", label: "Unit", list: { default: true }, editable: [] },
+    category: { type: "text", label: "Trade", facet: true, list: { default: true } },
+    urgency: { type: "enum", label: "Urgency", facet: true, list: { default: true }, enum: [
+      { value: "Emergency", tone: "danger" }, { value: "Urgent", tone: "warning" }, { value: "Normal", tone: "neutral" }, { value: "Low", tone: "neutral" },
+    ] },
+    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
+      { value: "New", tone: "warning" }, { value: "Triaged", tone: "info" }, { value: "Converted", tone: "success" }, { value: "Closed", tone: "neutral" },
+    ] },
+    work_order_id: { type: "ref", ref: "work_orders", label: "Work order", list: { default: true }, editable: [] },
+    submitted_at: { type: "datetime", label: "Submitted", sortable: true, list: { default: true }, editable: [] },
+  },
+  relations: [
+    { name: "resident", entity: "residents", fk: "resident_id", kind: "one" },
+    { name: "unit", entity: "units", fk: "unit_id", kind: "one" },
+    { name: "work_order", label: "Work order", entity: "work_orders", fk: "work_order_id", kind: "one" },
+  ],
+  list: { defaultSort: ["submitted_at", "desc"], statusTabs: "status" },
+  detail: {
+    facts: ["status", "urgency", "category", "resident_id", "unit_id", "work_order_id", "submitted_at"],
+    tabs: [{ key: "overview", label: "Request", fields: ["body", "resident_id", "property_id", "unit_id", "category", "urgency", "status", "work_order_id", "submitted_at"] }],
+    related: ["resident", "unit", "work_order"],
+  },
+  capabilities: { notes: true, activity: true },
+  permissions: { read: [...STAFF, "resident"], create: [...OPS, "resident"], update: [...OPS, "maintenance_supervisor"], delete: [...LEADERS] },
+  writes: "generic",
+  events: { created: "service_request.created" },
+  actions: ["service_requests.convert"],
+  help: { summary: "What residents report from the portal, by text or by phone, before it becomes a work order.", article: "service-requests" },
+});

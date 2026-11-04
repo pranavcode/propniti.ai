@@ -1,6 +1,6 @@
-import { TenancyPage } from "@/components/views/DetailViews";
+import { redirect } from "next/navigation";
 
-export default async function Page({ params }: PageProps<"/pm/tenancies/[id]">) {
-  const { id } = await params;
-  return <TenancyPage id={decodeURIComponent(id)} />;
+// v1 route; v2 lives at /app/leases.
+export default function Page() {
+  redirect("/app/leases");
 }

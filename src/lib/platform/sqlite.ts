@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { ensureBase } from "@/server/base";
 import type { Db, DbResult, DbStatement } from "./types";
 
 // D1-compatible wrapper over node:sqlite for the Node/Docker build and tests.
@@ -58,10 +59,25 @@ export function applyMigrations(raw: DatabaseSync, dir = join(/* turbopackIgnore
   }
 }
 
+// Cloudflare D1's statement limits, enforced here too so a query that would fail on D1 fails in
+// tests and local dev: at most 5 terms in a compound SELECT, 100 result columns, 100 bound
+// parameters, expression depth 100 and 100 KB of SQL per statement.
+export const D1_LIMITS = { compoundSelect: 5, column: 100, variableNumber: 100, exprDepth: 100, sqlLength: 100_000 };
+
+// A loaded in-memory database image, so each further ":memory:" database in this process (tests)
+// starts from a copy instead of regenerating the base.
+let memoryImage: Uint8Array | undefined;
+
+// Opens the database, applies migrations and loads the generated base dataset when it is missing
+// or from an older generator (ensureBase).
 export function openSqlite(path: string, migrationsDir?: string): Db {
+  const memory = path === ":memory:" && !migrationsDir;
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
-  const raw = new DatabaseSync(path);
+  const raw = new DatabaseSync(path, { limits: D1_LIMITS });
+  if (memory && memoryImage) raw.deserialize(memoryImage);
   raw.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000");
   applyMigrations(raw, migrationsDir);
+  ensureBase(raw);
+  if (memory && !memoryImage) memoryImage = raw.serialize();
   return sqliteDb(raw);
 }

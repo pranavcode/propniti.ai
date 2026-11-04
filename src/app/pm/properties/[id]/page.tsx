@@ -1,6 +1,6 @@
-import { PropertyPage } from "@/components/views/DetailViews";
+import { redirect } from "next/navigation";
 
-export default async function Page({ params }: PageProps<"/pm/properties/[id]">) {
-  const { id } = await params;
-  return <PropertyPage id={decodeURIComponent(id)} />;
+// v1 route; v2 property pages live at /app/properties/<id>.
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  redirect(`/app/properties/${encodeURIComponent((await params).id)}`);
 }

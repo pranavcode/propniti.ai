@@ -1,73 +1,88 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/Logo";
 
 // Section links are absolute so they also work from other pages (e.g. /docs).
 const links = [
   ["Product", "/#product"],
-  ["How it works", "/#how"],
+  ["Agents", "/#agents"],
   ["Who it's for", "/#who"],
-  ["Trust", "/#trust"],
+  ["Security", "/security"],
+  ["Pricing", "/pricing"],
   ["Docs", "/docs"],
 ];
 
-const ease = "ease-[cubic-bezier(0.32,0.72,0,1)]";
-
-export function Nav() {
+// overDark: the page opens on a dark hero, so the bar starts transparent with light text and
+// turns solid once the visitor scrolls. Book-demo is the one marketing page with a light top.
+export function Nav({ overDark = false }: { overDark?: boolean }) {
   const [open, setOpen] = useState(false);
-  // Close the full-screen menu with Escape.
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  const pathname = usePathname();
+  const light = overDark && pathname !== "/book-demo" && !scrolled && !open;
   return (
-    <>
-      <header className="fixed inset-x-0 top-4 z-30 flex justify-center px-4">
-        <div className="flex w-full max-w-3xl items-center gap-2 rounded-full bg-[#FBF9F4]/75 p-1.5 pl-5 shadow-[0_8px_40px_-12px_rgba(28,25,23,0.18)] ring-1 ring-[#1C1917]/[0.06] backdrop-blur-xl">
-          <Link href="/" className="text-[#1C1917]" aria-label="Propniti home"><Wordmark size={28} /></Link>
-          <nav className="ml-6 hidden items-center gap-6 text-[13px] text-[#57534E] md:flex">
-            {links.map(([l, h]) => (
-              <a key={h} href={h} className={`transition-colors duration-500 ${ease} hover:text-[#1C1917]`}>{l}</a>
-            ))}
-          </nav>
-          <div className="ml-auto flex items-center gap-1">
-            <Link href="/login" className="hidden rounded-full px-4 py-2 text-[13px] text-[#44403C] hover:text-[#1C1917] sm:block">Sign in</Link>
-            <Link href="/signup" className={`hidden rounded-full bg-[#1C1917] px-4 py-2 text-[13px] font-medium text-[#FBF9F4] transition-transform duration-500 ${ease} active:scale-[0.97] sm:block`}>Get started</Link>
-            <button
-              onClick={() => setOpen((o) => !o)}
-              aria-label={open ? "Close menu" : "Open menu"}
-              aria-expanded={open}
-              className="relative grid h-10 w-10 place-items-center rounded-full md:hidden"
-            >
-              <span className={`absolute h-px w-5 bg-[#1C1917] transition-transform duration-500 ${ease} ${open ? "rotate-45" : "-translate-y-[4px]"}`} />
-              <span className={`absolute h-px w-5 bg-[#1C1917] transition-transform duration-500 ${ease} ${open ? "-rotate-45" : "translate-y-[4px]"}`} />
-            </button>
-          </div>
+    <header
+      className={`fixed inset-x-0 top-0 z-30 transition-[background-color,box-shadow,color] duration-300 ease-out ${
+        light ? "bg-transparent text-white" : "bg-white/90 text-[oklch(0.2_0.018_220)] shadow-[0_1px_0_oklch(0.9_0.008_200)] backdrop-blur-md"
+      }`}
+    >
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-8 px-4 sm:px-6">
+        <Link href="/" aria-label="Propniti home" className="shrink-0"><Wordmark size={28} /></Link>
+        <nav aria-label="Main" className="hidden items-center gap-7 text-[14px] lg:flex">
+          {links.map(([l, h]) => (
+            <a key={h} href={h} className={`transition-opacity duration-200 hover:opacity-100 ${light ? "opacity-80" : "opacity-70"}`}>{l}</a>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center gap-2">
+          <Link href="/login" className={`hidden h-9 items-center rounded-full px-4 text-[14px] sm:inline-flex ${light ? "hover:bg-white/10" : "hover:bg-black/5"}`}>Try the live demo</Link>
+          <Link
+            href="/book-demo"
+            className={`hidden h-9 items-center rounded-full px-4 text-[14px] font-medium transition-colors duration-200 sm:inline-flex ${
+              light ? "bg-white text-[oklch(0.2_0.03_208)] hover:bg-[oklch(0.94_0.03_192)]" : "bg-[oklch(0.47_0.085_195)] text-white hover:bg-[oklch(0.36_0.07_198)]"
+            }`}
+          >
+            Book a demo
+          </Link>
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            aria-controls="mk-menu"
+            className="grid size-10 place-items-center rounded-full lg:hidden"
+          >
+            {open ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
         </div>
-      </header>
+      </div>
       <div
+        id="mk-menu"
         inert={!open}
-        aria-hidden={!open}
-        className={`fixed inset-0 z-20 bg-[#FBF9F4]/85 backdrop-blur-3xl transition-opacity duration-500 ${ease} md:hidden ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`border-t border-[oklch(0.9_0.008_200)] bg-white transition-[opacity,transform] duration-200 ease-out lg:hidden ${open ? "translate-y-0 opacity-100" : "pointer-events-none absolute inset-x-0 -translate-y-2 opacity-0"}`}
       >
-        <nav className="flex h-full flex-col justify-center gap-2 px-8">
-          {[...links, ["Sign in", "/login"], ["Get started", "/signup"]].map(([l, h], i) => (
-            <a
-              key={h}
-              href={h}
-              onClick={() => setOpen(false)}
-              style={{ transitionDelay: open ? `${100 + i * 50}ms` : "0ms" }}
-              className={`font-serif text-5xl text-[#1C1917] transition-[transform,opacity] duration-700 ${ease} ${open ? "translate-y-0 opacity-100" : "translate-y-12 opacity-0"}`}
-            >
-              {l}
-            </a>
+        <nav aria-label="Mobile" className="mx-auto flex max-w-7xl flex-col px-4 py-3 sm:px-6">
+          {[...links, ["Try the live demo", "/login"], ["Book a demo", "/book-demo"]].map(([l, h]) => (
+            <a key={h} href={h} onClick={() => setOpen(false)} className="rounded-lg px-2 py-3 text-[17px] hover:bg-black/5">{l}</a>
           ))}
         </nav>
       </div>
-    </>
+    </header>
   );
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Instrument_Serif } from "next/font/google";
-import { DemoProvider } from "@/lib/store";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -22,7 +21,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geist.variable} ${serif.variable} h-full antialiased`}>
       <body className="min-h-full bg-[#F6F2EA] font-sans text-[#1C1917]">
-        <DemoProvider>{children}</DemoProvider>
+        {children}
       </body>
     </html>
   );

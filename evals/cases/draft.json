@@ -1,0 +1,14 @@
+[
+  {"id": "draft-ok", "facts": {"balance_cents": 172500, "installment_cents": 57500, "final_installment_cents": 57500}, "body": "Hi Jordan, your balance is $1,725, past due since Nov 1. We can split it into three payments of $575.\n\nThanks,\nMarcus Bell, Property Manager, The Lofts at Riverside", "expect": {"ok": true}},
+  {"id": "draft-wrong-amount", "facts": {"balance_cents": 172500}, "body": "Hi Jordan, you owe $1,752.", "expect": {"ok": false}},
+  {"id": "draft-waiver", "facts": {"balance_cents": 172500}, "body": "Pay $1,725 this week and we'll waive the late fee.", "expect": {"ok": false}},
+  {"id": "draft-forgive", "facts": {"balance_cents": 50000}, "body": "We can forgive part of your $500 balance.", "expect": {"ok": false}},
+  {"id": "draft-no-figures", "facts": {"balance_cents": 50000}, "body": "Hi, please check the resident portal for your balance.", "expect": {"ok": true}},
+  {"id": "draft-es-ok", "facts": {"balance_cents": 240000}, "body": "Hola Ana, su saldo es de $2,400. Puede pagar en el portal.", "expect": {"ok": true}},
+  {"id": "draft-cents", "facts": {"balance_cents": 571109}, "body": "Your balance is $5,711.09.", "expect": {"ok": true}},
+  {"id": "draft-invented-fee", "facts": {"balance_cents": 120000}, "body": "Your balance is $1,200 plus a $75 late fee.", "expect": {"ok": false}},
+  {"id": "draft-approximate", "facts": {"balance_cents": 125000, "installment_cents": 41666, "final_installment_cents": 41668}, "body": "We can split it into three payments of about $416.66.", "expect": {"ok": false}},
+  {"id": "draft-approximate-es", "facts": {"balance_cents": 125000, "installment_cents": 41666}, "body": "Podemos dividirlo en tres pagos de aproximadamente $416.66.", "expect": {"ok": false}},
+  {"id": "draft-iso-date", "facts": {"balance_cents": 125000}, "body": "Your balance of $1,250 has been past due since 2026-11-01.", "expect": {"ok": false}},
+  {"id": "draft-exact-split", "facts": {"balance_cents": 125000, "installment_cents": 41666, "final_installment_cents": 41668}, "body": "We can split $1,250 into two payments of $416.66 and a final one of $416.68.", "expect": {"ok": true}}
+]

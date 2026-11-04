@@ -1,9 +1,13 @@
-import { bindings, defineConfig, defineWorker } from "cf/config";
+import { bindings, defineConfig, defineWorker, triggers } from "cf/config";
 
 export default defineConfig({
   worker: defineWorker({
     name: "property-mgmt-ai-prototype",
-    entrypoint: "vinext/server/fetch-handler",
+    // vinext fetch plus the Cron Trigger below (AI agent sweep); see src/worker-entry.ts.
+    entrypoint: "./src/worker-entry.ts",
+    triggers: [triggers.scheduled({ schedule: "*/15 * * * *" })],
+    // CPU per invocation (paid plan); one agent run per cron tick stays well inside it.
+    limits: { cpuMs: 60_000 },
     domains: ["propniti.ai", "www.propniti.ai"],
     workersDev: true,
     compatibilityDate: "2026-10-28",
@@ -24,7 +28,7 @@ export default defineConfig({
       // Per-IP cap on the routes that change demo data.
       WRITE_RATE_LIMITER: bindings.rateLimit({ namespace: "1002", simple: { limit: 60, period: 60 } }),
       // Demo workspaces and their data. Schema: migrations/*.sql.
-      DB: bindings.d1({ name: "propniti", id: "3d4ff9d5-eb1e-4970-b73e-004ba9124fd8" }),
+      DB: bindings.d1({ name: "propniti-v2", id: "b9dff387-c845-44c8-b735-5e8bf3946623" }),
       // Optional AI settings; unset = mock data. Set with `npx wrangler secret put <NAME>`.
       ANTHROPIC_API_KEY: bindings.secret(),
       OPENAI_API_KEY: bindings.secret(),

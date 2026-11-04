@@ -4,7 +4,7 @@
 //   EVAL_ONLY=extract npm run eval                 # only cases whose id contains "extract"
 // Exits 1 when the pass rate is below MIN_PASS (default 0.8). Fallbacks to mock count as not passed.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { gradeAsk, gradeExtract, gradeMap, gradeParse, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
+import { gradeAgentRun, gradeExtract, gradeReport, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
 
 const BASE_URL = (process.env.BASE_URL || "https://propniti.ai").replace(/\/$/, "");
 const MIN_PASS = Number(process.env.MIN_PASS ?? 0.8);
@@ -15,11 +15,15 @@ const read = (p) => readFileSync(new URL(p, ROOT));
 const cases = (area) => JSON.parse(read(`evals/cases/${area}.json`)).filter((c) => c.id.includes(ONLY));
 
 let lastStart = 0;
+// v2 routes act as a persona (pn_as cookie) in one eval workspace (pn_ws cookie set on first write).
+let wsCookie = "";
 async function call(path, init) {
   const wait = lastStart + GAP_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastStart = Date.now();
-  const res = await fetch(BASE_URL + path, { ...init, headers: { Origin: BASE_URL, ...init.headers }, signal: AbortSignal.timeout(120_000) });
+  const res = await fetch(BASE_URL + path, { ...init, headers: { Origin: BASE_URL, cookie: [init.persona ? `pn_as=${init.persona}` : "", wsCookie].filter(Boolean).join("; "), ...init.headers }, signal: AbortSignal.timeout(120_000) });
+  const set = res.headers.get("set-cookie")?.match(/pn_ws=[^;]+/)?.[0];
+  if (set) wsCookie = set;
   if (res.status === 429) {
     console.log("  rate limited; waiting 61 s");
     await new Promise((r) => setTimeout(r, 61_000));
@@ -30,7 +34,19 @@ async function call(path, init) {
   if (!res.ok) throw new Error(`${res.status}: ${body.error ?? "request failed"}`);
   return body;
 }
-const postJson = (path, body) => call(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const postJson = (path, body, persona) => call(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), persona });
+
+// Starts an agent run and waits for it to finish (Run now returns at once; the run continues in the background).
+async function agentRun(c) {
+  const { runId } = await postJson(`/api/ai/agents/${c.agent}/run`, {}, c.persona);
+  for (let i = 0; i < 90; i++) {
+    const r = await fetch(`${BASE_URL}/api/ai/runs/${runId}`, { headers: { cookie: [`pn_as=${c.persona}`, wsCookie].join("; ") } }).then((x) => x.json());
+    // A run with nothing to do never calls the model; that isn't a fallback.
+    if (r.run?.status !== "running") return { ...r, source: /^Nothing to do/.test(r.run?.summary ?? "") ? "n/a (nothing to do)" : r.run?.model === "rules" ? "mock" : r.run?.model };
+    await new Promise((res) => setTimeout(res, 2000));
+  }
+  throw new Error("run did not finish in 3 minutes");
+}
 
 // Small RFC 4180 reader for the sample CSVs (quoted fields with commas).
 function parseCsv(text) {
@@ -67,7 +83,8 @@ function parseCsv(text) {
 
 async function main() {
   const status = await fetch(`${BASE_URL}/api/ai/status`).then((r) => r.json());
-  const { state } = await fetch(`${BASE_URL}/api/state`, { headers: { Origin: BASE_URL } }).then((r) => r.json());
+  // v1 cases (validate, ask) read the legacy demo state; v2 servers no longer serve it.
+  const state = await fetch(`${BASE_URL}/api/state`, { headers: { Origin: BASE_URL } }).then((r) => (r.ok ? r.json() : {})).then((j) => j.state).catch(() => undefined);
   console.log(`AI eval against ${BASE_URL} (provider: ${status.label})\n`);
 
   const areas = [
@@ -76,11 +93,17 @@ async function main() {
       form.append("file", new Blob([read(c.file)], { type: "image/png" }), c.file.split("/").pop());
       return call("/api/ai/extract", { method: "POST", body: form });
     }, gradeExtract],
+    // Action plans are built by rules on purpose (nothing runs before a person confirms), so they aren't fallbacks.
+    ["Assistant plans", "copilot-plan", (c) => postJson("/api/ai/assistant", { question: c.question }, c.persona).then((r) => ({ ...r, source: r.live ? r.model : r.mode === "actions" ? "rules (by design)" : "mock" })), gradePlan],
+    ["AI filter", "nl-filter", (c) => postJson("/api/ai/nl-filter", { entity: c.entity, text: c.text }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeNlFilter],
+    ["Record summaries", "summary", (c) => postJson("/api/ai/summary", { entity: c.entity, id: c.recordId }, "daniel").then((r) => ({ ...r, source: r.summary?.model === "rules" ? "mock" : r.summary?.model })), gradeSummary],
+    ["Agent runs", "agents", agentRun, gradeAgentRun],
+    ["Report builder", "report-builder", (c) => postJson("/api/ai/report-spec", { text: c.text }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeReport],
     ["Invoice vs PO", "validate", (c) => {
       const wo = state.workOrders.find((w) => w.id === c.workOrder);
       return postJson("/api/ai/validate", { workOrder: { id: wo.id, title: wo.title, po: wo.po, submission: c.submission } });
     }, gradeValidate],
-    ["Assistant", "ask", (c) => postJson("/api/ai/ask", { question: c.question, state }), (c, res) => gradeAsk(c, res, state)],
+    ["Assistant (v1 path)", "ask", (c) => postJson("/api/ai/ask", { question: c.question }, c.persona), gradePlan],
     ["Column mapping", "import-map", (c) => {
       const table = c.csv ? parseCsv(read(c.csv).toString()) : [c.headers, ...c.samples];
       return postJson("/api/ai/import-map", { headers: table[0], samples: table.slice(1, 6) });
@@ -92,6 +115,10 @@ async function main() {
   for (const [label, area, send, grade] of areas) {
     const list = cases(area);
     if (!list.length) continue;
+    if (!state && area === "validate") {
+      console.log(`${label}: skipped (this server has no v1 demo state)`);
+      continue;
+    }
     console.log(`${label} (${list.length} cases)…`);
     for (const c of list) {
       const t0 = Date.now();
@@ -113,7 +140,7 @@ async function main() {
       const failed = checks.filter((x) => !x.ok).map((x) => (x.detail !== undefined ? `${x.name} (got ${x.detail})` : x.name));
       const notes = [];
       if (area === "validate" && res && overriddenByRules(res)) notes.push("model said approve; rules changed it to review");
-      const reason = error ?? (outcome === "fallback" ? res.note : [...failed, ...notes].join("; "));
+      const reason = error ?? (outcome === "fallback" ? res.note ?? "rules fallback (no model answer)" : [...failed, ...notes].join("; "));
       results.push({ area: label, id: c.id, outcome, accuracy, source: res?.source ?? "-", latencyMs, reason, checks, response: res });
     }
     console.table(

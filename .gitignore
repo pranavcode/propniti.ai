@@ -52,3 +52,10 @@ next-env.d.ts
 
 # live AI eval runs (the latest summary, evals/results/latest.md, is committed)
 /evals/results/*.json
+
+# generated base dataset for D1 loads (large; regenerate with scripts/seed-d1.mjs)
+/.seed/
+
+# Playwright
+/playwright-report/
+/test-results/
