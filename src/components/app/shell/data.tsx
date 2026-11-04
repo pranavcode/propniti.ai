@@ -14,12 +14,12 @@ registerPage({ key: "home.dashboard", label: "Dashboard", href: "/app", icon: La
 registerPage({ key: "home.inbox", label: "Inbox", href: "/app/inbox", icon: Inbox, section: "home", order: 2, roles: STAFF });
 registerPage({ key: "home.tasks", label: "My tasks", href: "/app/tasks", icon: CheckSquare, section: "home", order: 3, roles: STAFF });
 registerPage({ key: "finance.reports", label: "Reports", href: "/app/reports", icon: LineChart, section: "finance", order: 90, roles: STAFF.filter((r) => r !== "leasing_agent") });
-registerPage({ key: "ai.copilot", label: "Copilot", href: "/app/copilot", icon: Sparkles, section: "intelligence", order: 1, roles: withModule("intelligence") });
-registerPage({ key: "ai.agents", label: "Agents", href: "/app/agents", icon: Bot, section: "intelligence", order: 2, roles: withModule("intelligence") });
-registerPage({ key: "ai.approvals", label: "Approvals", href: "/app/ai/approvals", icon: ShieldCheck, section: "intelligence", order: 3, roles: withModule("intelligence") });
-registerPage({ key: "ai.activity", label: "AI activity", href: "/app/ai/activity", icon: Activity, section: "intelligence", order: 4, roles: withModule("intelligence") });
+registerPage({ key: "ai.copilot", label: "Copilot", href: "/app/copilot", icon: Sparkles, section: "intelligence", order: 1, roles: withModule("intelligence"), ai: true });
+registerPage({ key: "ai.agents", label: "Agents", href: "/app/agents", icon: Bot, section: "intelligence", order: 2, roles: withModule("intelligence"), ai: true });
+registerPage({ key: "ai.approvals", label: "Approvals", href: "/app/ai/approvals", icon: ShieldCheck, section: "intelligence", order: 3, roles: withModule("intelligence"), ai: true });
+registerPage({ key: "ai.activity", label: "AI activity", href: "/app/ai/activity", icon: Activity, section: "intelligence", order: 4, roles: withModule("intelligence"), ai: true });
 registerPage({ key: "ai.automations", label: "Automations", href: "/app/automations", icon: Workflow, section: "intelligence", order: 5, roles: withModule("intelligence") });
-registerPage({ key: "ai.data_health", label: "Data health", href: "/app/data-health", icon: HeartPulse, section: "intelligence", order: 6, roles: STAFF });
+registerPage({ key: "ai.data_health", label: "Data health", href: "/app/data-health", icon: HeartPulse, section: "intelligence", order: 6, roles: STAFF, ai: true });
 registerPage({ key: "settings.home", label: "Settings", href: "/app/settings", icon: Settings, section: "settings", order: 1, roles: withModule("settings") });
 
 const slim = (p: Persona): ShellPersona => ({ id: p.id, name: p.name, title: p.title, role: p.role, scopeLabel: p.scope.label, home: p.home, portal: p.portal });
@@ -37,7 +37,7 @@ export async function shellData(counts: Record<string, number> = {}): Promise<Sh
     section: g.section,
     label: SECTION_LABEL[g.section],
     items: g.items.filter((i) => !seen.has(i.href) && seen.add(i.href)).map((i) => ({
-      key: i.key, label: i.label, href: i.href, group: i.group, icon: <i.icon className={ic} />,
+      key: i.key, label: i.label, href: i.href, group: i.group, icon: <i.icon className={ic} />, ai: i.ai,
       count: counts[i.href], countTone: (i.href === "/app/inbox" || i.href === "/app/ai/approvals" ? "attention" : "default") as "attention" | "default",
     })),
   }));

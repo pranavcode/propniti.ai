@@ -119,6 +119,7 @@ export function CommandPalette({ open, onOpenChange, initialQuery = "" }: { open
                 <CommandItem key={i.key} value={`nav-${i.key}`} onSelect={() => go(i.href)}>
                   <span className="text-muted-foreground">{i.icon}</span>
                   <span>{i.label}</span>
+                  {i.ai && <span data-ai-mark className="-ml-1 flex text-tone-ai"><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span>}
                   <span className="ml-auto text-[11.5px] text-muted-foreground">{i.path}</span>
                 </CommandItem>
               ))}
