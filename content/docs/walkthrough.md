@@ -24,13 +24,13 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 - **Agents and approvals.** `/app/agents` lists the eight agents. `/app/automations` shows what runs automatically, when, and under which rules. `/app/ai/approvals` holds what the agents proposed. `/app/ai/activity` lists every run.
 - **Out of scope.** A link to a record outside your persona's scope opens a page that says so, with links back to the list and your home.
 
-<!-- TODO: screenshot ![Record peek drawer open beside a work-order list](screens/marcus-peek-drawer.png) -->
+![Record peek drawer open beside a work-order list](/docs/walkthrough/screens/marcus-peek-drawer.webp#2880x1800)
 
-<!-- TODO: screenshot ![Sign-in form beside the Pick a person list](screens/login-form.png) -->
+![Sign-in form beside the Pick a person list](/docs/walkthrough/screens/login-form.webp#2880x1800)
 
-<!-- TODO: screenshot ![Ask Propniti bubble with a tip](screens/marcus-chat-bubble.png) -->
+![Ask Propniti bubble with a tip](/docs/walkthrough/screens/marcus-chat-bubble.webp#2880x1800)
 
-<!-- TODO: screenshot ![Welcome splash on the home page](screens/marcus-welcome.png) -->
+![Welcome splash on the home page](/docs/walkthrough/screens/marcus-welcome.webp#2880x1800)
 
 ## 2. Daniel Reyes, principal
 
@@ -40,15 +40,18 @@ Daniel sees all 30 properties. He lands on `/app`, the portfolio home.
 2. Click *Explain* on the NOI tile. A sheet titled "Why did NOI change?" lists the drivers and the properties that moved it most. *View run* opens the agent run behind it.
 3. In *Furthest below budget*, open a property. Its NOI is the last closed month, labelled "NOI (last month)". Open *Unit stack*, then a unit, to see its lease history.
 4. Click *What-if*. Try the preset *Rent +3%*. Scenario NOI recomputes per property. Click *Explain this scenario* for a narrated version with its own run link.
-5. Back on the home, use *Waiting for your decision* to approve or reject proposals.
+5. Back on the home, a red KPI such as *Occupancy* shows *Improve with AI* under it. The panel says why the number is red, lists what agents can do with the expected effect of each, and *Have agents do this* starts them. Their proposals wait for approval as usual.
+6. Use *Waiting for your decision* to approve or reject proposals.
 
-AI here: *Explain* (facts computed, wording by a model or by rules), the what-if narration, and agent proposals.
+AI here: *Explain* (facts computed, wording by a model or by rules), the what-if narration, *Improve with AI*, and agent proposals.
 
-<!-- TODO: screenshot ![Daniel's portfolio home with briefing, KPIs and Explain buttons](screens/daniel-home.png) -->
+![Daniel's portfolio home with briefing, KPIs and Explain buttons](/docs/walkthrough/screens/daniel-home.webp#2880x1800)
 
-<!-- TODO: screenshot ![Explain NOI sheet with drivers and a View run link](screens/daniel-explain-noi.png) -->
+![Explain NOI sheet with drivers and a View run link](/docs/walkthrough/screens/daniel-explain-noi.webp#2880x1800)
 
-<!-- TODO: screenshot ![What-if simulator with Rent +3% applied](screens/daniel-what-if.png) -->
+![What-if simulator with Rent +3% applied](/docs/walkthrough/screens/daniel-what-if.webp#2880x1800)
+
+![Improve with AI on a red Occupancy KPI: drivers, a plan of agent actions and Have agents do this](/docs/walkthrough/screens/daniel-improve-ai.webp#2880x1800)
 
 ## 3. Priya Shah, regional manager
 
@@ -61,9 +64,9 @@ Priya sees 14 Texas properties. She lands on `/app`, the regional version.
 
 AI here: per-property *Explain*, optional AI suggestions in the import, and concession proposals routed to her by the approval policy (concessions over $500 need a regional manager).
 
-<!-- TODO: screenshot ![Priya's regional home with the property comparison table](screens/priya-home.png) -->
+![Priya's regional home with the property comparison table](/docs/walkthrough/screens/priya-home.webp#2880x1800)
 
-<!-- TODO: screenshot ![Import review step with matched columns and AI suggestions](screens/priya-import.png) -->
+![Import, Columns step: each column matched by preset, with sample values](/docs/walkthrough/screens/priya-import.webp#2880x1800)
 
 ## 4. Marcus Bell, property manager
 
@@ -80,15 +83,15 @@ Marcus runs three Austin communities. He lands on `/app/today`.
 
 AI here: the Collections and Renewals agents' proposals, suggested replies, lease abstraction and announcement drafts. Each draft links to its run.
 
-<!-- TODO: screenshot ![Marcus's Today page with briefing, KPIs and approvals](screens/marcus-today.png) -->
+![Marcus's Today page with briefing, KPIs and approvals](/docs/walkthrough/screens/marcus-today.webp#2880x1800)
 
-<!-- TODO: screenshot ![Approval item expanded with reasons, evidence and confidence](screens/marcus-approval-why.png) -->
+![Approvals inbox: each proposal with its reasons, risk and confidence](/docs/walkthrough/screens/marcus-approval-why.webp#2880x1800)
 
-<!-- TODO: screenshot ![Inbox with Messages, Approvals and Alerts tabs](screens/marcus-inbox.png) -->
+![Inbox with Messages, Approvals and Alerts tabs](/docs/walkthrough/screens/marcus-inbox.webp#2880x1800)
 
-<!-- TODO: screenshot ![Conversation with a suggested reply ready to edit](screens/marcus-inbox-reply.png) -->
+![Conversation with a suggested reply ready to edit](/docs/walkthrough/screens/marcus-inbox-reply.webp#2880x1800)
 
-<!-- TODO: screenshot ![My tasks, Overdue view](screens/marcus-tasks.png) -->
+![My tasks, Overdue view](/docs/walkthrough/screens/marcus-tasks.webp#2880x1800)
 
 ## 5. Lena Ortiz, leasing agent
 
@@ -102,9 +105,9 @@ Lena handles leasing for the same three Austin properties. She lands on `/app/le
 
 AI here: the Leasing and Renewals agents, listing drafts, and the fair-housing check.
 
-<!-- TODO: screenshot ![Lena's leasing day with tours and follow-ups](screens/lena-leasing-today.png) -->
+![Lena's leasing day with tours and follow-ups](/docs/walkthrough/screens/lena-leasing-today.webp#2880x1800)
 
-<!-- TODO: screenshot ![Listing editor with an AI draft and the fair-housing check](screens/lena-listing-draft.png) -->
+![Listing editor with an AI draft and the fair-housing check](/docs/walkthrough/screens/lena-listing-draft.webp#2880x1800)
 
 ## 6. Rachel Moore, managing broker
 
@@ -117,9 +120,9 @@ Rachel decides applications. She lands on `/app/leasing/broker`, the *Broker des
 
 Criminal history is never scored; it routes to a person. An application from the public site is scored moments after it is submitted, and the recommendation lands in her approvals inbox (see [section 15](#15-public-listings-site)).
 
-<!-- TODO: screenshot ![Broker desk with applications and AI recommendations](screens/rachel-broker-desk.png) -->
+![Broker desk with applications and AI recommendations](/docs/walkthrough/screens/rachel-broker-desk.webp#2880x1800)
 
-<!-- TODO: screenshot ![Application scoring tab with reasons for and against](screens/rachel-application-score.png) -->
+![Application scoring tab with reasons for and against](/docs/walkthrough/screens/rachel-application-score.webp#2880x1800)
 
 ## 7. Grace Kim, senior accountant
 
@@ -135,11 +138,11 @@ Grace works across all owner entities. She lands on `/app/finance`.
 
 AI here: invoice reading (a vision model when configured), the Payables agent, statement and variance explanations, and the report builder.
 
-<!-- TODO: screenshot ![Grace's finance home](screens/grace-finance-home.png) -->
+![Grace's finance home](/docs/walkthrough/screens/grace-finance-home.webp#2880x1800)
 
-<!-- TODO: screenshot ![AP inbox with fields read from an invoice and payables checks](screens/grace-ap-inbox.png) -->
+![AP inbox with fields read from an invoice and payables checks](/docs/walkthrough/screens/grace-ap-inbox.webp#2880x1800)
 
-<!-- TODO: screenshot ![Owner statement with an Explain popover](screens/grace-owner-statement-explain.png) -->
+![Owner statement with an Explain popover](/docs/walkthrough/screens/grace-owner-statement-explain.webp#2880x1800)
 
 ## 8. Tom Alvarez, maintenance supervisor
 
@@ -155,11 +158,11 @@ Tom oversees maintenance for 14 Texas properties. He lands on `/app/maintenance`
 
 AI here: the Maintenance triage and Compliance agents. The PO check is rules.
 
-<!-- TODO: screenshot ![Tom's maintenance home with triage queue](screens/tom-maintenance-home.png) -->
+![Tom's maintenance home with triage queue](/docs/walkthrough/screens/tom-maintenance-home.webp#2880x1800)
 
-<!-- TODO: screenshot ![Work order Invoice and PO tab with the PO check](screens/tom-invoice-po.png) -->
+![Work order Invoice and PO tab with the PO check](/docs/walkthrough/screens/tom-invoice-po.webp#2880x1800)
 
-<!-- TODO: screenshot ![Compliance dashboard with expiries timeline](screens/tom-compliance.png) -->
+![Compliance dashboard with expiries timeline](/docs/walkthrough/screens/tom-compliance.webp#2880x1800)
 
 ## 9. Sam Okafor, administrator
 
@@ -172,11 +175,11 @@ Sam manages the org's settings. He lands on `/app/admin`.
 5. Open *Data health*. It shows a score, open issues by rule and by property, and each suggested fix as before and after. *Apply fix* and *Apply N safe fixes* correct the records. Fixes that touch money, fraud or legal status, and any fix that isn't low risk, are labelled *Send for approval* and go to the approvals inbox instead, whoever clicks.
 6. Open *Automations*. As an admin, Sam can turn agents on or off and change their autonomy here; the change is written to the audit trail.
 
-<!-- TODO: screenshot ![Sam's admin briefing](screens/sam-admin-briefing.png) -->
+![Sam's admin briefing](/docs/walkthrough/screens/sam-admin-briefing.webp#2880x1800)
 
-<!-- TODO: screenshot ![Approval policy edit with change history](screens/sam-approval-policy.png) -->
+![Approval policies: org defaults and owner-entity limits](/docs/walkthrough/screens/sam-approval-policy.webp#2880x1800)
 
-<!-- TODO: screenshot ![Data health with before and after for a fix](screens/sam-data-health.png) -->
+![Data health with before and after for a fix](/docs/walkthrough/screens/sam-data-health.webp#2880x1800)
 
 ## 10. Nadia Brooks, platform admin
 
@@ -187,9 +190,9 @@ Nadia looks after every customer org. She lands on `/app/admin`, with platform q
 3. Open *AI usage*: runs per day, runs by agent, tokens and cost by model and by organization.
 4. Unlike Sam, Nadia can approve agent proposals from her briefing.
 
-<!-- TODO: screenshot ![Platform console with customer organizations](screens/nadia-platform-orgs.png) -->
+![Platform console with customer organizations](/docs/walkthrough/screens/nadia-platform-orgs.webp#2880x1800)
 
-<!-- TODO: screenshot ![AI usage by agent and model](screens/nadia-ai-usage.png) -->
+![AI usage by agent and model](/docs/walkthrough/screens/nadia-ai-usage.webp#2880x1800)
 
 ## 11. Agents, approvals and runs
 
@@ -205,13 +208,13 @@ Any staff persona with AI access can follow these steps. Marcus is a good choice
 
 Agents also run without anyone: every 15 minutes on a schedule, on events such as an overdue charge or a new application, and on the first visit after a missed sweep.
 
-<!-- TODO: screenshot ![Agents page with cards and Run now](screens/marcus-agents.png) -->
+![Agents page with cards and Run now](/docs/walkthrough/screens/marcus-agents.webp#2880x1800)
 
-<!-- TODO: screenshot ![Live run sheet streaming steps](screens/marcus-run-live.png) -->
+![An agent run in plain words, with the proposal it made](/docs/walkthrough/screens/marcus-run-live.webp#2880x1800)
 
-<!-- TODO: screenshot ![Approvals inbox, Needs you tab](screens/marcus-approvals.png) -->
+![Approvals inbox, Needs you tab](/docs/walkthrough/screens/marcus-approvals.webp#2880x1800)
 
-<!-- TODO: screenshot ![Automations page with agents, sweep and approval rules](screens/marcus-automations.png) -->
+![Automations page with agents, sweep and approval rules](/docs/walkthrough/screens/marcus-automations.webp#2880x1800)
 
 ## 12. Owner portal (Helen Carter)
 
@@ -222,9 +225,9 @@ Helen owns Bluebonnet Residential Fund II. She lands on `/portal/owner`.
 3. Open *Approvals*. Repairs over her approval limit wait here with *Why this needs you*. Click *Approve $…*, add an optional note, and confirm. The property manager is notified.
 4. Click *Ask AI* and choose "Why was my distribution lower this month?".
 
-<!-- TODO: screenshot ![Owner portal home with the monthly briefing](screens/owner-home.png) -->
+![Owner portal home with the monthly briefing](/docs/walkthrough/screens/owner-home.webp#2880x1800)
 
-<!-- TODO: screenshot ![Owner repair approval with reasons](screens/owner-approvals.png) -->
+![Owner repair approval with reasons](/docs/walkthrough/screens/owner-approvals.webp#2880x1800)
 
 ## 13. Resident portal (Jordan Lee)
 
@@ -236,9 +239,9 @@ Jordan rents #412 at The Lofts at Riverside. He lands on `/portal/resident`.
 
 The first read is rules. *Ask AI* answers from Jordan's own records.
 
-<!-- TODO: screenshot ![Resident pay page](screens/resident-pay.png) -->
+![Resident pay page](/docs/walkthrough/screens/resident-pay.webp#2880x1800)
 
-<!-- TODO: screenshot ![New request with the AI first read](screens/resident-request-triage.png) -->
+![New request with the AI first read](/docs/walkthrough/screens/resident-request-triage.webp#2880x1800)
 
 ## 14. Vendor portal (Luis Ramirez) and applicant portal (Priyanka Rao)
 
@@ -256,9 +259,9 @@ You can test invoice reading with the sample files: [clean invoice](https://prop
 2. Open *Documents* to upload. Only the file name is kept.
 3. Open *Fee* and pay $55. No real card is charged.
 
-<!-- TODO: screenshot ![Vendor invoice read from an uploaded file](screens/vendor-invoice.png) -->
+![Vendor invoice read from an uploaded file](/docs/walkthrough/screens/vendor-invoice.webp#2880x1800)
 
-<!-- TODO: screenshot ![Applicant status timeline and checklist](screens/applicant-status.png) -->
+![Applicant status timeline and checklist](/docs/walkthrough/screens/applicant-status.webp#2880x1800)
 
 ## 15. Public listings site
 
@@ -272,9 +275,9 @@ No sign-in is needed. Open [propniti.ai/listings](https://propniti.ai/listings).
 
 Tours and applications stay in your private copy and reset at midnight Pacific.
 
-<!-- TODO: screenshot ![Public listing with pricing, fees and Ask about this unit](screens/public-listing.png) -->
+![Public listing with pricing, fees and Ask about this unit](/docs/walkthrough/screens/public-listing.webp#2880x1800)
 
-<!-- TODO: screenshot ![Application status with the AI screening summary](screens/public-application-status.png) -->
+![Application form, step 1 of 5, beside the listing's pricing](/docs/walkthrough/screens/public-apply.webp#2880x1800)
 
 ## 16. Known limits
 
