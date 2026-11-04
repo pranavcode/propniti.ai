@@ -37,7 +37,7 @@ function writeSession(s: GuideSession) {
 // One small request, reused for two minutes across page views (and shared by concurrent callers).
 // A failed request is remembered for the same two minutes, so a struggling server isn't asked again.
 let inflight: Promise<GuideFacts | null> | null = null;
-function loadFacts(persona: string): Promise<GuideFacts | null> {
+export function loadFacts(persona: string): Promise<GuideFacts | null> {
   try {
     const c = JSON.parse(sessionStorage.getItem(FACTS) ?? "null") as { persona: string; at: number; facts: GuideFacts | null } | null;
     if (c && c.persona === persona && Date.now() - c.at < FACTS_TTL_MS) return Promise.resolve(c.facts);

@@ -4,11 +4,12 @@ import { getEntity } from "@/entities";
 import type { ActionKey, Row } from "@/entities/types";
 import type { Persona } from "@/auth/personas";
 import { addDays, money } from "./rules";
-import { columns, insert, list, newId, parseJson, sql, type DataCtx, type Table } from "./data";
+import { columns, insert, newId, parseJson, sql, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
-import { openRun, runWithContext } from "./orchestrator";
+import { openRun, runNow, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
 import { amountsIn } from "./tools/write";
+import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
 import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
 import { errText, modelLoop, type AgentCtx } from "./runtime";
 import type { ToolKey } from "./types";
@@ -28,7 +29,11 @@ export type TraceItem = { tool: string; input: unknown; summary: string; ms?: nu
 export type AssistantReply = {
   threadId: string; messageId: string; runId: string; mode: Mode; answer: string; source: string; model: string; live: boolean;
   table?: { columns: { key: string; label: string; align?: "right" }[]; rows: Row[] };
-  citations: Citation[]; trace: TraceItem[]; proposals: { id: string; title: string; why: string[]; risk: string; queue_state: string; action: string }[];
+  citations: Citation[]; trace: TraceItem[];
+  // decision: set when the proposal was approved or rejected after the reply (restored threads).
+  proposals: { id: string; title: string; why: string[]; risk: string; queue_state: string; action: string; decision?: string | null }[];
+  // An agent run the assistant started (Do mode); the panel follows it live.
+  run?: { id: string; agent: string; label: string; already: boolean };
   note?: string;
 };
 
@@ -69,7 +74,8 @@ function unverified(answer: string, outputs: string[]) {
 
 const NO_OFFER = /\b(without|no|missing|lacking)\s+(an?\s+|any\s+)?(renewal\s+)?offers?\b|\b(not|n't|never)\s+(yet\s+)?(been\s+)?(sent|made|given|received|gotten|got)?\s*(an?\s+)?(renewal\s+)?offer/i;
 
-type RulesOut = { answer: string; table?: AssistantReply["table"]; citations: Citation[]; proposals?: boolean };
+type RulesOut = { answer: string; table?: AssistantReply["table"]; citations: Citation[]; proposals?: boolean; run?: AssistantReply["run"] };
+type StartAgent = (key: string) => ReturnType<typeof runNow>;
 
 const fmtDays = (d: Delinquent) => `${d.days_late} days`;
 const lateTable = (rows: Delinquent[]): AssistantReply["table"] => ({
@@ -79,7 +85,7 @@ const lateTable = (rows: Delinquent[]): AssistantReply["table"] => ({
 
 // Rules answers for the common questions: used when no model is configured, when the model fails,
 // and when a model answer states a figure the lookups don't contain.
-async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promise<RulesOut | null> {
+async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
   const metro = matchMetro(q);
   const days = Number(q.match(/(\d+)\s*\+?\s*(?:days?|d\b)/i)?.[1] ?? 0);
   if (/\b(late|owe[sd]?|owing|overdue|delinquen\w*|behind on rent|arrears|unpaid rent)\b/i.test(q)) {
@@ -149,10 +155,6 @@ async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promis
     const saved = (await monthly(ctx.data, { months: 1 })).reduce((s, r) => s + Number(r.ai_minutes_saved ?? 0), 0);
     return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${r.agent_key.replace(/_/g, " ")} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
   }
-  if (context?.entity && context.id && /\b(this|it|here)\b/i.test(q)) {
-    const row = await ctx.call<Row>("records.get", { entity: context.entity, id: context.id }).catch(() => null);
-    if (row) return { answer: `${context.title ?? `${context.entity} ${context.id}`}: ${Object.entries(row).filter(([, v]) => v != null && v !== "" && String(v).length < 60).slice(0, 10).map(([k, v]) => `${k.replace(/_/g, " ")} ${k.endsWith("_cents") ? money(Number(v)) : v}`).join(", ")}.`, citations: [{ entity_type: context.entity, entity_id: context.id, label: context.title ?? context.id, href: hrefFor(context.entity, context.id) }] };
-  }
   return null;
 }
 
@@ -163,10 +165,24 @@ async function helpAnswer(ctx: AgentCtx, q: string): Promise<RulesOut & { articl
   return { answer: `${a.title}: ${a.snippet}`, citations: articles.map((x) => ({ help: x.slug, label: x.title, href: x.href })), articles };
 }
 
+const AGENT_WORDS: [string, RegExp][] = [["collections", /collections?/i], ["maintenance_triage", /triage|work orders?/i], ["ap", /bills?|payables?|invoices?/i], ["renewals", /renewals?/i], ["leasing", /applica\w+|prospects?|leasing/i], ["data_health", /data (health|issues?)|fix/i], ["compliance", /coi|insurance|complian\w+/i], ["owner_reporting", /owner|noi|variance/i]];
+
 // Action mode: recognised requests become proposals; nothing runs until the person confirms each.
-async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
+async function planActions(ctx: AgentCtx, q: string, start: StartAgent): Promise<RulesOut> {
   const metro = matchMetro(q);
   const days = Number(q.match(/(\d+)\s*\+?\s*(?:days?|d\b)/i)?.[1] ?? 0);
+  // "Run the collections agent", "triage new work orders": start the agent as Run now does.
+  const agent = AGENT_WORDS.find(([, re]) => re.test(q))?.[0];
+  if (agent && !/\b(remind\w*|reminders?|nudge)\b/i.test(q) && /\b(agent|run|start|triage|review|check|fix)\b/i.test(q)) {
+    const r = await start(agent);
+    const name = r.ok ? r.name : r.name ?? agent.replace(/_/g, " ");
+    if (!r.ok) return { answer: `I can't start the ${name} for you: ${r.error}. ${r.status === 403 ? "A property manager, regional manager or the principal can run it from Agents." : ""}`.trim(), citations: [] };
+    await ctx.step({ kind: "message", output: { started_run: r.runId, agent, already: r.already }, ok: true });
+    return {
+      answer: r.already ? `The ${name} is already running, so I didn't start another. Watch the run below.` : `Started the ${name}. Watch the run below; anything it proposes waits for approval.`,
+      citations: [{ label: "Watch the run", href: r.href }], run: { id: r.runId, agent, label: name, already: r.already },
+    };
+  }
   if (/\b(remind\w*|reminders?|nudge|collections?)\b/i.test(q) || (/\b(send|email|text)\b/i.test(q) && /\b(late|delinquen\w*|owe|overdue|rent)\b/i.test(q))) {
     const r = await ctx.call<{ rows: Delinquent[]; total: number }>("ledger.delinquency", { min_days: days || 5, metro, limit: 25 });
     const { reminder } = await import("./rules");
@@ -182,12 +198,25 @@ async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
     }
     return { answer: r.rows.length ? `I drafted ${r.rows.length} reminder${r.rows.length === 1 ? "" : "s"} for residents ${days || 5}+ days late${metro ? ` in ${metro}` : ""}. Review and confirm below; nothing is sent until you do.` : `Nobody${metro ? ` in ${metro}` : ""} is ${days || 5}+ days late, so there's nothing to send.`, table: lateTable(r.rows), citations: [], proposals: true };
   }
-  const agent = [["collections", /collections?/], ["maintenance_triage", /triage|work orders?/], ["ap", /bills?|payables?|invoices?/], ["renewals", /renewals?/], ["leasing", /applica\w+|prospects?|leasing/], ["data_health", /data (health|issues?)|fix/], ["compliance", /coi|insurance|complian\w+/], ["owner_reporting", /owner|noi|variance/]].find(([, re]) => (re as RegExp).test(q))?.[0];
-  if (agent && /\b(run|start|triage|review|check|fix)\b/i.test(q)) return { answer: `That's the ${String(agent).replace(/_/g, " ")} agent's job. Open it in the command center and press Run now to watch it work.`, citations: [{ label: "Agents", href: `/app/agents?agent=${agent}` }] };
   return { answer: "I can turn these into actions you confirm: send rent reminders (\"remind everyone 30+ days late in Austin\"), or run an agent (\"triage new work orders\"). Anything that moves money goes to the approvals inbox.", citations: [] };
 }
 
-export async function ask(o: { data: DataCtx; persona: Persona; question: string; mode?: Mode; threadId?: string; context?: AskContext; waitUntil?: (p: Promise<unknown>) => void }): Promise<AssistantReply> {
+// What the panel shows while a question runs (the route streams these before the answer).
+function statusFor(key: ToolKey, input: unknown, about: string | undefined) {
+  const entity = getEntity(String((input as { entity?: string })?.entity ?? ""));
+  if (key === "records.search") return entity ? `${entity.key === about ? "Checking similar" : "Searching"} ${entity.label.many.toLowerCase()}…` : "Searching records…";
+  const label: Partial<Record<ToolKey, string>> = {
+    "records.get": `Reading the ${entity?.label.one.toLowerCase() ?? "record"}…`, "records.related": "Checking related records…", "ledger.delinquency": "Checking who owes rent…", "ledger.lookup": "Reading the ledger…",
+    "metrics.monthly": "Checking monthly figures…", "metrics.explain_noi": "Working out what moved NOI…", "data.issues": "Checking data issues…", "policy.lookup": "Checking approval policies…", "help.search": "Searching help articles…",
+  };
+  return label[key] ?? "Looking it up…";
+}
+
+const TABLE = /^\s*\|.*\|\s*$/m;
+// An answer about a record must read as prose: no markdown tables and no internal ids.
+const unplain = (text: string, b: RecordBrief) => TABLE.test(text) || b.hidden.some((id) => new RegExp(`(^|[^\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\w-])`).test(text));
+
+export async function ask(o: { data: DataCtx; persona: Persona; question: string; mode?: Mode; threadId?: string; context?: AskContext; waitUntil?: (p: Promise<unknown>) => void; onStatus?: (text: string) => void }): Promise<AssistantReply> {
   const { data, persona, question, context } = o;
   const mode = o.mode ?? detectMode(question);
   const nowIso = demoNowIso();
@@ -205,10 +234,15 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
   const start = { db, ws, actor: data.actor, agent: "copilot" as const, trigger: { kind: "chat" as const, input: { question, mode, context } }, waitUntil: o.waitUntil };
   const runId = await openRun(start);
   const actions: ActionKey[] = ["leases.send_reminder"];
+  const say = o.onStatus ?? (() => undefined);
   const run = await runWithContext(runId, start, Date.now(), "copilot", "act_with_approval", actions, async (ctx) => {
     let out: RulesOut | null = null;
     let live = false;
     let note: string | undefined;
+    if (o.onStatus) {
+      const call = ctx.call.bind(ctx);
+      ctx.call = (async (k: ToolKey, i: unknown) => { say(statusFor(k, i, context?.entity)); return call(k, i); }) as AgentCtx["call"];
+    }
     const screening = screensByProtectedClass(question);
     if (screening.length) {
       // Fair housing: refused before any lookup or model call, whatever the mode.
@@ -236,11 +270,17 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
         }
       }
     } else if (mode === "actions") {
-      out = await planActions(ctx, question);
+      out = await planActions(ctx, question, (key) => runNow({ db, ws, actor: data.actor, persona, waitUntil: o.waitUntil }, key));
     } else {
+      // A question about the record in view ("Ask about this") starts from that record's facts.
       // Fact questions the rules cover are answered from the computed result, sentence included;
       // the model only adds suggested next steps. Everything else goes to the model's tool loop.
-      const rules = await rulesChat(ctx, question, context);
+      const def = context?.entity && context.id ? getEntity(context.entity) : undefined;
+      if (def) say(`Reading ${def.idFormat ? context!.id : context!.title ?? context!.id}…`);
+      const about = def ? await recordBrief(data, def.key, context!.id!) : null;
+      const onRecord = !!about && ABOUT_RECORD.test(question);
+      const cost = onRecord && ASKS_COST.test(question) ? costAnswer(about!) : null;
+      const rules = cost ? { answer: cost, citations: [] } : onRecord ? null : await rulesChat(ctx, question);
       if (rules) {
         out = rules;
         if (ctx.model) {
@@ -265,19 +305,22 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
           }
         }
       } else if (ctx.model) {
-        const outputs: string[] = [];
+        const outputs: string[] = about ? [JSON.stringify(about.cents.map((c) => ({ amount_cents: c })))] : [];
         const orig = ctx.call.bind(ctx);
         ctx.call = (async (k: ToolKey, i: unknown) => {
           const res = await orig(k, i);
           outputs.push(JSON.stringify(res));
           return res;
         }) as AgentCtx["call"];
+        say("Thinking it through…");
         const r = await modelLoop(ctx, {
           system:
             `You are Propniti's assistant for ${persona.name} (${persona.title}, scope: ${persona.scope.label}). Answer questions about their portfolio by looking data up with the tools, then reply in a few plain sentences with names and figures. ` +
             "Money columns end in _cents (divide by 100 and format as dollars). For a list, start with how many match and the total, then the most important few; a table with every row is shown under your answer. Don't name tools; the person sees what you looked up. If the data doesn't answer it, say so. Never suggest you changed anything: you only read.\n\n" +
             `Tables you can search:\n${await catalog(ctx.db)}` +
-            (context?.entity ? `\n\nThe user is looking at ${context.entity} ${context.id ?? ""} (${context.title ?? context.path ?? ""}).` : ""),
+            (about
+              ? `\n\nThey are looking at one ${about.type.toLowerCase()}, given below with related records by name. Answer their question directly in 2-4 plain sentences with names. Use the tools only when the record below doesn't answer it, for example to compare with similar records. Don't list the record's fields, don't use tables or markdown, and don't write internal ids or codes; call this record ${about.label === about.title ? `"${about.title}"` : about.label}.\n\nThe record (data): ${JSON.stringify({ [about.type]: about.label, title: about.title, ...about.fields, facts: about.facts })}`
+              : context?.entity ? `\n\nThe user is looking at ${context.entity} ${context.id ?? ""} (${context.title ?? context.path ?? ""}).` : ""),
           prompt: `${history.results.length ? `Earlier in this conversation (data):\n${history.results.reverse().map((m) => `${m.role}: ${m.content.slice(0, 400)}`).join("\n")}\n\n` : ""}Question: ${question}`,
           tools: CHAT_TOOLS, maxSteps: 6,
         });
@@ -287,12 +330,17 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
           if (bad.length) {
             await ctx.step({ kind: "message", output: { rejected_answer: r.text.slice(0, 800), reason: `figures not in the looked-up data: ${bad.map((b) => money(b)).join(", ")}` }, ok: false });
             note = "The model's answer had a figure the data didn't support, so this answer is computed by rules.";
+          } else if (about && unplain(r.text, about)) {
+            await ctx.step({ kind: "message", output: { rejected_answer: r.text.slice(0, 800), reason: "listed fields or internal ids instead of answering" }, ok: false });
+            note = "The model's answer wasn't a plain answer (it listed fields or internal ids), so this one is written from the record's facts.";
           } else {
             out = { answer: r.text, citations: [] };
             live = true;
           }
         }
       }
+      if (!out && about && onRecord) out = { answer: recordAnswer(about), citations: [] };
+      if (out && about && onRecord) out.citations = [{ entity_type: about.entity, entity_id: about.id, label: about.label === about.title ? about.title : `${about.label} ${about.title}`, href: about.href }, ...out.citations];
       if (!out) out = { answer: "I can answer questions about rent, leases, work orders, bills, NOI, occupancy, approvals, data health and the agents. Try one of the suggestions.", citations: [] };
     }
     return { summary: out!.answer.slice(0, 1000), result: { out: out!, live, note } };
@@ -315,26 +363,58 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
     : { results: [] as Row[] };
   const proposals = proposalRows.results.map((p) => ({ id: String(p.id), title: String(p.title), why: parseJson<string[]>(p.why, []), risk: String(p.risk), queue_state: String(p.queue_state), action: String(p.action) }));
   const model = res.live && ctx ? ctx.modelUsed : RULES;
+  const note = res.note ?? (!ctx?.model ? "No AI model is configured, so answers come from rules over your data." : !res.live ? "Figures and wording computed from your data." : undefined);
   const messageId = newId("msg");
   await db.batch([
-    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
+    // The plan keeps what the reply showed (source, table, note), so a reopened thread renders the same.
+    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace, live: res.live, source: model.label, note, table: res.out.table, agent_run: res.out.run }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
     ...(await Promise.all(proposals.map(async (p) => insert(db, ws, "assistant_actions", { id: newId("act"), message_id: messageId, action: p.action, params: JSON.stringify({ proposal_id: p.id }), status: "Proposed", at: demoNowIso() })))),
     db.prepare("UPDATE assistant_threads SET updated_at = ? WHERE workspace_id = ? AND id = ?").bind(demoNowIso(), ws, threadId),
   ]);
   return {
-    threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals,
-    note: res.note ?? (!ctx?.model ? "No AI model is configured, so answers come from rules over your data." : !res.live ? "Figures and wording computed from your data." : undefined),
+    threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals, note, run: res.out.run,
   };
 }
 
+// Saved conversations (⌘J panel and /app/copilot). Only the persona's own threads, in this workspace.
 export async function threads(data: DataCtx, personaId: string, size = 20) {
-  const r = await list(data, "assistant_threads", { filters: [{ field: "user_id", op: "eq", value: personaId }], sort: ["updated_at", "desc"], size });
-  return r.rows;
+  const { results } = await data.db.prepare("SELECT id, title, updated_at FROM assistant_threads WHERE workspace_id = ? AND user_id = ? AND deleted = 0 ORDER BY updated_at DESC, seq DESC LIMIT ?").bind(data.ws, personaId, Math.min(Math.max(1, size), 30)).all<{ id: string; title: string; updated_at: string }>();
+  return results;
 }
 
-export async function threadMessages(data: DataCtx, personaId: string, threadId: string) {
-  const t = await data.db.prepare("SELECT id, title FROM assistant_threads WHERE workspace_id = ? AND id = ? AND user_id = ?").bind(data.ws, threadId, personaId).first<Row>();
-  if (!t) return null;
-  const { results } = await data.db.prepare("SELECT id, role, content, plan, citations, model, at FROM assistant_messages WHERE workspace_id = ? AND thread_id = ? ORDER BY seq").bind(data.ws, threadId).all<Row>();
-  return { thread: t, messages: results.map((m) => ({ ...m, plan: parseJson(m.plan, null), citations: parseJson(m.citations, []) })) };
+export type SavedTurn = { role: "user"; text: string } | { role: "assistant"; reply: AssistantReply };
+type SavedPlan = { run_id?: string; mode?: Mode; trace?: TraceItem[]; live?: boolean; source?: string; note?: string; table?: AssistantReply["table"]; agent_run?: AssistantReply["run"] };
+
+// The last `limit` messages of a thread as the chat renders them. Proposals come back with their
+// current decision; nothing is run again.
+export async function threadMessages(data: DataCtx, personaId: string, threadId: string, limit = 30) {
+  const thread = await data.db.prepare("SELECT id, title, updated_at FROM assistant_threads WHERE workspace_id = ? AND id = ? AND user_id = ? AND deleted = 0").bind(data.ws, threadId, personaId).first<{ id: string; title: string; updated_at: string }>();
+  if (!thread) return null;
+  const n = Math.min(Math.max(1, limit), 100);
+  const { results } = await data.db.prepare("SELECT id, role, content, plan, citations, model FROM assistant_messages WHERE workspace_id = ? AND thread_id = ? AND deleted = 0 ORDER BY seq DESC LIMIT ?").bind(data.ws, threadId, n + 1).all<{ id: string; role: string; content: string; plan: string | null; citations: string; model: string | null }>();
+  const more = results.length > n;
+  const messages = results.slice(0, n).reverse();
+  const answers = messages.filter((m) => m.role === "assistant").map((m) => m.id);
+  const actions = answers.length
+    ? (await data.db.prepare("SELECT message_id, params FROM assistant_actions WHERE workspace_id = ? AND deleted = 0 AND message_id IN (SELECT value FROM json_each(?)) ORDER BY seq").bind(data.ws, JSON.stringify(answers)).all<{ message_id: string; params: string }>()).results
+    : [];
+  const ids = actions.map((a) => parseJson<{ proposal_id?: string }>(a.params, {}).proposal_id).filter((x): x is string => !!x);
+  const rows = ids.length
+    ? await sql<Row>(data, "SELECT p.id, p.title, p.why, p.risk, p.queue_state, p.action, d.decision FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.id IN (SELECT value FROM json_each(?))", [JSON.stringify(ids)])
+    : [];
+  const byId = new Map(rows.map((p) => [String(p.id), { id: String(p.id), title: String(p.title), why: parseJson<string[]>(p.why, []), risk: String(p.risk), queue_state: String(p.queue_state), action: String(p.action), decision: (p.decision as string | null) ?? null }]));
+  const turns: SavedTurn[] = messages.filter((m) => m.role !== "tool").map((m) => {
+    if (m.role === "user") return { role: "user", text: m.content };
+    const plan = parseJson<SavedPlan>(m.plan, {});
+    const proposals = actions.filter((a) => a.message_id === m.id).map((a) => byId.get(parseJson<{ proposal_id?: string }>(a.params, {}).proposal_id ?? "")).filter((p) => !!p);
+    return {
+      role: "assistant",
+      reply: {
+        threadId, messageId: m.id, runId: plan.run_id ?? "", mode: plan.mode ?? "chat", answer: m.content,
+        source: plan.source ?? (!m.model || m.model === RULES.model ? RULES.label : m.model), model: m.model ?? RULES.model, live: plan.live ?? false,
+        table: plan.table, citations: parseJson<Citation[]>(m.citations, []), trace: plan.trace ?? [], proposals, note: plan.note, run: plan.agent_run,
+      },
+    };
+  });
+  return { thread, turns, more };
 }

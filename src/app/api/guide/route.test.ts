@@ -36,14 +36,15 @@ describe("GET /api/guide", () => {
 
   it("counts within the persona's properties: open needs-you proposals, 31+ day balances and critical issues", async () => {
     // p01: Sep (64 days) and Oct (34 days) rent for l1, Oct for l2. p10 (90+ days) is outside Marcus's scope.
-    expect((await get("marcus")).body).toEqual({ approvals: 2, pastDue: { cents: 400000, properties: 1 }, dataIssues: { critical: 1 } });
-    expect((await get("daniel")).body).toEqual({ approvals: 3, pastDue: { cents: 700000, properties: 2 }, dataIssues: { critical: 2 } });
+    expect((await get("marcus")).body).toEqual({ approvals: 2, pastDue: { cents: 400000, properties: 1 }, dataIssues: { critical: 1 }, remind: { residents: 2 } });
+    expect((await get("daniel")).body).toEqual({ approvals: 3, pastDue: { cents: 700000, properties: 2 }, dataIssues: { critical: 2 }, remind: { residents: 3 } });
   });
 
   it("leaves out past-due balances for a role that can't see charges", async () => {
     const { status, body } = await get("lena");
     expect(status).toBe(200);
     expect(body.pastDue).toBeNull();
+    expect(body.remind).toBeNull();
   });
 
   it("leaves out approvals for a role without the intelligence module, as the nav does", async () => {

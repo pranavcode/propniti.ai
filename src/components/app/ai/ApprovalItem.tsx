@@ -31,6 +31,7 @@ export type ApprovalItemProps = {
   onReject?: () => void | Promise<unknown>;
   variant?: "card" | "row";
   defaultOpen?: boolean;
+  decided?: "approved" | "rejected" | "snoozed"; // already decided (a reopened conversation)
   className?: string;
   id?: string;
 };
@@ -47,9 +48,9 @@ export function RiskBadge({ risk }: { risk: Risk }) {
 
 // One proposed action in the approvals queue. People approve; agents only propose.
 export function ApprovalItem(p: ApprovalItemProps) {
-  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, variant = "card", defaultOpen, className, id } = p;
+  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, variant = "card", defaultOpen, decided, className, id } = p;
   const [open, setOpen] = useState(defaultOpen ?? variant === "card");
-  const [state, setState] = useState<"open" | "approved" | "rejected">("open");
+  const [state, setState] = useState<"open" | "approved" | "rejected" | "snoozed">(decided ?? "open");
   const [busy, setBusy] = useState(false);
   const act = async (kind: "approved" | "rejected") => {
     setBusy(true);
@@ -69,7 +70,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
     </div>
   ) : (
     <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", state === "approved" ? "text-tone-success" : "text-muted-foreground")}>
-      {state === "approved" ? <><Check className="size-3.5" /> Approved · logged to audit</> : <><X className="size-3.5" /> Rejected</>}
+      {state === "approved" ? <><Check className="size-3.5" /> Approved · logged to audit</> : state === "snoozed" ? "Snoozed" : <><X className="size-3.5" /> Rejected</>}
     </span>
   );
 

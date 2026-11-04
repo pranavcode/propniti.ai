@@ -14,6 +14,7 @@ export type GuideFacts = {
   approvals: number | null;                                // Approvals › Needs you
   pastDue: { cents: number; properties: number } | null;   // open balances more than 30 days past due
   dataIssues: { critical: number } | null;                 // open critical data issues
+  remind?: { residents: number } | null;                   // residents 30+ days late (what "send reminders" drafts)
 };
 
 // localStorage: "Don't show tips", dismissed nudges (id → the key it had) and whether Explain was used.
