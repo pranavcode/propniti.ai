@@ -81,7 +81,7 @@ export function ImportWizard({ options }: { options: WizardOptions }) {
       try {
         setAi(await apiJson<AiResult>("POST", "/api/import/ai", buildAiRequest(files, assembled)));
       } catch (e) {
-        setAi({ live: false, source: "Rules", model: "rules", note: `AI suggestions unavailable (${(e as Error).message}); rules only.`, estimate: { tokensIn: 0, costCents: 0 }, mappings: [], suggestions: [], notes: [] });
+        setAi({ live: false, source: "Rules", model: "rules", note: `AI suggestions unavailable (${(e as Error).message}); rules only.`, estimate: { tokensIn: 0, tokensOut: 0, costCents: 0 }, mappings: [], suggestions: [], notes: [] });
       } finally {
         setBusy(null);
       }

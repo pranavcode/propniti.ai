@@ -7,7 +7,9 @@ import type { WriteCtx } from "@/server/query";
 import { assemble, type ImportFile, type Payload } from "./assemble";
 import { detect } from "./mapping";
 import { parseDelimited, toSheet } from "./parse";
-import { CHUNK_BYTES, commit, insertStatements, plan, recentImports, undo, type ImportOptions } from "./server";
+import { TABLES } from "@/server/effective";
+import { REF_COLUMNS } from "./refs";
+import { CHUNK_BYTES, commit, ImportRequest, insertStatements, plan, recentImports, undo, type ImportOptions } from "./server";
 
 let db: Db;
 const NOW = Date.parse("2026-11-04T18:00:00Z");
@@ -128,7 +130,62 @@ describe("undo", () => {
     const r = await commit(c, payloadOf(ROLL), OPTS);
     const lease = await db.prepare("SELECT id, household_id, property_id FROM leases WHERE workspace_id = ? LIMIT 1").bind(WS).first<{ id: string; household_id: string; property_id: string }>();
     await db.prepare("INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, method, received_on, amount_cents) VALUES (?, 'pay-x', ?, ?, ?, 'Check', '2026-11-04', 1000)").bind(WS, lease!.id, lease!.household_id, lease!.property_id).run();
-    await expect(undo(c, r.batch)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Payments, credits/) });
+    await expect(undo(c, r.batch)).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Other records point at records from this import \(payments\)/) });
+  });
+});
+
+describe("undo safety", () => {
+  const VEN = `Vendor Name,Type,Contact,Email,Phone,1099\nDesert Air HVAC,HVAC,Luis Mora,luis@example.com,6025550111,Yes`;
+
+  it("refuses when any record outside the batch points at one inside it", async () => {
+    const c = await ctx("daniel");
+    const r = await commit(c, payloadOf(ROLL, VEN), OPTS);
+    const id = async (t: string) => (await db.prepare(`SELECT id FROM ${t} WHERE workspace_id = ? AND id LIKE ? LIMIT 1`).bind(WS, `%-i${r.batch}-%`).first<{ id: string }>())!.id;
+    const [vendor, lease, unit, property] = [await id("vendors"), await id("leases"), await id("units"), await id("properties")];
+    const cases: [string, string, unknown[]][] = [
+      ["work order for the vendor", "INSERT INTO work_orders (workspace_id, id, property_id, vendor_id, title, category, priority, status, opened_at) VALUES (?, 'wo-x', 'p01', ?, 'Fix', 'HVAC', 'Normal', 'New', '2026-11-04')", [WS, vendor]],
+      ["note on the lease", "INSERT INTO notes (workspace_id, id, entity_type, entity_id, author_id, body, created_at) VALUES (?, 'n-x', 'leases', ?, 'daniel', 'hi', '2026-11-04')", [WS, lease]],
+      ["unit added by hand at the property", "INSERT INTO units (workspace_id, id, property_id, number) VALUES (?, 'u-hand', ?, '999')", [WS, property]],
+      ["lease added by hand on the unit", "INSERT INTO leases (workspace_id, id, property_id, unit_id, household_id, status, start_on, rent_cents) VALUES (?, 'l-hand', 'p01', ?, 'h-x', 'Future', '2027-06-01', 1)", [WS, unit]],
+    ];
+    for (const [what, sql, binds] of cases) {
+      await db.prepare(sql).bind(...binds).run();
+      await expect(undo(c, r.batch), what).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/Other records point at records from this import/) });
+      await db.prepare(sql.match(/INSERT INTO (\w+)/)![1] === "notes" ? "DELETE FROM notes WHERE id = 'n-x'" : `DELETE FROM ${sql.match(/INSERT INTO (\w+)/)![1]} WHERE id IN ('wo-x', 'u-hand', 'l-hand')`).run();
+    }
+    // Logs (audit, activity, events) don't block: they stay as history.
+    await db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, at, actor_kind, actor_id, verb, summary) VALUES (?, 'a-x', 'leases', ?, '2026-11-04', 'staff', 'daniel', 'updated', 'x')").bind(WS, lease).run();
+    expect((await undo(c, r.batch)).removed).toEqual(r.created);
+  });
+
+  it("refuses a person whose scope doesn't cover every property in the batch", async () => {
+    const units = `Property,Unit,Sqft,Market Rent,Status\nThe Lofts at Riverside,201,700,1400,Vacant\nDeep Ellum Lofts,201,700,1400,Vacant`;
+    const r = await commit(await ctx("daniel"), payloadOf(units), OPTS);
+    await expect(undo(await ctx("marcus"), r.batch)).rejects.toMatchObject({ status: 403, message: expect.stringMatching(/outside your scope/) });
+    expect((await undo(await ctx("daniel"), r.batch)).removed).toEqual({ units: 2 });
+  });
+
+  it("the foreign-key list covers every id column in the schema", async () => {
+    const cols = (await db.prepare("SELECT m.name AS t, p.name AS c FROM sqlite_master AS m JOIN pragma_table_info(m.name) AS p WHERE m.type = 'table' ORDER BY m.name, p.cid").all<{ t: string; c: string }>()).results;
+    const derived: Record<string, string[]> = {};
+    for (const { t, c } of cols) if (TABLES.includes(t as never) && (/_id$/.test(c) && c !== "workspace_id" || c === "renewal_of" || c === "ref")) (derived[t] ??= []).push(c);
+    expect(REF_COLUMNS).toEqual(derived);
+  });
+});
+
+describe("request schema", () => {
+  const base = { properties: [], units: [], residents: [], leases: [], owners: [], vendors: [], balances: [], recurring: [] };
+  const src = { file: "f", line: 2 };
+  it("refuses unknown unit statuses and property types, and leases that end before they start", () => {
+    const ok = (payload: object, options: object = OPTS) => ImportRequest.safeParse({ mode: "preview", payload: { ...base, ...payload }, options }).success;
+    expect(ok({ units: [{ property: "a", number: "1", status: "Vacant", src }] })).toBe(true);
+    expect(ok({ units: [{ property: "a", number: "1", status: "Haunted", src }] })).toBe(false);
+    expect(ok({ properties: [{ key: "a", name: "A", street: "", city: "", state: "", zip: "", type: "Castle", src }] })).toBe(false);
+    expect(ok({}, { ...OPTS, propertyType: "Castle" })).toBe(false);
+    const lease = { property: "a", unit: "1", people: [{ first: "A", last: "B" }], start: "2026-05-01", rent: 1, status: "Active", src };
+    expect(ok({ leases: [{ ...lease, end: "2027-04-30" }] })).toBe(true);
+    expect(ok({ leases: [{ ...lease, end: "2026-04-30" }] })).toBe(false);
+    expect(ok({ recurring: [{ property: "a", unit: "1", label: "Pet", amount: 5, frequency: "Monthly", start: "2026-05-01", end: "2026-01-01", src }] })).toBe(false);
   });
 });
 
@@ -150,12 +207,22 @@ describe("permissions and scope", () => {
     expect(lena.skipped[0]!.reason).toBe("Your role can't add units");
   });
 
-  it("an accountant posts balances on existing leases; field rules drop what a role can't set", async () => {
+  it("opening balances go only on leases this import creates, never on a ledger already on file", async () => {
     const grace = await ctx("grace");
-    const bal = await commit(grace, payloadOf(`Property,Unit,Tenant,0-30,31-60,61-90,90+,Total\nThe Lofts at Riverside,102,Res,100,50,0,0,150`), { ...OPTS, reports: ["Aged Receivables Detail"] });
-    expect(bal.created).toEqual({ charges: 2 });
-    const rows = (await db.prepare("SELECT lease_id, due_on, amount_cents FROM charges WHERE workspace_id = ? ORDER BY due_on").bind(WS).all()).results;
-    expect(rows).toEqual([{ lease_id: "l-p01-u2", due_on: "2026-09-20", amount_cents: 5000 }, { lease_id: "l-p01-u2", due_on: "2026-10-20", amount_cents: 10000 }]);
+    const p = await plan(grace, payloadOf(`Property,Unit,Tenant,0-30,31-60,61-90,90+,Total\nThe Lofts at Riverside,102,Res,100,50,0,0,150`), { ...OPTS, reports: ["Aged Receivables Detail"] });
+    expect(p.summary.charges).toEqual({ new: 0, existing: 0, skipped: 1 });
+    expect(p.skipped[0]).toMatchObject({ type: "charges", reason: "Already on file — its balance comes from its ledger" });
+    await expect(commit(grace, payloadOf(`Property,Unit,Tenant,0-30,31-60,61-90,90+,Total\nThe Lofts at Riverside,102,Res,100,50,0,0,150`), OPTS)).rejects.toMatchObject({ status: 409 });
+    expect(await count("SELECT count(*) AS n FROM charges WHERE workspace_id = ?", WS)).toBe(0);
+    // With the rent roll in the same import, the new lease gets the aging buckets.
+    const roll = `Property,Unit,Tenant,Rent,Lease From,Lease To\nThe Lofts at Riverside,104,Dee Ford,1500,2026-05-01,2027-04-30`;
+    const aging = `Property,Unit,Tenant,0-30,31-60,61-90,90+,Total\nThe Lofts at Riverside,104,Dee Ford,100,50,0,0,150`;
+    const r = await commit(await ctx("daniel"), payloadOf(roll, aging), OPTS);
+    expect(r.created.charges).toBe(2);
+    expect((await db.prepare("SELECT due_on, amount_cents FROM charges WHERE workspace_id = ? ORDER BY due_on").bind(WS).all()).results).toEqual([{ due_on: "2026-09-20", amount_cents: 5000 }, { due_on: "2026-10-20", amount_cents: 10000 }]);
+  });
+
+  it("field rules drop what a role can't set", async () => {
     const marcus = await plan(await ctx("marcus"), payloadOf(`Vendor Name,Type,Contact,Email,Phone,1099,Tax ID\nDesert Air HVAC,HVAC,Luis Mora,luis@example.com,6025550111,Yes,12-3456789`), OPTS);
     expect(marcus.rows.vendors[0]).not.toHaveProperty("tin_last4");
     expect(marcus.rows.vendors[0]).not.toHaveProperty("is_1099");

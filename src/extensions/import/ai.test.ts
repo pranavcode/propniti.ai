@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setModelForTests, type ChatModel } from "@/ai/providers";
-import { AiRequest, suggest } from "./ai";
+import { AI_CAPS, AiRequest, suggest, userMessage } from "./ai";
 import { buildAiRequest } from "./airequest";
 import { assemble, type ImportFile } from "./assemble";
 import { detect } from "./mapping";
@@ -76,5 +76,27 @@ describe("AI suggestions", () => {
     expect(await suggest(req)).toMatchObject({ live: false, source: "Rules", mappings: [], suggestions: [], note: expect.stringMatching(/timed out/) });
     setModelForTests(null);
     expect(await suggest(req)).toMatchObject({ live: false, source: "Rules", note: expect.stringMatching(/No AI model is configured/) });
+  });
+});
+
+describe("AI request budget", () => {
+  it("drops flagged cells and sample rows to fit the budget, and still sends valid JSON", () => {
+    const wide = Array.from({ length: 60 }, (_, i) => `Column ${i}`);
+    const files = Array.from({ length: 6 }, (_, k) => ({
+      id: `f${k}`, kind: "rent_roll" as const, headers: wide, unmapped: wide.map((_, i) => i).slice(3), mapped: { property: 0, unit: 1, rent: 2 },
+      samples: Array.from({ length: 5 }, (_, r) => ({ line: r + 2, cells: wide.map(() => "x".repeat(60)) })),
+      flagged: Array.from({ length: 30 }, (_, r) => ({ line: r + 2, field: "rent", value: "9".repeat(60), why: "w".repeat(120) })),
+    }));
+    const msg = userMessage(AiRequest.parse({ files }));
+    expect(msg.length).toBeLessThanOrEqual(AI_CAPS.totalChars);
+    const body = JSON.parse(msg) as { files: { file: string; headers: string[] }[] };
+    expect(body.files.map((f) => f.file)).toEqual(["f0", "f1", "f2", "f3", "f4", "f5"]);
+    expect(body.files[0]!.headers).toHaveLength(60);
+  });
+
+  it("ignores fields named like object prototype keys", async () => {
+    setModelForTests(scripted({ mappings: [], cleanups: [{ file: "f1", field: "constructor", kind: "replace", from: "x", to: "y", line: null, confidence: 1, reason: "r" }], notes: [] }));
+    const { req } = setup();
+    expect((await suggest(req)).suggestions).toEqual([]);
   });
 });

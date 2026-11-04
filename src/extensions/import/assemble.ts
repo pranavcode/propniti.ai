@@ -1,5 +1,6 @@
 import { FIELDS, KIND_SPECS, type FieldKey, type Kind } from "./fields";
 import type { Mapping } from "./mapping";
+import { PROPERTY_TYPES } from "./labels";
 import * as N from "./normalize";
 import type { Sheet, SourceRow } from "./parse";
 
@@ -19,8 +20,8 @@ export type Suggestion = {
 };
 
 export type PersonRec = { first: string; last: string; email?: string; phone?: string };
-export type PropertyRec = { key: string; name: string; street: string; city: string; state: string; zip: string; type?: string; yearBuilt?: number; unitCount?: number; owner?: string; src: Src };
-export type UnitRec = { property: string; number: string; sqft?: number; marketRent?: number; status?: string; src: Src };
+export type PropertyRec = { key: string; name: string; street: string; city: string; state: string; zip: string; type?: (typeof PROPERTY_TYPES)[number]; yearBuilt?: number; unitCount?: number; owner?: string; src: Src };
+export type UnitRec = { property: string; number: string; sqft?: number; marketRent?: number; status?: NonNullable<ReturnType<typeof N.unitStatus>>; src: Src };
 export type ResidentRec = PersonRec & { property: string; unit?: string; status: N.ResidentStatus; src: Src };
 export type LeaseRec = { property: string; unit: string; people: PersonRec[]; start: string; end?: string; moveIn?: string; moveOut?: string; rent: number; deposit?: number; status: N.LeaseStatus; externalId?: string; src: Src };
 export type OwnerRec = { name: string; entity?: string; email?: string; phone?: string; state?: string; taxLast4?: string; feePct?: number; src: Src };
@@ -113,6 +114,13 @@ export function assemble(files: ImportFile[], edits: Edit[], today: string): Ass
       },
     };
 
+    // A file's property type counts only when it names one of ours; otherwise the preview's default applies.
+    const propertyType = (r: SourceRow) => {
+      const v = raw(r, "propertyType");
+      const hit = PROPERTY_TYPES.find((t) => t.toLowerCase() === v.toLowerCase());
+      if (v && !hit) issue(r, "warning", `Property type "${v}" isn't one of Propniti's types; the type chosen at preview is used`, "propertyType");
+      return hit;
+    };
     const propertyOf = (r: SourceRow): PropertyRec | null => {
       let name = raw(r, "property");
       let fromSection: string | undefined;
@@ -133,7 +141,7 @@ export function assemble(files: ImportFile[], edits: Edit[], today: string): Ass
         city: raw(r, "city") || parsed?.city || "",
         state: (st ? N.state(st) : null) ?? parsed?.state ?? "",
         zip: N.zip(raw(r, "zip")) ?? parsed?.zip ?? "",
-        type: raw(r, "propertyType") || undefined, yearBuilt: get.int(r, "yearBuilt"), unitCount: get.int(r, "unitCount"),
+        type: propertyType(r), yearBuilt: get.int(r, "yearBuilt"), unitCount: get.int(r, "unitCount"),
         owner: raw(r, "owner") || undefined, src: { file: f.id, line: r.line },
       };
       if (st && !N.state(st)) issue(r, "warning", `State "${st}" isn't a US state`, "state");

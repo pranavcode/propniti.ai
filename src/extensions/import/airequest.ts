@@ -50,3 +50,8 @@ export function buildAiRequest(files: ImportFile[], a: Assembled): { files: AiFi
     }),
   };
 }
+
+// Expected reply size: a fixed part plus room for a match per unmapped column and a fix per
+// flagged cell (about 40 and 60 tokens each), capped at the reply's own limits.
+export const outTokens = (files: { unmapped: number[]; flagged: unknown[] }[]) =>
+  Math.min(6000, 250 + files.reduce((s, f) => s + 40 * f.unmapped.length + 60 * f.flagged.length, 0));

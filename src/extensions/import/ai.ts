@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { currentModel, type ModelInfo, RULES, usageOf, type Usage } from "@/ai/providers";
+import { outTokens } from "./airequest";
 import type { Suggestion } from "./assemble";
 import { FIELDS, KIND_SPECS, KINDS, type FieldKey } from "./fields";
 
@@ -9,7 +10,7 @@ import { FIELDS, KIND_SPECS, KINDS, type FieldKey } from "./fields";
 // rules couldn't place, cell cleanups, and a few plain notes. Each suggestion carries its source and
 // confidence and is applied only when a person accepts it. Counts always come from code.
 
-export const AI_CAPS = { files: 6, sampleRows: 5, columns: 60, cellChars: 60, flagged: 30, totalChars: 16_000 } as const;
+export const AI_CAPS = { files: 6, sampleRows: 5, columns: 60, cellChars: 60, flagged: 30, totalChars: 20_000 } as const;
 
 const cell = z.string().max(AI_CAPS.cellChars);
 export const AiRequest = z.object({
@@ -28,7 +29,7 @@ export type AiRequest = z.infer<typeof AiRequest>;
 export type AiMapping = { file: string; field: FieldKey; col: number; confidence: number; reason: string };
 export type AiResult = {
   live: boolean; source: string; model: string; note?: string;
-  usage?: Usage; estimate: { tokensIn: number; costCents: number };
+  usage?: Usage; estimate: { tokensIn: number; tokensOut: number; costCents: number };
   mappings: AiMapping[]; suggestions: Suggestion[]; notes: string[];
 };
 
@@ -48,26 +49,37 @@ const SYSTEM = [
   "notes: up to 4 short sentences about the files' quality and anything to check before importing. Do not state counts, totals, amounts or any other numbers; the app shows those from its own calculation.",
 ].join("\n");
 
-const OUT_TOKENS = 900;
 export function estimate(req: AiRequest, info: ModelInfo) {
-  const tokensIn = Math.ceil((SYSTEM.length + JSON.stringify(req).length) / 4);
-  return { tokensIn, costCents: usageOf(info.model, tokensIn, OUT_TOKENS, 0).costCents };
+  const tokensIn = Math.ceil((SYSTEM.length + userMessage(req).length) / 4);
+  const tokensOut = outTokens(req.files);
+  return { tokensIn, tokensOut, costCents: usageOf(info.model, tokensIn, tokensOut, 0).costCents };
 }
 
-function userMessage(req: AiRequest) {
-  const body = {
-    files: req.files.map((f) => ({
+// The user message, kept under AI_CAPS.totalChars by dropping whole flagged cells, then whole
+// sample rows, from the file that has the most left, so the JSON is never cut mid-value.
+export function userMessage(req: AiRequest) {
+  const files = req.files.map((f) => ({ ...f, samples: [...f.samples], flagged: [...f.flagged] }));
+  const render = () => JSON.stringify({
+    files: files.map((f) => ({
       file: f.id,
       record_type: KIND_SPECS[f.kind].label,
-      target_fields: KIND_SPECS[f.kind].fields.filter((k) => !(k in f.mapped)).map((k) => ({ key: k, label: FIELDS[k].label })),
+      target_fields: KIND_SPECS[f.kind].fields.filter((k) => !Object.hasOwn(f.mapped, k)).map((k) => ({ key: k, label: FIELDS[k].label })),
       mapped_fields: Object.keys(f.mapped),
       headers: f.headers,
       unmapped_columns: f.unmapped.map((i) => f.headers[i]).filter(Boolean),
       sample_rows: f.samples.map((r) => ({ line: r.line, ...Object.fromEntries(f.headers.map((h, i) => [h, r.cells[i] ?? ""])) })),
       flagged: f.flagged,
     })),
-  };
-  return JSON.stringify(body).slice(0, AI_CAPS.totalChars);
+  });
+  let text = render();
+  while (text.length > AI_CAPS.totalChars) {
+    const f = files.reduce((a, b) => (b.flagged.length + b.samples.length > a.flagged.length + a.samples.length ? b : a));
+    if (f.flagged.length) f.flagged.pop();
+    else if (f.samples.length) f.samples.pop();
+    else break;
+    text = render();
+  }
+  return text;
 }
 
 const clamp = (n: number) => Math.max(0, Math.min(1, Math.round(n * 100) / 100));
@@ -80,14 +92,14 @@ export function validateReply(req: AiRequest, reply: z.infer<typeof Reply>): Pic
     const f = req.files.find((x) => x.id === m.file);
     const col = f ? f.headers.indexOf(m.column) : -1;
     const field = m.field as FieldKey;
-    if (!f || col < 0 || !f.unmapped.includes(col) || !KIND_SPECS[f.kind].fields.includes(field) || field in f.mapped || mappings.some((x) => x.file === f.id && (x.field === field || x.col === col))) continue;
+    if (!f || col < 0 || !f.unmapped.includes(col) || !KIND_SPECS[f.kind].fields.includes(field) || Object.hasOwn(f.mapped, field) || mappings.some((x) => x.file === f.id && (x.field === field || x.col === col))) continue;
     mappings.push({ file: f.id, field, col, confidence: clamp(m.confidence), reason: m.reason.slice(0, 200) });
   }
   const suggestions: Suggestion[] = [];
   for (const c of reply.cleanups) {
     const f = req.files.find((x) => x.id === c.file);
     const field = c.field as FieldKey;
-    if (!f || !(field in f.mapped)) continue;
+    if (!f || !Object.hasOwn(f.mapped, field)) continue;
     const col = f.mapped[field]!;
     const seen = [...f.samples.map((r) => ({ line: r.line, value: r.cells[col] ?? "" })), ...f.flagged.filter((x) => x.field === field)];
     if (!seen.some((x) => x.value === c.from && (c.line == null || x.line === c.line))) continue;

@@ -10,13 +10,13 @@ const crc32 = (b: Uint8Array) => { let c = 0xffffffff; for (const x of b) c = cr
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const col = (i: number) => { let s = ""; for (i++; i; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + ((i - 1) % 26)) + s; return s; };
 
-function zip(files: [string, string][]): Uint8Array {
+function zip(files: [string, string][], lie = false): Uint8Array {
   const parts: Buffer[] = [], central: Buffer[] = [];
   let off = 0;
   for (const [name, text] of files) {
     const raw = Buffer.from(text), data = deflateRawSync(raw), n = Buffer.from(name), crc = crc32(raw);
-    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(8, 8); local.writeUInt32LE(crc, 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(raw.length, 22); local.writeUInt16LE(n.length, 26);
-    const cen = Buffer.alloc(46); cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt16LE(20, 4); cen.writeUInt16LE(20, 6); cen.writeUInt16LE(8, 10); cen.writeUInt32LE(crc, 16); cen.writeUInt32LE(data.length, 20); cen.writeUInt32LE(raw.length, 24); cen.writeUInt16LE(n.length, 28); cen.writeUInt32LE(off, 42);
+    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(8, 8); local.writeUInt32LE(crc, 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(lie ? 100 : raw.length, 22); local.writeUInt16LE(n.length, 26);
+    const cen = Buffer.alloc(46); cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt16LE(20, 4); cen.writeUInt16LE(20, 6); cen.writeUInt16LE(8, 10); cen.writeUInt32LE(crc, 16); cen.writeUInt32LE(data.length, 20); cen.writeUInt32LE(lie ? 100 : raw.length, 24); cen.writeUInt16LE(n.length, 28); cen.writeUInt32LE(off, 42);
     parts.push(local, n, data); central.push(cen, n);
     off += 30 + n.length + data.length;
   }
@@ -25,7 +25,8 @@ function zip(files: [string, string][]): Uint8Array {
   return new Uint8Array(Buffer.concat([...parts, cd, end]));
 }
 
-export async function xlsx(rows: Cell[][]): Promise<Uint8Array> {
+// lieAboutSize writes a tiny uncompressed size in the zip headers (a zip bomb) for tests.
+export async function xlsx(rows: Cell[][], opts: { lieAboutSize?: boolean } = {}): Promise<Uint8Array> {
   const strings: string[] = [];
   const sheetRows = rows.map((r, ri) => `<row r="${ri + 1}">${r.map((v, ci) => {
     const ref = `${col(ci)}${ri + 1}`;
@@ -43,5 +44,5 @@ export async function xlsx(rows: Cell[][]): Promise<Uint8Array> {
     ["xl/styles.xml", `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`],
     ["xl/sharedStrings.xml", `<?xml version="1.0" encoding="UTF-8"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t xml:space="preserve">${esc(s)}</t></si>`).join("")}</sst>`],
     ["xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`],
-  ]);
+  ], opts.lieAboutSize);
 }

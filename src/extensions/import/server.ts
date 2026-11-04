@@ -2,15 +2,16 @@ import "server-only";
 import { z } from "zod";
 import { can, getEntity } from "@/entities";
 import type { EntityKey, Role } from "@/entities/types";
+import { APPEND_ONLY } from "@/server/effective";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { demoNowIso } from "@/lib/clock";
-import { chargeRefreshStmt } from "@/server/money";
 import { editable, effective, forgetOverlay, QueryError, type QueryCtx, type WriteCtx } from "@/server/query";
 import { AS_OF } from "@/seed/constants";
 import type { Payload } from "./assemble";
 import { glFor, key } from "./normalize";
 import { toolLabel } from "./presets";
-import { TYPE_LABEL, type ImportTableName } from "./labels";
+import { PROPERTY_TYPES, TYPE_LABEL, type ImportTableName } from "./labels";
+import { REF_COLUMNS } from "./refs";
 
 // The write side of an import. plan() resolves every cleaned record against the visitor's data
 // (natural keys, role, scope) and builds the rows; commit() writes them in one D1 batch whose first
@@ -22,22 +23,26 @@ const s = (n = 200) => z.string().max(n);
 const money = z.number().finite().min(-1e8).max(1e8);
 const person = z.object({ first: s(80), last: s(80), email: s(160).optional(), phone: s(20).optional() });
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// Unit statuses as the units entity def lists them (src/entities/defs/portfolio.ts).
+const UNIT_STATUS = z.enum(["Occupied", "Vacant", "Notice", "Make-ready", "Down", "Model"]);
+const PROPERTY_TYPE = z.enum(PROPERTY_TYPES);
+const ordered = (r: { start?: string; end?: string }) => !r.start || !r.end || r.end >= r.start;
 export const PayloadSchema = z.object({
-  properties: z.array(z.object({ key: s(), name: s().min(1), street: s(), city: s(80), state: s(2), zip: s(10), type: s(60).optional(), yearBuilt: z.number().int().min(1700).max(2100).optional(), unitCount: z.number().int().min(0).max(10_000).optional(), owner: s().optional(), src: SRC })).max(500),
-  units: z.array(z.object({ property: s(), number: s(30).min(1), sqft: z.number().int().min(0).max(1_000_000).optional(), marketRent: money.optional(), status: s(20).optional(), src: SRC })).max(6000),
+  properties: z.array(z.object({ key: s(), name: s().min(1), street: s(), city: s(80), state: s(2), zip: s(10), type: PROPERTY_TYPE.optional(), yearBuilt: z.number().int().min(1700).max(2100).optional(), unitCount: z.number().int().min(0).max(10_000).optional(), owner: s().optional(), src: SRC })).max(500),
+  units: z.array(z.object({ property: s(), number: s(30).min(1), sqft: z.number().int().min(0).max(1_000_000).optional(), marketRent: money.optional(), status: UNIT_STATUS.optional(), src: SRC })).max(6000),
   residents: z.array(person.extend({ property: s(), unit: s(30).optional(), status: z.enum(["Current", "Notice", "Past", "Future", "Eviction"]), src: SRC })).max(6000),
-  leases: z.array(z.object({ property: s(), unit: s(30), people: z.array(person).min(1).max(8), start: date, end: date.optional(), moveIn: date.optional(), moveOut: date.optional(), rent: money.positive(), deposit: money.positive().optional(), status: z.enum(["Future", "Active", "Notice", "Month-to-month", "Expired", "Terminated", "Eviction"]), externalId: s(60).optional(), src: SRC })).max(6000),
+  leases: z.array(z.object({ property: s(), unit: s(30), people: z.array(person).min(1).max(8), start: date, end: date.optional(), moveIn: date.optional(), moveOut: date.optional(), rent: money.positive(), deposit: money.positive().optional(), status: z.enum(["Future", "Active", "Notice", "Month-to-month", "Expired", "Terminated", "Eviction"]), externalId: s(60).optional(), src: SRC }).refine(ordered, "Lease ends before it starts")).max(6000),
   owners: z.array(z.object({ name: s().min(1), entity: s().optional(), email: s(160).optional(), phone: s(20).optional(), state: s(2).optional(), taxLast4: z.string().regex(/^\d{4}$/).optional(), feePct: z.number().min(0).max(1).optional(), src: SRC })).max(2000),
   vendors: z.array(z.object({ company: s().min(1), trade: s(60), contact: s(120).optional(), email: s(160).optional(), phone: s(20).optional(), taxLast4: z.string().regex(/^\d{4}$/).optional(), is1099: z.boolean().optional(), status: z.enum(["Active", "Inactive", "Do not use"]).optional(), src: SRC })).max(2000),
   balances: z.array(z.object({ property: s(), unit: s(30), tenant: s().optional(), buckets: z.tuple([money.min(0), money.min(0), money.min(0), money.min(0)]), src: SRC })).max(6000),
-  recurring: z.array(z.object({ property: s(), unit: s(30), label: s(60).min(1), amount: money.positive(), frequency: z.enum(["Monthly", "Quarterly", "Annually", "Weekly"]), start: date.optional(), end: date.optional(), src: SRC })).max(6000),
+  recurring: z.array(z.object({ property: s(), unit: s(30), label: s(60).min(1), amount: money.positive(), frequency: z.enum(["Monthly", "Quarterly", "Annually", "Weekly"]), start: date.optional(), end: date.optional(), src: SRC }).refine(ordered, "Charge ends before it starts")).max(6000),
 });
 export const OptionsSchema = z.object({
   tool: s(30),
   reports: z.array(s(80)).max(10),
   files: z.array(s(120)).max(10),
   portfolioId: s(80).optional(),
-  propertyType: s(60).optional(),
+  propertyType: PROPERTY_TYPE.optional(),
   ai: z.object({ model: s(80), suggestions: z.number().int().min(0).max(1000), accepted: z.number().int().min(0).max(1000) }).optional(),
 });
 export const ImportRequest = z.object({ mode: z.enum(["preview", "commit"]), payload: PayloadSchema, options: OptionsSchema });
@@ -88,7 +93,6 @@ export type Plan = {
   matched: { type: string; label: string; href: string }[];
   samples: Record<ImportTable, { label: string; detail: string }[]>;
   notes: string[];
-  refresh: string[];
 };
 
 async function hash(text: string) {
@@ -97,6 +101,24 @@ async function hash(text: string) {
 }
 
 const all = async <T>(db: Db, sql: string, ...binds: unknown[]) => (await db.prepare(sql).bind(...binds).all<T>()).results;
+
+// Every row of a small reference table, read in id order in pages so nothing is cut off.
+async function scan<T extends { id: string }>(db: Db, from: string, cols: string, where = "1 = 1"): Promise<T[]> {
+  const out: T[] = [];
+  for (let after = ""; ; ) {
+    const page = await all<T>(db, `SELECT ${cols} FROM ${from} AS t WHERE ${where} AND t.id > ? ORDER BY t.id LIMIT 2000`, after);
+    out.push(...page);
+    if (page.length < 2000) return out;
+    after = page.at(-1)!.id;
+  }
+}
+
+// IN lists go through json_each in chunks, so no single bound value grows without limit.
+async function inChunks<T>(values: string[], size: number, run: (chunk: string) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < values.length; i += size) out.push(...(await run(JSON.stringify(values.slice(i, i + size)))));
+  return out;
+}
 
 export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions): Promise<Plan> {
   const { db, ws, actor } = ctx;
@@ -136,11 +158,11 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
 
   // ------------------------------------------------------------------ owners and entities
   const [owners, entities, portfolios, regions, props, banks] = await Promise.all([
-    all<{ id: string; name: string; email: string }>(db, `SELECT id, name, email FROM ${E("owners")} LIMIT 5000`),
-    all<{ id: string; name: string; owner_id: string; org_id: string }>(db, `SELECT id, name, owner_id, org_id FROM ${E("owner_entities")} LIMIT 5000`),
-    all<{ id: string; owner_entity_id: string; org_id: string }>(db, `SELECT id, owner_entity_id, org_id FROM ${E("portfolios")} ORDER BY id LIMIT 5000`),
+    scan<{ id: string; name: string; email: string }>(db, E("owners"), "t.id, t.name, t.email"),
+    scan<{ id: string; name: string; owner_id: string; org_id: string }>(db, E("owner_entities"), "t.id, t.name, t.owner_id, t.org_id"),
+    scan<{ id: string; owner_entity_id: string; org_id: string }>(db, E("portfolios"), "t.id, t.owner_entity_id, t.org_id"),
     all<{ id: string; states: string }>(db, `SELECT id, states FROM ${E("regions")}`),
-    all<{ id: string; name: string; street: string; city: string; org_id: string; owner_entity_id: string }>(db, `SELECT id, name, street, city, org_id, owner_entity_id FROM ${E("properties")} LIMIT 5000`),
+    scan<{ id: string; name: string; street: string; city: string; org_id: string; owner_entity_id: string }>(db, E("properties"), "t.id, t.name, t.street, t.city, t.org_id, t.owner_entity_id"),
     all<{ id: string }>(db, `SELECT id FROM ${E("bank_accounts")} WHERE kind = 'Deposit'`),
   ]);
   const org = props[0]?.org_id ?? entities[0]?.org_id ?? "org-summit";
@@ -213,7 +235,8 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
   const [units, residents] = existingPids.length
     ? await Promise.all([
         all<{ id: string; property_id: string; number: string }>(db, `SELECT id, property_id, number FROM ${E("units")} WHERE property_id IN (SELECT value FROM json_each(?))`, JSON.stringify(existingPids)),
-        all<{ id: string; property_id: string; household_id: string; first_name: string; last_name: string; email: string }>(db, `SELECT id, property_id, household_id, first_name, last_name, email FROM ${E("residents")} WHERE property_id IN (SELECT value FROM json_each(?)) AND lower(first_name || ' ' || last_name) IN (SELECT value FROM json_each(?))`, JSON.stringify(existingPids), JSON.stringify([...new Set([...payload.residents, ...payload.leases.flatMap((l) => l.people)].map((x) => `${x.first} ${x.last}`.toLowerCase()))])),
+        inChunks([...new Set([...payload.residents, ...payload.leases.flatMap((l) => l.people)].map((x) => `${x.first} ${x.last}`.toLowerCase()))], 500, (names) =>
+          all<{ id: string; property_id: string; household_id: string; first_name: string; last_name: string; email: string }>(db, `SELECT id, property_id, household_id, first_name, last_name, email FROM ${E("residents")} WHERE property_id IN (SELECT value FROM json_each(?)) AND lower(first_name || ' ' || last_name) IN (SELECT value FROM json_each(?))`, JSON.stringify(existingPids), names)),
       ])
     : [[], []];
   const unitId = new Map<string, string | null>(); // `${pid}|${NUMBER}` → id
@@ -300,21 +323,18 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
 
   // ------------------------------------------------------------------ balances and recurring charges
   const leaseFor = (pk: string, n: string) => { const uid = unitOf(pk, n); return uid ? leaseAt.get(uid) : undefined; };
-  const touched = [...new Set([...payload.balances, ...payload.recurring].map((b) => leaseFor(b.property, b.unit)).filter((l) => l && !l.isNew).map((l) => l!.id))];
-  const [openings, recurrings] = touched.length
-    ? await Promise.all([
-        all<{ lease_id: string }>(db, `SELECT DISTINCT lease_id FROM ${E("charges")} WHERE lease_id IN (SELECT value FROM json_each(?)) AND description LIKE 'Opening balance%'`, JSON.stringify(touched)),
-        all<{ lease_id: string; label: string }>(db, `SELECT lease_id, label FROM ${E("recurring_charges")} WHERE lease_id IN (SELECT value FROM json_each(?))`, JSON.stringify(touched)),
-      ])
-    : [[], []];
-  const hasOpening = new Set(openings.map((o) => o.lease_id));
+  const touched = [...new Set(payload.recurring.map((b) => leaseFor(b.property, b.unit)).filter((l) => l && !l.isNew).map((l) => l!.id))];
+  const recurrings = await inChunks(touched, 500, (ids) => all<{ lease_id: string; label: string }>(db, `SELECT lease_id, label FROM ${E("recurring_charges")} WHERE lease_id IN (SELECT value FROM json_each(?))`, ids));
   const hasRecurring = new Set(recurrings.map((r) => `${r.lease_id}|${key(r.label)}`));
-  const refresh = new Set<string>();
+  // Opening balances go only on leases this import creates. A lease already on file has a ledger
+  // (charges, payments, credits) that its balance comes from; adding to it would count twice.
+  const hasOpening = new Set<string>();
   for (const b of payload.balances) {
     const label = `${unitLabel(b.property, b.unit)}${b.tenant ? ` · ${b.tenant}` : ""}`;
     const l = leaseFor(b.property, b.unit);
     if (!l) { skip("charges", label, "No current lease on this unit to post the balance to", b.src); continue; }
-    if (hasOpening.has(l.id)) { summary.charges.existing++; continue; }
+    if (!l.isNew) { skip("charges", label, "Already on file — its balance comes from its ledger", b.src); continue; }
+    if (hasOpening.has(l.id)) { skip("charges", label, "This lease already has a balance in this import", b.src); continue; }
     if (!allowed("charges")) { skip("charges", label, "Your role can't post balances", b.src); continue; }
     hasOpening.add(l.id);
     b.buckets.forEach((amt, i) => {
@@ -322,7 +342,6 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
       const due = daysBefore(AS_OF, AGE_DAYS[i]!);
       add("charges", { id: newId("charges"), lease_id: l.id, household_id: l.household, property_id: l.property, unit_id: l.unit, gl_account_id: "gl-4000", description: `Opening balance · ${AGE_LABEL[i]} (imported)`, period: due.slice(0, 7), due_on: due, amount_cents: cents(amt), paid_cents: 0, pending_cents: 0 });
     });
-    if (!l.isNew) refresh.add(l.id);
   }
   for (const r of payload.recurring) {
     const label = `${unitLabel(r.property, r.unit)} · ${r.label}`;
@@ -336,7 +355,7 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
   }
 
   // ------------------------------------------------------------------ vendors
-  const vendors = payload.vendors.length ? await all<{ id: string; company: string; email: string }>(db, `SELECT id, company, email FROM ${E("vendors")} LIMIT 5000`) : [];
+  const vendors = payload.vendors.length ? await scan<{ id: string; company: string; email: string }>(db, E("vendors"), "t.id, t.company, t.email") : [];
   const vendorIds = new Map<string, string>();
   for (const v of vendors) { vendorIds.set(key(v.company), v.id); if (v.email) vendorIds.set(v.email.toLowerCase(), v.id); }
   for (const v of payload.vendors) {
@@ -366,7 +385,7 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
     }
   };
   const samples = Object.fromEntries(IMPORT_TABLES.map((t) => [t, rows[t].slice(0, 5).map((r) => describe(t, r))])) as Plan["samples"];
-  return { batch, rows, summary, skipped, matched, samples, notes, refresh: [...refresh].slice(0, 50) };
+  return { batch, rows, summary, skipped, matched, samples, notes };
 }
 
 // ------------------------------------------------------------------ writing
@@ -413,11 +432,10 @@ export async function commit(ctx: WriteCtx, payload: Payload, opts: ImportOption
   const source = `${toolLabel(opts.tool)}${opts.reports.length ? ` (${opts.reports.join(", ")})` : ""}`;
   const stmts: DbStatement[] = [
     // The lock: a second run of this batch fails here on the audit row's unique id and writes nothing.
-    auditInsert(db, ws, `import-${p.batch}-${gen}`, at, ctx, "import.completed", p.batch, `Imported from ${source}: ${countText(created)}`, { batch: p.batch, created, tables: Object.keys(created), files: opts.files, tool: opts.tool, reports: opts.reports, ai: opts.ai ?? null, refresh: p.refresh, skipped: p.skipped.length }),
+    auditInsert(db, ws, `import-${p.batch}-${gen}`, at, ctx, "import.completed", p.batch, `Imported from ${source}: ${countText(created)}`, { batch: p.batch, created, tables: Object.keys(created), files: opts.files, tool: opts.tool, reports: opts.reports, ai: opts.ai ?? null, skipped: p.skipped.length }),
     ...IMPORT_TABLES.flatMap((t) => insertStatements(db, ws, t, p.rows[t])),
     db.prepare("INSERT INTO events (workspace_id, id, type, entity_type, entity_id, property_id, payload, created_at) VALUES (?, ?, 'import.completed', 'import', ?, NULL, ?, ?)")
       .bind(ws, `evt-import-${p.batch}-${gen}`, p.batch, JSON.stringify({ properties: created.properties ?? 0, units: created.units ?? 0, leases: created.leases ?? 0, by: ctx.actor.personaId }), at),
-    ...p.refresh.map((leaseId) => chargeRefreshStmt(db, ws, null, leaseId)),
   ];
   try {
     await db.batch(stmts);
@@ -431,16 +449,30 @@ export async function commit(ctx: WriteCtx, payload: Payload, opts: ImportOption
   return { batch: p.batch, created, links, lists };
 }
 
-// Records later work hangs on (payments, credits, ledger charges, work orders) block an undo, so
-// it never leaves a payment pointing at a lease that no longer exists.
-async function dependents(db: Db, ws: string, pattern: string) {
-  const r = await db.prepare(
-    `SELECT (SELECT count(*) FROM payments WHERE workspace_id = ?1 AND lease_id LIKE ?2)
-          + (SELECT count(*) FROM credits WHERE workspace_id = ?1 AND lease_id LIKE ?2)
-          + (SELECT count(*) FROM charges WHERE workspace_id = ?1 AND lease_id LIKE ?2 AND id NOT LIKE ?2)
-          + (SELECT count(*) FROM work_orders WHERE workspace_id = ?1 AND (unit_id LIKE ?2 OR property_id LIKE ?2)) AS n`,
-  ).bind(ws, pattern).first<{ n: number }>();
-  return r?.n ?? 0;
+// History and agent output that may mention an imported record without depending on it: logs stay
+// as history, and agent proposals re-check their record before they can run.
+const HISTORY = new Set(["audit", "activity_events", "events", "agent_runs", "agent_steps", "ai_proposals", "ai_decisions", "ai_summaries", "ai_feedback", "data_issues", "data_fix_log", "notifications", "metrics_monthly", "org_usage_monthly"]);
+
+// Tables outside the batch whose live rows point at a batch row through any id column
+// (REF_COLUMNS, from the schema). One EXISTS per table, 40 to a statement, all in one D1 batch.
+export async function dependents(db: Db, ws: string, pattern: string): Promise<string[]> {
+  const checks = Object.entries(REF_COLUMNS).filter(([t]) => !HISTORY.has(t)).map(([t, cols]) =>
+    `EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1${APPEND_ONLY.has(t) ? "" : " AND deleted = 0"} AND id NOT LIKE ?2 AND (${cols.map((c) => `${c} LIKE ?2`).join(" OR ")}))`);
+  const names = Object.keys(REF_COLUMNS).filter((t) => !HISTORY.has(t));
+  const chunks = Array.from({ length: Math.ceil(checks.length / 40) }, (_, k) => checks.slice(k * 40, k * 40 + 40));
+  const rs = await db.batch(chunks.map((c, k) => db.prepare(`SELECT ${c.map((x, i) => `${x} AS c${k * 40 + i}`).join(", ")}`).bind(ws, pattern)));
+  const row = Object.assign({}, ...rs.map((r) => (r.results?.[0] ?? {}) as Record<string, number>));
+  return names.filter((_, i) => row[`c${i}`]);
+}
+
+// Batch rows at properties outside the actor's scope (property-scoped tables only).
+async function outOfScope(db: Db, ws: string, pattern: string, tables: ImportTable[], scope: string[] | "all") {
+  if (scope === "all") return false;
+  const col = (t: ImportTable) => (t === "properties" ? "id" : REF_COLUMNS[t]?.includes("property_id") ? "property_id" : null);
+  const parts = tables.filter((t) => col(t)).map((t) => `EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1 AND id LIKE ?2 AND ${col(t)} NOT IN (SELECT value FROM json_each(?3)))`);
+  if (!parts.length) return false;
+  const r = await db.prepare(`SELECT ${parts.map((p, i) => `${p} AS c${i}`).join(", ")}`).bind(ws, pattern, JSON.stringify(scope)).first<Record<string, number>>();
+  return Object.values(r ?? {}).some(Boolean);
 }
 
 export async function undo(ctx: WriteCtx, batch: string): Promise<{ batch: string; removed: Partial<Record<ImportTable, number>> }> {
@@ -450,18 +482,19 @@ export async function undo(ctx: WriteCtx, batch: string): Promise<{ batch: strin
   const gen = await generation(db, ws, batch);
   const completed = (await db.prepare("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND action = 'import.completed' AND entity_id = ?").bind(ws, batch).first<{ n: number }>())?.n ?? 0;
   if (gen >= completed) throw new QueryError(409, "This import was already undone.");
-  const info = JSON.parse(done.after_json) as { created: Partial<Record<ImportTable, number>>; tables: ImportTable[]; refresh?: string[] };
+  const info = JSON.parse(done.after_json) as { created: Partial<Record<ImportTable, number>>; tables: ImportTable[] };
   const tables = info.tables.filter((t): t is ImportTable => t in TABLES);
   const denied = tables.filter((t) => !mayCreate(ctx.actor.role, t));
   if (denied.length) throw new QueryError(403, `Your role can't remove ${denied.map((t) => TYPE_LABEL[t][1]).join(", ")}.`);
   const pattern = `%-i${batch}-%`;
-  if (await dependents(db, ws, pattern)) throw new QueryError(409, "Payments, credits, charges or work orders were added to these records after the import. Undo would leave them dangling, so remove those first.");
+  if (await outOfScope(db, ws, pattern, tables, ctx.actor.propertyIds)) throw new QueryError(403, "Some records from this import are at properties outside your scope.");
+  const blocking = await dependents(db, ws, pattern);
+  if (blocking.length) throw new QueryError(409, `Other records point at records from this import (${blocking.map((t) => t.replace(/_/g, " ")).join(", ")}). Undo would leave them dangling, so remove or reassign those first.`);
   const at = demoNowIso(ctx.nowMs);
   try {
     await db.batch([
       auditInsert(db, ws, `import-${batch}-${gen}-undo`, at, ctx, "import.undone", batch, `Undid import: removed ${countText(info.created)}`, { batch, removed: info.created }),
       ...[...tables].reverse().map((t) => db.prepare(`DELETE FROM ${t} WHERE workspace_id = ?1 AND id LIKE ?2`).bind(ws, pattern)),
-      ...(info.refresh ?? []).map((leaseId) => chargeRefreshStmt(db, ws, null, leaseId)),
     ]);
   } catch (e) {
     if (/UNIQUE constraint failed: audit/.test(String((e as Error)?.message ?? e))) throw new QueryError(409, "This import was already undone.");

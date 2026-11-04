@@ -9,3 +9,6 @@ export const TYPE_LABEL: Record<ImportTableName, [one: string, many: string]> = 
 
 // What the preview shows as cards; households and portfolios are created alongside, not on their own.
 export const SHOWN: ImportTableName[] = ["properties", "units", "residents", "leases", "deposits", "charges", "recurring_charges", "owners", "owner_entities", "vendors"];
+
+// Property types the app uses (the seed roster's types); imported files map onto these.
+export const PROPERTY_TYPES = ["Garden multifamily", "Mid-rise multifamily", "High-rise multifamily", "Townhomes", "Small residential", "Mixed-use", "Office", "Retail strip", "Industrial flex"] as const;

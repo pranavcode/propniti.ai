@@ -41,6 +41,12 @@ describe("parsing", () => {
     expect(await readTable("book.xlsx", book)).toHaveLength(3);
   });
 
+  it("stops unpacking an .xlsx whose real inflated size passes the cap, whatever its header claims", async () => {
+    const bomb = await xlsx([["A"], ["x".repeat(31 * 1024 * 1024)]], { lieAboutSize: true });
+    expect(bomb.byteLength).toBeLessThan(1024 * 1024);
+    await expect(parseXlsx(bomb)).rejects.toThrow(/too large once unpacked/);
+  });
+
   it("refuses files over the size cap and old .xls files with a clear message", async () => {
     await expect(readTable("big.csv", new Uint8Array(4 * 1024 * 1024))).rejects.toThrow(/up to 3 MB/);
     await expect(readTable("old.xls", new Uint8Array(10))).rejects.toThrow(/Save it as .xlsx or CSV/);

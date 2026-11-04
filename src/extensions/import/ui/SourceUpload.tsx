@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { StatusBadge } from "@/components/app/display";
 import { formatNumber } from "@/lib/format";
-import { buildAiRequest } from "../airequest";
+import { buildAiRequest, outTokens } from "../airequest";
 import type { Assembled, ImportFile } from "../assemble";
 import { KIND_SPECS, KINDS, type Kind } from "../fields";
 import { detect, missingRequired, presetMapping, synonymMapping } from "../mapping";
@@ -98,8 +98,9 @@ export function UploadStep({ tool, files, setFiles, assembled, aiOn, setAiOn, ai
   const [reading, setReading] = useState(false);
   const est = useMemo(() => {
     if (!files.length) return null;
-    const tokens = Math.ceil((JSON.stringify(buildAiRequest(files, assembled)).length + 1900) / 4);
-    return { tokens, cents: (tokens / 1000) * ai.centsPer1kIn + 0.9 * ai.centsPer1kOut };
+    const req = buildAiRequest(files, assembled);
+    const tokens = Math.ceil((JSON.stringify(req).length + 2500) / 4);
+    return { tokens, cents: (tokens / 1000) * ai.centsPer1kIn + (outTokens(req.files) / 1000) * ai.centsPer1kOut };
   }, [files, assembled, ai]);
 
   async function add(list: { name: string; bytes: () => Promise<Uint8Array> }[]) {

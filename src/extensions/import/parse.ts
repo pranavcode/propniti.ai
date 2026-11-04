@@ -46,9 +46,25 @@ export function parseDelimited(text: string): string[][] {
 // XLSX: a zip of XML parts. Read with the browser's DecompressionStream, no library.
 // ---------------------------------------------------------------------------------------------
 
-async function inflate(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+const TOO_BIG = "The Excel file is too large once unpacked. Save the sheet as CSV and upload that.";
+
+// Inflates while counting the real output, so a zip whose headers understate its size (a zip
+// bomb) stops at the budget instead of filling memory.
+async function inflate(data: Uint8Array, budget: number): Promise<Uint8Array> {
+  const reader = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > budget) { await reader.cancel(); throw new ParseError(TOO_BIG); }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.byteLength; }
+  return out;
 }
 
 export async function unzip(buf: Uint8Array): Promise<Map<string, Uint8Array>> {
@@ -67,13 +83,16 @@ export async function unzip(buf: Uint8Array): Promise<Map<string, Uint8Array>> {
     const name = new TextDecoder().decode(buf.subarray(off + 46, off + 46 + nameLen));
     off += 46 + nameLen + extra + comment;
     if (!/^(xl\/(workbook\.xml|sharedStrings\.xml|styles\.xml|_rels\/workbook\.xml\.rels|worksheets\/[^/]+\.xml))$/.test(name)) continue;
-    total += raw;
-    if (total > MAX_XLSX_UNZIPPED) throw new ParseError("The Excel file is too large once unpacked. Save the sheet as CSV and upload that.");
+    if (total + raw > MAX_XLSX_UNZIPPED) throw new ParseError(TOO_BIG);
     const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
     const data = buf.subarray(start, start + size);
-    if (method === 0) out.set(name, data);
-    else if (method === 8) out.set(name, await inflate(data));
+    let part: Uint8Array;
+    if (method === 0) part = data;
+    else if (method === 8) part = await inflate(data, MAX_XLSX_UNZIPPED - total);
     else throw new ParseError("The Excel file uses a compression this importer can't read. Save it as CSV.");
+    total += part.byteLength;
+    if (total > MAX_XLSX_UNZIPPED) throw new ParseError(TOO_BIG);
+    out.set(name, part);
   }
   return out;
 }

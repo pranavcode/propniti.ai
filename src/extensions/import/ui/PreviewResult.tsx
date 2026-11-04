@@ -8,12 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { StatusBadge } from "@/components/app/display";
 import { formatNumber } from "@/lib/format";
 import type { AiResult } from "../ai";
-import { SHOWN, TYPE_LABEL as LABEL } from "../labels";
+import { PROPERTY_TYPES, SHOWN, TYPE_LABEL as LABEL } from "../labels";
 import type { ImportResult, ImportTable } from "../server";
 import type { Preview, WizardOptions } from "./ImportWizard";
 import { RulesBadge } from "./RulesBadge";
 
-const PROPERTY_TYPES = ["Garden multifamily", "Mid-rise multifamily", "High-rise multifamily", "Townhomes", "Small residential", "Mixed-use", "Office", "Retail strip", "Industrial flex"];
 const n = (t: ImportTable, k: number) => `${formatNumber(k)} ${LABEL[t][k === 1 ? 0 : 1]}`;
 const list = (parts: string[]) => (parts.length < 2 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`);
 
@@ -136,7 +135,7 @@ export function ResultStep({ result, busy, undone, onUndo, onAgain }: { result: 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Undo this import?</DialogTitle>
-            <DialogDescription>This removes the {formatNumber(total)} records the import created, including any edits made to them since. It is refused if payments, credits or work orders were added to them.</DialogDescription>
+            <DialogDescription>This removes the {formatNumber(total)} records the import created, including any edits made to them since. It is refused if other records now point at them (a work order, a note, a payment, a unit added by hand) or if any are at properties outside your scope.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirm(false)}>Keep the import</Button>
