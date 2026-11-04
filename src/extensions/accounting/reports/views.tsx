@@ -9,17 +9,19 @@ import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { cashForecast } from "../metrics";
-import { CsvButton } from "./CsvButton";
+import { DownloadMenu } from "@/extensions/export/DownloadMenu";
+import { askParams } from "@/extensions/export/reports";
+import { downloadHrefs } from "@/lib/export/hrefs";
 import { runSpec, type Ctx } from "./run";
 import { arAging, noiByProperty, pnl, rentRoll } from "./standard";
 import { COMPARE_LABEL, describeSpec, GROUP_LABEL, measureOf, periodLabel, type ScopeProperty } from "./spec";
 import type { AskResult } from "./ask";
 
-// Server-rendered report bodies. Each pairs a chart (one axis) with the table behind it and a CSV
-// of exactly the rows shown.
+// Server-rendered report bodies. Each pairs a chart (one axis) with the table behind it and a
+// Download menu (CSV, Excel, PDF) that re-runs the same report on the server.
 
 const monthShort = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
-const r2 = (n: number | null) => (n == null ? null : Math.round(n * 100) / 100);
+const dl = (params: Record<string, string | undefined>) => <DownloadMenu hrefs={downloadHrefs("/api/export/report", params)} what="Downloads this report: same period, property and your scope." />;
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : "−"}${Math.abs(n * 100).toFixed(1)}%`);
 
 export function Th({ children, right, className }: { children?: React.ReactNode; right?: boolean; className?: string }) {
@@ -58,7 +60,6 @@ export async function PnlReport({ ctx, from, to, property }: { ctx: Ctx; from: s
   if (!r.rows.length) return <EmptyState kind="table" title="No journal activity in this period" description="Pick a different period or property." />;
   const glHref = (gl: string) => `/app/gl/journal?f.gl_account_id=${encodeURIComponent(gl)}${from === to ? `&f.period=${from}` : ""}${property ? `&f.property_id=${property}` : ""}`;
   const section = (type: "Income" | "Expense") => r.rows.filter((x) => x.type === type);
-  const csv = [...r.rows.map((x) => [x.type, x.number, x.name, r2(x.amount)]), ["Total", "", "Income", r2(r.income)], ["Total", "", "Expense", r2(r.expense)], ["Total", "", "NOI", r2(r.noi)]];
   return (
     <div className="flex flex-col gap-3">
       <KpiRow className="xl:grid-cols-4">
@@ -72,7 +73,7 @@ export async function PnlReport({ ctx, from, to, property }: { ctx: Ctx; from: s
           data={r.months.map((m) => ({ ...m, label: monthShort(m.month) })) as ChartPoint[]} series={[{ key: "income", label: "Income", format: "money" }, { key: "expense", label: "Expense", format: "money" }]}
           drill={`/app/reports?r=pnl&from={month}&to={month}${property ? `&property=${property}` : ""}`} />
       )}
-      <TableCard title="Profit and loss" description={`${periodLabel(from, to)} · accrual, from monthly journal entries`} actions={<CsvButton filename={`pnl-${from}-${to}`} header={["Section", "GL", "Account", "Amount"]} rows={csv} />}>
+      <TableCard title="Profit and loss" description={`${periodLabel(from, to)} · accrual, from monthly journal entries`} actions={dl({ r: "pnl", from, to, property })}>
         <thead className={HEAD}><tr className="border-b"><Th>Account</Th><Th right>Amount</Th><Th right>% of income</Th></tr></thead>
         <tbody>
           {(["Income", "Expense"] as const).map((type) => (
@@ -107,7 +108,6 @@ export async function RentRollReport({ ctx, page, property, baseHref }: { ctx: C
   const size = 50;
   const r = await rentRoll(ctx, page, size, property);
   const pages = Math.max(1, Math.ceil(r.total / size));
-  const csv = r.rows.map((x) => [x.property, x.unit, x.status, x.sqft, r2(x.market_rent), x.household, x.lease_id, x.lease_status, x.start_on, x.end_on, r2(x.rent), r2(x.deposit), r2(x.balance)]);
   const nav = (p: number) => `${baseHref}&page=${p}`;
   return (
     <div className="flex flex-col gap-3">
@@ -118,8 +118,8 @@ export async function RentRollReport({ ctx, page, property, baseHref }: { ctx: C
         <KpiCard label="Lease rent" format="money" value={r.rent} footnote={r.market ? `${((r.rent / r.market) * 100).toFixed(1)}% of market` : "Monthly, current leases"} />
       </KpiRow>
       <TableCard title="Rent roll" description={`${r.total.toLocaleString("en-US")} units · page ${page} of ${pages}`}
-        actions={<CsvButton filename={`rent-roll-page-${page}`} label="Export this page" header={["Property", "Unit", "Unit status", "Sq ft", "Market rent", "Resident", "Lease", "Lease status", "Start", "End", "Rent", "Deposit", "Balance"]} rows={csv} />}
-        footer={<div className="flex items-center gap-2"><span>CSV export covers the {r.rows.length} rows on this page.</span>
+        actions={dl({ r: "rent_roll", property })}
+        footer={<div className="flex items-center gap-2"><span>Downloads cover every unit in the report, up to 10,000.</span>
           <span className="ml-auto flex gap-1">
             {page > 1 && <Button asChild size="sm" variant="outline"><Link href={nav(page - 1)}>Previous</Link></Button>}
             {page < pages && <Button asChild size="sm" variant="outline"><Link href={nav(page + 1)}>Next</Link></Button>}
@@ -155,7 +155,6 @@ export async function ArAgingReport({ ctx, property }: { ctx: Ctx; property?: st
   if (!rows.length) return <EmptyState kind="table" title="No past-due resident balances" description="Every charge due before today is paid or credited." />;
   const sum = (k: "d0_30" | "d31_60" | "d61_90" | "d90p" | "total") => rows.reduce((a, r) => a + r[k], 0);
   const buckets = [{ key: "d0_30", label: "0–30 days", bucket: "0-30" }, { key: "d31_60", label: "31–60", bucket: "31-60" }, { key: "d61_90", label: "61–90", bucket: "61-90" }, { key: "d90p", label: "90+", bucket: "90+" }] as const;
-  const csv = [...rows.map((r) => [r.property, r2(r.d0_30), r2(r.d31_60), r2(r.d61_90), r2(r.d90p), r2(r.total), r.charges]), ["Total", r2(sum("d0_30")), r2(sum("d31_60")), r2(sum("d61_90")), r2(sum("d90p")), r2(sum("total")), rows.reduce((a, r) => a + r.charges, 0)]];
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 xl:grid-cols-12">
@@ -171,7 +170,7 @@ export async function ArAgingReport({ ctx, property }: { ctx: Ctx; property?: st
         </div>
       </div>
       <TableCard title="Accounts receivable aging" description={`By property · as of ${asOf} · open balance of each past-due charge`}
-        actions={<CsvButton filename={`ar-aging-${asOf}`} header={["Property", "0-30", "31-60", "61-90", "90+", "Total", "Charges"]} rows={csv} />}>
+        actions={dl({ r: "ar_aging", property })}>
         <thead className={HEAD}><tr className="border-b"><Th>Property</Th>{buckets.map((b) => <Th key={b.key} right>{b.label}</Th>)}<Th right>Total</Th><Th right>Charges</Th></tr></thead>
         <tbody>
           {rows.map((r) => (
@@ -194,7 +193,6 @@ export async function ArAgingReport({ ctx, property }: { ctx: Ctx; property?: st
 export async function NoiReport({ ctx, from, to }: { ctx: Ctx; from: string; to: string }) {
   const r = await noiByProperty(ctx, from, to);
   if (!r.rows.length) return <EmptyState kind="table" title="No NOI for this period" description="Pick a different period." />;
-  const csv = r.rows.map((x) => [x.property, x.metro, r2(x.noi), r2(x.budget), r2(x.variance), x.pct == null ? null : Math.round(x.pct * 1000) / 10]);
   return (
     <div className="flex flex-col gap-3">
       <KpiRow className="xl:grid-cols-3">
@@ -205,7 +203,7 @@ export async function NoiReport({ ctx, from, to }: { ctx: Ctx; from: string; to:
       <ChartCard title="NOI vs budget by property" description={periodLabel(from, to)} kind="hbar" x="property" height={Math.max(280, r.rows.length * 26)}
         data={r.rows as unknown as ChartPoint[]} series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money" }]}
         drill={`/app/reports?r=pnl&property={property_id}&from=${from}&to=${to}`} />
-      <TableCard title="NOI by property" description={`${periodLabel(from, to)} · from monthly metrics`} actions={<CsvButton filename={`noi-${from}-${to}`} header={["Property", "Metro", "NOI", "Budget", "Variance", "Variance %"]} rows={csv} />}>
+      <TableCard title="NOI by property" description={`${periodLabel(from, to)} · from monthly metrics`} actions={dl({ r: "noi", from, to })}>
         <thead className={HEAD}><tr className="border-b"><Th>Property</Th><Th>Metro</Th><Th right>NOI</Th><Th right>Budget</Th><Th right>Variance</Th><Th right>%</Th></tr></thead>
         <tbody>
           {r.rows.map((x) => (
@@ -231,7 +229,6 @@ export async function CashForecastReport({ m }: { m: MetricCtx }) {
   const f = await cashForecast(m);
   if (!f.weeks.length) return <EmptyState kind="chart" title="No trust balance to project" />;
   const end = f.weeks.at(-1)!;
-  const csv = f.weeks.map((w) => [w.start, w.inflow, w.bills, w.recurring, w.other, w.distributions, w.outflow, w.balance]);
   return (
     <div className="flex flex-col gap-3">
       <KpiRow className="xl:grid-cols-4">
@@ -253,7 +250,7 @@ export async function CashForecastReport({ m }: { m: MetricCtx }) {
       </div>
       <div className="grid gap-3 xl:grid-cols-12">
         <div className="xl:col-span-8">
-          <TableCard title="Weekly forecast" description="Inflows and outflows by source" actions={<CsvButton filename="cash-forecast-90-days" header={["Week starting", "Rent in", "Open bills", "Recurring bills", "Other vendor spend", "Owner distributions", "Total out", "Balance"]} rows={csv} />}>
+          <TableCard title="Weekly forecast" description="Inflows and outflows by source" actions={dl({ r: "cash_forecast" })}>
             <thead className={HEAD}><tr className="border-b"><Th>Week of</Th><Th right>Rent in</Th><Th right>Open bills</Th><Th right>Recurring</Th><Th right>Other spend</Th><Th right>Distributions</Th><Th right>Balance</Th></tr></thead>
             <tbody>
               {f.weeks.map((w) => (
@@ -292,7 +289,6 @@ export async function AskReport({ ctx, ask, scope }: { ctx: Ctx; ask: AskResult;
   const data = r.rows.slice(0, isMonth ? 24 : 20).map((x) => ({ key: x.key, label: isMonth ? monthShort(x.key) : x.label, value: x.value, compare: x.compare })) as ChartPoint[];
   const series = [{ key: "value", label: m.label, format: "money" as const }, ...(cmp ? [{ key: "compare", label: cmpLabel, format: "money" as const, dashed: spec.compareTo === "budget" && isMonth }] : [])];
   const header = [GROUP_LABEL[spec.groupBy], m.label, ...(cmp ? [cmpLabel, "Variance", "Variance %"] : [])];
-  const csv = r.rows.map((x) => [isMonth ? x.key : x.label, r2(x.value), ...(cmp ? [r2(x.compare), r2(x.value - (x.compare ?? 0)), x.compare ? Math.round(((x.value - x.compare) / Math.abs(x.compare)) * 1000) / 10 : null] : [])]);
   // Over budget is bad for costs and good for income.
   const goodDelta = (d: number) => (m.goodWhen === "up" ? d >= 0 : d <= 0);
   const drillTemplate = spec.groupBy === "property" ? "/app/properties/{key}" : spec.groupBy === "gl" ? "/app/gl/journal?f.gl_account_id={key}" : spec.groupBy === "vendor" ? "/app/maintenance/vendors/{key}?tab=bills" : isMonth && m.source === "journal" ? "/app/reports?r=pnl&from={key}&to={key}" : undefined;
@@ -325,7 +321,7 @@ export async function AskReport({ ctx, ask, scope }: { ctx: Ctx; ask: AskResult;
             <ChartCard title={spec.title} description={r.rows.length > data.length ? `Top ${data.length} of ${r.rows.length}; the table has all` : undefined} kind={spec.chart} x="label" data={data} series={series} drill={drillTemplate}
               height={spec.chart === "hbar" ? Math.max(260, data.length * 26) : 260} />
           )}
-          <TableCard title="Results" description={`${r.rows.length} ${r.rows.length === 1 ? "row" : "rows"}`} actions={<CsvButton filename={spec.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)} header={header} rows={csv} />}>
+          <TableCard title="Results" description={`${r.rows.length} ${r.rows.length === 1 ? "row" : "rows"}`} actions={dl(askParams(spec))}>
             <thead className={HEAD}><tr className="border-b">{header.map((h, i) => <Th key={h} right={i > 0}>{h}</Th>)}</tr></thead>
             <tbody>
               {r.rows.map((x) => {
