@@ -45,3 +45,28 @@ for (const [persona, url] of [["tom", "/app/maintenance"], ["tom", "/app/mainten
     for (const tops of rows) expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(2);
   });
 }
+
+test("agent cards in a row are one height with Run now in line, and say when they run in plain words", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/agents`);
+  const cards = page.locator("[data-agent-card]");
+  await expect(cards.first()).toBeVisible();
+  const rows = await cards.evaluateAll((els) => {
+    const by = new Map<number, { h: number; run: number }[]>();
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      const run = [...el.querySelectorAll("button")].find((b) => /Run now/.test(b.textContent ?? ""))!.getBoundingClientRect().top;
+      by.set(Math.round(r.top), [...(by.get(Math.round(r.top)) ?? []), { h: r.height, run }]);
+    }
+    return [...by.values()];
+  });
+  for (const row of rows) {
+    expect(Math.max(...row.map((c) => c.h)) - Math.min(...row.map((c) => c.h))).toBeLessThanOrEqual(2);
+    expect(Math.max(...row.map((c) => c.run)) - Math.min(...row.map((c) => c.run))).toBeLessThanOrEqual(2);
+  }
+  // One autonomy control per card, schedules and events in words, no raw model ids.
+  await expect(page.getByRole("combobox", { name: /Autonomy for/ })).toHaveCount(8);
+  await expect(page.getByText("Daily at 14:00 UTC · on Payment returned", { exact: false }).first()).toBeVisible();
+  await expect(page.locator("#main")).not.toContainText(/\d+ \d+ \* \* \*|payment\.failed|@cf\//);
+  await expect(page.locator("#main")).not.toContainText(/Last sweep: in /);
+});

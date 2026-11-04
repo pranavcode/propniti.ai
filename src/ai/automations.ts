@@ -44,7 +44,7 @@ export const EVENT_INFO: Record<string, { label: string; source: string | null }
   "statement.closed": { label: "Owner statement closed", source: null },
   "data_issue.detected": { label: "Data issue found", source: null },
 };
-const eventLabel = (t: string) => EVENT_INFO[t]?.label ?? t.replace(/[._]/g, " ");
+export const eventLabel = (t: string) => EVENT_INFO[t]?.label ?? t.replace(/[._]/g, " ");
 
 const DAYS = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
 const NUM = /^\d{1,2}$/;
