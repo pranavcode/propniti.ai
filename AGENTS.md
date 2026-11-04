@@ -56,7 +56,7 @@ For people and coding agents working in this repo. Read `README.md` for what the
 ## Database changes
 
 - Add a new numbered file (`migrations/0002_<what>.sql`). Never edit a migration that has shipped.
-- Apply locally with `npm run db:migrate:local`; remotely with `npx cf d1 migrations apply 3d4ff9d5-eb1e-4970-b73e-004ba9124fd8` before deploying.
+- Apply locally with `npm run db:migrate:local`; remotely with `npx cf d1 migrations apply b9dff387-c845-44c8-b735-5e8bf3946623` before deploying.
 - Two tests assume a single migration: `src/server/server.test.ts` (expects one row in `d1_migrations`) and `src/server/d1.test.ts` (reads `0001_init.sql` only). Update both.
 - Every table carries `workspace_id`; every query filters on it.
 
