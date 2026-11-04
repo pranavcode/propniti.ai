@@ -471,6 +471,9 @@ registerAction({
     // An older price-only proposal carries no message; this one replaces it.
     if (open) await closeProposals(ctx, "renewal_offers", String(row.id), "Edited", `Replaced by a prepared offer (${ctx.actor.name})`);
     const { prepareOffer } = await ai();
+    // The suggested rent is written to the draft now, before anyone approves. That is safe: a draft
+    // is never sent, and sending (approving the proposal) re-checks the message against this rent.
+    // It must land before the proposal is made, or the proposal's snapshot would be stale on approval.
     const r = await prepareOffer(ctx, { ...row, rent_cents: cents(row, "rent") }, (rentCents, runId) =>
       commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals Agent prepared $${rentCents / 100} with a message, waiting for approval`, data: { run_id: runId } },
         [{ table: "renewal_offers", id: String(row.id), changes: { rent_cents: rentCents } }]));
