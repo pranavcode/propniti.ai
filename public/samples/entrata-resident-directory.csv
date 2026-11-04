@@ -1,0 +1,11 @@
+Property,Unit,Resident,Email,Phone,Status
+Camelback Station,101,"Pierce, Grace",grace.pierce@example.com,(602) 555-0150,Current
+Camelback Station,102,"O'Neill, Chinedu",chinedu.oneill@example.com,(602) 555-0151,Current
+Camelback Station,103,"Petrov, Sara",sara.petrov@example.com,(602) 555-0152,Notice
+Camelback Station,201,"Farah, Marcus",marcus.farah@example.com,(602) 555-0153,Current
+Camelback Station,203,"Shah, Elena",elena.shah@example.com,(602) 555-0155,Current
+Arcadia Row,A1,"Ramirez, Omar",omar.ramirez@example.com,(602) 555-0156,Current
+Arcadia Row,A2,"Mora, Hannah",hannah.mora@example.com,(602) 555-0157,Current
+Arcadia Row,A3,"Ortiz, Ravi",ravi.ortiz@example.com,(602) 555-0158,Notice
+Arcadia Row,A4,"Nair, Lena",lena.nair@example.com,(602) 555-0159,Current
+Arcadia Row,A6,"Brooks, Aisha",aisha.brooks@example.com,(602) 555-0161,Current
