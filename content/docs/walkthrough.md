@@ -2,7 +2,7 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 
 **Start here.** Open [propniti.ai/login](https://propniti.ai/login). Sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (every demo account uses it), or pick one of the 13 people in the *Pick a person* list beside the form: click a person (or use the arrow keys) to fill the form, then *Sign in as …*, or double-click to sign in straight away. *What each person sees*, below, describes each one. To switch later, open the avatar menu in the top bar and choose *Switch role (demo)*, or use *Switch* in the banner.
 
-**First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for that role, what's new and up to three things waiting. *Help › Show welcome screen* brings it back. A dot in the sidebar marks a feature you haven't opened yet, and a small toast offers its tour the first time you meet it. The *Ask Propniti* panel also opens on its own once a day.
+**First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for that role, what's new and up to three things waiting. *Help › Show welcome screen* brings it back. A dot in the sidebar marks a feature you haven't opened yet. Once per browser session a small card offers a tour; it sits over the foot of the sidebar so it never covers a table, and on a phone or with the sidebar collapsed the chat bubble offers it instead. The *Ask Propniti* panel also opens on its own once a day.
 
 **About the data.** Names, companies and figures are sample data: 30 properties in Austin, Dallas, Atlanta and Phoenix. "Today" is 4 November 2026, and the books are closed through October. Your changes go into a private copy that only you see. It resets at midnight Pacific time. No real payments or messages are sent.
 
@@ -22,7 +22,11 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 - **Inbox** (`/app/inbox`, or press I). One list of what needs you: conversations waiting on your reply, agent proposals you can decide, and your alerts. Tabs *All*, *Messages*, *Approvals* and *Alerts* show counts, and the sidebar badge counts what needs you. *Reply* opens the conversation; *Review* opens the proposal in the approvals inbox.
 - **My tasks** (`/app/tasks`). Tasks assigned to you or to your role, from people, automations and agents. Views: *Open*, *Overdue*, *Today*, *Upcoming* and *Done*. Click the circle to mark a task done (with *Undo*), or *New task* to add one.
 - **Agents and approvals.** `/app/agents` lists the eight agents. `/app/automations` shows what runs automatically, when, and under which rules. `/app/ai/approvals` holds what the agents proposed. `/app/ai/activity` lists every run.
-- **Out of scope.** A link to a record outside your persona's scope opens a page that says so, with links back to the list and your home.
+- **Out of scope.** A link to a record outside your persona's scope opens a page that says so, with links back to the list and your home. Every sidebar link opens a page your persona can use, and each persona's home is in the sidebar.
+- **Downloads.** Lists, reports and owner statements have a *Download* menu: *CSV* (plain data), *Excel (.xlsx)* (numbers and dates stay numbers and dates) or *PDF* (a printable table). It downloads what is on screen, with the same filters, search, view and scope, up to 10,000 rows. *Include Propniti branding* adds the logo, scope, filters, time and a footer to Excel and PDF files; CSV has no branding.
+- **Feedback on actions.** A thin bar at the top shows that a page is loading. After a filter click, a line such as "Showing 608 warning open issues · Clear" states what the list now shows and scrolls the results into view. Approvals, bulk actions and refreshes confirm with a toast; clicking the sidebar link of the page you're on refreshes it and says it is up to date. A section whose figures changed after an action shows "Updated just now" for a few seconds.
+- **Theme.** The theme button in the top bar offers *Light*, *Dark* and *System*; *System*, the default, follows your device and changes with it. The portals and these docs use the same choice. ⌘K also has *Switch to dark theme* and the others.
+- **Copilot** (`/app/copilot`). The full-page assistant. Each persona starts with sample conversations, marked *Sample*: questions such as "Who is 30+ days late on rent?" with answers computed by the rules assistant from the sample data. Ask a follow-up to continue one; the continuation is kept in your private copy.
 
 ![Record peek drawer open beside a work-order list](/docs/walkthrough/screens/marcus-peek-drawer.webp#2880x1800)
 
@@ -31,6 +35,10 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 ![Ask Propniti bubble with a tip](/docs/walkthrough/screens/marcus-chat-bubble.webp#2880x1800)
 
 ![Welcome splash on the home page](/docs/walkthrough/screens/marcus-welcome.webp#2880x1800)
+
+![Copilot with a sample conversation open: the Sample banner, proposed reminders with Approve buttons and the Rules label](/docs/walkthrough/screens/marcus-copilot-sample.webp#2880x1800)
+
+![Download menu on the AR aging report: CSV, Excel and PDF, with Include Propniti branding ticked](/docs/walkthrough/screens/grace-download-menu.webp#2880x1800)
 
 ## 2. Daniel Reyes, principal
 
@@ -44,6 +52,26 @@ Daniel sees all 30 properties. He lands on `/app`, the portfolio home.
 6. Use *Waiting for your decision* to approve or reject proposals.
 
 AI here: *Explain* (facts computed, wording by a model or by rules), the what-if narration, *Improve with AI*, and agent proposals.
+
+### Guided setup
+
+`/app/onboarding` (*Set up your portfolio*, also reached from *Guided setup* in the *Finish setup* checklist at the foot of the sidebar) walks a new customer through five steps. A principal, regional manager or admin can use it; other roles see who can. Every step can be skipped, and progress is saved on each move, so the flow resumes where it was left.
+
+1. **Company.** The company name, the states you operate in (they set late-fee caps, notice periods and deposit rules) and roughly how many units you manage.
+2. **Bring your data.** Drop exports from your current tool, in any mix, or click *Try sample files*. Each file's source tool and contents are identified by rules first, from its columns and name, with a confidence and the reason. *Use AI to identify files and suggest fixes* is optional: it is on when a model is available, and it sends only file names, header rows and the first few rows of each file. Turn it off and nothing is sent to a model. *Match columns* then continues in the import wizard (columns, checks, preview, import and undo), and nothing is saved until you confirm the preview.
+3. **Approval rules.** Suggested approval limits and agent autonomy, sized from your records: for example "Median completed vendor work order $386 across 3,853 jobs → auto-approve up to $400". Each suggestion shows its basis and confidence; *Accept*, *Edit* or *Keep current* each one. Legal, safety and owner distributions are never suggested; they stay with a person.
+4. **Your team.** Add people with a role and the properties, regions or whole company they cover. A principal can add people but can't grant the admin role or cover properties outside their own scope. People added here exist only in your private copy; no email is sent.
+5. **Check and finish.** Data Health runs its rules over the records you imported, then a summary shows what was imported, the data issues found, the rules set and the people added.
+
+![Guided setup, step 1: company name, states and units managed](/docs/walkthrough/screens/daniel-onboarding-company.webp#2880x1800)
+
+![Guided setup, step 2: Try sample files, the optional AI switch off, and files identified by rules with a confidence and reason](/docs/walkthrough/screens/daniel-onboarding-data.webp#2880x1800)
+
+![Guided setup, step 3: suggested approval limits with their basis, confidence and Accept, Edit or Keep current](/docs/walkthrough/screens/daniel-onboarding-rules.webp#2880x1800)
+
+![Guided setup, step 4: adding a property manager scoped to the imported properties](/docs/walkthrough/screens/daniel-onboarding-team.webp#2880x1800)
+
+![Guided setup, step 5: Data Health on the imported records and the setup summary](/docs/walkthrough/screens/daniel-onboarding-check.webp#2880x1800)
 
 ![Daniel's portfolio home with briefing, KPIs and Explain buttons](/docs/walkthrough/screens/daniel-home.webp#2880x1800)
 
@@ -60,11 +88,13 @@ Priya sees 14 Texas properties. She lands on `/app`, the regional version.
 1. Scroll to *Property comparison*: occupancy, economic occupancy, NOI against budget, collections, delinquency and work-order SLA side by side.
 2. Click *Variance* on a row to explain that property's NOI change.
 3. Use her quick actions: *Concessions to approve* opens proposed concessions, and *Work orders past SLA* opens the late jobs.
-4. Open `/app/settings/import` to bring in data from another system. Choose a source, for example AppFolio, and click *Load AppFolio sample files* (or upload your own CSV, TSV or Excel file). Leave *Use AI to help map and clean up* on, or turn it off for rules only. Check the column matches, accept or skip each AI suggestion, then *Preview import* and *Import N records*. *Undo import* removes the batch again, unless other records now point at it. New properties need a principal or regional manager.
+4. Open `/app/settings/import` to bring in data from another system. Each tool has a tile; click *Try samples* on one, for example AppFolio, to load its synthetic sample files, or pick the tile and upload your own CSV, TSV or Excel file. Leave *Use AI to help map and clean up* on, or turn it off for rules only. Check the column matches, accept or skip each AI suggestion, then *Preview import* and *Import N records*. *Undo import* removes the batch again, unless other records now point at it. New properties need a principal or regional manager.
 
 AI here: per-property *Explain*, optional AI suggestions in the import, and concession proposals routed to her by the approval policy (concessions over $500 need a regional manager).
 
 ![Priya's regional home with the property comparison table](/docs/walkthrough/screens/priya-home.webp#2880x1800)
+
+![Import, Source step: a tile for each tool with Try samples](/docs/walkthrough/screens/priya-import-samples.webp#2880x1800)
 
 ![Import, Columns step: each column matched by preset, with sample values](/docs/walkthrough/screens/priya-import.webp#2880x1800)
 
@@ -133,8 +163,9 @@ Grace works across all owner entities. She lands on `/app/finance`.
 3. Open a bill, for example `/app/payables/bills/BILL-20001`, to see its checks and coded lines.
 4. Open *Owner statements*. On a line such as *Unreconciled difference*, click *Explain*. It shows what it looked up, then the answer.
 5. Open *Budget vs actual* and click the ✦ on a row to explain a variance.
-6. Open *Reports* and type a question, for example "show me utilities by property for Q3 vs budget". *Build report* turns it into a report you can export as CSV.
-7. Open a bank reconciliation to see suggested matches with *Accept match*.
+6. Open *Reports* and type a question, for example "show me utilities by property for Q3 vs budget". *Build report* turns it into a report. *Download* on any report gives CSV, Excel or PDF. Reports are open to the principal, regional managers, property managers and accountants; other roles see a page saying reports aren't part of their role.
+7. On *Owner statements*, *Download statement* saves the statement as a file.
+8. Open a bank reconciliation to see suggested matches with *Accept match*.
 
 AI here: invoice reading (a vision model when configured), the Payables agent, statement and variance explanations, and the report builder.
 
@@ -172,14 +203,16 @@ Sam manages the org's settings. He lands on `/app/admin`.
 2. Open *Settings → Users* and *Roles and permissions* to see the role × module matrix.
 3. Open *Settings → Approvals*, click *Edit* on *Maintenance spend · org default*, change the limit and *Save policy*. The change appears in *Change history*.
 4. Open *Audit log* to see every human and agent action.
-5. Open *Data health*. It shows a score, open issues by rule and by property, and each suggested fix as before and after. *Apply fix* and *Apply N safe fixes* correct the records. Fixes that touch money, fraud or legal status, and any fix that isn't low risk, are labelled *Send for approval* and go to the approvals inbox instead, whoever clicks.
+5. Open *Data health*. It shows a score, open issues by rule and by property (counted within the persona's scope), and each issue by its rule name and the record's name. A suggested fix shows the fields before and after, in readable values. An issue with no automatic fix says "No automatic fix — a person needs to check this" and gives the next step, such as "Call the vendor on a number already on file to confirm the new bank details", with a link to the record. As an admin, Sam can't apply fixes himself: each shows *Send for approval* and goes to the approvals inbox. A principal, regional manager or property manager applies low-risk fixes with *Apply fix* or *Apply N safe fixes*; fixes that touch money, fraud or legal status, and any fix that isn't low risk, go to the approvals inbox whoever clicks.
 6. Open *Automations*. As an admin, Sam can turn agents on or off and change their autonomy here; the change is written to the audit trail.
 
 ![Sam's admin briefing](/docs/walkthrough/screens/sam-admin-briefing.webp#2880x1800)
 
 ![Approval policies: org defaults and owner-entity limits](/docs/walkthrough/screens/sam-approval-policy.webp#2880x1800)
 
-![Data health with before and after for a fix](/docs/walkthrough/screens/sam-data-health.webp#2880x1800)
+![Data health, warnings: a fix with before and after values, and Send for approval for the admin](/docs/walkthrough/screens/sam-data-health.webp#2880x1800)
+
+![Data health issue with no automatic fix: the reasons and a manual next step with a link to the vendor](/docs/walkthrough/screens/sam-data-health-next-step.webp#2880x1800)
 
 ## 10. Nadia Brooks, platform admin
 
@@ -198,7 +231,7 @@ Nadia looks after every customer org. She lands on `/app/admin`, with platform q
 
 Any staff persona with AI access can follow these steps. Marcus is a good choice.
 
-1. Open `/app/agents`. Each card shows the agent's goal, status, counters, last run and next run.
+1. Open `/app/agents`. Each card shows the agent's goal, status, counters, when it runs in plain words (for example "Daily at 14:00 UTC · on Payment returned"), last run, next run and the model its last run used. The header says when schedules were last checked and when the next check is due.
 2. Click *Run now* on the Collections agent. A side sheet shows each step as it happens, in plain words such as "Looked up 14 residents", with the records it touched linked by name. *Technical details* on a step shows the raw input and output. *Open the full run* opens `/app/ai/runs/<id>`.
 3. Under a card, the *Autonomy* select offers *Approve first* or *Auto within policy*. Only a principal, regional manager or admin can change it; Marcus sees it read-only. Changes are written to the audit trail.
 4. The *Approval policies* table shows what agents may apply on their own and when the owner decides.
@@ -221,7 +254,7 @@ Agents also run without anyone: every 15 minutes on a schedule, on events such a
 Helen owns Bluebonnet Residential Fund II. She lands on `/portal/owner`.
 
 1. Read *Your monthly briefing*: why her distribution moved, computed from her statements.
-2. Open *Statements*, pick a month, and click *Explain* on *Distributed to owner*.
+2. Open *Statements*, pick a month, and click *Explain* on *Distributed to owner*. *Download statement* saves it as CSV, Excel or PDF.
 3. Open *Approvals*. Repairs over her approval limit wait here with *Why this needs you*. Click *Approve $…*, add an optional note, and confirm. The property manager is notified.
 4. Click *Ask AI* and choose "Why was my distribution lower this month?".
 
