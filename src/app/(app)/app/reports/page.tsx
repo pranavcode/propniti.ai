@@ -11,12 +11,11 @@ import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { askReport } from "@/extensions/accounting/reports/ask";
 import { scopeProperties, type Ctx } from "@/extensions/accounting/reports/run";
-import { addMonths, FIRST_MONTH, periodLabel } from "@/extensions/accounting/reports/spec";
+import { addMonths, FIRST_MONTH, periodLabel, REPORT_ROLES } from "@/extensions/accounting/reports/spec";
 import { ArAgingReport, AskReport, CashForecastReport, NoiReport, PnlReport, RentRollReport } from "@/extensions/accounting/reports/views";
 
 export const metadata: Metadata = { title: "Reports · Propniti" };
 
-const ROLES = new Set(["principal", "regional_manager", "property_manager", "accountant"]);
 const REPORTS = [
   { key: "pnl", label: "Profit and loss", icon: FileSpreadsheet, blurb: "Income and expense by GL account for any period, with NOI and the monthly trend.", period: true, property: true },
   { key: "rent_roll", label: "Rent roll", icon: Building2, blurb: "Every unit with its resident, lease dates, rent, deposit and balance.", period: false, property: true },
@@ -31,7 +30,7 @@ type SP = { r?: string; ask?: string; from?: string; to?: string; property?: str
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const session = await currentSession();
-  if (!ROLES.has(session.actor.role)) {
+  if (!REPORT_ROLES.includes(session.actor.role)) {
     return <main className="p-6"><EmptyState kind="chart" title="Reports aren't part of your role" description="Switch role from your avatar menu to see reports as an accountant, manager or principal." action={{ label: "Go to your home", href: "/app" }} /></main>;
   }
   const sp = await searchParams;

@@ -5,6 +5,7 @@ import { allEntities, can, getEntity, navTree, registerPage, INTERNAL_ROLES, typ
 import { PERMISSIONS, PERSONAS, PN_AS, type Persona } from "@/auth/personas";
 import { currentPersona } from "@/auth/session";
 import { LAYOUT_COOKIE, parseCollapsed } from "../collapsible/prefs";
+import { REPORT_ROLES } from "@/extensions/accounting/reports/spec";
 import { toursFor } from "../tour/registry";
 import { SECTION_LABEL, type Density, type ShellData, type ShellPersona, type Theme } from "./types";
 
@@ -14,7 +15,7 @@ const withModule = (m: keyof (typeof PERMISSIONS)["admin"]) => STAFF.filter((r) 
 registerPage({ key: "home.dashboard", label: "Dashboard", href: "/app", icon: LayoutDashboard, section: "home", order: 1, roles: STAFF });
 registerPage({ key: "home.inbox", label: "Inbox", href: "/app/inbox", icon: Inbox, section: "home", order: 2, roles: STAFF, ai: true });
 registerPage({ key: "home.tasks", label: "My tasks", href: "/app/tasks", icon: CheckSquare, section: "home", order: 3, roles: STAFF });
-registerPage({ key: "finance.reports", label: "Reports", href: "/app/reports", icon: LineChart, section: "finance", order: 90, roles: STAFF.filter((r) => r !== "leasing_agent") });
+registerPage({ key: "finance.reports", label: "Reports", href: "/app/reports", icon: LineChart, section: "finance", order: 90, roles: REPORT_ROLES });
 registerPage({ key: "ai.copilot", label: "Copilot", href: "/app/copilot", icon: Sparkles, section: "intelligence", order: 1, roles: withModule("intelligence"), ai: true });
 registerPage({ key: "ai.agents", label: "Agents", href: "/app/agents", icon: Bot, section: "intelligence", order: 2, roles: withModule("intelligence"), ai: true });
 registerPage({ key: "ai.approvals", label: "Approvals", href: "/app/ai/approvals", icon: ShieldCheck, section: "intelligence", order: 3, roles: withModule("intelligence"), ai: true });
