@@ -4,6 +4,7 @@ import { registerPage } from "@/entities/registry";
 import "./metrics";
 import "./actions";
 import "./insurance";
+import "./renewalAsk";
 import "./tabs";
 import "./tour";
 

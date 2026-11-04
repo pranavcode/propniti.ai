@@ -5,6 +5,8 @@ import { currentLease, daysUntil, documents, insurance, me, offers, parsePhotos 
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { RenewalOffers } from "@/extensions/owners/portal/ui/resident/RenewalOffers";
 import { InsuranceUpload } from "@/extensions/owners/portal/ui/resident/InsuranceUpload";
+import { AskRenewal } from "@/extensions/owners/portal/ui/resident/AskRenewal";
+import { askedThisWeek } from "@/extensions/residents/renewalAsk";
 import { AS_OF } from "@/seed/constants";
 import { Card, fmtDay } from "@/extensions/owners/portal/ui/resident/bits";
 
@@ -25,7 +27,7 @@ export default async function ResidentLease() {
       </>
     );
   }
-  const [offerList, policy, docs] = await Promise.all([offers(c, lease.id), insurance(c, lease.id), documents(c, lease.id)]);
+  const [offerList, policy, docs, asked] = await Promise.all([offers(c, lease.id), insurance(c, lease.id), documents(c, lease.id), askedThisWeek(c.db, c.ws, lease.id).catch(() => false)]);
   const unitPhotos = parsePhotos(lease.unit_photos);
   const photos = (unitPhotos.length ? unitPhotos : parsePhotos(lease.photos)).slice(0, 4);
   const left = lease.end_on ? daysUntil(lease.end_on) : null;
@@ -51,7 +53,10 @@ export default async function ResidentLease() {
           <div id="renewal" className="scroll-mt-20">
             <Card title="Renewal">
               {offerList.length ? <RenewalOffers me={c.me} offers={offerList} /> : (
-                <p className="text-[13px] text-muted-foreground">No renewal offer yet. The office usually sends one 60 to 90 days before your lease ends{lease.end_on ? ` (${fmtDay(lease.end_on, true)})` : ""}. You&apos;ll see it here and get a message.</p>
+                <div className="space-y-3">
+                  <p className="text-[13px] text-muted-foreground">No renewal offer yet. The office usually sends one 60 to 90 days before your lease ends{lease.end_on ? ` (${fmtDay(lease.end_on, true)})` : ""}. You&apos;ll see it here and get a message.</p>
+                  {lease.status !== "Future" && <AskRenewal me={c.me} asked={asked} />}
+                </div>
               )}
             </Card>
           </div>
