@@ -8,7 +8,7 @@ import { unknownNumbers } from "@/ai/summaries";
 import { cleanNarrative, hasTokens, wrongDirections } from "./narrative";
 
 // Portfolio AI narration ("explain this number", what-if narrative). Every call is a traced run of
-// the Owner Reporting agent: the facts are computed in code (tool calls show in the run), the model
+// the Owner Reporting Agent: the facts are computed in code (tool calls show in the run), the model
 // only words them, and any figure the facts don't contain sends the answer back to the rules text.
 
 export type Narration = { text: string; bullets: string[]; source: "live" | "rules"; model: string; runId: string; facts: Facts; detail: unknown; note?: string };

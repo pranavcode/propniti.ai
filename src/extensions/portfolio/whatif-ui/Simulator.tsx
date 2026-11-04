@@ -183,7 +183,7 @@ export function Simulator({ baselines, initialScope, initialLevers, period }: { 
                 {narrative.note && <p className="text-[11.5px] text-muted-foreground">{narrative.note}</p>}
               </div>
             ) : (
-              <p className="text-[12.5px] text-muted-foreground">The Owner Reporting agent recomputes this scenario on the server and explains what drives the change, which properties move most and where the risk is. Every figure comes from the calculation, and the run is saved.</p>
+              <p className="text-[12.5px] text-muted-foreground">The Owner Reporting Agent recomputes this scenario on the server and explains what drives the change, which properties move most and where the risk is. Every figure comes from the calculation, and the run is saved.</p>
             )}
           </div>
         </section>

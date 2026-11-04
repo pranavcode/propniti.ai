@@ -82,7 +82,7 @@ test("renewal: agent prices with reasons, person accepts, AI drafts, person send
   await as(context, "lena");
   const errors = watch(page);
   await go(page, `${BASE}/app/leasing/renewals?status=Draft`);
-  await page.getByRole("button", { name: /Ask the Renewals agent|Price again/ }).click();
+  await page.getByRole("button", { name: /Ask the Renewals Agent|Price again/ }).click();
   await expect(page.getByText(/market rent/i).first()).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("link", { name: "View run" }).first()).toHaveAttribute("href", /\/app\/ai\/runs\//);
 
@@ -104,7 +104,7 @@ test("broker: scores an application with reasons and decides it on the record", 
   // Oldest waiting application first; the run's workspace starts fresh, so it is still open.
   await page.getByRole("link", { name: "Review" }).first().click();
   await page.waitForURL(/\/app\/leasing\/applications\/[^/?]+$/);
-  await expect(page.getByRole("heading", { name: "Leasing agent score" })).toBeVisible(FIRST_PAINT);
+  await expect(page.getByRole("heading", { name: "Leasing Agent score" })).toBeVisible(FIRST_PAINT);
   await expect(page.getByText("Fair-housing safe scoring")).toBeVisible();
   await page.getByRole("button", { name: /Score with AI|Re-score/ }).click();
   await expect(page.getByRole("img", { name: /Score \d+ out of 100/ })).toBeVisible({ timeout: 60_000 });

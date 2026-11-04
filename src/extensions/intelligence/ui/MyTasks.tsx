@@ -19,8 +19,8 @@ import { TONE_DOT } from "@/components/app/status";
 import { apiJson } from "@/components/app/forms/api";
 import { openPeek } from "@/components/app/peek/usePeek";
 import { isModifiedClick } from "@/components/app/peek/url";
-import { AGENT_LABEL } from "@/ai/ui/client";
 import { TaskDialogs, TaskMenu, type Pending, type Staff } from "./TaskActions";
+import { agentName } from "@/ai/ui/labels";
 
 // My tasks (client half): the view tabs, the task table with one-click done / reopen, a row menu
 // (snooze, reassign, draft notice), bulk done / snooze, and the New task sheet. Rows, counts and facets come from the server page; every change goes through
@@ -76,7 +76,7 @@ function DoneToggle({ row, onDone }: { row: Row; onDone: (row: Row, next: "compl
 
 function Source({ row, me }: { row: Row; me: string }) {
   if (row.source === "Agent") {
-    const label = typeof row.agent === "string" ? AGENT_LABEL[row.agent] ?? row.agent.replace(/_/g, " ") : "AI agent";
+    const label = typeof row.agent === "string" ? agentName(row.agent) : "AI agent";
     const body = <><Sparkles className="size-3 shrink-0" />{label}</>;
     return row.run_id
       ? <Link href={`/app/ai/runs/${encodeURIComponent(String(row.run_id))}`} onClick={(e) => e.stopPropagation()} title="Open the run that created this task" className="inline-flex min-w-0 items-center gap-1 truncate text-tone-ai underline-offset-2 hover:underline">{body}</Link>

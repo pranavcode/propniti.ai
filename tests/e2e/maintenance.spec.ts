@@ -2,7 +2,7 @@ import { expect as baseExpect, test } from "@playwright/test";
 import { as, BASE, GREETING, go, openFull, reload, watch } from "./helpers";
 
 // Maintenance as Tom Alvarez (maintenance supervisor): home → chart drill-down → intake with the
-// Maintenance Triage agent → dispatch → board and calendar → vendor invoice approve-and-pay →
+// Maintenance Triage Agent → dispatch → board and calendar → vendor invoice approve-and-pay →
 // technician view. Run against a dev server: BASE_URL=http://localhost:3201.
 
 test.describe.configure({ timeout: 240_000 });

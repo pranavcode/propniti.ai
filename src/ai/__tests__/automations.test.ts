@@ -65,7 +65,7 @@ describe("automations view", () => {
 
   it("an agent turned off shows Off and no next run", async () => {
     const { raw, db } = openFixture();
-    raw.prepare("INSERT INTO agent_definitions (workspace_id, id, name, owner_role, goal, tools, triggers, autonomy, enabled) VALUES (?, 'renewals', 'Renewals agent', 'property_manager', 'x', '[]', ?, 'suggest', 0)").run(WS, JSON.stringify({ schedule: "0 13 * * 1", events: ["lease.expiring"] }));
+    raw.prepare("INSERT INTO agent_definitions (workspace_id, id, name, owner_role, goal, tools, triggers, autonomy, enabled) VALUES (?, 'renewals', 'Renewals Agent', 'property_manager', 'x', '[]', ?, 'suggest', 0)").run(WS, JSON.stringify({ schedule: "0 13 * * 1", events: ["lease.expiring"] }));
     const r = (await automationsView({ db, ws: WS, actor: DANIEL }, NOW)).agents.find((a) => a.key === "renewals")!;
     expect(r).toMatchObject({ enabled: false, nextDueAt: null, status: { label: "Off" }, autonomy: { value: "act_with_approval" } });
   });
@@ -75,7 +75,7 @@ describe("automations view", () => {
     seedRuns(raw);
     const org = await automationsView({ db, ws: WS, actor: DANIEL }, NOW);
     const overdue = org.events.find((e) => e.type === "charge.overdue")!;
-    expect(overdue).toMatchObject({ label: "Rent overdue", queued: 2, agents: [{ key: "collections", name: "Collections agent" }] });
+    expect(overdue).toMatchObject({ label: "Rent overdue", queued: 2, agents: [{ key: "collections", name: "Collections Agent" }] });
     expect(overdue.source).toMatch(/sweep/);
     expect(org.events.find((e) => e.type === "payment.failed")!.queued).toBe(0);
     // Listened to, but nothing in the product raises it.

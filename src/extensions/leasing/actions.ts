@@ -110,7 +110,7 @@ registerAction({
 });
 
 // One follow-up per lead per day: the header button, the bulk bar, "Send all", an edited draft and
-// an approved Leasing agent proposal all share the key, so a double click or a second sender is a 409.
+// an approved Leasing Agent proposal all share the key, so a double click or a second sender is a 409.
 const FOLLOW_UP_STAGES = ["Inquiry", "Contacted", "Toured", "Tour scheduled"];
 const FollowUp = z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough();
 
@@ -137,7 +137,7 @@ async function sendFollowUp(ctx: ActionContext, row: Row, input: z.infer<typeof 
   return ok(`Follow-up sent to ${row.name}`);
 }
 
-// With a subject and body: an edited draft, or an approved Leasing agent proposal (its payload carries them).
+// With a subject and body: an edited draft, or an approved Leasing Agent proposal (its payload carries them).
 registerAction({
   key: "prospects.send_follow_up",
   label: "Send follow-up",
@@ -171,7 +171,7 @@ registerAction({
   roles: LEASING,
   icon: Sparkles,
   when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
-  help: { summary: "The Leasing agent drafts a short follow-up from the lead's stage, budget and beds wanted. You edit it before sending.", article: "leasing-pipeline-board" },
+  help: { summary: "The Leasing Agent drafts a short follow-up from the lead's stage, budget and beds wanted. You edit it before sending.", article: "leasing-pipeline-board" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { draftFollowUp } = await ai();
@@ -231,19 +231,19 @@ registerAction({
   roles: [...LEASING],
   icon: Sparkles,
   when: (r) => OPEN_APP.includes(String(r.stage)),
-  help: { summary: "The Leasing agent scores the application from income, credit band, rental history and verification only, and sends a recommendation to the broker.", article: "fair-housing-applicant-scoring" },
+  help: { summary: "The Leasing Agent scores the application from income, credit band, rental history and verification only, and sends a recommendation to the broker.", article: "fair-housing-applicant-scoring" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { scoreApplication } = await ai();
     const r = await scoreApplication(ctx, row);
     const s = r.result;
-    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "scored", summary: `Leasing agent scored ${s.score} and recommends ${s.recommendation.toLowerCase()}`, data: { run_id: r.runId } },
+    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "scored", summary: `Leasing Agent scored ${s.score} and recommends ${s.recommendation.toLowerCase()}`, data: { run_id: r.runId } },
       [{ table: "applications", id: String(row.id), changes: { score: s.score, scoring_factors: JSON.stringify(s.factors), recommendation: s.recommendation, income_to_rent: Number(s.ratio.toFixed(2)), ...(row.stage === "Submitted" || row.stage === "Screening" ? { stage: "Review" } : {}) } }]);
     return aiResult({ ...s, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
 });
 
-// Used by the broker's buttons and by approving a Leasing agent proposal in the inbox (whose payload
+// Used by the broker's buttons and by approving a Leasing Agent proposal in the inbox (whose payload
 // carries the recommendation). The decision, the person and the AI recommendation are all audited.
 const Decide = z.object({
   decision: z.enum(["Approved", "Conditional", "Denied"]).optional(),
@@ -284,7 +284,7 @@ async function decideApplication(ctx: ActionContext, row: Row, decision: "Approv
   return ok(`Application ${decision.toLowerCase()}`);
 }
 
-// The same decision under the keys the seeded Leasing agent proposals use: approving one of those
+// The same decision under the keys the seeded Leasing Agent proposals use: approving one of those
 // in the inbox accepts the agent's recommendation as the broker's decision.
 for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as const) {
   registerAction({
@@ -296,7 +296,7 @@ for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as 
     when: (r) => OPEN_APP.includes(String(r.stage)),
     input: z.object({ note: z.string().trim().max(500).optional() }).passthrough(),
     confirm: { title: verb === "approve" ? "Approve this application?" : "Deny this application?", body: "Your decision is logged with the AI recommendation. Use the AI scoring tab to add conditions or a reason." },
-    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing agent's recommendation" : undefined)),
+    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing Agent's recommendation" : undefined)),
   });
 }
 
@@ -311,7 +311,7 @@ registerAction({
   entity: "listings",
   roles: LEASING,
   icon: Sparkles,
-  help: { summary: "The Leasing agent drafts the headline and description from the unit and property facts. You edit it before saving.", article: "listing-editor-ai-description" },
+  help: { summary: "The Leasing Agent drafts the headline and description from the unit and property facts. You edit it before saving.", article: "listing-editor-ai-description" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { draftListing } = await ai();
@@ -414,7 +414,7 @@ registerAction({
 });
 
 // ---------------------------------------------------------------------------------------------
-// Renewal offers: the Renewals agent prices it, a person accepts or edits, AI drafts, a person sends
+// Renewal offers: the Renewals Agent prices it, a person accepts or edits, AI drafts, a person sends
 // ---------------------------------------------------------------------------------------------
 
 registerAction({
@@ -424,12 +424,12 @@ registerAction({
   roles: LEASING,
   icon: Sparkles,
   when: (r) => r.status === "Draft",
-  help: { summary: "The Renewals agent prices the offer from the unit type's market rent, tenure and payment history.", article: "renewal-workflow" },
+  help: { summary: "The Renewals Agent prices the offer from the unit type's market rent, tenure and payment history.", article: "renewal-workflow" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { proposeOffer } = await ai();
     const r = await proposeOffer(ctx, row);
-    await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals agent proposed $${r.result.rentCents / 100} (${r.result.changePct}%)`, data: { run_id: r.runId } },
+    await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals Agent proposed $${r.result.rentCents / 100} (${r.result.changePct}%)`, data: { run_id: r.runId } },
       [{ table: "renewal_offers", id: String(row.id), changes: { rent_cents: r.result.rentCents, market_rent_cents: r.result.facts.market_rent_cents } }]);
     return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
@@ -462,7 +462,7 @@ registerAction({
   roles: LEASING,
   icon: Sparkles,
   when: (r) => r.status === "Draft",
-  help: { summary: "The Renewals agent prices the draft and writes its message, then leaves it as a proposal. A person approves before anything is sent.", article: "renewal-workflow" },
+  help: { summary: "The Renewals Agent prices the draft and writes its message, then leaves it as a proposal. A person approves before anything is sent.", article: "renewal-workflow" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { effective } = await import("@/server/query");
@@ -472,7 +472,7 @@ registerAction({
     if (open) await closeProposals(ctx, "renewal_offers", String(row.id), "Edited", `Replaced by a prepared offer (${ctx.actor.name})`);
     const { prepareOffer } = await ai();
     const r = await prepareOffer(ctx, { ...row, rent_cents: cents(row, "rent") }, (rentCents, runId) =>
-      commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals agent prepared $${rentCents / 100} with a message, waiting for approval`, data: { run_id: runId } },
+      commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals Agent prepared $${rentCents / 100} with a message, waiting for approval`, data: { run_id: runId } },
         [{ table: "renewal_offers", id: String(row.id), changes: { rent_cents: rentCents } }]));
     return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
@@ -525,7 +525,7 @@ registerAction({
   },
 });
 
-// A reminder on a sent offer nobody has answered. The Renewals agent proposes it (a plain reminder,
+// A reminder on a sent offer nobody has answered. The Renewals Agent proposes it (a plain reminder,
 // or a month-to-month notice when the lease is about to end); a person approves. Once a day per offer.
 registerAction({
   key: "renewal_offers.follow_up",

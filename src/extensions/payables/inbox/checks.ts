@@ -1,6 +1,6 @@
 // Payables checks for a bill being entered or reviewed. Pure functions, used by the AP inbox (in
 // the browser) and the bill's Review and Lines tabs (on the server), so both show the same result.
-// Thresholds match the Payables agent (src/ai/agents/payables.ts): 2.4× the vendor's median paid
+// Thresholds match the Payables Agent (src/ai/agents/payables.ts): 2.4× the vendor's median paid
 // bill, a duplicate invoice number, and a bank change in the last 60 days that nobody verified.
 
 export const ANOMALY_MULTIPLE = 2.4;

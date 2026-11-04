@@ -14,6 +14,7 @@ import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasin
 import { errText, modelLoop, type AgentCtx } from "./runtime";
 import type { ToolKey } from "./types";
 import "./agents";
+import { agentName } from "@/ai/ui/labels";
 
 // The assistant (⌘J and /app/copilot). Three modes over the same tools the agents use:
 //   chat    answers about your data; the model plans the lookups, figures come from tool results
@@ -153,7 +154,7 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
   if (/\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
     const runs = await sql<{ agent_key: string; n: number; proposals: number }>(ctx.data, "SELECT r.agent_key, count(*) AS n, (SELECT count(*) FROM {ai_proposals} p WHERE p.agent = r.agent_key) AS proposals FROM {agent_runs} r GROUP BY r.agent_key ORDER BY n DESC", [], { unscoped: true });
     const saved = (await monthly(ctx.data, { months: 1 })).reduce((s, r) => s + Number(r.ai_minutes_saved ?? 0), 0);
-    return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${r.agent_key.replace(/_/g, " ")} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
+    return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${agentName(r.agent_key)} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
   }
   return null;
 }
@@ -175,7 +176,7 @@ async function planActions(ctx: AgentCtx, q: string, start: StartAgent): Promise
   const agent = AGENT_WORDS.find(([, re]) => re.test(q))?.[0];
   if (agent && !/\b(remind\w*|reminders?|nudge)\b/i.test(q) && /\b(agent|run|start|triage|review|check|fix)\b/i.test(q)) {
     const r = await start(agent);
-    const name = r.ok ? r.name : r.name ?? agent.replace(/_/g, " ");
+    const name = r.ok ? r.name : r.name ?? agentName(agent);
     if (!r.ok) return { answer: `I can't start the ${name} for you: ${r.error}. ${r.status === 403 ? "A property manager, regional manager or the principal can run it from Agents." : ""}`.trim(), citations: [] };
     await ctx.step({ kind: "message", output: { started_run: r.runId, agent, already: r.already }, ok: true });
     return {

@@ -8,7 +8,7 @@ export { reminder } from "../rules";
 
 export default defineAgent({
   key: "collections",
-  name: "Collections agent",
+  name: "Collections Agent",
   ownerRole: "property_manager",
   goal: "Follow up on every resident who owes rent: remind the recently late, offer payment plans at 31–90 days, and refer 90+ day balances to a manager for legal review. Never promise a waiver.",
   tools: ["ledger.delinquency", "ledger.lookup", "records.get", "records.related", "policy.lookup", "messages.draft", "actions.propose"],

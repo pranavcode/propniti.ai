@@ -11,13 +11,13 @@ import { FIELD, postAction } from "./client";
 
 // New maintenance request: a plain-language description and a photo. Saving creates the work order
 // through the generic API, attaches the photo (which runs the photo check), then runs the
-// Maintenance Triage agent and opens its suggestion.
+// Maintenance Triage Agent and opens its suggestion.
 
 type Step = "idle" | "saving" | "photo" | "triage";
 const STEPS: { key: Exclude<Step, "idle">; label: string }[] = [
   { key: "saving", label: "Saving the request" },
   { key: "photo", label: "Checking the photo" },
-  { key: "triage", label: "Maintenance Triage agent: trade, urgency, estimate, vendors" },
+  { key: "triage", label: "Maintenance Triage Agent: trade, urgency, estimate, vendors" },
 ];
 
 const firstSentence = (s: string) => {

@@ -31,7 +31,7 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   const unit = unitId ? await getRow({ db: getPlatform().db, ws, actor }, "units", unitId).catch(() => null) : null;
   return (
     <main>
-      <PageHeader title="New maintenance request" description="Describe the problem in plain words and add a photo. The Maintenance Triage agent suggests the trade, urgency, an estimate and the best vendor. Under your auto-approve limit it assigns that vendor itself; above it, you choose." />
+      <PageHeader title="New maintenance request" description="Describe the problem in plain words and add a photo. The Maintenance Triage Agent suggests the trade, urgency, an estimate and the best vendor. Under your auto-approve limit it assigns that vendor itself; above it, you choose." />
       <PageBody>
         {properties.length
           ? <IntakeForm properties={properties} photos={SAMPLE_PHOTOS.map((url) => ({ url, label: PHOTO_TAGS[photoTag(url)!].label }))} examples={EXAMPLES} initial={{ property, unit: unit && unit.property_id === property ? { id: unitId!, label: String(unit._title ?? unitId) } : undefined }} />

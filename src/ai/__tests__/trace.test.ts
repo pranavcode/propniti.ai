@@ -123,6 +123,15 @@ describe("model, plan and message steps", () => {
     expect(row.sentence.quote).toBe("Liam owes the most; I'll check his ledger first.");
   });
 
+  it("names record types in a plan in words, not table names", () => {
+    const plan = (text: string, r: TraceRefs = refs) => sentenceText(describeSteps([step(0, "plan", { output: { plan: text } })], r)[0].sentence);
+    const withPolicies = { ...refs, entities: { ...refs.entities, vendors: { one: "Vendor", many: "Vendors" } } };
+    expect(plan("Check work_orders, vendors, approval_policies; propose actions that need a person.", withPolicies)).toBe("Check work orders, vendors and approval policies; propose actions that need a person.");
+    expect(plan("Check prospects, messages; propose actions that need a person.")).toBe("Check prospects and messages; propose actions that need a person.");
+    expect(plan("Check charges; propose actions that need a person.")).toBe("Check charges; propose actions that need a person.");
+    expect(wantedRefs([step(0, "plan", { output: { plan: "Check work_orders, vendors; propose x." } })]).entities).toEqual(expect.arrayContaining(["work_orders", "vendors"]));
+  });
+
   it("describes how a run started", () => {
     const row = one([step(0, "plan", { output: { trigger: "manual", event_id: null, autonomy: "act_with_approval", model: "Workers AI Llama 4 Scout", as_of: "2026-11-04" } })]);
     expect(sentenceText(row.sentence)).toBe("Started by a person, using Workers AI Llama 4 Scout; every action waits for approval");

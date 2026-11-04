@@ -166,7 +166,7 @@ export default async function MaintenanceHome() {
         </KpiRow>
 
         <div className="grid gap-5 xl:grid-cols-12">
-          <Section id="triage" title="Triage queue" description="New requests, emergencies first. Dispatch the Maintenance Triage agent's suggestion here, or open a request to review it." className="xl:col-span-7"
+          <Section id="triage" title="Triage queue" description="New requests, emergencies first. Dispatch the Maintenance Triage Agent's suggestion here, or open a request to review it." className="xl:col-span-7"
             actions={<>{canDispatch && <AcceptSuggestions ids={highIds} overLimit={highIds.filter((id) => suggested.get(id)?.toApprovals).length} />}<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button></>}>
             <div data-tour="mx-triage" className="overflow-hidden rounded-lg border bg-card">
               {h?.triage.length ? (

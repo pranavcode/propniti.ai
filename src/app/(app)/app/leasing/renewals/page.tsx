@@ -55,7 +55,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
     <>
       <PageHeader
         title="Renewals"
-        description="Leases ending soon. The Renewals agent proposes a rent with its reasons; you accept or edit it, then send an AI-drafted offer."
+        description="Leases ending soon. The Renewals Agent proposes a rent with its reasons; you accept or edit it, then send an AI-drafted offer."
         meta={<><span>{data.total} lease{data.total === 1 ? "" : "s"} ending in {window} days</span><span>{data.counts["No offer"] ?? 0} without an offer</span><span>{c.actor.scope.label}</span></>}
         actions={<Button asChild size="sm" variant="outline"><Link href="/app/leasing/renewal-offers">All offers</Link></Button>}
       >

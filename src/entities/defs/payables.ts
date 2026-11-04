@@ -109,7 +109,7 @@ registerEntity({
   actions: ["bills.submit", "bills.approve", "bills.pay", "bills.approve_and_pay", "bills.recode", "bills.void", "bills.confirm_vendor_bank"],
   // INTEGRATE: scenarios.md names this rule bill_lines.gl_miscoded, but bill_lines isn't an EntityKey (logged in lane-requests.md).
   dataRules: ["bill_lines.gl_miscoded" as RuleKey],
-  help: { summary: "Vendor invoices to approve and pay. The Payables agent checks each one for unusual amounts, duplicates, GL coding and vendor bank changes before you approve.", article: "approve-a-bill" },
+  help: { summary: "Vendor invoices to approve and pay. The Payables Agent checks each one for unusual amounts, duplicates, GL coding and vendor bank changes before you approve.", article: "approve-a-bill" },
 });
 
 registerEntity({

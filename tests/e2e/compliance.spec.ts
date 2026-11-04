@@ -18,7 +18,7 @@ test("compliance dashboard drills into lists and records", async ({ page }) => {
   await go(page, `${BASE}/app/compliance`);
   await expect(page.getByRole("heading", { name: "Compliance", level: 1 })).toBeVisible();
   await expect(page.getByText("Expiries timeline")).toBeVisible();
-  await expect(page.getByText("Compliance agent proposals")).toBeVisible();
+  await expect(page.getByText("Compliance Agent proposals")).toBeVisible();
   await expect(page.getByText("Upcoming expiries, next 12 months")).toBeVisible();
 
   // KPI drill-down opens the filtered list.

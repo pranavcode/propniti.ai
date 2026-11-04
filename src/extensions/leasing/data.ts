@@ -30,7 +30,7 @@ async function all<T = Row>(c: LeasingCtx, q: string, binds: unknown[]) {
   return (await c.db.prepare(q).bind(...binds).all<T>()).results;
 }
 // Server copies of the AI page labels (the originals live in a client module).
-export const AGENT_NAME: Record<string, string> = { leasing: "Leasing agent", renewals: "Renewals agent" };
+export const AGENT_NAME: Record<string, string> = { leasing: "Leasing Agent", renewals: "Renewals Agent" };
 export { proposalSource as sourceOf } from "@/ai/rules";
 // Tour times are the property's wall-clock time (the seed writes them as "10:00Z" for a 10 AM
 // tour), so they are formatted in UTC, on the server, which also keeps server and browser renders equal.
@@ -71,7 +71,7 @@ export async function followUps(c: LeasingCtx, limit = 8) {
   return { rows, total: Number(total[0]?.n ?? 0), ids: ids.map((r) => String(r.id)) };
 }
 
-// Proposals from the Leasing and Renewals agents still waiting on a person, newest risk first.
+// Proposals from the Leasing and Renewals Agents still waiting on a person, newest risk first.
 export async function leasingProposals(c: LeasingCtx, opts: { actions?: string[]; limit?: number } = {}) {
   const acts = opts.actions ?? [];
   const rows = await sql<Row>(aiData(c),
@@ -88,7 +88,7 @@ function mayDecide(role: Role, p: Row) {
   return p.risk !== "Low" || p.amount_cents != null ? access === "approve" : access === "write" || access === "approve";
 }
 
-// Applications waiting on the broker, with the latest Leasing agent score if there is one.
+// Applications waiting on the broker, with the latest Leasing Agent score if there is one.
 export async function waitingApplications(c: LeasingCtx, limit = 10) {
   const s = scope(c, "a.property_id");
   const where = `a.stage = 'Review'${s.sql}`;

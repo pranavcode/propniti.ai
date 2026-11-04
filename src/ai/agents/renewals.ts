@@ -13,7 +13,7 @@ export { renewalRent } from "../rules";
 
 export default defineAgent({
   key: "renewals",
-  name: "Renewals agent",
+  name: "Renewals Agent",
   ownerRole: "property_manager",
   goal: "Send a renewal offer for every lease ending in the next 90 days that has none, priced toward market rent and capped at +5%, with the reasoning shown.",
   tools: ["records.search", "records.get", "records.related", "ledger.lookup", "messages.draft", "actions.propose"],

@@ -10,7 +10,7 @@ import { fixProposal } from "./tools/write";
 import "./agents";
 
 // Data Health center actions. Applying a fix from the page is a person acting, but it still runs as
-// a Data Health agent run, so the proposal, the change, the fix log and the audit row link up.
+// a Data Health Agent run, so the proposal, the change, the fix log and the audit row link up.
 
 export async function applyFixes(data: DataCtx, persona: Persona, issueIds: string[], opts: { safeOnly: boolean }) {
   const start = { db: data.db, ws: data.ws, actor: data.actor, agent: "data_health" as const, trigger: { kind: "manual" as const, input: { issues: issueIds } } };
