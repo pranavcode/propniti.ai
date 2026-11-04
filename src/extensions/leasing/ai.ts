@@ -136,6 +136,31 @@ export async function draftListing(actx: ActionContext, listing: Row): Promise<R
 }
 
 // ---------------------------------------------------------------------------------------------
+// Lead follow-up (Leasing agent): a short note from the lead's own facts, for a person to edit and send.
+// ---------------------------------------------------------------------------------------------
+
+export async function draftFollowUp(actx: ActionContext, prospect: Row): Promise<RunOut<MessageDraft>> {
+  return run(actx, "leasing", { task: "draft_follow_up", prospect_id: prospect.id }, async (ctx) => {
+    await ctx.call("records.get", { entity: "prospects", id: String(prospect.id) });
+    const [d] = await sql<Row>(ctx.data, "SELECT pr.name, pr.stage, pr.desired_beds, pr.budget_cents, p.name AS property FROM {prospects} pr JOIN {properties} p ON p.id = pr.property_id WHERE pr.id = ?", [String(prospect.id)]);
+    if (!d) throw new Error("Lead not found in your scope");
+    const beds = d.desired_beds == null ? null : Number(d.desired_beds);
+    const facts = { first_name: String(d.name ?? "there").split(" ")[0], property: String(d.property), stage: String(d.stage), desired_beds: beds, budget_cents: d.budget_cents == null ? null : Number(d.budget_cents), sender: actx.actor.name };
+    await ctx.step({ kind: "tool_result", toolKey: "records.get", output: { facts }, ok: true });
+    const home = beds == null ? "homes" : beds === 0 ? "studios" : `${beds}-bedroom homes`;
+    const template: MessageDraft = {
+      subject: `Still looking for a home at ${facts.property}?`,
+      body: `Hi ${facts.first_name},\n\nThanks again for your interest in ${facts.property}. We still have ${home} that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${facts.sender}`,
+    };
+    const drafted = await prose(ctx, z.object({ subject: z.string().min(5).max(120), body: z.string().min(60).max(1200) }),
+      `You write a short, friendly follow-up email from a US leasing agent to a rental lead who hasn't heard from us in a few days. Offer a tour, invite a reply and sign with the sender's name. Mention only the home size and property from the facts. Never describe who should live there and never promise prices, specials or availability not in the facts. ${PLAIN}`,
+      JSON.stringify(facts),
+      (v) => [...textChecks(`${v.subject} ${v.body}`, facts), ...(PROTECTED.test(v.body) ? ["Mentions a protected characteristic"] : [])]);
+    return { summary: drafted ? "Drafted the follow-up." : "Wrote the follow-up from the template.", result: drafted ?? template };
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Renewals: price an offer from the unit type's market rent, tenure and payment history, then
 // draft the message once a person has accepted or edited the rent.
 // ---------------------------------------------------------------------------------------------

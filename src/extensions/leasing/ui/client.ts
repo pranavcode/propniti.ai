@@ -34,3 +34,32 @@ export async function createRecord(entity: string, body: Record<string, unknown>
 }
 
 export const runHref = (id: string | null | undefined) => (id ? `/app/ai/runs/${id}` : undefined);
+
+export type BulkResult = { ok: number; failed: number; errors: string[] };
+
+// Runs a bulk action over any number of records, `chunk` ids per request (the route caps a request
+// at 25), reporting progress after each request. Each record keeps its own checks and audit row.
+export async function runBulk(entity: string, action: string, ids: string[], opts: { input?: unknown; chunk?: number; onProgress?: (done: number) => void } = {}): Promise<BulkResult> {
+  const size = opts.chunk ?? 25;
+  const out: BulkResult = { ok: 0, failed: 0, errors: [] };
+  for (let i = 0; i < ids.length; i += size) {
+    const part = ids.slice(i, i + size);
+    const res = await fetch(`/api/e/${entity}/actions/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: part, ...(opts.input === undefined ? {} : { input: opts.input }) }) }).catch(() => null);
+    const body = res ? await res.json().catch(() => ({})) : {};
+    // A refused request (rate limit, lost connection) stops the run; what was done stays done.
+    if (!res || !Array.isArray(body.results)) {
+      out.failed += ids.length - i;
+      out.errors.push(body.error ?? "Couldn't reach the server. Try again.");
+      break;
+    }
+    for (const r of body.results as { status: number; error?: string }[]) {
+      if (r.status === 200) out.ok++;
+      else { out.failed++; if (r.error) out.errors.push(r.error); }
+    }
+    opts.onProgress?.(Math.min(ids.length, i + size));
+  }
+  return out;
+}
+
+// "Sent 24 · 2 skipped: Maya already got a follow-up today"
+export const bulkSummary = (r: BulkResult, verb: string) => `${verb} ${r.ok}${r.failed ? ` · ${r.failed} skipped${r.errors[0] ? `: ${r.errors[0]}` : ""}` : ""}`;

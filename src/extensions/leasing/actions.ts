@@ -86,30 +86,74 @@ registerAction({
   },
 });
 
-// Approving a Leasing agent follow-up sends the drafted note (or the standard one) and logs the contact.
+// One follow-up per lead per day: the header button, the bulk bar, "Send all", an edited draft and
+// an approved Leasing agent proposal all share the key, so a double click or a second sender is a 409.
+const FOLLOW_UP_STAGES = ["Inquiry", "Contacted", "Toured", "Tour scheduled"];
+const FollowUp = z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough();
+
+async function sendFollowUp(ctx: ActionContext, row: Row, input: z.infer<typeof FollowUp>): Promise<ActionResult> {
+  if (!FOLLOW_UP_STAGES.includes(String(row.stage))) return fail(409, `${row.name ?? "This lead"} is ${String(row.stage ?? "closed").toLowerCase()}; no follow-up sent`);
+  const first = String(row.name ?? "there").split(" ")[0];
+  const body = input.body ?? `Hi ${first}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${ctx.actor.name}`;
+  const flags = checkFairHousing(body);
+  if (flags.length) return fail(409, `Check the message: "${flags[0].phrase}" (${flags[0].category})`);
+  const at = now(ctx);
+  const threadId = newId("thr");
+  try {
+    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "contacted", summary: `Follow-up sent by ${ctx.actor.name}` },
+      [{ table: "prospects", id: String(row.id), changes: { last_contact_at: at, ...(row.stage === "Inquiry" ? { stage: "Contacted" } : {}) } }],
+      [
+        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "prospect", party_id: row.id, subject: input.subject ?? "Still looking for a new home?", entity_type: "prospects", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
+        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "leasing", sent_at: at } },
+      ], `follow-up-${row.id}-${at.slice(0, 10)}`);
+  } catch (e) {
+    if (e instanceof AlreadyDone) return fail(409, `${row.name ?? "This lead"} already got a follow-up today`);
+    throw e;
+  }
+  await closeProposals(ctx, "prospects", String(row.id), "Edited", `Followed up by ${ctx.actor.name}`);
+  return ok(`Follow-up sent to ${row.name}`);
+}
+
+// With a subject and body: an edited draft, or an approved Leasing agent proposal (its payload carries them).
 registerAction({
   key: "prospects.send_follow_up",
   label: "Send follow-up",
   entity: "prospects",
   roles: LEASING,
   icon: Send,
-  when: (r) => ["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(r.stage)),
-  input: z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough(),
-  async handler(ctx, row, input) {
-    if (!["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(row.stage))) return fail(409, `${row.name ?? "This lead"} is ${String(row.stage ?? "closed").toLowerCase()}; no follow-up sent`);
-    const first = String(row.name ?? "there").split(" ")[0];
-    const body = input.body ?? `Hi ${first}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${ctx.actor.name}`;
-    const flags = checkFairHousing(body);
-    if (flags.length) return fail(409, `Check the message: "${flags[0].phrase}" (${flags[0].category})`);
-    const at = now(ctx);
-    const threadId = newId("thr");
-    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "contacted", summary: `Follow-up sent by ${ctx.actor.name}` },
-      [{ table: "prospects", id: String(row.id), changes: { last_contact_at: at, ...(row.stage === "Inquiry" ? { stage: "Contacted" } : {}) } }],
-      [
-        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "prospect", party_id: row.id, subject: input.subject ?? "Still looking for a new home?", entity_type: "prospects", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
-        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "leasing", sent_at: at } },
-      ]);
-    return ok(`Follow-up sent to ${row.name}`);
+  when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
+  input: FollowUp,
+  handler: sendFollowUp,
+});
+
+// The one-click version for the record header, the drawer and bulk sends: the standard note.
+registerAction({
+  key: "prospects.follow_up",
+  label: "Send follow-up",
+  entity: "prospects",
+  roles: LEASING,
+  icon: Send,
+  bulk: true,
+  when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
+  confirm: { title: "Send a follow-up?", body: "Sends the standard follow-up email from you and logs the contact. To edit the wording first, use Draft under Follow-ups due on My leasing day." },
+  help: { summary: "Emails the lead a short follow-up offering a tour and logs the contact. Each lead gets at most one follow-up a day.", article: "leasing-pipeline-board" },
+  handler: (ctx, row) => sendFollowUp(ctx, row, {}),
+});
+
+registerAction({
+  key: "prospects.draft_follow_up",
+  ai: true,
+  label: "Draft follow-up with AI",
+  entity: "prospects",
+  roles: LEASING,
+  icon: Sparkles,
+  when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
+  help: { summary: "The Leasing agent drafts a short follow-up from the lead's stage, budget and beds wanted. You edit it before sending.", article: "leasing-pipeline-board" },
+  input: NO_INPUT,
+  async handler(ctx, row) {
+    const { draftFollowUp } = await ai();
+    const r = await draftFollowUp(ctx, row);
+    return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
 });
 

@@ -62,11 +62,13 @@ export async function todaysTours(c: LeasingCtx, agentId?: string) {
 export async function followUps(c: LeasingCtx, limit = 8) {
   const s = scope(c, "pr.property_id");
   const where = `pr.stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) BETWEEN 3 AND 30${s.sql}`;
-  const [rows, total] = await Promise.all([
+  const [rows, total, ids] = await Promise.all([
     all(c, `SELECT pr.id, pr.name, pr.stage, pr.source, pr.desired_beds, pr.budget_cents, p.name AS property, CAST(julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) AS INTEGER) AS days FROM ${E(c, "prospects")} pr JOIN ${E(c, "properties")} p ON p.id = pr.property_id WHERE ${where} ORDER BY CASE pr.stage WHEN 'Toured' THEN 0 ELSE 1 END, days LIMIT ?`, [AS_OF, AS_OF, ...s.binds, limit]),
     all<{ n: number }>(c, `SELECT count(*) AS n FROM ${E(c, "prospects")} pr WHERE ${where}`, [AS_OF, ...s.binds]),
+    // Every due lead, for "Send all" (capped; the next batch shows once these are contacted).
+    all<{ id: string }>(c, `SELECT pr.id FROM ${E(c, "prospects")} pr WHERE ${where} ORDER BY pr.id LIMIT 200`, [AS_OF, ...s.binds]),
   ]);
-  return { rows, total: Number(total[0]?.n ?? 0) };
+  return { rows, total: Number(total[0]?.n ?? 0), ids: ids.map((r) => String(r.id)) };
 }
 
 // Proposals from the Leasing and Renewals agents still waiting on a person, newest risk first.

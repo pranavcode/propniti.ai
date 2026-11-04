@@ -120,3 +120,36 @@ test("broker: scores an application with reasons and decides it on the record", 
   await expect(page.getByText(/Conditional by Rachel Moore/).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("follow-ups: AI draft edited and sent, then Send all, and Send follow-up on the record", async ({ page, context }) => {
+  await as(context, "lena");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/leasing/today`);
+  const section = page.locator("[data-tour=leasing-followups]");
+  await expect(section).toBeVisible(FIRST_PAINT);
+
+  // Draft opens an editable AI draft in place (not the chat), with its run; Send sends the edit.
+  const draft = section.getByRole("button", { name: /^Draft a follow-up to / }).first();
+  const who = (await draft.getAttribute("aria-label"))!.replace("Draft a follow-up to ", "");
+  await draft.click();
+  const message = section.getByRole("textbox", { name: "Message", exact: true });
+  await expect(message).not.toHaveValue("", { timeout: 60_000 });
+  await expect(section.getByRole("link", { name: "View run" })).toHaveAttribute("href", /\/app\/ai\/runs\//);
+  await message.fill(`${await message.inputValue()}\nP.S. Saturday tours are open too.`);
+  await section.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByText(`Follow-up sent to ${who}`)).toBeVisible(FIRST_PAINT);
+
+  // Send all: confirm, progress, summary.
+  await page.getByRole("button", { name: /^Send all \d+/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Send \d+$/ }).click();
+  await expect(page.getByRole("dialog").getByText(/^Sent \d+/)).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+
+  // A lead record has the one-click action (with a confirmation).
+  const list = await (await page.request.get(`${BASE}/api/e/prospects?f.stage=Inquiry&size=1`)).json();
+  await go(page, `${BASE}/app/leasing/prospects/${list.rows[0].id}`);
+  await page.getByRole("button", { name: "Send follow-up" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText(/Follow-up sent to|already got a follow-up today/)).toBeVisible(FIRST_PAINT);
+  expect(errors).toEqual([]);
+});
