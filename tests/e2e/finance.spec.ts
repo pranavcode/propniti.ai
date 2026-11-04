@@ -52,7 +52,8 @@ test("report builder turns a question into a validated report", async ({ page })
   await go(page, `${BASE}/app/reports?ask=${encodeURIComponent("show me utilities by property for Q3 vs budget")}`);
   await expect(page.getByText(/Utilities/i).first()).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Export CSV/ })).toBeVisible();
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /^CSV/ })).toBeVisible();
 });
 
 test("reconciliation shows AI-suggested matches and an unexplained deposit; capex flags overruns", async ({ page }) => {
