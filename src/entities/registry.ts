@@ -34,11 +34,11 @@ export function getEntityByRoute(pathname: string): { def: EntityDef; id?: strin
 
 // Custom pages that are not entity lists (Dashboard, Inbox, Copilot, Reports, Settings…) join
 // the sidebar through here.
-export type NavPage = { key: string; label: string; href: string; icon: LucideIcon; section: NavSection; group?: string; order: number; roles: Role[] };
+export type NavPage = { key: string; label: string; href: string; icon: LucideIcon; section: NavSection; group?: string; order: number; roles: Role[]; ai?: boolean };
 const pages = new Map<string, NavPage>();
 export const registerPage = (page: NavPage) => (pages.set(page.key, page), page);
 
-export type NavItem = { key: string; label: string; href: string; icon: LucideIcon; group?: string; order: number };
+export type NavItem = { key: string; label: string; href: string; icon: LucideIcon; group?: string; order: number; ai?: boolean };
 export type NavGroup = { section: NavSection; items: NavItem[] };
 
 // Sidebar for a role: entities it can read plus pages it may open, grouped by section in order.

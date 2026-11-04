@@ -740,19 +740,19 @@ Good to know: nothing in the audit log can be edited or deleted, including by an
   },
   {
     id: "automation-rules",
-    title: "Automation rules and run history",
-    body: `An automation rule fires an action automatically on a trigger and conditions, such as a schedule or a status change — anything that moves money or changes a lease still waits for approval.
+    title: "Agent schedules, events and run history",
+    body: `Agents run on a schedule, when an event they listen for happens, or when someone presses **Run now**. Every run is recorded.
 
-1. Open **Settings → Automations** to see every rule, its trigger, and whether it's **On** or **Off**.
-2. Open a rule to see its **trigger** (a schedule, a status change, a new record), its **conditions**, and the **action** it runs (a notification, a task, or a named action).
-3. Choose **Run now** on a matching record to test a rule before relying on it.
-4. Open **Settings → Automations → Runs** to see every past run: which record it fired on, whether it succeeded, was skipped, or needs approval, and why.
-5. Toggle a rule **Off** to pause it without deleting its configuration or history.
+1. Open **Automations** to see each agent's schedule, the events that start it, its last run and when it is next due.
+2. The **Event triggers** table shows what raises each event (for example, marking a payment returned raises *Payment returned* for the Collections agent) and how many are waiting.
+3. A sweep runs every 15 minutes and starts one piece of work: the scheduled agent that has waited longest, or one agent's queued events.
+4. Open **AI activity** to see every run: what started it, its steps, the proposals it made and whether it failed.
+5. To turn an agent off, or change its autonomy or schedule, use the **Agents** page. Only principals, regional managers and admins can, because these settings apply to the whole organization.
 
-Good to know: automations can send notifications and create tasks entirely on their own, but they never bypass who's allowed to approve a bill, work order or lease change — they trigger the request, a person still approves it. A rule's full run history stays attached to the rule itself, so you can audit exactly what it has and hasn't done.`,
-    tags: ["automation", "rules", "workflow", "settings"],
-    entity_type: "automation_rules",
-    route: "/app/settings/automations",
+Good to know: agents never move money on their own. They propose, and money, legal and safety actions wait for a person unless an approval policy allows them.`,
+    tags: ["automation", "agents", "runs", "schedule"],
+    entity_type: null,
+    route: "/app/automations",
   },
   {
     id: "data-health",

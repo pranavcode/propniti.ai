@@ -1,0 +1,27 @@
+Rent Roll with Lease Charges
+As of: 11/04/2026
+"Sample data — synthetic, for testing imports"
+
+Property,Unit,Unit Type,Unit Sq Ft,Resident,Name,Market Rent,Charge Code,Amount,Resident Deposit,Other Deposit,Move In,Lease Expiration,Move Out,Balance
+Sonoran Vista,101,,650,t004192,Luis Okafor,"$1,100.00",rent,1075.00,$500.00,,02/01/2026,01/31/2027,,$0.00
+,,,,,,,petrent,35.00,,,,,,
+Sonoran Vista,102,,710,t004193,Fatima Haddad,"$1,135.00",rent,1120.00,$500.00,,05/01/2026,04/30/2027,,$325.50
+Sonoran Vista,103,,770,t004194,Owen Rahman,"$1,170.00",rent,1145.00,$500.00,,08/01/2026,07/31/2027,,$0.00
+,,,,,,,petrent,35.00,,,,,,
+Sonoran Vista,201,,830,t004195,Julia Dubois,"$1,205.00",rent,1190.00,$500.00,,11/01/2026,10/31/2027,,"$1,210.00"
+,,,,,,,petrent,35.00,,,,,,
+,,,,,,,parking,50.00,,,,,,
+Sonoran Vista,202,,890,,VACANT,"$1,240.00",,,,,,,,
+Sonoran Vista,203,,950,t004197,Daniel Whitfield,"$1,275.00",rent,1260.00,$500.00,,06/01/2026,,,$0.00
+,,,,,,,petrent,35.00,,,,,,
+,,,,,,,parking,50.00,,,,,,
+Saguaro Point,A1,,650,t004198,Grace Pierce,"$1,250.00",rent,1225.00,$500.00,,09/01/2026,08/31/2027,,$0.00
+,,,,,,,petrent,35.00,,,,,,
+Saguaro Point,A2,,710,t004199,Chinedu O'Neill,"$1,285.00",rent,1270.00,$500.00,,01/01/2026,12/31/2027,,$325.50
+Saguaro Point,A3,,770,t004200,Sara Petrov,"$1,320.00",rent,1295.00,$500.00,,04/01/2026,03/31/2027,,$0.00
+,,,,,,,petrent,35.00,,,,,,
+Saguaro Point,A4,,830,t004201,Marcus Farah,"$1,355.00",rent,1340.00,$500.00,,07/01/2026,06/30/2027,,"$1,210.00"
+,,,,,,,parking,50.00,,,,,,
+Saguaro Point,A5,,890,,VACANT,"$1,390.00",,,,,,,,
+Saguaro Point,A6,,950,t004203,Elena Shah,"$1,425.00",rent,1410.00,$500.00,,02/01/2026,,,$0.00
+,,,,,,,parking,50.00,,,,,,

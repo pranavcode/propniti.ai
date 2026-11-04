@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AgentsCenter } from "@/ai/ui/AgentsCenter";
 import { pageData } from "@/ai/ui/server";
 import { agentCards, aiStatus } from "@/ai/views";
+import { canEditPolicies } from "@/ai/policy-editors";
 
 export const metadata = { title: "Agents · Propniti" };
 
@@ -26,7 +27,7 @@ export default async function AgentsPage() {
         actions={<><Button asChild variant="outline" size="sm"><Link href="/app/ai/activity">All runs</Link></Button><Button asChild size="sm"><Link href="/app/ai/approvals">Approvals{pending ? ` (${pending})` : ""}</Link></Button></>}
       />
       <div className="mt-5">
-        <AgentsCenter agents={agents} status={status} canManage={access === "approve"} canRun={access !== "none"} />
+        <AgentsCenter agents={agents} status={status} canManage={canEditPolicies(persona.role)} canRun={access !== "none"} canEditPolicies={canEditPolicies(persona.role)} />
       </div>
     </main>
   );

@@ -1,6 +1,6 @@
 import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
-import { PERMISSIONS } from "@/auth/personas";
+import { canEditPolicies } from "@/ai/policy-editors";
 import { getAgent } from "@/ai/agents";
 import { parseCron } from "@/ai/cron";
 import { eff, insert, newId } from "@/ai/data";
@@ -21,7 +21,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ke
     const w = await writeSession(request, Patch, "write", { staff: true });
     if (w instanceof Response) return w;
     const { s, body } = w;
-    if (PERMISSIONS[s.actor.role].intelligence !== "approve") return json({ error: `${s.persona.title} can't change agent settings` }, { status: 403 });
+    // Agent settings apply to the whole org, so only the roles that set approval policies change them.
+    if (!canEditPolicies(s.actor.role)) return json({ error: `${s.persona.title} can't change agent settings` }, { status: 403 });
     if (body.schedule) {
       try {
         parseCron(body.schedule);

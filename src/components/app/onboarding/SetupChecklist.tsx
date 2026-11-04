@@ -14,7 +14,7 @@ export type SetupItem = { key: string; label: string; description: string; href:
 export const SETUP_ITEMS: SetupItem[] = [
   { key: "company", label: "Company profile", description: "Legal name, EIN, logo and business address.", href: "/app/settings/company", cta: "Edit profile", done: true },
   { key: "bank", label: "Connect trust and operating banks", description: "Link the accounts rent and owner payouts move through.", href: "/app/banking", cta: "Connect bank", done: true },
-  { key: "import", label: "Import properties and units", description: "Upload a rent roll; the AI maps columns and flags bad rows.", href: "/app/settings/import", cta: "Import", done: true },
+  { key: "import", label: "Import your portfolio", description: "Upload exports from your current tool; columns are matched and bad rows flagged before anything is saved.", href: "/app/settings/import", cta: "Import", done: true },
   { key: "roles", label: "Review roles and permissions", description: "Who can approve bills, post fees and see owner data.", href: "/app/settings/roles", cta: "Review roles", done: true },
   { key: "team", label: "Invite your team", description: "Property managers, leasing, accounting and maintenance.", href: "/app/settings/users?new=1", cta: "Invite", done: false },
   { key: "payments", label: "Set payment and late-fee rules", description: "Grace period, fee caps by state, and approval limits.", href: "/app/settings/payments", cta: "Set rules", done: false },

@@ -495,18 +495,18 @@ Good to know: policy changes are tracked with history — Settings → Policies 
   },
   {
     id: "automations-trigger-condition-action",
-    title: "Build an automation rule",
-    body: `An automation rule is a trigger, one or more conditions, and an action — for example, "when a work order is marked complete, and the cost is under $200, notify the owner."
+    title: "See what runs automatically",
+    body: `**Automations** lists everything that runs without someone pressing a button: the eight agents, the 15-minute sweep that starts them, the events that trigger them, and the approval rules they follow.
 
-1. Open **Automations** and choose **New rule**.
-2. Pick a **trigger** (a status change, a date, a new record, or a schedule).
-3. Add **conditions** to narrow when it fires, such as property, amount, or a field value.
-4. Choose the **action**: send a notification, create a task, or run a named action like posting a reminder message.
-5. Save and toggle the rule **On**. Test it with **Run now** on a matching record before relying on it.
+1. Open **Automations** from the Intelligence menu.
+2. Read each agent's **trigger**: its schedule (for example "Daily at 14:00") and the events it listens for (for example "Rent overdue").
+3. Check **Autonomy**. *Approve first* sends every action to the approvals inbox. *Auto within policy* lets low-risk actions under the approval-policy limits apply on their own.
+4. Open an agent's name to see its runs, and the last-run time to open that run's trace.
+5. Under **Approval rules**, see how much each kind of decision may apply alone and who approves above that.
 
-Good to know: automation rules can send notifications and create tasks on their own, but any action that moves money or changes a lease still goes through the normal approval flow — automations trigger the request, they don't bypass who's allowed to approve it. Each rule's run history is visible from the rule itself, so you can see exactly which records it fired on and what it did.`,
-    tags: ["automation", "rules", "workflow"],
-    entity_type: "automation_rules",
+Good to know: legal and safety actions, and anything high risk, always wait for a person. Agents check the approval policies before anything applies, and approving is refused if the record changed after the agent looked at it.`,
+    tags: ["automation", "agents", "schedule", "approval"],
+    entity_type: null,
     route: "/app/automations",
   },
   {

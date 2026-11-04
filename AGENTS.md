@@ -119,7 +119,7 @@ Rules for every lane:
 - **Personas: `src/auth/personas.ts`.** It holds 9 internal and platform roles (platform admin, principal, regional, property manager, leasing agent, broker, accountant, maintenance supervisor, admin) plus the owner, resident, vendor and applicant portals.
   - Each persona has a scope, a home route, quick actions and suggested assistant questions.
   - The chosen persona is stored in the `pn_as` cookie; `currentPersona()` in `src/auth/session.ts` reads it on the server.
-  - `PERMISSIONS` is the role × module matrix. The sign-in page lists every persona as a one-click demo user, with no passwords.
+  - `PERMISSIONS` is the role × module matrix. The sign-in page has an email and password form (demo emails `<id>@propniti.demo`, one published password `DEMO_PASSWORD`, checked server-side in `/api/session`) above every persona as a one-click card.
   - The seed must use the ids personas reference: regions `r-tx`, `r-se`, `r-sw`; properties `p01`–`p30`; owner `ow01`; resident `res-p01-0001`; vendor `v01`; applicant `apl-0001`.
 - **Schema: `migrations/0002_v2.sql`.** It has 106 tables. The header explains the conventions:
   - `workspace_id = 'base'` rows are shared and read-only. A visitor's overlay rows replace base rows that have the same id, and a `deleted = 1` overlay row hides a base row.

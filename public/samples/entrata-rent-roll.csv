@@ -1,0 +1,13 @@
+Property,Bldg-Unit,Unit Type,Resident,Lease Status,Lease Start,Lease End,Move-In,Market Rent,Rent,Deposit Held,Balance
+Camelback Station,101,,"Pierce, Grace",Current,08/01/2026,07/31/2027,08/01/2026,"$1,100.00","$1,075.00",$500.00,$0.00
+Camelback Station,102,,"O'Neill, Chinedu",Current,11/01/2026,10/31/2027,11/01/2026,"$1,135.00","$1,120.00",$500.00,$325.50
+Camelback Station,103,,"Petrov, Sara",Notice,03/01/2026,02/28/2027,03/01/2026,"$1,170.00","$1,145.00",$500.00,$0.00
+Camelback Station,201,,"Farah, Marcus",Current,06/01/2026,05/31/2027,06/01/2026,"$1,205.00","$1,190.00",$500.00,"$1,210.00"
+Camelback Station,202,,VACANT,Vacant-Unrented,,,,"$1,240.00","$1,240.00",,
+Camelback Station,203,,"Shah, Elena",Current,01/01/2026,,01/01/2026,"$1,275.00","$1,260.00",$500.00,$0.00
+Arcadia Row,A1,,"Ramirez, Omar",Current,04/01/2026,03/31/2027,04/01/2026,"$1,250.00","$1,225.00",$500.00,$0.00
+Arcadia Row,A2,,"Mora, Hannah",Current,07/01/2026,06/30/2027,07/01/2026,"$1,285.00","$1,270.00",$500.00,$325.50
+Arcadia Row,A3,,"Ortiz, Ravi",Notice,10/01/2026,09/30/2027,10/01/2026,"$1,320.00","$1,295.00",$500.00,$0.00
+Arcadia Row,A4,,"Nair, Lena",Current,02/01/2026,01/31/2027,02/01/2026,"$1,355.00","$1,340.00",$500.00,"$1,210.00"
+Arcadia Row,A5,,VACANT,Vacant-Unrented,,,,"$1,390.00","$1,390.00",,
+Arcadia Row,A6,,"Brooks, Aisha",Current,08/01/2026,,08/01/2026,"$1,425.00","$1,410.00",$500.00,$0.00
