@@ -93,3 +93,29 @@ test("Grace adds an org-wide task", async ({ page, context }) => {
   await expect(row).toContainText("Org-wide");
   expect(errors).toEqual([]);
 });
+
+test("Marcus snoozes a task and sends a drafted notice of entry", async ({ page, context }) => {
+  await as(context, "marcus");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/tasks`);
+  const first = page.locator("tbody tr").first();
+  const title = (await first.locator("a[data-peek-entity='tasks']").textContent())?.trim() ?? "";
+  await first.getByRole("button", { name: /More actions for/ }).click();
+  await page.getByRole("menuitem", { name: "Snooze…" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Next week" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Snooze", exact: true }).click();
+  await expect(page.getByText(`Snoozed "${title}"`)).toBeVisible();
+
+  const notice = page.locator("tbody tr", { hasText: "Send notice of entry" }).first();
+  if (await notice.count()) {
+    await notice.getByRole("button", { name: /More actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Draft notice" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("Message")).toHaveValue(/notice that our team will enter/);
+    await expect(dialog.getByLabel("Subject")).toHaveValue(/Notice of entry/);
+    await dialog.getByRole("button", { name: "Send notice" }).click();
+    await expect(page.getByText(/Notice sent to .* \(simulated\)/)).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});
+

@@ -99,3 +99,21 @@ test("technician view starts a job and logs time", async ({ page }) => {
   await expect(page.getByText(/Logged 30 min/)).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("a triage suggestion is dispatched from the home queue, and late make-readies escalate", async ({ page }) => {
+  const errors = watch(page);
+  await go(page, `${BASE}/app/maintenance`);
+  await expect(page.getByRole("button", { name: /Accept \d+ high-confidence suggestions?/ })).toBeVisible();
+  const row = page.locator("#triage li", { has: page.getByRole("button", { name: "Dispatch as suggested" }) }).first();
+  const id = (await row.textContent())?.match(/WO-\d+/)?.[0];
+  await row.getByRole("button", { name: "Dispatch as suggested" }).click();
+  // Within the auto-approve limit it's dispatched; over it, it goes to Approvals or waits for the owner.
+  await expect(page.getByText(new RegExp(`${id}( dispatched to|: .*Approvals| is on hold)`))).toBeVisible();
+
+  await go(page, `${BASE}/app/maintenance/turnovers?view=late`);
+  await page.locator("tbody tr").first().getByRole("checkbox").check();
+  await page.getByRole("toolbar", { name: "Bulk actions" }).getByRole("button", { name: /escalate/i }).click();
+  await expect(page.getByText(/1 of 1 done|Nothing was changed|escalated in the last/)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+

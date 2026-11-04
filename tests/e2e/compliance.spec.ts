@@ -52,3 +52,17 @@ test("legal cases are hidden from roles without access", async ({ page }) => {
   await go(page, `${BASE}/app/compliance`);
   await expect(page.getByRole("link", { name: "Legal and evictions" })).toHaveCount(0);
 });
+
+test("a lapsed vendor certificate is requested from the timeline, once", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await go(page, `${BASE}/app/compliance`);
+  await expect(page.getByText("Lapsed, needs action")).toBeVisible();
+  const request = page.getByRole("button", { name: "Request certificate" }).first();
+  await expect(request).toBeVisible();
+  await request.click();
+  await expect(page.getByText("Asked the vendor for a current certificate")).toBeVisible();
+  // The row now says when the vendor was asked instead of offering the button again.
+  await expect(page.getByText(/^Asked /).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
