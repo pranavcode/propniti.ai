@@ -143,14 +143,14 @@ export function ChartPanel({ c }: { c: ChartData }) {
   }
 
   return (
-    <section className="flex flex-col rounded-lg border bg-card">
+    <section className="flex h-full flex-col rounded-lg border bg-card">
       <header className="flex items-baseline justify-between gap-2 px-4 pt-3">
         <h3 className="text-[13px] font-semibold">{c.title}</h3>
         {c.drill && <span className="text-[11px] text-muted-foreground">Click to drill in</span>}
       </header>
       {c.error || !c.points.length
         ? <p className="px-4 py-10 text-center text-[12.5px] text-muted-foreground">{c.error ?? "No data for this period yet."}</p>
-        : <ChartContainer config={config} className={cn("w-full px-2 pb-2", c.kind === "hbar" ? "h-80" : "h-56")}>{chart}</ChartContainer>}
+        : <div className={cn("relative flex-1", c.kind === "hbar" ? "min-h-80" : "min-h-56")}><ChartContainer config={config} className="absolute inset-0 aspect-auto px-2 pb-2">{chart}</ChartContainer></div>}
       {c.source && <footer className="border-t px-4 py-1.5 text-[10.5px] text-muted-foreground">Source: {c.source}{c.asOf ? ` · through ${monthLabel(c.asOf)}` : ""}</footer>}
     </section>
   );

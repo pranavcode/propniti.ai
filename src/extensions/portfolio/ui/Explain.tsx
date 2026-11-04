@@ -194,7 +194,7 @@ export function ExplainableKpi({ metric, property, ...kpi }: KpiCardProps & { me
   const imp = useImprove({ metric, property, label: kpi.label, value: kpi.value, previous: kpi.previous, goodWhen: kpi.goodWhen, format: kpi.format, deltaLabel: kpi.deltaLabel });
   return (
     <div className="flex min-w-0 flex-col">
-      <KpiCard {...kpi} actions={<ExplainButton metric={metric} property={property} label={kpi.label} />} className={cn("flex-1", imp.shown && "rounded-b-none", kpi.className)} />
+      <KpiCard {...kpi} actions={<ExplainButton metric={metric} property={property} label={kpi.label}><span className="@max-[15rem]/kpi:sr-only">Explain</span></ExplainButton>} className={cn("flex-1", imp.shown && "rounded-b-none", kpi.className)} />
       {imp.strip}
     </div>
   );

@@ -68,7 +68,7 @@ export function KpiCard({ label, value, format = "count", previous, deltaLabel =
   // The whole card drills through a link stretched over it, so header buttons (Explain, the
   // definition tip) can sit in the same row without nesting interactive elements in a link.
   return (
-    <div className={cn("group/kpi relative flex flex-col rounded-lg border bg-card p-4 transition-[border-color,box-shadow]", href && "hover:border-foreground/20 hover:shadow-[0_1px_3px_oklch(0_0_0/0.06)] has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/60", className)}>
+    <div className={cn("group/kpi @container/kpi relative flex flex-col rounded-lg border bg-card p-4 transition-[border-color,box-shadow]", href && "hover:border-foreground/20 hover:shadow-[0_1px_3px_oklch(0_0_0/0.06)] has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/60", className)}>
       {href && <Link href={href} aria-label={`${label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
       <div className="-mt-1 flex h-6 items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
         <span className="truncate">{label}</span>
@@ -90,13 +90,13 @@ export function KpiCard({ label, value, format = "count", previous, deltaLabel =
       <div className="mt-auto flex items-end justify-between gap-2 pt-2">
         {delta ? (
           <span className="flex min-w-0 items-center gap-1 text-[12px]">
-            <span className={cn("inline-flex items-center rounded px-1 font-medium tabular-nums", flat ? "bg-muted text-muted-foreground" : good ? "bg-tone-success/10 text-tone-success" : "bg-tone-danger/10 text-tone-danger")}>
+            <span className={cn("inline-flex shrink-0 items-center rounded px-1 font-medium whitespace-nowrap tabular-nums", flat ? "bg-muted text-muted-foreground" : good ? "bg-tone-success/10 text-tone-success" : "bg-tone-danger/10 text-tone-danger")}>
               {flat ? "▬" : up ? "▲" : "▼"} {delta.replace(/^[+−]/, "")}
             </span>
             <span className="truncate text-muted-foreground">{deltaLabel}</span>
           </span>
         ) : <span />}
-        {spark && <Sparkline data={spark} tone={good == null || flat ? "neutral" : good ? "good" : "bad"} />}
+        {spark && <Sparkline className="shrink-0 @max-[10rem]/kpi:hidden" data={spark} tone={good == null || flat ? "neutral" : good ? "good" : "bad"} />}
       </div>
     </div>
   );

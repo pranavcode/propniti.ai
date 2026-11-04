@@ -58,10 +58,12 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
   else if (!data.length) body = <EmptyState compact kind="chart" title="No data for this period" description={empty ?? "Change the date range or filters."} className="py-6" />;
   else if (kind === "funnel") body = <Funnel data={data} x={x} series={series[0]!} onPoint={onPoint} />;
   else if (kind === "heatmap" && heatmap) body = <Heatmap data={data} row={x} {...heatmap} onPoint={onPoint} />;
-  else if (kind !== "heatmap") body = <Recharts kind={kind} data={data} x={x} series={series} height={height} onPoint={onPoint} />;
+  else if (kind === "donut") body = <Recharts kind={kind} data={data} x={x} series={series} height={height} onPoint={onPoint} />;
+  // Line, area and bar charts fill the card, so cards in one grid row end level; `height` is the minimum.
+  else if (kind !== "heatmap") body = <div className="relative flex-1" style={{ minHeight: height }}><div className="absolute inset-0 overflow-hidden"><Recharts kind={kind} data={data} x={x} series={series} height={height} onPoint={onPoint} /></div></div>;
 
   return (
-    <div className={cn("flex min-w-0 flex-col rounded-lg border bg-card", className)}>
+    <div className={cn("flex h-full min-w-0 flex-col rounded-lg border bg-card", className)}>
       <div className="flex items-start gap-2 px-4 pt-3.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -86,7 +88,7 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
           ))}
         </ul>
       )}
-      <div className="px-4 pt-3 pb-4">{body}</div>
+      <div className="flex flex-1 flex-col justify-center px-4 pt-3 pb-4">{body}</div>
       {footer && <div className="border-t px-4 py-2 text-[12px] text-muted-foreground">{footer}</div>}
     </div>
   );
