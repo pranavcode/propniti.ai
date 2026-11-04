@@ -6,7 +6,7 @@ import type { Db } from "@/lib/platform/types";
 import { openRun, runWithContext } from "@/ai/orchestrator";
 import { rejectProposal } from "@/ai/effects";
 import { checkDraft, letterDates } from "@/ai/rules";
-import type { AgentCtx } from "@/ai/runtime";
+import { modelTimeout, type AgentCtx } from "@/ai/runtime";
 import { protectedTargeting, withoutTargeting } from "@/extensions/leasing/fairHousing";
 import { abstractByRules, ABSTRACT_FIELDS, compareAbstract, fillTemplate, leaseDocument, type AbstractKey, type Comparison, type Extracted } from "./lib";
 import { insertRow, leaseRecord, one, overlayWrite, sql } from "./server";
@@ -35,7 +35,7 @@ async function structured<S extends z.ZodType>(ctx: AgentCtx, schema: S, system:
   const t0 = Date.now();
   await ctx.step({ kind: "tool_call", toolKey: `model.${tool}`, input: { model: ctx.model.info.label, chars: user.length }, ok: true });
   try {
-    const { value, usage } = await ctx.model.structured(schema, system, user, { timeoutMs: 20_000 });
+    const { value, usage } = await ctx.model.structured(schema, system, user, { timeoutMs: modelTimeout(ctx, 20_000) });
     ctx.addUsage(usage);
     ctx.modelUsed = ctx.model.info;
     await ctx.step({ kind: "tool_result", toolKey: `model.${tool}`, output: value, latencyMs: Date.now() - t0, ok: true });

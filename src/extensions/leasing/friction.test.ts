@@ -205,6 +205,30 @@ describe("fair-housing rewrite", () => {
     expect(d.description).not.toMatch(/young|kids/i);
     expect(r.href).toBe(`/app/ai/runs/${d.runId}`);
   });
+
+  it("gives the model the time left in the run, and skips it for the template near the deadline", async () => {
+    const structured = vi.fn(async (..._a: unknown[]): Promise<never> => { throw new Error("offline"); });
+    setModelForTests({ info: { provider: "anthropic", model: "claude-opus-5", label: "Test", native: true }, chat: () => new Promise(() => {}), structured });
+    try {
+      const ctx = await ctxFor("lena");
+      const draft = resolveAction("listings", "draft_description");
+      // A fresh run has its full 25 s budget, not a 5 s floor past the deadline.
+      expect((await runAction({ ...ctx, nowMs: Date.now() }, draft, "lst-fh", {})).status).toBe(200);
+      const timeoutMs = (structured.mock.calls[0][3] as { timeoutMs: number }).timeoutMs;
+      expect(timeoutMs).toBeGreaterThan(20_000);
+      expect(timeoutMs).toBeLessThanOrEqual(25_000);
+      // With 200 ms left the model isn't called; the template is used and the step says why.
+      structured.mockClear();
+      const r = await runAction({ ...ctx, nowMs: Date.now() - 24_800 }, draft, "lst-fh", {});
+      expect(r.status).toBe(200);
+      expect(structured).not.toHaveBeenCalled();
+      const { runId } = JSON.parse(String(r.message)) as { runId: string };
+      const out = await getPlatform().db.prepare("SELECT output FROM agent_steps WHERE run_id = ? AND ok = 0").bind(runId).all<{ output: string }>();
+      expect(out.results.map((x) => JSON.parse(x.output))).toContainEqual({ model_error: "deadline reached", fallback: "template" });
+    } finally {
+      setModelForTests(null);
+    }
+  });
 });
 
 describe("broker: reassign stale leads", () => {
