@@ -105,6 +105,7 @@ describe("applying fixes from Data Health", () => {
     expect(fixProposal(issue("bill_lines.gl_miscoded", "bill_lines", { changes: { gl_account_id: "gl-6100" } })).alwaysHuman).toBe(true);
     expect(fixProposal(issue("bills.something", "bills", { changes: { memo: "x" } })).alwaysHuman).toBe(true);
     expect(fixProposal(issue("units.rent_typo", "units", { changes: { market_rent_cents: 150000 } })).alwaysHuman).toBe(true);
+    expect(fixProposal(issue("vendors.bank_format", "vendors", { changes: { bank_last4: "1234" } })).alwaysHuman).toBe(true);
     const dup = fixProposal(issue("residents.possible_duplicate", "residents", { action: "residents.merge", params: { keep: "r1", merge: "r2" } }));
     expect(dup.alwaysHuman).toBe(true);
     expect((dup.payload as { effects: { kind: string }[] }).effects.map((e) => e.kind)).toEqual(["task"]);

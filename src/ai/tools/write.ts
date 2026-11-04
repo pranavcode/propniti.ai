@@ -77,7 +77,7 @@ registerTool({
 const HUMAN_RULES = /^(payments\.|owner_distributions\.|bank_transactions\.|vendors\.unverified_bank_change|leases\.rent_outlier)/;
 const LEDGER = /^(charges|payments|transfers|owner_distributions|bank_accounts|journal_entries|credits|bank_transactions)$/;
 const PAYABLES = /^(bills|bill_lines)$/;
-const MONEY_FIELD = /^gl_account_id$|_cents$/;
+const MONEY_FIELD = /^gl_account_id$|_cents$|^bank_/;
 
 type Fix = { changes?: Record<string, unknown>; action?: string; params?: Record<string, unknown>; why?: string[]; confidence?: number; source?: string; merge_into?: string };
 
