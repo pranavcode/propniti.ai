@@ -16,6 +16,7 @@ const links = [
   ["Docs", "/docs"],
 ];
 
+// dark: variants apply only under a .dark ancestor, which only /docs sets (it follows the app theme).
 // overDark: the page opens on a dark hero, so the bar starts transparent with light text and
 // turns solid once the visitor scrolls. Book-demo is the one marketing page with a light top.
 export function Nav({ overDark = false }: { overDark?: boolean }) {
@@ -41,7 +42,7 @@ export function Nav({ overDark = false }: { overDark?: boolean }) {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-30 transition-[background-color,box-shadow,color] duration-300 ease-out ${
-        light ? "bg-transparent text-white" : "bg-white/90 text-[oklch(0.2_0.018_220)] shadow-[0_1px_0_oklch(0.9_0.008_200)] backdrop-blur-md"
+        light ? "bg-transparent text-white" : "bg-white/90 text-[oklch(0.2_0.018_220)] shadow-[0_1px_0_oklch(0.9_0.008_200)] backdrop-blur-md dark:bg-[oklch(0.17_0.005_265)]/90 dark:text-[oklch(0.96_0.003_265)] dark:shadow-[0_1px_0_oklch(1_0_0/0.1)]"
       }`}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-8 px-4 sm:px-6">
@@ -52,7 +53,7 @@ export function Nav({ overDark = false }: { overDark?: boolean }) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <Link href="/login" className={`hidden h-9 items-center rounded-full px-4 text-[14px] sm:inline-flex ${light ? "hover:bg-white/10" : "hover:bg-black/5"}`}>Try the live demo</Link>
+          <Link href="/login" className={`hidden h-9 items-center rounded-full px-4 text-[14px] sm:inline-flex ${light ? "hover:bg-white/10" : "hover:bg-black/5 dark:hover:bg-white/10"}`}>Try the live demo</Link>
           <Link
             href="/book-demo"
             className={`hidden h-9 items-center rounded-full px-4 text-[14px] font-medium transition-colors duration-200 sm:inline-flex ${
@@ -75,11 +76,11 @@ export function Nav({ overDark = false }: { overDark?: boolean }) {
       <div
         id="mk-menu"
         inert={!open}
-        className={`border-t border-[oklch(0.9_0.008_200)] bg-white transition-[opacity,transform] duration-200 ease-out lg:hidden ${open ? "translate-y-0 opacity-100" : "pointer-events-none absolute inset-x-0 -translate-y-2 opacity-0"}`}
+        className={`border-t border-[oklch(0.9_0.008_200)] bg-white transition-[opacity,transform] dark:border-white/10 dark:bg-[oklch(0.17_0.005_265)] duration-200 ease-out lg:hidden ${open ? "translate-y-0 opacity-100" : "pointer-events-none absolute inset-x-0 -translate-y-2 opacity-0"}`}
       >
         <nav aria-label="Mobile" className="mx-auto flex max-w-7xl flex-col px-4 py-3 sm:px-6">
           {[...links, ["Try the live demo", "/login"], ["Book a demo", "/book-demo"]].map(([l, h]) => (
-            <a key={h} href={h} onClick={() => setOpen(false)} className="rounded-lg px-2 py-3 text-[17px] hover:bg-black/5">{l}</a>
+            <a key={h} href={h} onClick={() => setOpen(false)} className="rounded-lg px-2 py-3 text-[17px] hover:bg-black/5 dark:hover:bg-white/10">{l}</a>
           ))}
         </nav>
       </div>
