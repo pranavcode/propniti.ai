@@ -6,7 +6,7 @@ import { setModelForTests } from "../providers";
 import { startRun } from "../orchestrator";
 import { getAgent } from "../agents/registry";
 import { delinquency } from "../facts";
-import { clearImproveCache, planInput, executePlan, PlanConflict, planSummary, preview, REGISTRY } from "../improve";
+import { CACHE_MAX, clearImproveCache, improveCacheSize, planInput, executePlan, PlanConflict, planSummary, preview, REGISTRY } from "../improve";
 import { canImprove, improveKeyFor, isRed, type ImproveKey } from "../improve/meta";
 import "../agents";
 import { DANIEL, MARCUS, openFixture, TODAY, WS } from "./fixture";
@@ -329,6 +329,12 @@ describe("improve: review fixes", () => {
     expect(r).toMatchObject({ created: 1, dropped: 1 });
     expect(r.message).toContain("1 no longer qualified");
     await expect(executePlan(s(f, DANIEL), "delinquency", null, [{ action: "leases.offer_payment_plan", ids: ["l9"] }])).rejects.toThrow(PlanConflict);
+  });
+
+  it("keeps the preview cache bounded", async () => {
+    const f = setup();
+    for (let i = 0; i < CACHE_MAX + 10; i++) await preview(s(f, { ...DANIEL, personaId: `visitor-${i}` }), "vacancy", null);
+    expect(improveCacheSize()).toBe(CACHE_MAX);
   });
 
   it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {

@@ -24,7 +24,17 @@ export type ImproveSession = { db: Db; ws: string; actor: Actor };
 // Short cache per workspace, persona and card: the drivers and plan are read on click, and a second
 // click within a minute reuses them. Executing a plan clears the workspace's entries.
 const TTL_MS = 60_000;
+export const CACHE_MAX = 200;
 const cache = new Map<string, { at: number; value: Omit<Preview, "plan"> }>();
+export const improveCacheSize = () => cache.size;
+// Expired entries go on every write; past CACHE_MAX the oldest goes (a Map keeps insertion order).
+function remember(k: string, value: Omit<Preview, "plan">) {
+  const now = Date.now();
+  for (const [key, e] of cache) if (now - e.at >= TTL_MS) cache.delete(key);
+  cache.delete(k);
+  while (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
+  cache.set(k, { at: now, value });
+}
 const cacheKey = (s: ImproveSession, key: ImproveKey, property: string | null) => `${s.ws}|${s.actor.personaId}|${key}|${property ?? ""}`;
 export function clearImproveCache(ws?: string) {
   for (const k of cache.keys()) if (!ws || k.startsWith(`${ws}|`)) cache.delete(k);
@@ -75,7 +85,7 @@ export async function preview(s: ImproveSession, key: ImproveKey, property: stri
   let value = !opts.fresh && hit && Date.now() - hit.at < TTL_MS ? hit.value : null;
   if (!value) {
     value = await analyze(s, key, property);
-    cache.set(k, { at: Date.now(), value });
+    remember(k, value);
   }
   return { ...value, plan: await planSummary(s, key, property) };
 }
