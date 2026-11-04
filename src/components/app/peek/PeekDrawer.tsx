@@ -161,7 +161,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
         )}
 
         {p.summary !== false && (
-          <RecordSummary key={id} entity={p.entity} id={id} title={p.title} label={p.label.one} initial={p.summary} heading="h3" onAsk={onAsk} />
+          <RecordSummary key={id} entity={p.entity} id={id} label={p.label.one} initial={p.summary} heading="h3" />
         )}
 
         {p.health && p.health.length > 0 && (
