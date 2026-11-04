@@ -61,6 +61,13 @@ describe("entity list downloads", () => {
     expect(plain).not.toContain("Propniti");
   });
 
+  it("names the saved view only when it was applied", async () => {
+    const applied = await text(await pdfRoute.GET(req("/api/e/vendor_1099s/export.pdf?view=missing-w9", "grace"), p("vendor_1099s")));
+    expect(applied).toContain("View: Missing W-9");
+    const overridden = await text(await pdfRoute.GET(req("/api/e/vendor_1099s/export.pdf?view=missing-w9&q=acme", "grace"), p("vendor_1099s")));
+    expect(overridden).not.toContain("View: Missing W-9");
+  });
+
   it("refuses roles that can't read the entity, like the list does", async () => {
     expect((await xlsxRoute.GET(req("/api/e/residents/export.xlsx", "owner"), p("residents"))).status).toBe(403);
     expect((await pdfRoute.GET(req("/api/e/residents/export.pdf", "vendor"), p("residents"))).status).toBe(403);

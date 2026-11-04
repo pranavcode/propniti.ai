@@ -45,8 +45,10 @@ export function entityExport(request: Request, entity: string, format: Exclude<F
     if (limited) return limited;
     const def = getDef(entity);
     const raw = new URL(request.url).searchParams;
-    const view = def.list.savedViews?.find((v) => v.key === raw.get("view"))?.label;
-    const doc = await entityDoc(await readCtx(request), entity, parseListQuery(withView(def, raw)), { branded: raw.get("brand") !== "0", view });
+    const sp = withView(def, raw);
+    // withView skips the saved view when the URL carries its own filters, search or sort.
+    const view = sp !== raw ? def.list.savedViews?.find((v) => v.key === raw.get("view"))?.label : undefined;
+    const doc = await entityDoc(await readCtx(request), entity, parseListQuery(sp), { branded: raw.get("brand") !== "0", view });
     return file(doc, format, def.label.many);
   });
 }
