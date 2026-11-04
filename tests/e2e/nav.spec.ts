@@ -48,3 +48,23 @@ for (const [persona, home] of Object.entries(HOMES)) {
     await expect(page.locator(`nav[aria-label="Main"] a[href="${home}"][aria-current="page"]`)).toBeVisible();
   });
 }
+
+test("the section and group holding the current page open, other saved-closed sections stay closed", async ({ page, context }) => {
+  await as(context, "tom");
+  await go(page, "/app");
+  await page.evaluate(() => { localStorage.setItem("pn_nav_groups", "[]"); localStorage.setItem("pn_nav_closed", JSON.stringify(["operations", "intelligence"])); });
+  await go(page, "/app/maintenance/work-orders");
+  const nav = page.locator('nav[aria-label="Main"]');
+  await expect(nav.getByRole("button", { name: "Operations" })).toHaveAttribute("aria-expanded", "true");
+  await expect(nav.getByRole("button", { name: /^Maintenance/ })).toHaveAttribute("aria-expanded", "true");
+  await expect(nav.locator('a[href="/app/maintenance/work-orders"][aria-current="page"]')).toBeVisible();
+  await expect(nav.getByRole("button", { name: /AI agents/ })).toHaveAttribute("aria-expanded", "false");
+  // Closing the open section by hand still works.
+  await nav.getByRole("button", { name: "Operations" }).click();
+  await expect(nav.getByRole("button", { name: "Operations" })).toHaveAttribute("aria-expanded", "false");
+  // A record page under the list keeps the list highlighted.
+  await nav.getByRole("button", { name: "Operations" }).click();
+  const href = await page.locator("main a[href^='/app/maintenance/work-orders/']").first().getAttribute("href");
+  await go(page, href!);
+  await expect(nav.locator('a[href="/app/maintenance/work-orders"][aria-current="page"]')).toBeVisible();
+});
