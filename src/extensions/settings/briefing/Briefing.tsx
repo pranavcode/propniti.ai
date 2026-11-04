@@ -11,6 +11,7 @@ import { proposalsPage } from "@/ai/views";
 import type { DataCtx } from "@/ai/data";
 import { PageBody, Section } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
+import { CollapsibleSection } from "@/components/app/collapsible/Collapsible";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
@@ -119,13 +120,13 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           {canAi && (
-            <Section title="What needs you" description="Agent proposals over a policy limit, highest risk first. Approving runs the action and logs it." actions={needs > queue.rows.length ? <Link href="/app/ai/approvals" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline">All {needs} <ArrowRight className="size-3" /></Link> : undefined}>
+            <CollapsibleSection id="needs-you" title="What needs you" summary={`${needs.toLocaleString("en-US")} waiting${high ? `, ${high} high risk` : ""}`} description="Agent proposals over a policy limit, highest risk first. Approving runs the action and logs it." actions={needs > queue.rows.length ? <Link href="/app/ai/approvals" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline">All {needs} <ArrowRight className="size-3" /></Link> : undefined}>
               {!queue.rows.length ? (
                 <EmptyState compact kind="table" title="Nothing waiting on you" description="When an agent proposes something over your approval limit, it shows up here with its reasons and evidence." />
               ) : (
                 <div className="flex flex-col gap-2">{queue.rows.map((p) => <ProposalCard key={String(p.id)} p={p as unknown as ProposalJson} canApprove={PERMISSIONS[role].intelligence === "approve"} />)}</div>
               )}
-            </Section>
+            </CollapsibleSection>
           )}
 
           <Section title="Your tasks" actions={<Link href="/app/tasks" className="text-[12.5px] text-primary hover:underline">All tasks</Link>}>
@@ -147,7 +148,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
-          <Section title="Risks and anomalies">
+          <CollapsibleSection id="risks" title="Risks and anomalies" summary={riskList.length ? `${riskList.length} open` : "None open"}>
             {!riskList.length ? (
               <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-3 text-[12.5px] text-muted-foreground"><CheckCircle2 className="size-4 text-tone-success" />No open risks in your scope right now.</div>
             ) : (
@@ -162,7 +163,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
                 ))}
               </ul>
             )}
-          </Section>
+          </CollapsibleSection>
 
           <Section title="Overnight" description="What the agents did since yesterday." actions={<Link href="/app/agents" className="text-[12.5px] text-primary hover:underline">Agents</Link>}>
             {!byAgent.size ? (
