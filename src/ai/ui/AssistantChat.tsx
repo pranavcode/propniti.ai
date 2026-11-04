@@ -400,7 +400,7 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
   }, [turns, busy, card]);
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col", page && "min-h-[calc(100vh-10rem)]")}>
+    <div className="flex h-full min-h-0 flex-col">
       {slot && createPortal(<RecentMenu current={threadId} onOpen={(id) => void open(id)} onNew={reset} />, slot)}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {persona && shell && !shell.data.persona.portal && <RightNow persona={persona} nav={shell.data.nav.flatMap((s) => s.items.map((i) => i.href))} onAsk={(q) => void ask(q)} />}

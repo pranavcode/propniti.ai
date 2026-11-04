@@ -18,13 +18,13 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
   const open = sp.thread ? await threadMessages(data, persona.id, sp.thread, 100) : null;
   const m = modelInfo();
   return (
-    <main className="flex h-full flex-col">
+    <div className="flex h-full flex-col">
       <PageHeader icon={<Sparkles />} title="Copilot" description="Ask about your portfolio, tell Propniti what to do, or ask how something works. Answers show what was looked up; actions wait for your confirmation." meta={<span>Model: {m.label}</span>} />
-      <div className="mt-4 grid min-h-0 flex-1 gap-4 px-4 pb-6 md:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="hidden rounded-lg border bg-card lg:block">
+      <div className="mt-4 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 px-4 pb-6 md:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="hidden min-h-0 flex-col rounded-lg border bg-card lg:flex">
           <div className="flex items-center justify-between border-b px-3 py-2 text-[13px] font-semibold">Conversations <Link href="/app/copilot" className="text-[12px] font-normal text-primary hover:underline">New</Link></div>
           {list.length ? (
-            <ul className="max-h-[70vh] overflow-y-auto py-1">
+            <ul className="min-h-0 flex-1 overflow-y-auto py-1">
               {list.map((t) => (
                 <li key={String(t.id)}>
                   <Link href={`/app/copilot?thread=${t.id}`} className={cn("block px-3 py-1.5 hover:bg-muted/50", sp.thread === t.id && "bg-muted")}>
@@ -36,11 +36,13 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
             </ul>
           ) : <p className="p-3 text-[12px] text-muted-foreground">Your conversations are saved here.</p>}
         </aside>
-        <section className="min-h-[60vh] overflow-hidden rounded-lg border bg-card">
-          {open?.thread.sample && <p className="border-b bg-muted/40 px-4 py-2 text-[12px] text-muted-foreground"><SampleTag /> <span className="ml-1">A sample conversation from the demo data. The answers were computed from that data by the rules assistant; ask a follow-up to continue it.</span></p>}
-          <AssistantChat key={sp.thread ?? "new"} page threadId={open ? sp.thread : undefined} initialTurns={open?.turns} suggestions={persona.assistantPrompts} />
+        <section className="flex min-h-[420px] flex-col overflow-hidden rounded-lg border bg-card">
+          {open?.thread.sample && <p className="shrink-0 border-b bg-muted/40 px-4 py-2 text-[12px] text-muted-foreground"><SampleTag /> <span className="ml-1">A sample conversation from the demo data. The answers were computed from that data by the rules assistant; ask a follow-up to continue it.</span></p>}
+          <div className="min-h-0 flex-1">
+            <AssistantChat key={sp.thread ?? "new"} page threadId={open ? sp.thread : undefined} initialTurns={open?.turns} suggestions={persona.assistantPrompts} />
+          </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

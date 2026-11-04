@@ -36,12 +36,12 @@ export default async function HelpArticlePage({ params }: PageProps<"/app/help/[
   const a = find((await params).slug);
   if (!a) notFound();
   return (
-    <main>
+    <div>
       <PageHeader title={a.title} meta={a.tags.length ? <span>{a.tags.join(" · ")}</span> : undefined} />
       <PageBody>
         <Body body={a.body} />
         {a.route && <Link href={a.route} className="inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary hover:underline">Go to the page <ArrowRight className="size-3.5" /></Link>}
       </PageBody>
-    </main>
+    </div>
   );
 }

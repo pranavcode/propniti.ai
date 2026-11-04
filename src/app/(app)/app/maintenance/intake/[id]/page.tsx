@@ -28,7 +28,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
   const id = decodeURIComponent(raw);
   const sp = await searchParams;
   const { actor, ws } = await currentSession();
-  if (!can(actor.role, "read", "work_orders")) return <main className="p-6"><EmptyState title="Work orders aren't part of your role" action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!can(actor.role, "read", "work_orders")) return <div className="p-6"><EmptyState title="Work orders aren't part of your role" action={{ label: "Go to your home", href: "/app" }} /></div>;
   const db = getPlatform().db;
   const wo = await getRow({ db, ws, actor }, "work_orders", id);
   if (!wo) notFound();
@@ -45,7 +45,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
   const canAct = can(actor.role, "work_orders.dispatch", "work_orders");
 
   return (
-    <main>
+    <div>
       <PageHeader
         title={String(wo.title)}
         meta={<><Link href={`/app/maintenance/work-orders/${encodeURIComponent(id)}`} className="hover:underline">{id}</Link><span>·</span><span>{String(wo.property_id__label)}{wo.unit_id__label ? ` · ${wo.unit_id__label}` : " · common area"}</span><span>·</span><span>Opened {formatDateTime(String(wo.opened_at))}</span><StatusBadge value={wo.status} /></>}
@@ -104,6 +104,6 @@ export default async function TriagePage({ params, searchParams }: Props) {
           </aside>
         </div>
       </PageBody>
-    </main>
+    </div>
   );
 }

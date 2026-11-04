@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // The inbox header, filter tabs and rows while items load.
 export default function Loading() {
   return (
-    <main className="flex flex-col gap-4 px-4 pt-5 md:px-6" aria-busy aria-label="Loading inbox">
+    <div className="flex flex-col gap-4 px-4 pt-5 md:px-6" aria-busy aria-label="Loading inbox">
       <div className="flex items-start gap-3">
         <Skeleton className="size-8 rounded-md" />
         <div className="flex flex-col gap-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3.5 w-96 max-w-full" /></div>
@@ -18,6 +18,6 @@ export default function Loading() {
           </div>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

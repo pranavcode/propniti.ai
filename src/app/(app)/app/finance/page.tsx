@@ -12,7 +12,7 @@ const ROLES = new Set(["principal", "regional_manager", "accountant"]);
 export default async function FinancePage() {
   const session = await currentSession();
   if (!ROLES.has(session.actor.role)) {
-    return <main className="p-6"><EmptyState kind="chart" title="Finance overview isn't part of your role" description="Switch role from your avatar menu to see this page as an accountant or principal." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState kind="chart" title="Finance overview isn't part of your role" description="Switch role from your avatar menu to see this page as an accountant or principal." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   return <FinanceHome session={session} />;
 }

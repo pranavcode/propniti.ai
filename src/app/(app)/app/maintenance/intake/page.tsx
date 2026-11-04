@@ -23,20 +23,20 @@ export default async function IntakePage({ searchParams }: { searchParams: Promi
   const one = (v: string | string[] | undefined) => (typeof v === "string" ? v.slice(0, 80) : undefined);
   const { actor, ws } = await currentSession();
   if (!can(actor.role, "create", "work_orders")) {
-    return <main className="p-6"><EmptyState title="You can't log maintenance requests in this role" description="Switch to the maintenance supervisor or a property manager from your avatar menu." action={{ label: "Back to maintenance", href: "/app/maintenance" }} /></main>;
+    return <div className="p-6"><EmptyState title="You can't log maintenance requests in this role" description="Switch to the maintenance supervisor or a property manager from your avatar menu." action={{ label: "Back to maintenance", href: "/app/maintenance" }} /></div>;
   }
   const properties = await intakeOptions(getPlatform().db, ws, actor);
   const property = one(sp.property);
   const unitId = one(sp.unit);
   const unit = unitId ? await getRow({ db: getPlatform().db, ws, actor }, "units", unitId).catch(() => null) : null;
   return (
-    <main>
+    <div>
       <PageHeader title="New maintenance request" description="Describe the problem in plain words and add a photo. The Maintenance Triage Agent suggests the trade, urgency, an estimate and the best vendor. Under your auto-approve limit it assigns that vendor itself; above it, you choose." />
       <PageBody>
         {properties.length
           ? <IntakeForm properties={properties} photos={SAMPLE_PHOTOS.map((url) => ({ url, label: PHOTO_TAGS[photoTag(url)!].label }))} examples={EXAMPLES} initial={{ property, unit: unit && unit.property_id === property ? { id: unitId!, label: String(unit._title ?? unitId) } : undefined }} />
           : <EmptyState title="No properties in your scope" description="Requests are logged against a property you manage." />}
       </PageBody>
-    </main>
+    </div>
   );
 }

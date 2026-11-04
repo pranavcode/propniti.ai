@@ -56,7 +56,7 @@ function Card({ w }: { w: Row }) {
 export default async function BoardPage({ searchParams }: Props) {
   const sp = await searchParams;
   const { actor, ws } = await currentSession();
-  if (!can(actor.role, "read", "work_orders")) return <main className="p-6"><EmptyState title="Work orders aren't part of your role" action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!can(actor.role, "read", "work_orders")) return <div className="p-6"><EmptyState title="Work orders aren't part of your role" action={{ label: "Go to your home", href: "/app" }} /></div>;
   const db = getPlatform().db;
   const calendar = sp.view === "calendar";
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : AS_OF.slice(0, 7);
@@ -76,7 +76,7 @@ export default async function BoardPage({ searchParams }: Props) {
   );
 
   return (
-    <main>
+    <div>
       <PageHeader title="Work orders" meta={<><span>{actor.scope.label}</span><span>·</span><span className="tabular-nums">{total} open</span></>}
         actions={<>{toggle}{can(actor.role, "create", "work_orders") && <Button asChild size="sm"><Link href="/app/maintenance/intake"><ClipboardPlus />New request</Link></Button>}</>}>
         {!calendar && (
@@ -114,7 +114,7 @@ export default async function BoardPage({ searchParams }: Props) {
           <Calendar month={month} rows={days ?? []} sp={sp} />
         )}
       </PageBody>
-    </main>
+    </div>
   );
 }
 

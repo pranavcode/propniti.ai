@@ -22,7 +22,7 @@ const SORTS: Record<string, string> = { paid: "paid_ytd DESC", open: "open_cents
 export default async function Page({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
   const session = await currentSession();
   if (!["principal", "regional_manager", "accountant"].includes(session.actor.role)) {
-    return <main className="p-6"><EmptyState kind="table" title="Vendor payments aren't part of your role" description="Switch to the accountant from your avatar menu." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState kind="table" title="Vendor payments aren't part of your role" description="Switch to the accountant from your avatar menu." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const sort = (await searchParams).sort ?? "paid";
   const { db } = getPlatform();
@@ -50,7 +50,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   );
 
   return (
-    <main>
+    <div>
       <PageHeader icon={<Users />} title="Vendor payments" description={`What each vendor was paid in ${year}, what is still owed, and their tax and bank status. Vendor records live under Maintenance → Vendors.`}
         meta={<><span>{rows.length} vendors</span><span>·</span><span>{rows.filter(held).length} on payment hold</span></>} />
       <PageBody>
@@ -84,6 +84,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
           </div>
         </div>
       </PageBody>
-    </main>
+    </div>
   );
 }
