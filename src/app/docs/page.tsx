@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Arrow, Bezel, Eyebrow, ease } from "@/components/marketing/parts";
 import { BackLinks, snapshotLabel } from "@/components/docs/parts";
 import { DOCS, renderedDoc } from "@/lib/docs";

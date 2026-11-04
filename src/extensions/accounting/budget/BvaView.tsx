@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Sparkles } from "lucide-react";
 import { AIBadge } from "@/components/app/ai";
 import { ChartCard } from "@/components/app/dashboard";

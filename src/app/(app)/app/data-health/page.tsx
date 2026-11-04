@@ -1,5 +1,5 @@
 import { HeartPulse } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { PageHeader } from "@/components/app/page";
 import { Button } from "@/components/ui/button";
 import { DataHealthCenter } from "@/ai/ui/DataHealthCenter";

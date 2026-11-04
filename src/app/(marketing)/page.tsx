@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, Check, FileClock, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { AGENTS, BOOK_HREF, DEMO_HREF, FAQ, INTEGRATIONS, PERSONAS_MKT, PILLARS, PLANS } from "@/components/marketing/content";
 import { PersonaTabs } from "@/components/marketing/PersonaTabs";

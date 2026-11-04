@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Archive, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";

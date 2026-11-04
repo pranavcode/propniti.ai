@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ChevronRight, Megaphone } from "lucide-react";
 import { EmptyState } from "@/components/app/states";
 import { pageCtx, scopeIn, sql, one } from "../server";

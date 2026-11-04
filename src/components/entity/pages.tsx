@@ -1,5 +1,5 @@
 import "server-only";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { notFound } from "next/navigation";
 import { ChevronRight, CircleHelp, Sparkles } from "lucide-react";
 import { allEntities, can, getEntity, type ChartDef, type EntityDef, type KpiDef, type ListQuery, type Row, type TabDef } from "@/entities";
