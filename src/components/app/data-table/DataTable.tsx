@@ -204,6 +204,8 @@ export function DataTable(props: DataTableProps) {
   const tabValue = statusTabs ? readValues(params, statusTabs.field) : [];
   // The clicked tab reads as selected at once, while its rows load (the URL changes when they arrive).
   const [clickedTab, setClickedTab] = useState<string | null>(null);
+  // Forget the click once the load ends, so a later Back/Forward or filter change shows the URL's tab.
+  if (!pending && clickedTab != null) setClickedTab(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const tabEdges = useScrollEdges(tabsRef);
   const tableEdges = useScrollEdges(scrollRef);
