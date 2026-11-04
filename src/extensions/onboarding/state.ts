@@ -59,6 +59,17 @@ export function applyPatch(s: OnboardingState, p: OnboardingPatch): OnboardingSt
   };
 }
 
+// Runs async tasks one at a time, in call order. Each save is a read-modify-write of the one stored
+// record, so two in flight (a rule saved, then Continue clicked straight away) lose the first.
+export function oneAtATime() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <R,>(task: () => Promise<R>): Promise<R> => {
+    const run = tail.then(task);
+    tail = run.catch(() => undefined);
+    return run;
+  };
+}
+
 // A stored record that no longer parses (an older shape) starts over rather than failing the page.
 export function parseState(v: unknown): OnboardingState {
   const r = OnboardingPatch.safeParse(v ?? {});
