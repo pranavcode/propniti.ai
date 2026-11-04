@@ -1,12 +1,14 @@
 import { deleteRecord, getDef, getRow, QueryError, relations, updateRecord, writeSchema } from "@/server/query";
 import { Empty } from "@/lib/requests";
 import { actionsForRow } from "@/server/permissions";
+import { peekData } from "@/components/entity/peek";
 import { handle, json, readCtx, writeCtx } from "../../_lib/http";
 
 type Ctx = { params: Promise<{ entity: string; id: string }> };
 
 // GET /api/e/[entity]/[id]: the record, its relations (?relations=0 to skip) and the actions
-// this role may run on it.
+// this role may run on it. ?peek=1 instead returns the record page header data the peek drawer
+// shows (facts, status, data health, AI summary, related counts, edit fields).
 export async function GET(request: Request, { params }: Ctx) {
   return handle(async () => {
     const { entity, id } = await params;
@@ -14,7 +16,9 @@ export async function GET(request: Request, { params }: Ctx) {
     const def = getDef(entity);
     const row = await getRow(ctx, entity, id);
     if (!row) throw new QueryError(404, `${def.label.one} not found`);
-    const withRelations = new URL(request.url).searchParams.get("relations") !== "0";
+    const sp = new URL(request.url).searchParams;
+    if (sp.get("peek") === "1") return json({ row, peek: await peekData(ctx, def, row) });
+    const withRelations = sp.get("relations") !== "0";
     return json({
       row,
       relations: withRelations ? await relations(ctx, def, row) : undefined,

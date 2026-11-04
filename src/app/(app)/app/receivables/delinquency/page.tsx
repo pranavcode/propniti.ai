@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { staffSession } from "@/extensions/receivables/staff";
 import Link from "next/link";
+import { PeekLink } from "@/components/app/peek/PeekLink";
 import { ArrowRight, X } from "lucide-react";
 import { can } from "@/entities";
 import { Money } from "@/components/app/display";
@@ -68,7 +69,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
               {props.map((r) => (
                 <tr key={r.property_id} className={cn("border-t", property === r.property_id && "bg-primary/[0.05]")}>
                   <th scope="row" className="max-w-0 px-3 py-1.5 text-left font-normal">
-                    <Link href={`/app/properties/${r.property_id}`} className="block truncate font-medium hover:text-primary hover:underline">{r.name}</Link>
+                    <PeekLink entity="properties" id={r.property_id} href={`/app/properties/${r.property_id}`} className="block truncate font-medium hover:text-primary hover:underline">{r.name}</PeekLink>
                     <span className="block text-[11.5px] text-muted-foreground">{r.metro} · {r.units} units</span>
                   </th>
                   {COLS.map((c) => {
@@ -137,7 +138,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
                   {drill.rows.map((r) => (
                     <tr key={r.lease_id} className="border-t hover:bg-muted/30">
                       <td className="max-w-0 px-3 py-1.5">
-                        {r.resident_id ? <Link href={`/app/residents/${r.resident_id}`} className="block truncate font-medium hover:text-primary hover:underline">{r.household}</Link> : <span className="block truncate font-medium">{r.household}</span>}
+                        {r.resident_id ? <PeekLink entity="residents" id={r.resident_id} href={`/app/residents/${r.resident_id}`} className="block truncate font-medium hover:text-primary hover:underline">{r.household}</PeekLink> : <span className="block truncate font-medium">{r.household}</span>}
                         <span className="block truncate text-[11.5px] text-muted-foreground">{r.lease_id} · {r.lease_status}{r.rent_cents ? <> · rent <Money value={r.rent_cents} cents style="whole" tone="none" /></> : null}</span>
                       </td>
                       <td className="px-3 text-muted-foreground">{r.property} #{r.unit}</td>
