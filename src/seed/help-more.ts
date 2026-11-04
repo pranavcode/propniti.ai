@@ -517,15 +517,15 @@ Good to know: applicants see their application's stage, but never the internal a
   {
     id: "prepare-1099s",
     title: "Prepare 1099s",
-    body: `Propniti drafts a 1099 for every 1099-eligible vendor paid $600 or more by an owner entity in the year, and flags anything that needs attention before filing.
+    body: `Propniti drafts a 1099 for every 1099-eligible vendor paid at or above the IRS reporting threshold for the tax year by an owner entity (the 1099s page shows the threshold it applies), and flags anything that needs attention before filing.
 
 1. Open **Finance → 1099s** to see draft and filed 1099s by vendor and year.
 2. Each draft totals payments from owner entities for that vendor across the year, pulled directly from paid bills.
-3. Vendors missing a **W-9 on file** while flagged as 1099 vendors and paid over $600 are highlighted — you need the W-9 before filing.
+3. Vendors missing a **W-9 on file** while flagged as 1099 vendors and paid at or above the threshold are highlighted — you need the W-9 before filing.
 4. Review each draft's amount against the vendor's paid-bill history if anything looks off, then mark it ready.
 5. Filed 1099s from prior years stay on the vendor's record for reference, with their filed date.
 
-Good to know: a vendor paid just under $600 won't get a draft automatically, since the threshold is a hard cutoff, not a rounding judgment — check manually if you believe a vendor is close. Filing itself happens outside Propniti (through your tax software or provider); this page prepares and checks the numbers, it doesn't submit to the IRS.`,
+Good to know: a vendor paid below the threshold won't get a draft, since the threshold is a hard cutoff. Vendors within 15% below it are marked **Near threshold**, because December payments could make them reportable. Filing itself happens outside Propniti (through your tax software or provider); this page prepares and checks the numbers, it doesn't submit to the IRS.`,
     tags: ["1099s", "vendors", "tax", "finance"],
     entity_type: "vendor_1099s",
     route: "/app/finance/1099",
