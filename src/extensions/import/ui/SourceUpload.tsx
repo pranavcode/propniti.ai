@@ -27,7 +27,8 @@ export function SourceStep({ tool, setTool, recent, onUndo, busy, onNext, onSamp
           <h2 className="text-[14px] font-semibold">Where is your portfolio today?</h2>
           <p className="text-[12.5px] text-muted-foreground">Pick the tool you&apos;re moving from. Its usual export columns are matched for you; anything else can be matched by hand. No files handy? Each tool has sample files: choose <span className="font-medium text-foreground">Try samples</span>.</p>
         </div>
-        <div role="radiogroup" aria-label="Source tool" className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
+        {/* A group, not a radiogroup: each tile also holds its own "Try samples" button. */}
+        <div role="group" aria-label="Source tool" className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
           {TOOLS.map((t) => (
             <div key={t.key} data-tool-tile className={cn("flex min-w-0 flex-col rounded-md border transition-colors", tool === t.key && "border-primary bg-primary/[0.06] ring-1 ring-primary")}>
               <button type="button" role="radio" aria-checked={tool === t.key} onClick={() => setTool(t.key)}

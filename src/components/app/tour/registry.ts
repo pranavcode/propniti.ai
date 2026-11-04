@@ -77,7 +77,7 @@ registerTour({
   roles: withModule("settings"),
   steps: [
     { href: "/app/settings/import", title: "Import data", body: "Bring your portfolio over from your current tool or a spreadsheet: properties, units, residents, leases, owners, vendors and open balances." },
-    { href: "/app/settings/import", target: '[role="radiogroup"][aria-label="Source tool"]', title: "Start from your tool", body: "Pick where your data lives today, then upload its export files.", placement: "bottom" },
+    { href: "/app/settings/import", target: '[role="group"][aria-label="Source tool"]', title: "Start from your tool", body: "Pick where your data lives today, then upload its export files.", placement: "bottom" },
     { href: "/app/settings/import", target: 'ol[aria-label="Import steps"]', title: "Six steps", body: "Source, files, columns, review, preview and done. The current step is highlighted here.", placement: "bottom" },
     { href: "/app/settings/import", title: "Nothing is written until you confirm", body: "Every value is checked, and the preview shows what will be added. A finished import can be undone." },
   ],
