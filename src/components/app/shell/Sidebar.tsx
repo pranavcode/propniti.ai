@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "@/components/Link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,7 @@ function entries(items: ShellNavItem[]): Entry[] {
 export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collapsed: boolean; onToggle?: () => void; className?: string; onNavigate?: () => void }) {
   const { data, openPalette, openSetup } = useShell();
   const pathname = usePathname();
+  const router = useRouter();
   // The clicked item lights up at once; the pathname only changes once the next page arrives.
   const [clicked, setClicked] = useState<{ href: string; from: string } | null>(null);
   const active = clicked?.from === pathname ? clicked.href : activeHref(pathname, data.nav);
@@ -49,7 +50,13 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
     return () => clearTimeout(t);
   }, [clicked]);
   const navigate = (e: React.MouseEvent, href: string) => {
-    if (href !== pathname && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) setClicked({ href, from: pathname });
+    const plain = !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0);
+    // Clicking the page you're on would do nothing; refresh its data and go back to the top instead.
+    if (plain && href === pathname) {
+      e.preventDefault();
+      document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
+      router.refresh();
+    } else if (plain) setClicked({ href, from: pathname });
     onNavigate?.();
   };
   const [closed, setClosed] = useLocalStorage<string[]>("pn_nav_closed", []);
