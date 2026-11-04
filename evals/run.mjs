@@ -4,7 +4,7 @@
 //   EVAL_ONLY=extract npm run eval                 # only cases whose id contains "extract"
 // Exits 1 when the pass rate is below MIN_PASS (default 0.8). Fallbacks to mock count as not passed.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { gradeAgentRun, gradeExtract, gradeInsurance, gradeReport, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
+import { gradeAgentRun, gradeDetect, gradeExtract, gradeInsurance, gradeReport, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
 
 const BASE_URL = (process.env.BASE_URL || "https://propniti.ai").replace(/\/$/, "");
 const MIN_PASS = Number(process.env.MIN_PASS ?? 0.8);
@@ -115,6 +115,7 @@ async function main() {
       return postJson("/api/ai/import-map", { headers: table[0], samples: table.slice(1, 6) });
     }, gradeMap],
     ["Pasted notes", "import-parse", (c) => postJson("/api/ai/import-parse", { text: c.text }), gradeParse],
+    ["Onboarding file detection", "onboarding-detect", (c) => postJson("/api/onboarding/detect", { files: [{ id: "f1", name: "export.csv", headers: c.headers, samples: c.samples }] }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeDetect],
   ];
 
   const results = [];
