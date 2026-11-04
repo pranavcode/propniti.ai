@@ -68,16 +68,17 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Sign-in at `/login` with a demo email and password, or a one-click persona card; role switch from the avatar menu | Built | One published password, checked on the server in constant time; a cookie holds the chosen persona. Not an account system |
+| Sign-in at `/login` with a demo email and password, or a compact list of the 13 people beside the form (descriptions in *What each person sees* below); role switch from the avatar menu or the banner's *Switch* | Built | One published password, checked on the server in constant time; a cookie holds the chosen persona. Not an account system |
 | A home page per role | Built | See [Personas](#personas) for each landing page |
 | List pages for every record type, with search, filters, status tabs, saved and shared views, CSV export and server-side paging (25, 50 or 100 rows) | Built | Generated from each record type's definition |
+| *Select all N matching* for bulk actions, real bulk labels, *New* forms prefilled from the current filter, *View* links in toasts | Built | Bulk selection is rate limited |
 | Record pages with tabs, Activity, Notes, Tasks and Documents, an AI summary and a Data health panel | Built | Tabs appear when the record type supports them |
 | Record peek drawer: a list row opens the record in a side drawer (a bottom sheet on phones), with J and K to move between rows and *Open full page* | Built | The URL carries `?peek=<id>`, so a drawer can be linked |
 | ⌘K command palette: records, pages, quick actions and "Ask AI" | Built | |
 | Breadcrumbs: section and group names open their first page; *Home* opens the persona's home | Built | |
-| AI-powered pages marked in the sidebar and ⌘K with a sparkle (Inbox, Copilot, Agents, Approvals, AI activity, Automations, Data health) | Built | Tooltip: "AI-powered: agents propose, you approve" |
+| AI-powered pages marked in the sidebar and ⌘K with a sparkle (Inbox, Copilot, Agents, Approvals, AI activity, Automations, Data health); the *AI agents* section sits near the top of the sidebar | Built | Tooltip: "AI-powered: agents propose, you approve" |
 | Inbox at `/app/inbox`: conversations waiting on your reply, agent proposals you can decide, and your alerts, with tabs *All*, *Messages*, *Approvals* and *Alerts* | Built | 25 rows a page; a sidebar badge counts what needs you. *Reply* and *Review* open the page that does the work |
-| My tasks at `/app/tasks`: tasks assigned to you or your role, with *Open*, *Overdue*, *Today*, *Upcoming* and *Done* views, filters, *New task* and mark done or reopen | Built | Due dates use the demo date. A double click changes a task once |
+| My tasks at `/app/tasks`: tasks assigned to you or your role, with *Open*, *Overdue*, *Today*, *Upcoming* and *Done* views, filters, *New task*, mark done or reopen, *Snooze* and *Reassign* | Built | Due dates use the demo date. A double click changes a task once |
 | A record outside your scope opens an in-app page: "This record isn't in your scope or doesn't exist" | Built | Unknown and out-of-scope records look the same |
 | Locked records (paid bills, sent offers, ended leases) can't be edited | Partial | The server refuses the save; the Edit button still shows |
 | Natural-language list filter | Not built | The `/api/ai/nl-filter` route exists, but no list page calls it |
@@ -98,11 +99,12 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Requirement | Status | Notes |
 | --- | --- | --- |
 | Leasing day view: briefing, tours, follow-ups due, agent proposals | Built | Lena |
-| Pipeline board: move prospects between stages | Built | |
+| Pipeline board: move prospects between stages, with *Undo* | Built | |
+| Follow-ups: send one or *Send all*; stale leads followed up or reassigned in bulk; *Rewrite with AI* on drafts | Built | |
 | Listing editor with *Draft with AI* and a fair-housing language check | Built | Flagged wording blocks the save |
 | Application scoring with reasons for and against, and a recommendation | Built | Rules score; criminal history is never scored |
 | Broker decision on the application record: approve, approve with conditions, deny | Built | A conditional approval needs a reason |
-| Renewals: the agent prices an offer with reasons; a person accepts or edits, drafts with AI and sends | Built | |
+| Renewals: the agent prices an offer with reasons; a person accepts or edits, drafts with AI and sends; renewal drafts prepared in bulk and renewal follow-ups | Built | An approver's edits reach the sent message |
 
 ### Residents and communications
 
@@ -120,7 +122,8 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Requirement | Status | Notes |
 | --- | --- | --- |
 | Maintenance home: SLA KPIs, triage queue, approvals, invoices to approve, vendor insurance | Built | Tom |
-| Intake: a plain-language request is saved and triaged by the agent (trade, urgency, cost estimate, vendor) | Built | |
+| Intake: a plain-language request is saved and triaged by the agent (trade, urgency, cost estimate, vendor); *Dispatch as suggested* | Built | Uses the same decide rule; confidence is checked on the server |
+| Request certificates of insurance from vendors; vendor certificates prefilled and read by AI; escalate late make-readies | Built | |
 | Board and calendar of open work orders | Built | |
 | Technician view: start a job, log time, mark done | Built | |
 | Vendor invoice check against the purchase order, then *Approve and pay* once | Built | Rules only (totals within 2%, line groups, line sums, photos on file). Payment is blocked while a vendor bank change is unverified, or above the owner's limit without the owner's approval |
@@ -132,7 +135,9 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | --- | --- | --- |
 | Receivables: delinquency aging that drills to residents, ledgers and charges | Built | |
 | Record a payment; a double click records one payment | Built | Simulated money |
-| Collections workbench: a rules risk score with reasons, drafted reminders in English or Spanish | Built | |
+| Collections workbench: a rules risk score with reasons, drafted reminders in English or Spanish; *Remind* and *Record payment* from the delinquency list | Built | |
+| Payment run: pay approved bills in one run; bills over the limit go to staff approvers | Built | Simulated money |
+| Collection rate: the share of each month's own charges paid so far, never over 100% | Built | Paying down older balances no longer counts toward the current month |
 | Returned payments with a state-capped fee; deposit dispositions | Built | |
 | AP inbox: read an uploaded invoice, suggest GL coding, run payables checks, approve and pay | Built | Reading uses a vision model when one is configured; otherwise manual entry |
 | Hold payments on an unverified vendor bank change; a different person must verify it | Built | |
@@ -145,22 +150,27 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Eight agents on a schedule, on events and on *Run now* | Built | See [Agent behaviour](#agent-behaviour) |
+| Eight agents on a schedule, on events and on *Run now* | Built | See [Agent behaviour](#agent-behaviour). Agent names read in title case, for example *Collections Agent* |
 | Agents page: status, counters, autonomy, *Run now*, approval-policy limits | Built | `/app/agents` |
 | Approvals inbox with tabs *Needs you*, *Handled automatically*, *Waiting on others*, *Decided*; bulk approve of low-risk items | Built | `/app/ai/approvals` |
 | Approvals deep link: `?proposal=<id>` or `?record=applications/<id>` opens and highlights that proposal | Built | |
-| Approvals inbox filter controls | Partial | `?agent=` filters; there are no filter controls on the page |
+| Approvals inbox filters, *Approve all low-risk matching*, *Waiting on others* with *Notify approver* | Built | Bulk approval covers low-risk items only |
 | Owner approves proposals waiting on the owner | Partial | The owner portal lists repairs over the owner's limit. Agent proposals in *Waiting on others* don't appear there; a principal can decide them |
 | AI activity: every run with trigger, model, tokens and cost; an AI audit log | Built | `/app/ai/activity` |
 | Run trace that streams steps while the run is going | Built | `/app/ai/runs/<id>` |
 | Assistant (⌘J and `/app/copilot`): Ask, Do and Help modes; each turn is a traced run; saved conversations | Built | Do mode turns rent-reminder requests into proposals. `/app/copilot` lists the 30 most recent conversations; the side panel keeps a conversation for the session only |
 | *Ask Propniti* chat bubble on staff pages: opens the assistant with page-aware suggested questions, and offers one tip at a time from real data | Built | At most one tip per page view, two minutes apart and five per session; never during a tour, typing or a dialog. *Show tips* turns them off |
-| Chat history across sessions in the assistant panel | Not built | <!-- TODO: chat history (in flight) --> |
+| Chat history in the assistant panel: recent conversations per persona, *New*, open as a page | Built | |
+| *Ask about this* on a record: the assistant answers about that record, using its facts by name | Built | Also in the portals, limited to the person's own records |
+| *Right now* in the assistant panel: up to three one-click items from your counts (approvals waiting, past-due balances, data issues) | Built | |
+| Do mode can start agents | Built | Their proposals follow the normal approval rules |
+| *Improve with AI* on a red KPI (delinquency, occupancy, work-order SLA): drivers computed from the records, a plan of real agent actions with expected effects from history, and *Have agents do this* | Built | Proposals go through the normal approval rules; the card then shows what changed on the plan's records. A second plan for the same card is refused while one runs |
+| Definitions on labels: KPI, chart, column, filter, record-fact and autonomy labels show a plain-English definition on hover, focus or tap, with a *Learn more* link | Built | From field or KPI help first, then a glossary of property-management terms |
+| Help article pages at `/app/help/<id>` | Built | The assistant's help citations link here |
 | Readable run steps: each agent step as a plain sentence with linked record names, raw input and output behind *Technical details* | Built | Records outside the viewer's scope show their type only |
 | *Summarize with AI* on a record without a summary (record page and peek drawer) | Built | Same scope checks, figure checks and rules fallback as stored summaries; the result is kept in the visitor's copy |
-| *Improve with AI* | Not built | <!-- TODO: Improve with AI (in flight) --> |
 | AI summaries on records, computed from the record's current figures | Built | See [Source labels](#source-labels) |
-| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* | Built | Fixes that touch money, fraud or legal status, and anything not low risk, always wait in the approvals inbox, whoever clicks. A low-risk fix runs only if the person clicking may decide it |
+| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes*, filters from links, bulk apply up to 50 | Built | Fixes that touch money, fraud or legal status, and anything not low risk, always wait in the approvals inbox, whoever clicks. A low-risk fix runs only if the person clicking may decide it |
 | Automations at `/app/automations`: every agent with its schedule, events, autonomy, last run, next run and 30-day runs and failures; the 15-minute sweep; event triggers; approval rules; rules built into the product | Built | Events that nothing raises yet are marked as such. Settings → Automations now opens this page |
 
 ### Portals and public site
@@ -168,7 +178,7 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Requirement | Status | Notes |
 | --- | --- | --- |
 | Owner portal: briefing, statements with *Explain*, repair approvals, properties, documents, messages | Built | |
-| Resident portal: pay rent, autopay, requests with an AI first read, lease and renewal, messages | Built | The first read is rules |
+| Resident portal: pay rent, autopay, requests with an AI first read, lease and renewal (*Ask about renewing*), renters insurance upload, messages | Built | The first read is rules; staff verify uploaded insurance |
 | Vendor portal: accept or decline jobs, send invoices (read from a file), payments, insurance certificates | Built | |
 | Applicant portal: status timeline, documents checklist, $55 fee, messages | Built | No real card is charged |
 | *Ask AI* in each portal, answered from the person's own records | Built | Rules answer; a model may reword without adding figures |
@@ -184,7 +194,9 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Integrations | Partial | Status cards only; no outside service is called |
 | Platform console: customer orgs, system health, AI usage | Built | Platform admin only |
 | Collapsible home and dashboard sections, remembered per persona in this browser; *Reset layout* in the avatar menu | Built | Reset clears collapsed sections and sidebar, panel and drawer sizes; tours, tips, theme and saved views are kept |
-| First-visit splash and tour tips as toasts | Not built | A first tour is offered once on a first visit. <!-- TODO: splash and tour toasts (in flight) --> |
+| Welcome splash on the home page once a demo day per persona (greeting, what Propniti does for the role, what's new, up to three things waiting); *Don't show again*; *Help › Show welcome screen* brings it back | Built | |
+| New-feature dots in the sidebar until the page is visited, and one toast per page view offering that feature's tour | Built | |
+| The assistant panel opens on its own once a demo day per persona | Built | After the splash closes, or on the day's first page view |
 | Real sign-in and accounts | Not built | |
 
 ## Import
@@ -265,7 +277,8 @@ Some owner entities override the maintenance and bill limits. On money actions, 
 - Each proposal shows its title, amount, risk, source, reasons, confidence (High, Medium or Low with a percentage), the records it used and a link to its run.
 - A person approves, rejects, or edits the wording of a drafted message and then approves. Recipient, record and amounts can't be edited.
 - Before an approved proposal runs, the server checks again that the record is in the approver's scope, that its key fields haven't changed since the agent looked, and that the action is still allowed. It runs once.
-- The same decision rule applies wherever a proposal can be run: the approvals inbox, the record's action buttons and Data Health. A money, legal or safety proposal the person can't decide stays in the approvals inbox; a low-risk one they can't decide is refused.
+- One decision rule (`src/ai/decide.ts`) sets the buttons, the *Needs you* counts and the server check, so they always agree. Low-risk items with no amount need write access to the module; anything with money, legal or safety risk needs approve access. Life-safety items (high-risk items in the risk module, such as an overdue fire inspection) are decided only by the property's regional manager or the principal. Over the owner's limit, the owner or a principal decides.
+- Wherever a proposal can be run (the approvals inbox, a record's action buttons, Data Health), one the person can't decide stays in the approvals inbox, or is refused if it is low risk.
 - Re-running an agent doesn't duplicate a proposal that is still open.
 
 ### Source labels
@@ -331,7 +344,7 @@ Model providers are live. Everything else is simulated.
 | V1 prototype | Six role views, AI invoice reading and validation, simulated trust-account payments, ratings, rent-roll import | Replaced by v2 |
 | v2 | 13 personas with scoped homes; 64 record types in 13 modules; eight scheduled and event-driven agents with approvals, autonomy and policy limits; run traces; assistant; Data Health; record peek drawer; four portals; public listings and applications; per-visitor overlay on a shared base | Live at propniti.ai since 4 November 2026 |
 | v2 updates | Demo sign-in form; Inbox; My tasks; Automations; import from other tools with optional AI help; *Ask Propniti* chat bubble; sparkle marks on AI pages; clickable breadcrumbs; approval checks on Data Health fixes and record actions; in-app not-found page; readable run steps; *Summarize with AI*; collapsible home sections | Live, 4 November 2026 |
-| Next | Chat history, *Improve with AI*, first-visit tips | In progress <!-- TODO: update as these merge --> |
+| v2 updates (evening) | Chat history, *Ask about this*, *Right now*, Do mode starts agents; welcome splash, tour toasts and new-feature dots; approvals and bulk friction fixes; leasing, money and operations shortcuts; one decide rule with life-safety approvals; collection rate per month's charges; *Improve with AI*; label definitions and help pages; compact sign-in layout | Live, 4 November 2026 <!-- confirm after the batch 4 deploy --> |
 | Pilot readiness | Real accounts and identity provider, real payment and messaging providers in test mode, owner-portal approval of agent proposals, AP inbox intake of portal invoices, natural-language list filters | Not built |
 
 ## Open questions

@@ -33,14 +33,15 @@ Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propni
 | Area | Path | Notes |
 | --- | --- | --- |
 | Marketing and docs | `/`, `/pricing`, `/product/...`, `/security`, `/docs` | Static pages |
-| Sign-in | `/login`, `/api/session` | Demo email and password form above one-click persona cards; the server checks the published password in constant time and sets the `pn_as` cookie (30 days). Works without JavaScript |
+| Sign-in | `/login`, `/api/session` | Demo email and password form beside a compact list of the 13 people; the server checks the published password in constant time and sets the `pn_as` cookie (30 days). Works without JavaScript |
 | Staff app | `/app/...` | Static pages for homes and custom screens (Inbox, My tasks, Automations, Copilot, Data health, reports, settings); `/app/[...path]` resolves every other path to a record type's list or record page. Out-of-scope or unknown records render an in-app not-found page |
 | Portals | `/portal/owner`, `/portal/resident`, `/portal/vendor`, `/portal/applicant` | Each has its own `ask` route |
 | Public site | `/listings`, `/listings/[id]`, `/apply/[listingId]` | Ask, tour and submit routes; no sign-in |
 | Records API | `/api/e/[entity]`, `/[id]`, `/actions/[action]`, notes, tasks, documents, activity, `export.csv` | Generic reads and writes, scoped by persona |
 | Metrics and views | `/api/metrics/[key]`, `/api/views` | KPI and chart data; saved views |
 | Import | `/api/import`, `/api/import/undo`, `/api/import/ai` | Commit a checked import as one batch, undo a batch, and the optional AI pass |
-| Guide and alerts | `/api/guide`, `/api/notifications`, `/api/notifications/read` | Counts behind the chat bubble's tips; the bell's alerts and mark read |
+| Guide and alerts | `/api/guide`, `/api/notifications`, `/api/notifications/read` | Counts behind the chat bubble's tips, *Right now* and the welcome screen; the bell's alerts and mark read |
+| Help | `/app/help/<id>` | Renders the seeded help articles that definitions and assistant citations link to |
 | AI API | `/api/ai/...` | Agents, runs (with a streaming trace), proposals, assistant, summaries, data health, policies, sweep, events, invoice reading |
 
 Old v1 routes (`/demo`, `/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`, `/onboarding`) redirect to their v2 pages, and `/app/settings/automations` redirects to `/app/automations`.
@@ -127,7 +128,11 @@ Every agent runs the same loop (`framework.ts`):
 - **Routing.** A proposal applies on its own only when the agent's autonomy is *Auto within policy*, the workspace is not the base, risk is Low, it is not always-human, and its amount is within the policy limit. Over the owner threshold it waits for the owner. Everything else waits for a person.
 - **Deduplication.** One open proposal per agent, record and action.
 - **Approval** (`src/ai/effects.ts`, `src/ai/http.ts`). The server re-checks scope, the record's key fields against the snapshot, the action's precondition and the approver's role. A guarded `ai_decisions` insert runs it once.
-- **One decision rule** (`canDecide`). The approvals inbox, the generic record action route (`/api/e/<entity>/<id>/actions/<action>`) and Data Health all apply it. A proposal the caller can't decide that involves money, legal or safety, or isn't low risk, stays queued (202 with the proposal id); a refused low-risk one returns 403. Data Health fixes that touch money, fraud or legal status always queue, whoever clicks.
+- **One decision rule** (`src/ai/decide.ts`, enforced by `canDecide`). Buttons, *Needs you* counts and the server read the same rule; life-safety items go only to the property's regional manager or the principal. The approvals inbox, the generic record action route (`/api/e/<entity>/<id>/actions/<action>`), Data Health and *Dispatch as suggested* all apply it. A proposal the caller can't decide that involves money, legal or safety, or isn't low risk, stays queued (202 with the proposal id); a refused low-risk one returns 403. Data Health fixes that touch money, fraud or legal status always queue, whoever clicks.
+
+### Improve with AI
+
+`src/components/app/ai/ImproveWithAI.tsx`. A red delinquency, occupancy or SLA KPI offers a panel with drivers computed from the records and a plan of agent actions, with expected effects from history in scope. *Have agents do this* starts plan runs: each takes a unique run id from the caller (a double start fails), keeps its input in the opening step, skips the model loop and only considers the plan's records that still qualify. One plan per card at a time; plan starts count against the AI rate limit. Proposals follow the normal approval rules.
 
 ### Inbox, tasks and import
 
@@ -139,7 +144,7 @@ Every agent runs the same loop (`framework.ts`):
 
 - **Record summaries** (`src/ai/summaries.ts`). Facts come from the record type's `ai.facts`. A stored model summary is shown only while its facts equal the current facts; otherwise the rules sentence is written from the current figures. Labels: *Rules*, *Generated* or *Precomputed*. A record with no summary offers *Summarize with AI*, which calls the same summary route and stores the result in the visitor's overlay.
 - **Explain** (KPIs, statement lines, budget variances, what-if). Code computes the facts; a model words them only when every number it writes is in the facts.
-- **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools. The *Ask Propniti* chat bubble (`src/components/app/guide`) opens it with page-aware questions and shows at most one data-backed tip at a time, from counts served by `/api/guide`. Common questions are answered by rules from tool results. Any dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes; each item waits for a person.
+- **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools. Conversations are stored per persona and listed in the panel's history menu. *Ask about this* passes the record's facts by name; *Right now* reads the same counts as the chat bubble; Do mode can start an agent run. The *Ask Propniti* chat bubble (`src/components/app/guide`) opens it with page-aware questions and shows at most one data-backed tip at a time, from counts served by `/api/guide`. Common questions are answered by rules from tool results. Any dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes; each item waits for a person.
 - **Prompt hygiene.** Records, documents, messages and questions are framed as data, never instructions, in every prompt. Model output is schema-validated.
 
 ## Security

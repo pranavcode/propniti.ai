@@ -1,6 +1,8 @@
 This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai). It has one section for each staff persona, one for each portal and one for the public listings site. Each section says where the person lands, what they do and which AI shows up.
 
-**Start here.** Open [propniti.ai/login](https://propniti.ai/login). Sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (every demo account uses it), or pick a person below the form: click a card to fill the form, or double-click it to sign in straight away. Staff are listed first, portals second. To switch, open the avatar menu in the top bar and choose *Switch role (demo)*.
+**Start here.** Open [propniti.ai/login](https://propniti.ai/login). Sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (every demo account uses it), or pick one of the 13 people in the list beside the form. *What each person sees*, below, describes each one. To switch later, open the avatar menu in the top bar and choose *Switch role (demo)*, or use *Switch* in the banner.
+
+**First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for that role, what's new and up to three things waiting. *Help › Show welcome screen* brings it back. A dot in the sidebar marks a feature you haven't opened yet, and a small toast offers its tour the first time you meet it. The *Ask Propniti* panel also opens on its own once a day.
 
 **About the data.** Names, companies and figures are sample data: 30 properties in Austin, Dallas, Atlanta and Phoenix. "Today" is 4 November 2026, and the books are closed through October. Your changes go into a private copy that only you see. It resets at midnight Pacific time. No real payments or messages are sent.
 
@@ -13,6 +15,8 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 - **Your layout.** Sections on home pages and dashboards collapse with a click and stay that way for that persona in this browser. *Reset layout* in the avatar menu opens them again and resets sidebar and panel sizes.
 - **⌘K** searches records and pages, and turns a question into "Ask AI".
 - **⌘J** opens the assistant, *Ask Propniti*. Pick *Ask*, *Do* or *Help*, or leave it on *Auto*. Each answer shows "Looked up N things" and a *Full trace* link to the run.
+- **Ask Propniti panel.** It opens with *Right now*: up to three one-click items such as approvals waiting. The history button lists recent conversations. On a record, *Ask about this* asks about that record. In *Do* mode it can start an agent; what the agent proposes waits for approval as usual.
+- **Definitions.** Hover, focus or tap a KPI, chart, column, filter or autonomy label to see what it means in plain English; *Learn more* opens the help article at `/app/help/<id>`.
 - **Ask Propniti bubble.** The round button at the bottom right opens the same assistant, with questions suggested for the page you're on. Now and then it offers one tip drawn from your data, such as approvals waiting or residents 30 days past due. Tips come at most once per page and five times a session, never while you type or a dialog is open. Dismiss one and it stays dismissed; *Show tips* in the bubble's menu turns them off.
 - **Sidebar.** A small sparkle marks the AI-powered pages: Inbox, Copilot, Agents, Approvals, AI activity, Automations and Data health. Breadcrumbs at the top are links: a section or group name opens its first page, and *Home* opens your home.
 - **Inbox** (`/app/inbox`, or press I). One list of what needs you: conversations waiting on your reply, agent proposals you can decide, and your alerts. Tabs *All*, *Messages*, *Approvals* and *Alerts* show counts, and the sidebar badge counts what needs you. *Reply* opens the conversation; *Review* opens the proposal in the approvals inbox.
@@ -26,7 +30,7 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 
 <!-- TODO: screenshot ![Ask Propniti bubble with a tip](screens/marcus-chat-bubble.png) -->
 
-<!-- TODO: splash and tour tips as toasts (in flight); describe here once merged -->
+<!-- TODO: screenshot ![Welcome splash on the home page](screens/marcus-welcome.png) -->
 
 ## 2. Daniel Reyes, principal
 
@@ -67,11 +71,12 @@ Marcus runs three Austin communities. He lands on `/app/today`.
 
 1. Read *Your briefing*. It is computed from his records just now, and each line links to the rows behind it: past-due households, leases without a renewal offer, unread conversations, data issues.
 2. Click *Leases ending in 60 days* to open the list. Click a row to peek at it.
-3. Review the *Approvals* section. Open *Why?* on a Collections reminder to see the reasons, the records it used and its confidence. Approve or reject it.
-4. Open *Inbox*. The *Messages* tab lists conversations waiting on him; *Needs reply* means the resident wrote last. Click *Reply* on one, click *Suggest a reply*, edit it, then *Send*.
-5. Open *My tasks* and switch to *Overdue*. Mark one done, then *Undo*.
-6. Open a lease and its *Abstraction* tab. Click *Abstract lease on file*. The result cites pages and flags dates that don't match the record. *Apply fix* corrects the record.
-7. Open *Announcements → New*, pick a property and click *Draft with AI*. Review, then send to its residents.
+3. If a KPI such as delinquency is red, click *Improve with AI* under it. The panel shows the drivers, computed from the records, and a plan of agent actions with expected effects. *Have agents do this* starts the agents; their proposals go to approvals as usual, and the card then shows what changed.
+4. Review the *Approvals* section. Open *Why?* on a Collections reminder to see the reasons, the records it used and its confidence. Approve or reject it.
+5. Open *Inbox*. The *Messages* tab lists conversations waiting on him; *Needs reply* means the resident wrote last. Click *Reply* on one, click *Suggest a reply*, edit it, then *Send*.
+6. Open *My tasks* and switch to *Overdue*. Mark one done, then *Undo*. *Snooze* moves a task to a later date; *Reassign* hands it to someone else.
+7. Open a lease and its *Abstraction* tab. Click *Abstract lease on file*. The result cites pages and flags dates that don't match the record. *Apply fix* corrects the record.
+8. Open *Announcements → New*, pick a property and click *Draft with AI*. Review, then send to its residents.
 
 AI here: the Collections and Renewals agents' proposals, suggested replies, lease abstraction and announcement drafts. Each draft links to its run.
 
@@ -91,7 +96,7 @@ Lena handles leasing for the same three Austin properties. She lands on `/app/le
 
 1. Read the *Briefing*: new leads, tours, applications, and what the agents did since yesterday.
 2. Check *Today's tours* and *Follow-ups due*. The Leasing agent proposes a follow-up for prospects nobody has contacted in three days.
-3. Open *Pipeline board* and move a prospect to *Tour*. Approval of an application stays with the broker.
+3. Open *Pipeline board* and move a prospect to *Tour*; *Undo* moves it back. Approval of an application stays with the broker. Under *Follow-ups due*, send one or *Send all*, and use *Rewrite with AI* on a draft.
 4. Open a listing and click *Draft with AI*. Choose *Use draft, then edit*. If the text contains wording that fails the fair-housing check, the save is blocked until it's fixed.
 5. Open *Renewals*, pick a draft offer and click *Ask the Renewals agent*. It prices the offer toward market rent, capped at +5%, with reasons. Accept or edit, click *Draft with AI*, then *Send offer*.
 
@@ -194,7 +199,7 @@ Any staff persona with AI access can follow these steps. Marcus is a good choice
 2. Click *Run now* on the Collections agent. A side sheet shows each step as it happens, in plain words such as "Looked up 14 residents", with the records it touched linked by name. *Technical details* on a step shows the raw input and output. *Open the full run* opens `/app/ai/runs/<id>`.
 3. Under a card, the *Autonomy* select offers *Approve first* or *Auto within policy*. Only a principal, regional manager or admin can change it; Marcus sees it read-only. Changes are written to the audit trail.
 4. The *Approval policies* table shows what agents may apply on their own and when the owner decides.
-5. Open `/app/ai/approvals`. The tabs are *Needs you*, *Handled automatically*, *Waiting on others* and *Decided*. *Approve N low-risk* approves low-risk items with no amount in one step.
+5. Open `/app/ai/approvals`. The tabs are *Needs you*, *Handled automatically*, *Waiting on others* and *Decided*. Filter by agent, risk or record type, then *Approve all low-risk matching*. On *Waiting on others*, *Notify approver* reminds the person who decides. Life-safety items, such as an overdue fire inspection, go only to the property's regional manager or the principal.
 6. Open `/app/ai/activity` for every run, with trigger (*Schedule*, *Event*, *Run now* or *Assistant*), model, tokens and summary.
 7. Open `/app/automations`. The header shows how many agents are on, when the next 15-minute sweep is due and how many events are waiting. The tables list each agent's trigger, autonomy, last run, next run and runs and failures over 30 days; the event triggers, including the ones nothing in the product raises yet; the approval rules; and the rules built into the product, such as late-fee caps and the midnight reset.
 
@@ -277,10 +282,7 @@ Tours and applications stay in your private copy and reset at midnight Pacific.
 - **No reset button.** Your private copy resets at midnight Pacific.
 - **Portal invoices skip the AP inbox.** They appear on the work order's *Invoice and PO* tab only.
 - **Owner approvals.** The owner portal lists repairs over the owner's limit. Agent proposals waiting on an owner appear in the staff *Waiting on others* tab, not in the portal.
-- **Approvals filters.** The approvals inbox has no filter controls; `?agent=` in the URL filters by agent.
 - **Locked records** still show *Edit*. Saving is refused.
 - **Events with no source.** Some agent events (an expiring insurance certificate, a closed owner statement, a new data issue) aren't raised by anything yet; those agents cover the work on their schedule. The Automations page marks them.
-- **Chat history.** The assistant panel keeps a conversation for the session; saved conversations are listed on `/app/copilot`. <!-- TODO: chat history (in flight) -->
-- **Not yet in the demo:** *Improve with AI*. <!-- TODO: remove when it merges -->
 
 More detail: [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
