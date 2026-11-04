@@ -40,7 +40,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   const [crumbTitle, setCrumbTitle] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useLocalStorage<boolean>("pn_ai_open", false);
   const [aiWidth, setAiWidth] = useLocalStorage<number>("pn_ai_w", 400);
-  const [pending, setPending] = useState<{ query: string; context?: AssistantContext; id: number } | null>(null);
+  const [pending, setPending] = useState<{ query: string | null; context?: AssistantContext; id: number } | null>(null);
   const [aiFrom, setAiFrom] = useState<"bubble" | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +71,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
     setOpen: (open: boolean, from?: "bubble") => { setAiFrom(open ? from ?? null : null); setAiOpen(open); },
     openedFrom: aiOpen ? aiFrom : null,
     toggle: () => { setAiFrom(null); setAiOpen((o) => !o); },
-    ask: (query: string, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); if (!aiOpen) setAiFrom(null); setAiOpen(true); },
+    ask: (query: string | null, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); if (!aiOpen) setAiFrom(null); setAiOpen(true); },
     pending,
     take: () => setPending(null),
     width: Math.min(AI_MAX_W, Math.max(AI_MIN_W, aiWidth)),

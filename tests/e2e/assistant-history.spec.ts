@@ -24,7 +24,7 @@ async function askInDock(page: Page, question: string) {
   await expect(box).toBeEnabled();
   await box.fill(question);
   await box.press("Enter");
-  await expect(dock.getByText("Looking it up…")).toBeHidden();
+  await expect(dock.locator("[data-assistant-busy]")).toBeHidden();
   await expect(dock.locator(".rounded-lg.border.bg-card").last()).toBeVisible();
   return dock;
 }

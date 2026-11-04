@@ -12,10 +12,11 @@ export type AssistantState = {
   setOpen: (open: boolean, from?: "bubble") => void;
   openedFrom: "bubble" | null;
   toggle: () => void;
-  // Open the dock and hand it a question (from ⌘K "Ask AI", AskBox, "Ask about this").
-  ask: (query: string, context?: AssistantContext) => void;
+  // Open the dock and hand it a question (from ⌘K "Ask AI", AskBox). A null query opens it on the
+  // context without sending anything ("Ask about this": the person picks or types the question).
+  ask: (query: string | null, context?: AssistantContext) => void;
   // The last question handed over and not yet taken. The dock calls take() to consume it.
-  pending: { query: string; context?: AssistantContext; id: number } | null;
+  pending: { query: string | null; context?: AssistantContext; id: number } | null;
   take: () => void;
   width: number;
 };

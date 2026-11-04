@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { BookOpen, Check, ChevronRight, Database, History, Loader2, Maximize2, MessageSquare, Plus, Search, Wand2 } from "lucide-react";
+import { BookOpen, Check, ChevronRight, Database, History, Loader2, Maximize2, MessageSquare, Plus, Search, Wand2, X } from "lucide-react";
 import { AIBadge, ApprovalItem, AskBox } from "@/components/app/ai";
 import { RelativeDate } from "@/components/app/display";
 import { useShellMaybe, type AssistantContext } from "@/components/app/shell/context";
@@ -46,6 +46,58 @@ const DECIDED: Record<string, "approved" | "rejected" | "snoozed"> = { Approved:
 const RESET_NOTE = "Your last conversation was cleared with the nightly demo reset (midnight Pacific), so this is a fresh one.";
 type Saved = { thread: { id: string; title: string }; turns: Turn[]; more: boolean };
 type ThreadRow = { id: string; title: string; updated_at: string };
+type Card = { type: string; title: string; href: string; status?: string; facts: { label: string; value: string }[]; summary?: { text: string; source: string; model: string }; questions: string[] };
+
+// Sends a question and reads the streamed progress ({"status"} lines) until the reply arrives.
+async function askStreaming(body: unknown, onStatus: (s: string) => void): Promise<Reply> {
+  const res = await fetch("/api/ai/assistant", { method: "POST", headers: { "content-type": "application/json", accept: "application/x-ndjson" }, body: JSON.stringify(body) });
+  if (!res.ok || !res.body || !res.headers.get("content-type")?.includes("ndjson")) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+    return data as Reply;
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    buf += value ?? "";
+    const lines = buf.split("\n");
+    buf = done ? "" : lines.pop()!;
+    for (const line of lines.filter((l) => l.trim())) {
+      const msg = JSON.parse(line) as { status?: string; reply?: Reply; error?: string };
+      if (msg.status) onStatus(msg.status);
+      if (msg.error) throw new Error(msg.error);
+      if (msg.reply) return msg.reply;
+    }
+    if (done) throw new Error("The answer didn't arrive. Try again.");
+  }
+}
+
+// The record "Ask about this" opened the dock on: what it is, its key facts and current summary.
+function RecordCard({ card }: { card: Card | "loading" | "missing" }) {
+  if (card === "loading") return <div className="space-y-2 rounded-lg border bg-card p-3" aria-busy="true"><div className="h-4 w-2/3 animate-pulse rounded bg-muted" /><div className="h-3 w-full animate-pulse rounded bg-muted" /><div className="h-3 w-5/6 animate-pulse rounded bg-muted" /></div>;
+  if (card === "missing") return <p className="text-[12px] text-muted-foreground">I can&apos;t open that record&apos;s details, but you can still ask about it.</p>;
+  return (
+    <section aria-label={`About this ${card.type.toLowerCase()}`} className="space-y-2 rounded-lg border bg-card p-3">
+      <div className="flex items-center gap-2 text-[11.5px] text-muted-foreground">
+        <span>{card.type}</span>
+        {card.status && <span className="rounded-full border px-1.5 py-px text-[11px] text-foreground/80">{card.status}</span>}
+      </div>
+      <Link href={card.href} className="block font-semibold leading-snug hover:text-primary hover:underline">{card.title}</Link>
+      {card.facts.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
+          {card.facts.map((f) => <div key={f.label} className="min-w-0"><dt className="text-muted-foreground">{f.label}</dt><dd className="truncate" title={f.value}>{f.value}</dd></div>)}
+        </dl>
+      )}
+      {card.summary && (
+        <div className="space-y-1 border-t pt-2">
+          <AIBadge size="xs" source={card.summary.source === "rules" ? "rules" : card.summary.source === "live" ? "live" : "precomputed"} model={card.summary.model} />
+          <p className="text-[12.5px] text-muted-foreground">{card.summary.text}</p>
+        </div>
+      )}
+    </section>
+  );
+}
 
 // The thread each persona last used in the dock, kept in this browser. Storage can be blocked.
 const threadKey = (persona: string) => `pn_ai_thread:${persona}`;
@@ -186,6 +238,11 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
   const [notice, setNotice] = useState<string | null>(null);
   const [more, setMore] = useState(false);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  // "Ask about this": the record questions are about (removable), and its card until one is asked.
+  const [about, setAbout] = useState<AssistantContext | null>(null);
+  const [card, setCard] = useState<Card | "loading" | "missing" | null>(null);
+  const [cardOpen, setCardOpen] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const prompts = suggestions.length ? suggestions : shell?.data.assistantPrompts ?? [];
   const persona = page ? null : shell?.data.persona.id ?? null;
@@ -237,17 +294,33 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
   const ask = useCallback(async (question: string, ctx?: AssistantContext) => {
     setTurns((t) => [...t, { role: "user", text: question, mode: mode === "auto" ? undefined : mode }]);
     setBusy(true);
+    setStatus(null);
+    setCardOpen(false);
     try {
-      const context = ctx ?? (page ? undefined : contextFromPath(pathname));
-      const reply = await api<Reply>("/api/ai/assistant", "POST", { question, threadId, mode: mode === "auto" ? undefined : mode, context });
+      const context = ctx ?? about ?? (page ? undefined : contextFromPath(pathname));
+      const reply = await askStreaming({ question, threadId, mode: mode === "auto" ? undefined : mode, context }, setStatus);
       setThreadId(reply.threadId);
       setTurns((t) => [...t, { role: "assistant", reply }]);
     } catch (e) {
       setTurns((t) => [...t, { role: "error", text: (e as Error).message }]);
     } finally {
       setBusy(false);
+      setStatus(null);
     }
-  }, [mode, page, pathname, threadId, setThreadId]);
+  }, [mode, page, pathname, threadId, setThreadId, about]);
+
+  const focus = useCallback(async (ctx: AssistantContext) => {
+    setAbout(ctx);
+    setCardOpen(true);
+    if (!ctx.entity || !ctx.id) return setCard(null);
+    setCard("loading");
+    try {
+      setCard(await api<Card>(`/api/ai/assistant/about?entity=${encodeURIComponent(ctx.entity)}&id=${encodeURIComponent(ctx.id)}`));
+    } catch {
+      setCard("missing");
+    }
+  }, []);
+  const clearAbout = () => { setAbout(null); setCard(null); };
 
   // Questions handed over from ⌘K, AskBox on a page, or "Ask about this" on a record.
   // Only the dock takes hand-overs; the full page would race it when both are open.
@@ -256,12 +329,15 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
   useEffect(() => {
     if (!pending || busy || restoring) return;
     take?.();
-    void ask(pending.query, pending.context ? { ...pending.context, path: pending.context.path ?? pathname } : undefined);
-  }, [pending, take, busy, restoring, ask, pathname]);
+    const ctx = pending.context ? { ...pending.context, path: pending.context.path ?? pathname } : undefined;
+    // "Ask about this" sends nothing: the person picks a suggested question or types one.
+    if (pending.query === null) { if (ctx) void focus(ctx); return; }
+    void ask(pending.query, ctx);
+  }, [pending, take, busy, restoring, ask, focus, pathname]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [turns, busy]);
+  }, [turns, busy, card]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col", page && "min-h-[calc(100vh-10rem)]")}>
@@ -283,7 +359,8 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
         ) : (
           <div key={i} className="rounded-lg border bg-card px-3 py-2.5"><Answer reply={t.reply} /></div>
         ))}
-        {busy && <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Looking it up…</div>}
+        {busy && <div data-assistant-busy className="flex items-center gap-2 text-muted-foreground" aria-live="polite"><Loader2 className="size-4 animate-spin" /> {status ?? "Looking it up…"}</div>}
+        {card && cardOpen && !busy && <RecordCard card={card} />}
         <div ref={end} />
       </div>
       <div className="space-y-2 border-t p-3">
@@ -295,7 +372,13 @@ export function AssistantChat({ threadId: initialThread, initialTurns = [], sugg
           ))}
           {threadId && <button className="ml-auto text-[12px] text-muted-foreground hover:text-foreground" onClick={reset}>New conversation</button>}
         </div>
-        <AskBox size="md" busy={busy || restoring} onAsk={(q) => void ask(q)} suggestions={turns.length ? [] : prompts} placeholder={mode === "help" ? "How do I…" : mode === "actions" ? "Remind everyone 30+ days late in Austin" : undefined} />
+        {about && (
+          <div className="flex min-w-0 items-center gap-1 self-start rounded-full border border-tone-ai/30 bg-tone-ai/5 py-0.5 pr-0.5 pl-2 text-[12px]">
+            <span className="min-w-0 truncate"><span className="text-muted-foreground">About:</span> {card && typeof card === "object" ? `${card.type} · ` : ""}{about.title ?? about.id}</span>
+            <button onClick={clearAbout} aria-label="Remove record context, ask a general question" className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"><X className="size-3" /></button>
+          </div>
+        )}
+        <AskBox size="md" busy={busy || restoring} onAsk={(q) => void ask(q)} suggestions={cardOpen && card && typeof card === "object" ? card.questions : about ? [] : turns.length ? [] : prompts} placeholder={mode === "help" ? "How do I…" : mode === "actions" ? "Remind everyone 30+ days late in Austin" : undefined} />
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./fac
 import { openRun, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
 import { amountsIn } from "./tools/write";
+import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
 import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
 import { errText, modelLoop, type AgentCtx } from "./runtime";
 import type { ToolKey } from "./types";
@@ -81,7 +82,7 @@ const lateTable = (rows: Delinquent[]): AssistantReply["table"] => ({
 
 // Rules answers for the common questions: used when no model is configured, when the model fails,
 // and when a model answer states a figure the lookups don't contain.
-async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promise<RulesOut | null> {
+async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
   const metro = matchMetro(q);
   const days = Number(q.match(/(\d+)\s*\+?\s*(?:days?|d\b)/i)?.[1] ?? 0);
   if (/\b(late|owe[sd]?|owing|overdue|delinquen\w*|behind on rent|arrears|unpaid rent)\b/i.test(q)) {
@@ -151,10 +152,6 @@ async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promis
     const saved = (await monthly(ctx.data, { months: 1 })).reduce((s, r) => s + Number(r.ai_minutes_saved ?? 0), 0);
     return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${r.agent_key.replace(/_/g, " ")} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
   }
-  if (context?.entity && context.id && /\b(this|it|here)\b/i.test(q)) {
-    const row = await ctx.call<Row>("records.get", { entity: context.entity, id: context.id }).catch(() => null);
-    if (row) return { answer: `${context.title ?? `${context.entity} ${context.id}`}: ${Object.entries(row).filter(([, v]) => v != null && v !== "" && String(v).length < 60).slice(0, 10).map(([k, v]) => `${k.replace(/_/g, " ")} ${k.endsWith("_cents") ? money(Number(v)) : v}`).join(", ")}.`, citations: [{ entity_type: context.entity, entity_id: context.id, label: context.title ?? context.id, href: hrefFor(context.entity, context.id) }] };
-  }
   return null;
 }
 
@@ -189,7 +186,22 @@ async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
   return { answer: "I can turn these into actions you confirm: send rent reminders (\"remind everyone 30+ days late in Austin\"), or run an agent (\"triage new work orders\"). Anything that moves money goes to the approvals inbox.", citations: [] };
 }
 
-export async function ask(o: { data: DataCtx; persona: Persona; question: string; mode?: Mode; threadId?: string; context?: AskContext; waitUntil?: (p: Promise<unknown>) => void }): Promise<AssistantReply> {
+// What the panel shows while a question runs (the route streams these before the answer).
+function statusFor(key: ToolKey, input: unknown, about: string | undefined) {
+  const entity = getEntity(String((input as { entity?: string })?.entity ?? ""));
+  if (key === "records.search") return entity ? `${entity.key === about ? "Checking similar" : "Searching"} ${entity.label.many.toLowerCase()}…` : "Searching records…";
+  const label: Partial<Record<ToolKey, string>> = {
+    "records.get": `Reading the ${entity?.label.one.toLowerCase() ?? "record"}…`, "records.related": "Checking related records…", "ledger.delinquency": "Checking who owes rent…", "ledger.lookup": "Reading the ledger…",
+    "metrics.monthly": "Checking monthly figures…", "metrics.explain_noi": "Working out what moved NOI…", "data.issues": "Checking data issues…", "policy.lookup": "Checking approval policies…", "help.search": "Searching help articles…",
+  };
+  return label[key] ?? "Looking it up…";
+}
+
+const TABLE = /^\s*\|.*\|\s*$/m;
+// An answer about a record must read as prose: no markdown tables and no internal ids.
+const unplain = (text: string, b: RecordBrief) => TABLE.test(text) || b.hidden.some((id) => new RegExp(`(^|[^\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\w-])`).test(text));
+
+export async function ask(o: { data: DataCtx; persona: Persona; question: string; mode?: Mode; threadId?: string; context?: AskContext; waitUntil?: (p: Promise<unknown>) => void; onStatus?: (text: string) => void }): Promise<AssistantReply> {
   const { data, persona, question, context } = o;
   const mode = o.mode ?? detectMode(question);
   const nowIso = demoNowIso();
@@ -207,10 +219,15 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
   const start = { db, ws, actor: data.actor, agent: "copilot" as const, trigger: { kind: "chat" as const, input: { question, mode, context } }, waitUntil: o.waitUntil };
   const runId = await openRun(start);
   const actions: ActionKey[] = ["leases.send_reminder"];
+  const say = o.onStatus ?? (() => undefined);
   const run = await runWithContext(runId, start, Date.now(), "copilot", "act_with_approval", actions, async (ctx) => {
     let out: RulesOut | null = null;
     let live = false;
     let note: string | undefined;
+    if (o.onStatus) {
+      const call = ctx.call.bind(ctx);
+      ctx.call = (async (k: ToolKey, i: unknown) => { say(statusFor(k, i, context?.entity)); return call(k, i); }) as AgentCtx["call"];
+    }
     const screening = screensByProtectedClass(question);
     if (screening.length) {
       // Fair housing: refused before any lookup or model call, whatever the mode.
@@ -240,9 +257,15 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
     } else if (mode === "actions") {
       out = await planActions(ctx, question);
     } else {
+      // A question about the record in view ("Ask about this") starts from that record's facts.
       // Fact questions the rules cover are answered from the computed result, sentence included;
       // the model only adds suggested next steps. Everything else goes to the model's tool loop.
-      const rules = await rulesChat(ctx, question, context);
+      const def = context?.entity && context.id ? getEntity(context.entity) : undefined;
+      if (def) say(`Reading ${def.idFormat ? context!.id : context!.title ?? context!.id}…`);
+      const about = def ? await recordBrief(data, def.key, context!.id!) : null;
+      const onRecord = !!about && ABOUT_RECORD.test(question);
+      const cost = onRecord && ASKS_COST.test(question) ? costAnswer(about!) : null;
+      const rules = cost ? { answer: cost, citations: [] } : onRecord ? null : await rulesChat(ctx, question);
       if (rules) {
         out = rules;
         if (ctx.model) {
@@ -267,19 +290,22 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
           }
         }
       } else if (ctx.model) {
-        const outputs: string[] = [];
+        const outputs: string[] = about ? [JSON.stringify(about.cents.map((c) => ({ amount_cents: c })))] : [];
         const orig = ctx.call.bind(ctx);
         ctx.call = (async (k: ToolKey, i: unknown) => {
           const res = await orig(k, i);
           outputs.push(JSON.stringify(res));
           return res;
         }) as AgentCtx["call"];
+        say("Thinking it through…");
         const r = await modelLoop(ctx, {
           system:
             `You are Propniti's assistant for ${persona.name} (${persona.title}, scope: ${persona.scope.label}). Answer questions about their portfolio by looking data up with the tools, then reply in a few plain sentences with names and figures. ` +
             "Money columns end in _cents (divide by 100 and format as dollars). For a list, start with how many match and the total, then the most important few; a table with every row is shown under your answer. Don't name tools; the person sees what you looked up. If the data doesn't answer it, say so. Never suggest you changed anything: you only read.\n\n" +
             `Tables you can search:\n${await catalog(ctx.db)}` +
-            (context?.entity ? `\n\nThe user is looking at ${context.entity} ${context.id ?? ""} (${context.title ?? context.path ?? ""}).` : ""),
+            (about
+              ? `\n\nThey are looking at one ${about.type.toLowerCase()}, given below with related records by name. Answer their question directly in 2-4 plain sentences with names. Use the tools only when the record below doesn't answer it, for example to compare with similar records. Don't list the record's fields, don't use tables or markdown, and don't write internal ids or codes; call this record ${about.label === about.title ? `"${about.title}"` : about.label}.\n\nThe record (data): ${JSON.stringify({ [about.type]: about.label, title: about.title, ...about.fields, facts: about.facts })}`
+              : context?.entity ? `\n\nThe user is looking at ${context.entity} ${context.id ?? ""} (${context.title ?? context.path ?? ""}).` : ""),
           prompt: `${history.results.length ? `Earlier in this conversation (data):\n${history.results.reverse().map((m) => `${m.role}: ${m.content.slice(0, 400)}`).join("\n")}\n\n` : ""}Question: ${question}`,
           tools: CHAT_TOOLS, maxSteps: 6,
         });
@@ -289,12 +315,17 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
           if (bad.length) {
             await ctx.step({ kind: "message", output: { rejected_answer: r.text.slice(0, 800), reason: `figures not in the looked-up data: ${bad.map((b) => money(b)).join(", ")}` }, ok: false });
             note = "The model's answer had a figure the data didn't support, so this answer is computed by rules.";
+          } else if (about && unplain(r.text, about)) {
+            await ctx.step({ kind: "message", output: { rejected_answer: r.text.slice(0, 800), reason: "listed fields or internal ids instead of answering" }, ok: false });
+            note = "The model's answer wasn't a plain answer (it listed fields or internal ids), so this one is written from the record's facts.";
           } else {
             out = { answer: r.text, citations: [] };
             live = true;
           }
         }
       }
+      if (!out && about && onRecord) out = { answer: recordAnswer(about), citations: [] };
+      if (out && about && onRecord) out.citations = [{ entity_type: about.entity, entity_id: about.id, label: about.label === about.title ? about.title : `${about.label} ${about.title}`, href: about.href }, ...out.citations];
       if (!out) out = { answer: "I can answer questions about rent, leases, work orders, bills, NOI, occupancy, approvals, data health and the agents. Try one of the suggestions.", citations: [] };
     }
     return { summary: out!.answer.slice(0, 1000), result: { out: out!, live, note } };
