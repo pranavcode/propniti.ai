@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { ErrorBanner } from "@/components/app/states";
+import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { formatDate, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { asOfDate, scopeIn, sql } from "../server";
@@ -93,6 +94,7 @@ export async function TodayPage() {
   if (issueN) bullets.push({ icon: HeartPulse, tone: "warning", text: <><b>{issueN}</b> data issue{issueN === 1 ? "" : "s"} on residents and leases, such as {issues.slice(0, 2).map((i) => i.rule_id.split(".")[1].replace(/_/g, " ")).join(" and ")}. Each has a suggested fix.</>, href: "/app/data-health", cta: "Fix" });
   if (lapsed) bullets.push({ icon: ShieldAlert, tone: "warning", text: <><b>{lapsed}</b> renters insurance polic{lapsed === 1 ? "y has" : "ies have"} lapsed.</>, href: "/app/residents/insurance?f.status=Lapsed", cta: "Policies" });
 
+  const watchN = bullets.filter((b) => b.href !== "/app/ai/approvals" && (b.tone === "danger" || b.tone === "warning")).length;
   const kpi = (m: Awaited<typeof kColl>) => ({ value: m?.value ?? null, previous: m?.previous ?? null, spark: m?.spark });
 
   return (
@@ -108,32 +110,39 @@ export async function TodayPage() {
       </header>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_60%)]" data-tour="briefing" aria-labelledby="briefing-h">
-          <header className="flex items-center gap-2 border-b border-tone-ai/15 px-4 py-2.5">
+        <Collapsible id="briefing" label="Your briefing" className="peer/brief xl:data-collapsed:col-span-full rounded-lg border border-tone-ai/25 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--tone-ai)_5%,var(--card)),var(--card)_60%)]" data-tour="briefing" aria-labelledby="briefing-h">
+          <header className="flex items-center gap-2 border-b border-tone-ai/15 px-4 py-2.5 group-data-collapsed/collapse:border-b-0">
             <Sparkles className="size-4 text-tone-ai" />
             <h2 id="briefing-h" className="shrink-0 text-[13.5px] font-semibold">Your briefing</h2>
-            <span className="ml-auto min-w-0 text-right text-[11.5px] text-muted-foreground" title="Every figure is computed from your properties' records when the page loads; no model writes or changes them.">Computed from your records just now · figures link to the rows behind them</span>
+            <WhenExpanded><span className="ml-auto min-w-0 text-right text-[11.5px] text-muted-foreground" title="Every figure is computed from your properties' records when the page loads; no model writes or changes them.">Computed from your records just now · figures link to the rows behind them</span></WhenExpanded>
+            <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{needN.toLocaleString("en-US")} need you · {watchN} to watch</span></WhenCollapsed>
+            <CollapseButton className="-mr-1.5 ml-auto shrink-0" />
           </header>
+          <CollapseBody>
           {bullets.length === 0 ? <p className="px-4 py-6 text-[13px] text-muted-foreground">Nothing needs you right now. Agents will flag anything new here.</p> : (
             <ul className="divide-y divide-tone-ai/10">
               {bullets.map((b) => (
                 <li key={b.href} className="flex items-start gap-3 px-4 py-2.5">
                   <span className={cn("mt-0.5 grid size-6 shrink-0 place-items-center rounded-md", { ai: "bg-tone-ai/10 text-tone-ai", danger: "bg-tone-danger/10 text-tone-danger", warning: "bg-tone-warning/12 text-tone-warning", info: "bg-tone-info/10 text-tone-info", success: "bg-tone-success/10 text-tone-success" }[b.tone])}><b.icon className="size-3.5" /></span>
                   <p className="min-w-0 flex-1 text-[13px] leading-relaxed">{b.text}</p>
-                  <Link href={b.href} className="mt-0.5 inline-flex shrink-0 items-center gap-0.5 text-[12px] font-medium text-primary hover:underline">{b.cta}<ArrowRight className="size-3" /></Link>
+                  <Link href={b.href} className="inline-flex shrink-0 items-center gap-0.5 self-center text-[12px] font-medium text-primary hover:underline">{b.cta}<ArrowRight className="size-3" /></Link>
                 </li>
               ))}
             </ul>
           )}
           <div className="border-t border-tone-ai/15 p-3"><AskToday suggestions={persona.assistantPrompts} /></div>
-        </section>
+          </CollapseBody>
+        </Collapsible>
 
-        <aside className="flex flex-col gap-3">
-          <section className="rounded-lg border bg-card">
-            <header className="flex items-center justify-between border-b px-3 py-2">
-              <h2 className="flex items-center gap-1.5 text-[12.5px] font-semibold"><MessageSquare className="size-3.5 text-muted-foreground" />Conversations waiting</h2>
-              <Link href="/app/communications/inbox" className="text-[12px] text-primary hover:underline">Inbox</Link>
+        <aside className="flex flex-col gap-3 xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid xl:peer-data-collapsed/brief:grid-cols-2 xl:peer-data-collapsed/brief:items-start">
+          <Collapsible id="conversations" label="Conversations waiting" className="rounded-lg border bg-card">
+            <header className="flex items-center gap-2 border-b px-3 py-2 group-data-collapsed/collapse:border-b-0">
+              <h2 className="flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold"><MessageSquare className="size-3.5 text-muted-foreground" />Conversations waiting</h2>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{unreadN} unread</span></WhenCollapsed>
+              <Link href="/app/communications/inbox" className="ml-auto text-[12px] text-primary hover:underline">Inbox</Link>
+              <CollapseButton className="-mr-1.5" />
             </header>
+            <CollapseBody>
             {threads.length === 0 ? <p className="px-3 py-3 text-[12.5px] text-muted-foreground">No open conversations.</p> : (
               <ul className="divide-y">
                 {threads.map((t) => (
@@ -150,13 +159,17 @@ export async function TodayPage() {
                 ))}
               </ul>
             )}
-          </section>
+            </CollapseBody>
+          </Collapsible>
 
-          <section className="rounded-lg border bg-card">
-            <header className="flex items-center justify-between border-b px-3 py-2">
-              <h2 className="flex items-center gap-1.5 text-[12.5px] font-semibold"><HeartPulse className="size-3.5 text-muted-foreground" />Data health in your area</h2>
-              <Link href="/app/data-health" className="text-[12px] text-primary hover:underline">All issues</Link>
+          <Collapsible id="data-health" label="Data health in your area" className="rounded-lg border bg-card">
+            <header className="flex items-center gap-2 border-b px-3 py-2 group-data-collapsed/collapse:border-b-0">
+              <h2 className="flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold"><HeartPulse className="size-3.5 text-muted-foreground" />Data health in your area</h2>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{issueN} open</span></WhenCollapsed>
+              <Link href="/app/data-health" className="ml-auto text-[12px] text-primary hover:underline">All issues</Link>
+              <CollapseButton className="-mr-1.5" />
             </header>
+            <CollapseBody>
             {issues.length === 0 ? <p className="px-3 py-3 text-[12.5px] text-muted-foreground">No open issues on residents or leases.</p> : (
               <ul className="divide-y">
                 {issues.slice(0, 6).map((i) => (
@@ -169,7 +182,8 @@ export async function TodayPage() {
                 ))}
               </ul>
             )}
-          </section>
+            </CollapseBody>
+          </Collapsible>
         </aside>
       </div>
 
@@ -180,11 +194,13 @@ export async function TodayPage() {
         <KpiCard label="Open work orders" format="count" goodWhen="down" value={Number(w.open)} href={`/app/maintenance/work-orders?${WO_OPEN_Q}`} footnote={`${w.late} past SLA · ${w.urgent} urgent`} />
       </div>
 
+      <CollapsibleSection id="charts" title="Charts" summary="3 charts" description="Select a bar for the records behind it.">
       <div className="grid gap-3 lg:grid-cols-3">
         <ChartCard title="Delinquency aging" description="Past-due balance by days late" kind="bar" data={lateCents ? aging : []} x="bucket" series={[{ key: "amount", label: "Past due", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={220} help="Click a bucket for the charges in it." />
         <ChartCard title="Lease expirations by month" description="Active and on-notice leases, next 12 months" kind="bar" data={(exp?.points ?? []) as never} x="label" series={[{ key: "count", label: "Leases ending", format: "count" }]} drill="/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice" height={220} />
         <ChartCard title="Open work orders by priority" description="Within SLA and past SLA" kind="stacked" data={(woPri?.points ?? []) as never} x="priority" series={[{ key: "within", label: "Within SLA", format: "count", color: "var(--chart-1)" }, { key: "past_sla", label: "Past SLA", format: "count", color: "var(--tone-danger)" }]} drill={`/app/maintenance/work-orders?${WO_OPEN_Q}&f.priority={priority}`} height={220} />
       </div>
+      </CollapsibleSection>
 
       <section data-tour="queue" aria-labelledby="queue-h" className="flex flex-col gap-2">
         <div className="flex items-end justify-between gap-2">
