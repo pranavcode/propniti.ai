@@ -4,6 +4,7 @@ import { Activity, Bot, CheckSquare, HeartPulse, Inbox, LayoutDashboard, LineCha
 import { allEntities, can, getEntity, navTree, registerPage, INTERNAL_ROLES, type Role } from "@/entities";
 import { PERMISSIONS, PERSONAS, PN_AS, type Persona } from "@/auth/personas";
 import { currentPersona } from "@/auth/session";
+import { LAYOUT_COOKIE, parseCollapsed } from "../collapsible/prefs";
 import { toursFor } from "../tour/registry";
 import { SECTION_LABEL, type Density, type ShellData, type ShellPersona, type Theme } from "./types";
 
@@ -60,5 +61,6 @@ export async function shellData(counts: Record<string, number> = {}): Promise<Sh
     theme: ["light", "dark", "system"].includes(theme) ? theme : "light",
     density: density === "compact" ? "compact" : "comfortable",
     sidebarOpen: jar.get("sidebar_state")?.value !== "false",
+    collapsed: parseCollapsed(jar.get(LAYOUT_COOKIE)?.value),
   };
 }
