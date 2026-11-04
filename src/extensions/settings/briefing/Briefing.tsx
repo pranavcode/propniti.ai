@@ -120,7 +120,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           {canAi && (
-            <CollapsibleSection id="needs-you" title="What needs you" summary={`${needs.toLocaleString("en-US")} waiting${high ? `, ${formatNumber(high)} high risk` : ""}`} description="Agent proposals over a policy limit, highest risk first. Approving runs the action and logs it." actions={needs > queue.rows.length ? <Link href="/app/ai/approvals" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline">All {needs} <ArrowRight className="size-3" /></Link> : undefined}>
+            <CollapsibleSection id="needs-you" title="What needs you" summary={`${needs.toLocaleString("en-US")} waiting${high ? `, ${formatNumber(high)} high risk` : ""}`} description="Agent proposals over a policy limit, highest risk first. Approving runs the action and logs it." actions={needs > queue.rows.length ? <Link href="/app/ai/approvals" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline">All {formatNumber(needs)} <ArrowRight className="size-3" /></Link> : undefined}>
               {!queue.rows.length ? (
                 <EmptyState compact kind="table" title="Nothing waiting on you" description="When an agent proposes something over your approval limit, it shows up here with its reasons and evidence." />
               ) : (

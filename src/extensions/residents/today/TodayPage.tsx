@@ -90,9 +90,9 @@ export async function TodayPage() {
   if (needN) bullets.push({ icon: Zap, tone: highN ? "danger" : "warning", text: <><b>{formatNumber(needN)}</b> proposal{needN === 1 ? " needs" : "s need"} your decision{highN ? <>, <b>{formatNumber(highN)}</b> high risk</> : ""}.</>, href: "/app/ai/approvals", cta: "Review" });
   if (lateCents) bullets.push({ icon: CircleDollarSign, tone: over30 ? "danger" : "warning", text: <><b>{formatNumber(lateHouseholds)}</b> household{lateHouseholds === 1 ? " owes" : "s owe"} <b>{usd(lateCents)}</b> past due, <b>{usd(over30)}</b> of it over 30 days{worst && late.length > 1 ? <>; most at {worst.name} ({usd(Number(worst.total))})</> : ""}.</>, href: "/app/receivables/delinquency", cta: "Delinquency" });
   if (w.late || w.urgent) bullets.push({ icon: Wrench, tone: w.late ? "danger" : "warning", text: <><b>{formatNumber(w.open)}</b> open work orders: <b>{formatNumber(w.urgent)}</b> emergency or urgent, <b>{formatNumber(w.late)}</b> past SLA.</>, href: `/app/maintenance/work-orders?view=past-sla`, cta: "Work orders" });
-  if (leases.length) bullets.push({ icon: CalendarClock, tone: soon30 ? "warning" : "info", text: <><b>{leases.length}</b> lease{leases.length === 1 ? " ends" : "s end"} in the next 60 days with no renewal offer, <b>{soon30}</b> within 30 days.</>, href: "/app/leases?view=expiring-60", cta: "Leases" });
-  if (unreadN) bullets.push({ icon: MessageSquare, tone: "info", text: <><b>{unreadN}</b> unread conversation{unreadN === 1 ? "" : "s"} from residents, vendors and owners.</>, href: "/app/communications/inbox?unread=1", cta: "Inbox" });
-  if (issueN) bullets.push({ icon: HeartPulse, tone: "warning", text: <><b>{issueN}</b> data issue{issueN === 1 ? "" : "s"} on residents and leases, such as {issues.slice(0, 2).map((i) => i.rule_id.split(".")[1].replace(/_/g, " ")).join(" and ")}. Each has a suggested fix.</>, href: "/app/data-health", cta: "Fix" });
+  if (leases.length) bullets.push({ icon: CalendarClock, tone: soon30 ? "warning" : "info", text: <><b>{formatNumber(leases.length)}</b> lease{leases.length === 1 ? " ends" : "s end"} in the next 60 days with no renewal offer, <b>{formatNumber(soon30)}</b> within 30 days.</>, href: "/app/leases?view=expiring-60", cta: "Leases" });
+  if (unreadN) bullets.push({ icon: MessageSquare, tone: "info", text: <><b>{formatNumber(unreadN)}</b> unread conversation{unreadN === 1 ? "" : "s"} from residents, vendors and owners.</>, href: "/app/communications/inbox?unread=1", cta: "Inbox" });
+  if (issueN) bullets.push({ icon: HeartPulse, tone: "warning", text: <><b>{formatNumber(issueN)}</b> data issue{issueN === 1 ? "" : "s"} on residents and leases, such as {issues.slice(0, 2).map((i) => i.rule_id.split(".")[1].replace(/_/g, " ")).join(" and ")}. Each has a suggested fix.</>, href: "/app/data-health", cta: "Fix" });
   if (lapsed) bullets.push({ icon: ShieldAlert, tone: "warning", text: <><b>{lapsed}</b> renters insurance polic{lapsed === 1 ? "y has" : "ies have"} lapsed.</>, href: "/app/residents/insurance?f.status=Lapsed", cta: "Policies" });
 
   const watchN = bullets.filter((b) => b.href !== "/app/ai/approvals" && (b.tone === "danger" || b.tone === "warning")).length;
@@ -139,7 +139,7 @@ export async function TodayPage() {
           <Collapsible id="conversations" label="Conversations waiting" className="rounded-lg border bg-card">
             <header className="flex items-center gap-2 border-b px-3 py-2 group-data-collapsed/collapse:border-b-0">
               <h2 className="flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold"><MessageSquare className="size-3.5 text-muted-foreground" />Conversations waiting</h2>
-              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{unreadN} unread</span></WhenCollapsed>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{formatNumber(unreadN)} unread</span></WhenCollapsed>
               <Link href="/app/communications/inbox" className="ml-auto text-[12px] text-primary hover:underline">Inbox</Link>
               <CollapseButton className="-mr-1.5" />
             </header>
@@ -166,7 +166,7 @@ export async function TodayPage() {
           <Collapsible id="data-health" label="Data health in your area" className="rounded-lg border bg-card">
             <header className="flex items-center gap-2 border-b px-3 py-2 group-data-collapsed/collapse:border-b-0">
               <h2 className="flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold"><HeartPulse className="size-3.5 text-muted-foreground" />Data health in your area</h2>
-              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{issueN} open</span></WhenCollapsed>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{formatNumber(issueN)} open</span></WhenCollapsed>
               <Link href="/app/data-health" className="ml-auto text-[12px] text-primary hover:underline">All issues</Link>
               <CollapseButton className="-mr-1.5" />
             </header>
@@ -191,7 +191,7 @@ export async function TodayPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard label="Past-due balance" format="money" goodWhen="down" value={lateCents / 100} href="/app/receivables/delinquency" help="Unpaid charges past their due date, all aging buckets, as of today." footnote={`${lateHouseholds} household${lateHouseholds === 1 ? "" : "s"} · ${usd(over30)} over 30 days`} />
         <KpiCard label="Collections rate" format="pct" goodWhen="up" {...kpi(kColl)} href="/app/receivables/payments" help="Collected this month as a share of what was charged." />
-        <KpiCard label="Leases ending in 60 days" format="count" goodWhen="down" value={kExp?.value ?? null} href="/app/leases?view=expiring-60" footnote={`${leases.length} without a renewal offer`} />
+        <KpiCard label="Leases ending in 60 days" format="count" goodWhen="down" value={kExp?.value ?? null} href="/app/leases?view=expiring-60" footnote={`${formatNumber(leases.length)} without a renewal offer`} />
         <KpiCard label="Open work orders" format="count" goodWhen="down" value={Number(w.open)} href={`/app/maintenance/work-orders?${WO_OPEN_Q}`} footnote={`${w.late} past SLA · ${w.urgent} urgent`} />
       </div>
 
@@ -218,7 +218,7 @@ export async function TodayPage() {
         <section className="rounded-lg border bg-card">
           <header className="flex items-center justify-between border-b px-3 py-2">
             <h2 className="flex items-center gap-1.5 text-[12.5px] font-semibold"><CalendarClock className="size-3.5 text-muted-foreground" />Ending soon without a renewal offer</h2>
-            <Link href="/app/leases?view=expiring-60" className="text-[12px] text-primary hover:underline">All {leases.length}</Link>
+            <Link href="/app/leases?view=expiring-60" className="text-[12px] text-primary hover:underline">All {formatNumber(leases.length)}</Link>
           </header>
           <table className="w-full text-[12.5px]">
             <tbody>

@@ -57,14 +57,14 @@ export default async function BrokerDesk() {
               <Sparkles className="size-3.5 text-tone-ai" />
               <h2 id="brief-h" className="shrink-0 text-[13px] font-semibold">Briefing</h2>
               <WhenExpanded><span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground"><Cpu className="size-3" />Computed from your records</span></WhenExpanded>
-              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${apps.total.toLocaleString("en-US")} need you · ${flags.length} to fix`}</span></WhenCollapsed>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${apps.total.toLocaleString("en-US")} need you · ${formatNumber(flags.length)} to fix`}</span></WhenCollapsed>
               <CollapseButton className="-mr-1.5 ml-auto" />
             </div>
             <CollapseBody>
             <ul className="flex flex-col gap-1.5 p-4 text-[13px]">
               <li><Link href="#approvals" className="hover:text-primary"><span className="font-semibold tabular-nums">{formatNumber(apps.total)}</span> application{apps.total === 1 ? "" : "s"} waiting on you{oldest ? <>, the oldest for <span className="font-semibold tabular-nums">{Number(oldest.waiting)}</span> days ({String(oldest.applicant)})</> : null}.</Link></li>
-              {unscored > 0 && <li className="text-muted-foreground"><span className="font-semibold text-foreground tabular-nums">{unscored}</span> of the ones shown have no AI score yet; open one and choose “Score with AI”.</li>}
-              <li><Link href="#compliance" className={cn("hover:text-primary", flags.length && "text-tone-danger")}><span className="font-semibold tabular-nums">{flags.length}</span> listing{flags.length === 1 ? "" : "s"} with fair-housing wording to fix.</Link></li>
+              {unscored > 0 && <li className="text-muted-foreground"><span className="font-semibold text-foreground tabular-nums">{formatNumber(unscored)}</span> of the ones shown have no AI score yet; open one and choose “Score with AI”.</li>}
+              <li><Link href="#compliance" className={cn("hover:text-primary", flags.length && "text-tone-danger")}><span className="font-semibold tabular-nums">{formatNumber(flags.length)}</span> listing{flags.length === 1 ? "" : "s"} with fair-housing wording to fix.</Link></li>
               {agents.filter((a) => a.stale > 0).sort((a, b) => b.stale - a.stale).slice(0, 1).map((a) => (
                 <li key={a.agent_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
                   <span>{a.agent ?? "Unassigned"} has the most leads going stale ({a.stale}).</span>

@@ -132,7 +132,7 @@ export default async function MaintenanceHome() {
                   <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{formatNumber(Number(c.untriaged ?? 0))}</span>
                   <span className="text-[12.5px] text-muted-foreground group-hover:text-foreground">new requests to dispatch <ArrowRight className="inline size-3" /></span>
                 </Link>
-                <Link href="/app/maintenance/work-orders?view=awaiting-approval" className="text-[12.5px] text-muted-foreground hover:text-foreground">{h?.invoices.length ?? 0} vendor invoices to approve ({formatMoney(invoiceTotal / 100, "whole")}) · {proposals.length} agent proposals</Link>
+                <Link href="/app/maintenance/work-orders?view=awaiting-approval" className="text-[12.5px] text-muted-foreground hover:text-foreground">{formatNumber(h?.invoices.length ?? 0)} vendor invoices to approve ({formatMoney(invoiceTotal / 100, "whole")}) · {formatNumber(proposals.length)} agent proposals</Link>
               </div>
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">Watch</h3>
