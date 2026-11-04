@@ -3,7 +3,7 @@
 import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -129,14 +129,20 @@ function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellN
       )}
     >
       {!nested && <span className={cn("shrink-0 [&_svg]:size-4", active ? "text-primary" : "text-muted-foreground group-hover/nav:text-foreground")}>{item.icon}</span>}
-      {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+      {!collapsed && <span className={cn("min-w-0 truncate", !item.ai && "flex-1")}>{item.label}</span>}
+      {item.ai && !collapsed && (
+        <Tooltip>
+          <TooltipTrigger asChild><span data-ai-mark className="mr-auto flex shrink-0 text-tone-ai"><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span></TooltipTrigger>
+          <TooltipContent side="right">AI-powered: agents propose, you approve</TooltipContent>
+        </Tooltip>
+      )}
       {count && !collapsed && (
         <span className={cn("ml-auto rounded px-1.5 text-[11px] leading-[18px] font-medium tabular-nums", item.countTone === "attention" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{count}</span>
       )}
       {count && collapsed && <span className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />}
     </Link>
   );
-  return collapsed ? <RailTip label={item.label} extra={count ?? undefined}>{link}</RailTip> : link;
+  return collapsed ? <RailTip label={item.label} extra={count ?? undefined} ai={item.ai}>{link}</RailTip> : link;
 }
 
 function NavGroup({ label, items, active, onNavigate }: { label: string; items: ShellNavItem[]; active: string; onNavigate: (e: React.MouseEvent, href: string) => void }) {
@@ -165,12 +171,12 @@ function NavGroup({ label, items, active, onNavigate }: { label: string; items: 
   );
 }
 
-function RailTip({ label, kbd, extra, children, show = true }: { label: string; kbd?: string; extra?: string; children: React.ReactElement; show?: boolean }) {
+function RailTip({ label, kbd, extra, ai, children, show = true }: { label: string; kbd?: string; extra?: string; ai?: boolean; children: React.ReactElement; show?: boolean }) {
   if (!show) return children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="right" className="flex items-center gap-2">{label}{extra && <span className="opacity-70">{extra}</span>}{kbd && <span className="opacity-60">{kbd}</span>}</TooltipContent>
+      <TooltipContent side="right" className="flex items-center gap-2">{label}{ai && <span className="flex items-center gap-1 opacity-80"><Sparkles className="size-3" aria-hidden />AI-powered</span>}{extra && <span className="opacity-70">{extra}</span>}{kbd && <span className="opacity-60">{kbd}</span>}</TooltipContent>
     </Tooltip>
   );
 }

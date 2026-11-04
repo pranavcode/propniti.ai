@@ -13,6 +13,8 @@ import * as prefs from "@/app/(app)/app/settings/notifications/prefs/route";
 import * as connect from "@/app/(app)/app/settings/integrations/connect/route";
 import * as listRoute from "@/app/api/e/[entity]/route";
 import * as recordRoute from "@/app/api/e/[entity]/[id]/route";
+import * as policyRoute from "@/app/api/ai/policies/[id]/route";
+import * as agentRoute from "@/app/api/ai/agents/[key]/route";
 
 // Settings writes on a fresh in-memory database: state-rule amendments keep history, policy
 // edits are audited with before/after, and the settings POST routes are guarded and idempotent.
@@ -34,6 +36,7 @@ beforeAll(async () => {
   for (const s of [
     "INSERT INTO state_rules (workspace_id, id, state, rule, value, note, effective_from) VALUES ('base', 'sr-tx-grace_days-20230101', 'TX', 'grace_days', '1', 'Old grace period', '2023-01-01'), ('base', 'sr-tx-grace_days-20240901', 'TX', 'grace_days', '2', 'Tex. Prop. Code §92.019', '2024-09-01')",
     "INSERT INTO approval_policies (workspace_id, id, owner_entity_id, category, limit_cents, approver_role, owner_approval_over_cents, always_human) VALUES ('base', 'apol-maintenance-spend', NULL, 'Maintenance spend', 100000, 'property_manager', 500000, 0)",
+    "INSERT INTO approval_policies (workspace_id, id, owner_entity_id, category, limit_cents, approver_role, owner_approval_over_cents, always_human) VALUES ('base', 'apol-legal', NULL, 'Legal', NULL, 'principal', NULL, 1)",
     "INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 'sam', 'org-summit', 'Sam Okafor', 'Administrator', 'sam.okafor@summitresidential.example')",
   ]) await db().prepare(s).run();
 });
@@ -62,17 +65,42 @@ describe("state rules", () => {
   });
 });
 
+const patch = (path: string, body: unknown, persona: string) => new Request(`http://${host}${path}`, {
+  method: "PATCH", body: JSON.stringify(body),
+  headers: { host, origin: `http://${host}`, "content-type": "application/json", cookie: `pn_as=${persona}; pn_ws=${WS}` },
+});
+const editPolicy = (persona: string, body: unknown, id = "apol-maintenance-spend") => policyRoute.PATCH(patch(`/api/ai/policies/${id}`, body, persona), { params: Promise.resolve({ id }) });
+
 describe("approval policies", () => {
   it("audits a limit change with the values before and after", async () => {
-    await updateRecord(await wctx("sam"), "approval_policies", "apol-maintenance-spend", { limit: 2500 });
-    const a = await db().prepare("SELECT before_json, after_json, actor FROM audit WHERE workspace_id = ? AND entity_type = 'approval_policies'").bind(WS).first<{ before_json: string; after_json: string; actor: string }>();
-    expect(JSON.parse(a!.before_json)).toEqual({ limit_cents: 100000 });
-    expect(JSON.parse(a!.after_json)).toEqual({ limit_cents: 250000 });
+    expect((await editPolicy("sam", { limit_cents: 250000 })).status).toBe(200);
+    const a = await db().prepare("SELECT before_json, after_json, actor FROM audit WHERE workspace_id = ? AND entity_type = 'approval_policies' ORDER BY at DESC").bind(WS).first<{ before_json: string; after_json: string; actor: string }>();
+    expect(JSON.parse(a!.before_json)).toMatchObject({ limit_cents: 100000 });
+    expect(JSON.parse(a!.after_json)).toMatchObject({ limit_cents: 250000 });
     expect(a!.actor).toBe("Sam Okafor");
   });
 
-  it("lets leaders read but not change policies", async () => {
-    await expect(updateRecord(await wctx("daniel"), "approval_policies", "apol-maintenance-spend", { limit: 9000 })).rejects.toMatchObject({ status: 403 });
+  it("lets principals, regional managers and admins change policies through one route, and nobody else", async () => {
+    for (const p of ["daniel", "priya", "sam"]) expect((await editPolicy(p, { owner_approval_over_cents: 600000, approver_role: "accountant" })).status, p).toBe(200);
+    for (const p of ["marcus", "grace", "tom", "nadia"]) expect((await editPolicy(p, { limit_cents: 9000 })).status, p).toBe(403);
+  });
+
+  it("closes the generic record API to policy edits", async () => {
+    await expect(updateRecord(await wctx("sam"), "approval_policies", "apol-maintenance-spend", { limit: 9000 })).rejects.toMatchObject({ status: 405 });
+    await expect(updateRecord(await wctx("nadia"), "approval_policies", "apol-maintenance-spend", { limit: 9000 })).rejects.toMatchObject({ status: 405 });
+  });
+
+  it("keeps legal and safety decisions always with a person", async () => {
+    expect((await editPolicy("sam", { always_human: false }, "apol-legal")).status).toBe(400);
+    expect((await editPolicy("sam", { always_human: true })).status).toBe(200);
+  });
+});
+
+describe("agent settings", () => {
+  const editAgent = (persona: string, body: unknown) => agentRoute.PATCH(patch("/api/ai/agents/collections", body, persona), { params: Promise.resolve({ key: "collections" }) });
+  it("only policy editors change an agent's autonomy, schedule or on/off, because it applies to the whole org", async () => {
+    for (const p of ["marcus", "grace", "tom", "rachel", "nadia"]) expect((await editAgent(p, { autonomy: "auto_within_policy" })).status, p).toBe(403);
+    for (const p of ["daniel", "priya", "sam"]) expect((await editAgent(p, { autonomy: "act_with_approval" })).status, p).toBe(200);
   });
 });
 

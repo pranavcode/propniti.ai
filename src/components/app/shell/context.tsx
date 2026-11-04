@@ -8,7 +8,9 @@ import type { Density, ShellData, Theme } from "./types";
 
 export type AssistantState = {
   open: boolean;
-  setOpen: (open: boolean) => void;
+  // `from` is "bubble" when the chat bubble opened it; the panel then shows the page guide.
+  setOpen: (open: boolean, from?: "bubble") => void;
+  openedFrom: "bubble" | null;
   toggle: () => void;
   // Open the dock and hand it a question (from ⌘K "Ask AI", AskBox, "Ask about this").
   ask: (query: string, context?: AssistantContext) => void;
@@ -33,6 +35,7 @@ export type ShellContext = {
   crumbTitle: string | null;
   setCrumbTitle: (t: string | null) => void;
   startTour: (id?: string) => void;
+  tourActive: boolean;
   openSetup: () => void;
 };
 

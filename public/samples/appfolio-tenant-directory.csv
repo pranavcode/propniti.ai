@@ -1,0 +1,11 @@
+Property,Unit,Tenant,Status,Emails,Phone Numbers,Move-in,Move-out
+Maple Court Apartments,101,"Mora, Hannah",Current,hannah.mora@example.com,(512) 555-0157,07/01/2026,
+Maple Court Apartments,102,"Ortiz, Ravi",Current,ravi.ortiz@example.com,(512) 555-0158,10/01/2026,
+Maple Court Apartments,103,"Nair, Lena",Notice,lena.nair@example.com,(512) 555-0159,02/01/2026,
+Maple Court Apartments,201,"Park, Tomas",Current,tomas.park@example.com,(512) 555-0160,05/01/2026,
+Maple Court Apartments,203,"Khan, Kevin",Current,kevin.khan@example.com,(512) 555-0162,11/01/2026,
+Cedar Row Townhomes,A1,"Liu, Sofia",Current,sofia.liu@example.com,(512) 555-0163,03/01/2026,
+Cedar Row Townhomes,A2,"Diaz, Jordan",Current,jordan.diaz@example.com,(512) 555-0164,06/01/2026,
+Cedar Row Townhomes,A3,"Novak, Mei",Notice,mei.novak@example.com,(512) 555-0165,09/01/2026,
+Cedar Row Townhomes,A4,"Chen, Andre",Current,andre.chen@example.com,(512) 555-0166,01/01/2026,
+Cedar Row Townhomes,A6,"Okafor, Luis",Current,luis.okafor@example.com,(512) 555-0168,07/01/2026,

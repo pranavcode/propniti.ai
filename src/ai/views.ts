@@ -16,19 +16,31 @@ import { modelInfo } from "./providers";
 export type AgentCard = {
   key: AgentKey; name: string; goal: string; ownerRole: string; enabled: boolean; autonomy: string; schedule: string | null; events: string[];
   lastRun: { id: string; status: string; started_at: string; summary: string | null; model: string | null; trigger_kind: string } | null;
-  nextRunAt: string | null; runs30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
+  nextRunAt: string | null; runs30: number; ok30: number; failed30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
 };
+
+// The runs a person may open: all of them org-wide; for property-scoped roles, runs they started
+// and runs that proposed something in their properties (runDetail shows those).
+function runScope(data: DataCtx, alias: string): { sql: string; params: unknown[] } {
+  if (data.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  return {
+    sql: `(${alias}.started_by = ? OR EXISTS (SELECT 1 FROM {ai_proposals} sp WHERE sp.run_id = ${alias}.id AND sp.property_id IN (SELECT value FROM json_each(?))))`,
+    params: [data.actor.personaId, JSON.stringify(data.actor.propertyIds)],
+  };
+}
 
 export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<AgentCard[]> {
   await loadAgents();
   const configs = await agentConfigs(data.db, data.ws);
   const since = demoIsoIn(-30 * 86_400_000, nowMs);
+  const rs = runScope(data, "r");
+  const ls = runScope(data, "l");
   const [runs, props, last] = await Promise.all([
-    sql<{ agent_key: string; n: number; ok: number }>(data, "SELECT agent_key, count(*) AS n, sum(status IN ('done', 'waiting_approval')) AS ok FROM {agent_runs} WHERE started_at >= ? GROUP BY agent_key", [since], { unscoped: true }),
+    sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, `SELECT r.agent_key, count(*) AS n, sum(r.status IN ('done', 'waiting_approval')) AS ok, sum(r.status = 'failed') AS failed FROM {agent_runs} r WHERE r.started_at >= ? AND ${rs.sql} GROUP BY r.agent_key`, [since, ...rs.params], { unscoped: true }),
     sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
       `SELECT p.agent, count(*) AS n, sum(d.decision IN ('Approved', 'Edited') AND p.queue_state <> 'auto_handled') AS approved, sum(p.queue_state = 'auto_handled') AS auto, sum(d.id IS NULL AND p.queue_state <> 'auto_handled') AS pending
        FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`),
-    sql<Row>(data, "SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(seq) FROM {agent_runs} GROUP BY agent_key)", [], { unscoped: true }),
+    sql<Row>(data, `SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(l.seq) FROM {agent_runs} l WHERE ${ls.sql} GROUP BY l.agent_key)`, ls.params, { unscoped: true }),
   ]);
   return AGENT_ORDER.map((key) => {
     const def = getAgent(key)!;
@@ -40,7 +52,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
     return {
       key, name: def.name, goal: def.goal, ownerRole: def.ownerRole, enabled: cfg.enabled, autonomy: cfg.autonomy, schedule: cfg.schedule ?? null, events: cfg.events,
       lastRun: l ? { id: String(l.id), status: String(l.status), started_at: String(l.started_at), summary: (l.summary as string) ?? null, model: (l.model as string) ?? null, trigger_kind: String(l.trigger_kind) } : null,
-      nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
+      nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, ok30: Number(r?.ok ?? 0), failed30: Number(r?.failed ?? 0), successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
       proposed: p?.n ?? 0, approved: Number(p?.approved ?? 0), auto: Number(p?.auto ?? 0), pending: Number(p?.pending ?? 0), tools: def.tools, actions: def.actions,
     };
   });
@@ -58,11 +70,8 @@ export async function runsPage(data: DataCtx, f: { agent?: string; status?: stri
   if (f.agent) { where.push("agent_key = ?"); params.push(f.agent); }
   if (f.status) { where.push("status = ?"); params.push(f.status); }
   if (f.trigger) { where.push("trigger_kind = ?"); params.push(f.trigger); }
-  // Property-scoped roles see runs they started and runs that proposed something in their scope.
-  if (data.actor.propertyIds !== "all") {
-    where.push("(started_by = ? OR EXISTS (SELECT 1 FROM {ai_proposals} sp WHERE sp.run_id = r.id AND sp.property_id IN (SELECT value FROM json_each(?))))");
-    params.push(data.actor.personaId, JSON.stringify(data.actor.propertyIds));
-  }
+  const scope = runScope(data, "r");
+  if (data.actor.propertyIds !== "all") { where.push(scope.sql); params.push(...scope.params); }
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const w = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -105,7 +114,7 @@ const hrefOf = (t: string, id: string) => {
 };
 
 export type Queue = "needs_you" | "auto_handled" | "waiting" | "decided";
-const QUEUE_SQL: Record<Queue, string> = {
+export const QUEUE_SQL: Record<Queue, string> = {
   needs_you: "p.queue_state = 'needs_you' AND d.id IS NULL",
   waiting: "p.queue_state = 'waiting' AND d.id IS NULL",
   auto_handled: "p.queue_state = 'auto_handled'",

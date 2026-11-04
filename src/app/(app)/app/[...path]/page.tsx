@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { allEntities, getEntityByRoute } from "@/entities";
+import { allEntities, can, getEntityByRoute, type Row } from "@/entities";
 import { currentSession, requireStaff } from "@/auth/session";
 import { ListView, ModuleIndex, RecordView } from "@/components/entity/pages";
 import { PageSkeleton } from "@/components/app/PageSkeleton";
+import { getPlatform } from "@/lib/platform";
+import { getRow } from "@/server/query";
 
 // Generic entity pages (lane C). Any /app path without a static route lands here and resolves
 // through the registry:
@@ -53,17 +55,24 @@ export default async function EntityPage({ params, searchParams }: Props) {
   if (r.redirect) redirect(r.redirect);
   const hit = r.hit;
   if (!hit && !allEntities().some((d) => d.route.startsWith(r.path! + "/"))) notFound();
+  // Same for a record that doesn't exist or is outside the persona's scope: thrown inside the
+  // stream, notFound() can't set the status and React logs #419.
+  let row: Row | undefined;
+  if (hit?.id) {
+    const session = await currentSession();
+    if (can(session.actor.role, "read", hit.def.key)) row = (await getRow({ db: getPlatform().db, ws: session.ws, actor: session.actor }, hit.def.key, hit.id)) ?? notFound();
+  }
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <EntityBody hit={hit} path={r.path!} searchParams={searchParams} />
+      <EntityBody hit={hit} row={row} path={r.path!} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function EntityBody({ hit, path, searchParams }: { hit: ReturnType<typeof getEntityByRoute>; path: string; searchParams: Props["searchParams"] }) {
+async function EntityBody({ hit, row, path, searchParams }: { hit: ReturnType<typeof getEntityByRoute>; row?: Row; path: string; searchParams: Props["searchParams"] }) {
   const sp = toParams(await searchParams);
   const session = await currentSession();
   if (hit && !hit.id) return <ListView def={hit.def} searchParams={sp} session={session} />;
-  if (hit?.id) return <RecordView def={hit.def} id={hit.id} searchParams={sp} session={session} />;
+  if (hit?.id) return <RecordView def={hit.def} id={hit.id} row={row} searchParams={sp} session={session} />;
   return <ModuleIndex path={path} session={session} />;
 }

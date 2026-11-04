@@ -1,5 +1,6 @@
 import "server-only";
 import Link from "@/components/Link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { ChevronRight, CircleHelp, Sparkles } from "lucide-react";
 import { allEntities, can, getEntity, type ChartDef, type EntityDef, type KpiDef, type ListQuery, type Row, type TabDef } from "@/entities";
@@ -20,6 +21,7 @@ import { ChartPanel, KpiTile, type ChartData, type KpiData } from "./Metrics";
 import { RecordActions } from "./RecordActions";
 import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
+import { withActorNames } from "@/server/actors";
 import { columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
 
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
@@ -198,7 +200,7 @@ function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "do
             {kind === "activity" && <p className="text-[13px]">{String(r.summary)}{r.actor_kind === "agent" && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-tone-ai"><Sparkles className="size-3" />AI</span>}</p>}
             {kind === "documents" && <a href={safeHref(r.url)} target="_blank" rel="noreferrer" className="text-[13px] font-medium hover:text-primary hover:underline">{String(r.name)}</a>}
             <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-              {kind === "notes" && <>{String(r.author_id)} · </>}
+              {kind === "notes" && <>{String(r.author_name ?? r.author_id)} · </>}
               {kind === "tasks" && r.due_on != null && <>Due {String(r.due_on)} · {String(r.priority)} · </>}
               {kind === "documents" && <>{String(r.doc_type ?? "Document")}{r.filed_to ? ` · ${String(r.filed_to)}` : ""} · </>}
               <span title={formatDateTime(String(r.created_at ?? r.at ?? r.uploaded_at))}>{formatRelative(String(r.created_at ?? r.at ?? r.uploaded_at))}</span>
@@ -210,11 +212,11 @@ function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "do
   );
 }
 
-export async function RecordView({ def, id, searchParams, session }: { def: EntityDef; id: string; searchParams: URLSearchParams; session: Session }) {
+export async function RecordView({ def, id, row: loaded, searchParams, session }: { def: EntityDef; id: string; row?: Row; searchParams: URLSearchParams; session: Session }) {
   const ctx = ctxOf(session);
   const role = session.actor.role;
   if (!can(role, "read", def.key)) return <Denied def={def} />;
-  const row = await getRow(ctx, def.key, id);
+  const row = loaded ?? await getRow(ctx, def.key, id);
   if (!row) notFound();
   const tabs = tabsFor(def, role);
   const active = tabs.find((t) => t.key === searchParams.get("tab")) ?? tabs[0];
@@ -228,20 +230,32 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
       const [remote, local] = r.fk.split("=", 2);
       const value = local ? (await ctx.db.prepare(`SELECT ${local.replace(/[^a-z_]/g, "")} AS v FROM ${effective(def.table, ctx.ws)} WHERE id = ?`).bind(id).first<{ v: unknown }>())?.v : id;
       const q = parseListQuery(withView(rel, searchParams));
-      const [{ res, error }, facets] = await Promise.all([
+      const sub = def.relations.find((x) => x.name === "subaccounts");
+      const [{ res, error }, facets, children] = await Promise.all([
         attempt(list(ctx, rel.key, { ...q, where: { column: remote, value } })),
         facetOptions(ctx, rel.key, q).catch(() => ({})),
+        sub ? list(ctx, def.key, { size: 20, where: { column: sub.fk, value: id } }).then((x) => x.rows).catch(() => []) : Promise.resolve([]),
       ]);
       return (
+        <div className="space-y-3">
+        {children.length > 0 && (
+          <p className="rounded-md border bg-muted/40 px-3 py-2 text-[12.5px] text-muted-foreground">
+            {rel.label.many} post to its sub-accounts:{" "}
+            {children.map((c, i) => <Fragment key={String(c.id)}>{i > 0 && ", "}<Link href={`${def.route}/${encodeURIComponent(String(c.id))}`} className="font-medium text-foreground hover:text-primary hover:underline">{String(c._title ?? c.id)}</Link></Fragment>)}
+            ; its totals include them.
+          </p>
+        )}
         <EntityList key={rel.key} entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
           counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
           searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
+        </div>
       );
     } else if (active?.kind === "custom") {
       const c = getTab(active.customKey!)!;
       return c.component({ entity: def.key, id, row, actor: session.actor });
     } else if (active) {
       const res = await collab(ctx, active.kind as "notes" | "tasks" | "activity" | "documents", def.key, id, Number(searchParams.get("page")) || 1, 50);
+      if (active.kind === "notes") res.rows = await withActorNames(ctx, res.rows, "author_id", "author_name");
       return (
         <div className="space-y-3">
           {(active.kind === "notes" || active.kind === "tasks") && <Composer entity={def.key} id={id} kind={active.kind} />}
@@ -285,17 +299,19 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
       </div>
 
       {facts.length > 0 && (
-        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4 xl:grid-cols-8">
+        <div className="overflow-hidden rounded-lg border bg-card">
+        <dl className="-mb-px -mr-px grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))]">
           {facts.map((k) => {
             const f = def.fields[k];
             return (
-              <div key={k} className="min-w-0 bg-card px-3 py-2">
+              <div key={k} className="min-w-0 border-b border-r px-3 py-2">
                 <dt className="truncate text-[11px] text-muted-foreground">{f.label}</dt>
                 <dd className="mt-0.5 truncate text-[13.5px] font-medium"><Cell col={{ key: k, label: f.label, kind: columnKind(k, f), enum: f.enum, href: f.type === "ref" ? refHref(f, k) : undefined, moneyStyle: "whole" }} row={row} /></dd>
               </div>
             );
           })}
         </dl>
+        </div>
       )}
 
       {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}

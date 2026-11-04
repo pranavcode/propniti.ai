@@ -5,7 +5,7 @@ import type { TourDef } from "../tour/types";
 // Plain data the server layout hands the client shell. Icons are pre-rendered elements, because
 // component functions can't cross the server/client boundary.
 
-export type ShellNavItem = { key: string; label: string; href: string; icon: ReactNode; group?: string; count?: number; countTone?: "default" | "attention" };
+export type ShellNavItem = { key: string; label: string; href: string; icon: ReactNode; group?: string; count?: number; countTone?: "default" | "attention"; ai?: boolean; help?: string };
 export type ShellNavSection = { section: NavSection; label: string; items: ShellNavItem[] };
 
 export type ShellPersona = { id: string; name: string; title: string; role: Role; scopeLabel: string; home: string; portal?: boolean };

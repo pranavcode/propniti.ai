@@ -17,6 +17,30 @@ test("routes personas from /app to their homes", async ({ context, page }) => {
   await expect(page).toHaveURL(new RegExp(`${getPersona("lena")!.home}$`));
 });
 
+test("a record outside the persona's scope 404s inside the app shell", async ({ context, page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+  await as(context, "marcus");
+  const res = await go(page, `${BASE}/app/properties/p10`);
+  expect(res?.status()).toBe(404);
+  await expect(page.getByText("This record isn't in your scope or doesn't exist")).toBeVisible();
+  await expect(page.getByText(/viewing as Marcus Bell, who sees 3 Austin properties/)).toBeVisible();
+  await expect(page.getByRole("navigation").first()).toBeVisible();
+  await page.getByRole("link", { name: "Back to the list" }).click();
+  await expect(page).toHaveURL(/\/app\/properties$/);
+  expect(errors.filter((e) => !/404|Not Found/i.test(e))).toEqual([]);
+});
+
+test("an unknown /app page 404s inside the shell without a list link", async ({ context, page }) => {
+  await as(context, "marcus");
+  const res = await go(page, `${BASE}/app/no-such-page/deeper`);
+  expect(res?.status()).toBe(404);
+  await expect(page.getByText("This page doesn't exist or isn't part of your role")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to the list" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Go to your home" })).toBeVisible();
+});
+
 test("admin briefing shows overnight agents, what needs you and risks", async ({ context, page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -51,4 +75,18 @@ test("anyone sets their own notification preferences", async ({ context, page })
   expect((await saved).status()).toBe(200);
   await reload(page);
   await expect(page.getByRole("switch", { name: "Agent run results by SMS" })).toHaveAttribute("aria-checked", before === "true" ? "false" : "true");
+});
+
+test("sidebar marks only AI-powered pages with a sparkle", async ({ context, page }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app`);
+  const nav = page.getByRole("navigation", { name: "Main" });
+  for (const name of ["Inbox", "Copilot", "Agents", "Approvals", "AI activity", "Automations", "Data health"]) {
+    await expect(nav.getByRole("link", { name: new RegExp(`^${name}.*\\(AI-powered\\)`) })).toBeVisible();
+  }
+  for (const name of ["Dashboard", "Properties"]) {
+    const link = nav.getByRole("link", { name: new RegExp(`^${name}`) }).first();
+    await expect(link).toBeVisible();
+    await expect(link.locator("[data-ai-mark]")).toHaveCount(0);
+  }
 });
