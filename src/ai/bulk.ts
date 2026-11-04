@@ -4,7 +4,7 @@ import { executeProposal } from "./effects";
 import type { ProposalFilters } from "./filters";
 import { canDecide } from "./http";
 import type { AiSession } from "./session";
-import { proposal, proposalWhere, QUEUE_SQL } from "./views";
+import { proposal, proposalWhere, queueSql } from "./views";
 
 // "Approve all low-risk matching" in the approvals inbox: every page, not just the one on screen.
 // Capped per click so one request stays short; the confirm says when more remain.
@@ -15,11 +15,13 @@ const SCAN = 500;
 type Who = Pick<AiSession, "db" | "ws" | "actor" | "persona">;
 const isSafe = (p: Row) => p.risk === "Low" && p.amount_cents == null;
 
-// Low-risk proposals with no amount, waiting on a person, matching the filters, that this persona may decide.
+// Low-risk proposals with no amount in this persona's "Needs you" (decide.ts) matching the filters;
+// canDecide re-checks each one.
 export async function safeMatching(s: Who, f: ProposalFilters, cap = BULK_CAP) {
   const w = proposalWhere(f);
+  const q = queueSql(s.actor.role, "needs_you");
   const rows = await sql<Row>({ db: s.db, ws: s.ws, actor: s.actor },
-    `SELECT p.* FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE ${[QUEUE_SQL.needs_you, "p.risk = 'Low'", "p.amount_cents IS NULL", ...w.where].join(" AND ")} ORDER BY p.created_at DESC, p.id LIMIT ${SCAN}`, w.params);
+    `SELECT p.* FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE ${[q.sql, "p.risk = 'Low'", "p.amount_cents IS NULL", ...w.where].join(" AND ")} ORDER BY p.created_at DESC, p.id LIMIT ${SCAN}`, [...q.params, ...w.params]);
   const ok: string[] = [];
   for (const p of rows) if ((await canDecide(s, p)).ok) ok.push(String(p.id));
   return { ids: ok.slice(0, cap), count: Math.min(ok.length, cap), more: ok.length > cap || rows.length === SCAN };
@@ -43,8 +45,3 @@ export async function approveSafe(s: Who, ids: string[]) {
   return { approved: results.filter((r) => r.ok).length, results };
 }
 
-// Marks each inbox row with whether this persona may decide it, so the page can offer
-// "Notify approver" on the ones it can't.
-export async function withCanDecide<T extends Row>(s: Who, rows: T[]) {
-  return Promise.all(rows.map(async (p) => ({ ...p, can_decide: !p.decision && (await canDecide(s, p)).ok })));
-}

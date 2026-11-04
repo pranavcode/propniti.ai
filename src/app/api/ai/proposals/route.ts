@@ -1,4 +1,3 @@
-import { withCanDecide } from "@/ai/bulk";
 import { approvalFilters } from "@/ai/filters";
 import { dataOf, guarded, json, staffSession } from "@/ai/http";
 import { proposalsPage, type Queue } from "@/ai/views";
@@ -13,7 +12,6 @@ export async function GET(request: Request) {
     if (s instanceof Response) return s;
     const sp = new URL(request.url).searchParams;
     const q = sp.get("queue") ?? "needs_you";
-    const page = await proposalsPage(dataOf(s), { queue: (QUEUES.has(q) ? q : "needs_you") as Queue, ...approvalFilters(sp), page: Number(sp.get("page")) || 1, size: Number(sp.get("size")) || 25, facets: sp.get("facets") === "1" });
-    return json({ ...page, rows: await withCanDecide(s, page.rows) });
+    return json(await proposalsPage(dataOf(s), { queue: (QUEUES.has(q) ? q : "needs_you") as Queue, ...approvalFilters(sp), page: Number(sp.get("page")) || 1, size: Number(sp.get("size")) || 25, facets: sp.get("facets") === "1" }));
   });
 }

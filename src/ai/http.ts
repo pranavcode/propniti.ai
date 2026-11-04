@@ -1,11 +1,10 @@
 import { after } from "next/server";
 import type { z } from "zod";
-import { getEntity } from "@/entities";
-import { PERMISSIONS } from "@/auth/personas";
-import { INTERNAL_ROLES, type Row } from "@/entities/types";
+import type { Row } from "@/entities/types";
 import { rateLimit } from "@/lib/guard";
 import { parseBody } from "@/lib/requests";
 import { DB_BUSY, publicError, sql, type DataCtx } from "./data";
+import { needsApprove, staffDecision } from "./decide";
 import { aiSession, json, sameOrigin, type AiSession } from "./session";
 
 // HTTP glue for /api/ai/*: session, origin and rate-limit checks, background work via after()
@@ -60,26 +59,17 @@ export async function guarded(fn: () => Promise<Response>) {
   }
 }
 
-// Anything with money, legal or safety risk needs approve access, not just write.
-export const needsApprove = (p: Row) => p.risk !== "Low" || p.amount_cents != null;
+export { needsApprove };
 
 // Who may decide an agent's proposal. Agents act on other people's records (reminders to other
 // households, data fixes), so portal users never decide them; the one exception is an owner
-// approving a spend that waits on them, for a property they own. Staff need write access to the
-// record's module for low-risk items and approve access for anything with money, legal or safety risk.
+// approving a spend that waits on them, for a property they own. Staff follow staffDecision (decide.ts).
 export async function canDecide(s: Pick<AiSession, "db" | "ws" | "actor" | "persona">, p: Row): Promise<{ ok: true } | { ok: false; error: string }> {
-  const role = s.actor.role;
   if (s.persona.portal) {
-    if (role === "owner" && p.queue_state === "waiting" && p.assignee_role === "owner" && (await ownsProposal(s, p))) return { ok: true };
+    if (s.actor.role === "owner" && p.queue_state === "waiting" && p.assignee_role === "owner" && (await ownsProposal(s, p))) return { ok: true };
     return { ok: false, error: "Only staff can act on agent proposals." };
   }
-  if (!(INTERNAL_ROLES as readonly string[]).includes(role)) return { ok: false, error: "Only staff can act on agent proposals." };
-  if (p.queue_state === "waiting") return role === "principal" ? { ok: true } : { ok: false, error: "This one waits for the owner's approval in their portal." };
-  const mod = getEntity(String(p.entity_type))?.module ?? "intelligence";
-  const access = PERMISSIONS[role][mod] ?? "none";
-  const approve = needsApprove(p);
-  if (approve ? access === "approve" : access === "write" || access === "approve") return { ok: true };
-  return { ok: false, error: `${s.persona.title} can't ${approve ? "approve" : "act on"} ${mod} items${p.assignee_role ? `; this one goes to the ${String(p.assignee_role).replace(/_/g, " ")}` : ""}.` };
+  return staffDecision(s.actor.role, p, s.persona.title);
 }
 
 // The owner persona's record is an owners row; the proposal's property must belong to one of its entities.

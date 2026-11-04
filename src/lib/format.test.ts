@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
+import { formatCountDelta, formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
 
 const now = new Date("2026-11-04T12:00:00Z");
 
@@ -21,6 +21,11 @@ describe("format", () => {
     expect(formatDelta(105, 100)).toBe("+5%");
     expect(formatDelta(97, 100)).toBe("−3%");
     expect(formatDelta(5, 0)).toBeNull();
+    // Counts change by how many, not by a percentage of a small base (30 → 151 is "+121", not "+403%").
+    expect(formatCountDelta(151, 30)).toBe("+121");
+    expect(formatCountDelta(4, 7)).toBe("−3");
+    expect(formatCountDelta(5, 0)).toBe("+5");
+    expect(formatCountDelta(5, null)).toBeNull();
   });
 
   it("formats dates relative to now", () => {
@@ -29,6 +34,9 @@ describe("format", () => {
     expect(formatRelative("2026-11-04T11:55:00Z", now)).toBe("5m ago");
     expect(formatRelative("2026-11-03T09:00:00Z", now)).toBe("yesterday");
     expect(formatRelative("2026-11-01T09:00:00Z", now)).toBe("3 days ago");
+    // A stamp a little ahead of "now" (another machine's clock) is still "just now", never "in 1m".
+    expect(formatRelative("2026-11-04T12:01:30Z", now)).toBe("just now");
+    expect(formatRelative("2026-11-04T12:30:00Z", now)).toBe("in 30m");
     expect(formatDue("2026-11-02", now)).toEqual({ text: "Late by 2 days", late: true, soon: false });
     expect(formatDue("2026-11-04", now).text).toBe("Due today");
   });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
-import { approveSafe, safeMatching, withCanDecide } from "../bulk";
+import { approveSafe, safeMatching } from "../bulk";
 import { applyFixes } from "../datafix";
 import { approvalFilters } from "../filters";
 import { notifyApprover } from "../notify";
@@ -95,14 +95,20 @@ describe("approve all low-risk matching", () => {
     expect(lena.approved).toBe(0);
   });
 
-  it("marks rows this persona can't decide", async () => {
+  it("puts what another role decides under Waiting on others, marked so the persona can notify them", async () => {
     const f = await seed();
     const data = { db: f.db, ws: WS, actor: SAM.actor };
-    const page = await proposalsPage(data, { queue: "needs_you", size: 50 });
-    const rows = await withCanDecide({ ...data, persona: SAM.persona }, page.rows);
-    expect(rows.every((r) => r.can_decide === false)).toBe(true);
-    const mine = await withCanDecide({ ...data, actor: MARCUS, persona: getPersona("marcus")! }, page.rows.filter((r) => r.property_id === "p02"));
-    expect(mine.every((r) => r.can_decide)).toBe(true);
+    const mine = await proposalsPage(data, { queue: "needs_you", size: 50 });
+    const others = await proposalsPage(data, { queue: "waiting", size: 50, facets: true });
+    expect(mine.total).toBe(0);
+    expect(others.total).toBe(32);
+    expect(others.counts).toMatchObject({ waiting: 32 });
+    expect(others.counts.needs_you ?? 0).toBe(0);
+    expect(others.rows.every((r) => r.can_decide === false)).toBe(true);
+    expect(others.facets!.risk.find((x) => x.key === "Low")?.n).toBe(31);
+    const marcus = await proposalsPage({ ...data, actor: MARCUS }, { queue: "needs_you", property: "p02" });
+    expect(marcus.total).toBe(20);
+    expect(marcus.rows.every((r) => r.can_decide)).toBe(true);
   });
 });
 

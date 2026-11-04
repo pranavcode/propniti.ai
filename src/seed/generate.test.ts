@@ -181,7 +181,9 @@ describe("seed generator", () => {
   it("metrics_monthly matches the raw aggregates", () => {
     expect(T.metrics_monthly).toHaveLength(30 * 19);
     const charged = group(T.charges, (c) => `${c.property_id}|${c.period}`, cents);
-    const collected = group(T.payments, (p) => (p.nsf ? null : `${p.property_id}|${(p.received_on as string).slice(0, 7)}`), cents);
+    // Collected = what the month's own charges have been paid so far (the ledger allocation), so an
+    // older balance paid down this month never lifts the rate above 100%.
+    const collected = group(T.charges, (c) => `${c.property_id}|${c.period}`, (c) => cents(c, "paid_cents"));
     const types = Object.fromEntries(T.gl_accounts.map((g) => [g.id, g.type]));
     const noi = group(T.journal_entries.filter((j) => types[j.gl_account_id as string] === "Income" || types[j.gl_account_id as string] === "Expense"), (j) => `${j.property_id}|${j.period}`, (j) => cents(j, "credit_cents") - cents(j, "debit_cents"));
     const opened = group(T.work_orders, (w) => `${w.property_id}|${(w.opened_at as string).slice(0, 7)}`, () => 1);
@@ -189,6 +191,7 @@ describe("seed generator", () => {
       const k = `${m.property_id}|${m.month}`;
       expect(m.charged_cents, k).toBe(charged.get(k) ?? 0);
       expect(m.collected_cents, k).toBe(collected.get(k) ?? 0);
+      expect(m.collected_cents as number, k).toBeLessThanOrEqual(m.charged_cents as number);
       expect(m.noi_cents, k).toBe(noi.get(k) ?? 0);
       expect(m.wo_opened, k).toBe(opened.get(k) ?? 0);
       expect(m.occupied as number).toBeLessThanOrEqual(m.units as number);

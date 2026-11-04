@@ -21,7 +21,7 @@ type Queue = "needs_you" | "auto_handled" | "waiting" | "decided";
 const TABS: { key: Queue; label: string; hint: string }[] = [
   { key: "needs_you", label: "Needs you", hint: "Agents proposed these and stopped: a person decides." },
   { key: "auto_handled", label: "Handled automatically", hint: "Low-risk actions inside your approval policies, already applied and audited." },
-  { key: "waiting", label: "Waiting on others", hint: "Over the owner's limit: the owner approves in their portal." },
+  { key: "waiting", label: "Waiting on others", hint: "Over the owner's limit (the owner approves in their portal), or for another role to decide: notify them from here." },
   { key: "decided", label: "Decided", hint: "Approved, edited or rejected by a person." },
 ];
 type Facet = { key: string; label: string; n: number };
@@ -204,14 +204,14 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
                 why={p.why}
                 evidence={p.evidence.map((e) => ({ label: e.label, href: e.href }))}
                 confidence={p.confidence}
-                policy={p.assignee_role ? `Approver: ${p.assignee_role.replace(/_/g, " ")}` : undefined}
+                policy={p.decide_reason ?? p.approver ?? (p.assignee_role ? `Approver: ${p.assignee_role.replace(/_/g, " ")}` : undefined)}
                 runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
                 recordHref={p.href}
                 createdAt={p.created_at}
                 source={sourceOf(p)}
                 model={p.model ?? undefined}
                 canApprove={p.can_decide !== false}
-                onNotify={!decided && p.can_decide === false && !notified[p.id] ? () => notify(p) : undefined}
+                onNotify={!p.decision && p.can_decide === false && !notified[p.id] ? () => notify(p) : undefined}
                 onApprove={decided ? undefined : () => decide(p, "approve")}
                 onReject={decided ? undefined : () => decide(p, "reject")}
                 onEdit={!decided && m ? () => setEditing({ p, subject: m.subject ?? "", body: m.body ?? "" }) : undefined}

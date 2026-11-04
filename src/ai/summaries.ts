@@ -1,4 +1,5 @@
 import { demoIsoIn, demoNowIso } from "@/lib/clock";
+import { decidableSql } from "./decide";
 import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { Facts, Row } from "@/entities/types";
@@ -132,7 +133,7 @@ async function briefingFacts(data: DataCtx): Promise<{ facts: Facts; today: stri
   const today = await asOf(data.db);
   const [late, needs, issues, runs] = await Promise.all([
     delinquency(data, today, { minDays: 1, limit: 1 }),
-    sql<{ n: number }>(data, "SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id)"),
+    sql<{ n: number }>(data, `SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id) AND ${decidableSql(data.actor.role).sql}`, decidableSql(data.actor.role).params),
     sql<{ n: number; critical: number }>(data, "SELECT count(*) AS n, sum(severity = 'critical') AS critical FROM {data_issues} WHERE status = 'open'"),
     sql<{ n: number; auto: number }>(data, "SELECT count(*) AS n, (SELECT count(*) FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= ?) AS auto FROM {agent_runs} WHERE started_at >= ?", [demoIsoIn(-86_400_000), demoIsoIn(-86_400_000)], { unscoped: true }),
   ]);

@@ -2,9 +2,10 @@ import { demoIsoIn, demoNow } from "@/lib/clock";
 import { can, getEntity } from "@/entities";
 import { getAction } from "@/extensions/actions";
 import { effective, expand, readWs } from "@/server/query";
-import type { AgentKey, Row } from "@/entities/types";
+import type { AgentKey, Role, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
+import { approverLabel, decidableSql, staffDecision } from "./decide";
 import { computeFix, proposalSource, type AiSource } from "./rules";
 import { fixProposal, queueReason } from "./tools/write";
 import { nextRun } from "./cron";
@@ -21,6 +22,7 @@ export type AgentCard = {
   key: AgentKey; name: string; goal: string; ownerRole: string; enabled: boolean; autonomy: string; schedule: string | null; events: string[];
   lastRun: { id: string; status: string; started_at: string; summary: string | null; model: string | null; trigger_kind: string } | null;
   nextRunAt: string | null; runs30: number; ok30: number; failed30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
+  statsMissing?: boolean; // a stats query failed: counts read 0 and the page says so
 };
 
 // The runs a person may open: all of them org-wide; for property-scoped roles, runs they started
@@ -39,12 +41,27 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
   const since = demoIsoIn(-30 * 86_400_000, nowMs);
   const rs = runScope(data, "r");
   const ls = runScope(data, "l");
+  // A failed or slow stats query is logged and leaves the cards with their settings and empty
+  // counts, instead of failing the whole page (D1 can time out under load).
+  let statsMissing = false;
+  const stat = async <T,>(label: string, q: Promise<T[]>): Promise<T[]> => {
+    const t0 = Date.now();
+    try {
+      const rows = await q;
+      if (Date.now() - t0 > 2_000) console.warn(`[ai] agents page: ${label} took ${Date.now() - t0} ms`);
+      return rows;
+    } catch (err) {
+      statsMissing = true;
+      console.error(`[ai] agents page: ${label} failed after ${Date.now() - t0} ms`, err);
+      return [];
+    }
+  };
   const [runs, props, last] = await Promise.all([
-    sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, `SELECT r.agent_key, count(*) AS n, sum(r.status IN ('done', 'waiting_approval')) AS ok, sum(r.status = 'failed') AS failed FROM {agent_runs} r WHERE r.started_at >= ? AND ${rs.sql} GROUP BY r.agent_key`, [since, ...rs.params], { unscoped: true }),
-    sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
+    stat("runs", sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, `SELECT r.agent_key, count(*) AS n, sum(r.status IN ('done', 'waiting_approval')) AS ok, sum(r.status = 'failed') AS failed FROM {agent_runs} r WHERE r.started_at >= ? AND ${rs.sql} GROUP BY r.agent_key`, [since, ...rs.params], { unscoped: true })),
+    stat("proposals", sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
       `SELECT p.agent, count(*) AS n, sum(d.decision IN ('Approved', 'Edited') AND p.queue_state <> 'auto_handled') AS approved, sum(p.queue_state = 'auto_handled') AS auto, sum(d.id IS NULL AND p.queue_state <> 'auto_handled') AS pending
-       FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`),
-    sql<Row>(data, `SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(l.seq) FROM {agent_runs} l WHERE ${ls.sql} GROUP BY l.agent_key)`, ls.params, { unscoped: true }),
+       FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`)),
+    stat("last runs", sql<Row>(data, `SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(l.seq) FROM {agent_runs} l WHERE ${ls.sql} GROUP BY l.agent_key)`, ls.params, { unscoped: true })),
   ]);
   return AGENT_ORDER.map((key) => {
     const def = getAgent(key)!;
@@ -58,6 +75,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
       lastRun: l ? { id: String(l.id), status: String(l.status), started_at: String(l.started_at), summary: (l.summary as string) ?? null, model: (l.model as string) ?? null, trigger_kind: String(l.trigger_kind) } : null,
       nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, ok30: Number(r?.ok ?? 0), failed30: Number(r?.failed ?? 0), successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
       proposed: p?.n ?? 0, approved: Number(p?.approved ?? 0), auto: Number(p?.auto ?? 0), pending: Number(p?.pending ?? 0), tools: def.tools, actions: def.actions,
+      ...(statsMissing ? { statsMissing } : {}),
     };
   });
 }
@@ -98,7 +116,7 @@ export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
   if (!org && run.started_by !== data.actor.personaId) {
     const mine = await sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]);
     if (!mine.length) return null;
-    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map(proposalOut), refs: { records: {}, entities: {}, actions: {}, proposals: {} } as TraceRefs, traceHidden: true };
+    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map((r) => proposalOut(r, data.actor.role)), refs: { records: {}, entities: {}, actions: {}, proposals: {} } as TraceRefs, traceHidden: true };
   }
   const [steps, proposals, plans] = await Promise.all([
     sql<Row>(data, "SELECT * FROM {agent_steps} WHERE run_id = ? AND idx > ? ORDER BY idx LIMIT 400", [id, afterIdx], { unscoped: true }),
@@ -107,7 +125,7 @@ export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
     afterIdx >= 0 ? sql<Row>(data, "SELECT * FROM {agent_steps} WHERE run_id = ? AND idx <= ? AND kind = 'plan' ORDER BY idx LIMIT 4", [id, afterIdx], { unscoped: true }) : Promise.resolve([]),
   ]);
   const out = steps.map(stepOut);
-  return { run, steps: out, proposals: proposals.map(proposalOut), refs: await traceRefs(data, out, plans.map(stepOut)) };
+  return { run, steps: out, proposals: proposals.map((r) => proposalOut(r, data.actor.role)), refs: await traceRefs(data, out, plans.map(stepOut)) };
 }
 
 const asTraceStep = (s: StepRow): TraceStepLike => ({ idx: s.idx, kind: s.kind, toolKey: s.tool_key ?? undefined, input: s.input ?? undefined, output: s.output ?? undefined, ok: s.ok, at: s.at });
@@ -168,10 +186,15 @@ export async function traceRefs(data: DataCtx, steps: StepRow[], context: StepRo
   return refs;
 }
 
-export type ProposalOut = Row & { source: AiSource; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string };
-export function proposalOut(p: Row): ProposalOut {
+export type ProposalOut = Row & { source: AiSource; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string; can_decide?: boolean; decide_reason?: string | null; approver?: string };
+// With the viewer's role, also says whether they may decide it (the rule canDecide enforces), why
+// not, and who may: the Approve button and its label read these.
+export function proposalOut(p: Row, role?: Role): ProposalOut {
   const evidence = parseJson<{ entity_type: string; entity_id: string; label: string }[]>(p.evidence, []).map((e) => ({ ...e, href: hrefOf(e.entity_type, e.entity_id) }));
-  return { ...p, source: proposalSource(p), why: parseJson<string[]>(p.why, []), evidence, payload: parseJson<Record<string, unknown>>(p.payload, {}), href: hrefOf(String(p.entity_type), String(p.entity_id)) };
+  const out: ProposalOut = { ...p, source: proposalSource(p), why: parseJson<string[]>(p.why, []), evidence, payload: parseJson<Record<string, unknown>>(p.payload, {}), href: hrefOf(String(p.entity_type), String(p.entity_id)) };
+  if (!role) return out;
+  const d = staffDecision(role, p);
+  return { ...out, can_decide: d.ok, decide_reason: d.ok ? null : d.error, approver: approverLabel(p) };
 }
 const hrefOf = (t: string, id: string) => {
   const d = getEntity(t);
@@ -187,7 +210,6 @@ export const QUEUE_SQL: Record<Queue, string> = {
 };
 
 const RANK = "CASE p.risk WHEN 'High' THEN 2 WHEN 'Medium' THEN 1 ELSE 0 END";
-const QUEUE_OF = "CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' ELSE p.queue_state END";
 
 // The inbox filters as SQL over `p` (ai_proposals), shared by the page and "approve all matching".
 export function proposalWhere(f: ProposalFilters) {
@@ -200,25 +222,39 @@ export function proposalWhere(f: ProposalFilters) {
   return { where, params };
 }
 
+// A persona's tabs (decide.ts): "Needs you" holds only what they may decide; an open item another
+// role must decide shows under "Waiting on others", where they can notify that approver.
+export function queueSql(role: Role, q: Queue) {
+  const mine = decidableSql(role);
+  if (q === "needs_you") return { sql: `${QUEUE_SQL.needs_you} AND ${mine.sql}`, params: mine.params };
+  if (q === "waiting") return { sql: `(${QUEUE_SQL.waiting} OR (${QUEUE_SQL.needs_you} AND NOT ${mine.sql}))`, params: mine.params };
+  return { sql: QUEUE_SQL[q], params: [] as unknown[] };
+}
+const queueOf = (role: Role) => {
+  const mine = decidableSql(role);
+  return { sql: `CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' WHEN p.queue_state = 'needs_you' AND NOT ${mine.sql} THEN 'waiting' ELSE p.queue_state END`, params: mine.params };
+};
+
 export type Facet = { key: string; label: string; n: number };
 
 // facets: also list the filter options (the approvals page; home widgets skip the extra query).
 export async function proposalsPage(data: DataCtx, f: ProposalFilters & { queue?: Queue; page?: number; size?: number; facets?: boolean }) {
   const queue = f.queue ?? "needs_you";
+  const q = queueSql(data.actor.role, queue);
   const w = proposalWhere(f);
-  const where = [QUEUE_SQL[queue], ...w.where];
-  const params = w.params;
-  // Approvals assigned to a role the persona doesn't hold still show (read-only) for leaders.
+  const where = [q.sql, ...w.where];
+  const params = [...q.params, ...w.params];
+  const of = queueOf(data.actor.role);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
   const [rows, total, counts, groups] = await Promise.all([
     sql<Row>(data, `SELECT p.*, d.decision, d.decided_by, d.decided_at, d.note AS decision_note ${from} WHERE ${where.join(" AND ")} ORDER BY ${RANK} DESC, p.created_at DESC, p.id LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n ${from} WHERE ${where.join(" AND ")}`, params),
-    sql<{ q: string; n: number }>(data, `SELECT ${QUEUE_OF} AS q, count(*) AS n ${from} GROUP BY q`),
+    sql<{ q: string; n: number }>(data, `SELECT ${of.sql} AS q, count(*) AS n ${from} GROUP BY q`, of.params),
     // Filter options: what this queue holds, before the filters narrow it.
     !f.facets ? [] : sql<{ agent: string; risk: string; property_id: string | null; property: string | null; entity_type: string; n: number }>(data,
-      `SELECT p.agent, p.risk, p.property_id, pr.name AS property, p.entity_type, count(*) AS n ${from} LEFT JOIN {properties} pr ON pr.id = p.property_id WHERE ${QUEUE_SQL[queue]} GROUP BY p.agent, p.risk, p.property_id, p.entity_type`),
+      `SELECT p.agent, p.risk, p.property_id, pr.name AS property, p.entity_type, count(*) AS n ${from} LEFT JOIN {properties} pr ON pr.id = p.property_id WHERE ${q.sql} GROUP BY p.agent, p.risk, p.property_id, p.entity_type`, q.params),
   ]);
   const facet = (key: (g: (typeof groups)[number]) => string | null, label: (g: (typeof groups)[number]) => string) => {
     const m = new Map<string, Facet>();
@@ -237,7 +273,7 @@ export async function proposalsPage(data: DataCtx, f: ProposalFilters & { queue?
     property: facet((g) => g.property_id, (g) => g.property ?? String(g.property_id)),
     entity: facet((g) => g.entity_type, (g) => getEntity(g.entity_type)?.label.many ?? g.entity_type.replace(/_/g, " ")),
   };
-  return { rows: rows.map(proposalOut), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number>, ...(facets && { facets }) };
+  return { rows: rows.map((r) => proposalOut(r, data.actor.role)), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number>, ...(facets && { facets }) };
 }
 
 // Where a deep link lands: the proposal (by id, or the newest one on a record such as
@@ -246,13 +282,15 @@ export async function proposalFocus(data: DataCtx, f: { proposal?: string; recor
   const [type, id] = f.record?.split(/\/(.*)/) ?? [];
   if (!f.proposal && !(type && id)) return null;
   const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
+  const of = queueOf(data.actor.role);
   const [hit] = await sql<{ id: string; q: Queue; rank: number; created_at: string }>(data,
-    `SELECT p.id, ${QUEUE_OF} AS q, ${RANK} AS rank, p.created_at ${from} WHERE ${f.proposal ? "p.id = ?" : "p.entity_type = ? AND p.entity_id = ?"} ORDER BY p.created_at DESC LIMIT 1`,
-    f.proposal ? [f.proposal] : [type, id]);
+    `SELECT p.id, ${of.sql} AS q, ${RANK} AS rank, p.created_at ${from} WHERE ${f.proposal ? "p.id = ?" : "p.entity_type = ? AND p.entity_id = ?"} ORDER BY p.created_at DESC LIMIT 1`,
+    [...of.params, ...(f.proposal ? [f.proposal] : [type, id])]);
   if (!hit) return null;
+  const mine = queueSql(data.actor.role, hit.q);
   const [ahead] = await sql<{ n: number }>(data,
-    `SELECT count(*) AS n ${from} WHERE ${QUEUE_SQL[hit.q]} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
-    [hit.rank, hit.rank, hit.created_at, hit.created_at, hit.id]);
+    `SELECT count(*) AS n ${from} WHERE ${mine.sql} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
+    [...mine.params, hit.rank, hit.rank, hit.created_at, hit.created_at, hit.id]);
   return { id: hit.id, queue: hit.q, page: Math.floor((ahead?.n ?? 0) / size) + 1 };
 }
 

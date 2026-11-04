@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
+import { INTERNAL_ROLES } from "@/entities/types";
+import { sql } from "../data";
+import { approverLabel, decidableSql, staffDecision } from "../decide";
 import { executeProposal } from "../effects";
 import { canDecide } from "../http";
 import { startRun } from "../orchestrator";
 import { setModelForTests } from "../providers";
-import { DANIEL, openFixture, WS } from "./fixture";
+import { proposalsPage } from "../views";
+import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
 
 afterEach(() => setModelForTests(undefined));
 
@@ -50,5 +54,63 @@ describe("who may decide a proposal", () => {
     expect(await canDecide({ db, ws: WS, actor: DANIEL, persona: getPersona("daniel")! }, p)).toEqual({ ok: true });
     const lena = getPersona("lena")!;
     expect(await canDecide({ db, ws: WS, actor: { ...DANIEL, personaId: "lena", role: "leasing_agent" }, persona: lena }, p)).toMatchObject({ ok: false });
+  });
+});
+
+// The approvals queue the personas reported: compliance items routed to the maintenance supervisor,
+// a data fix routed to the admin, a bill, a renewal and a lead follow-up.
+const OPEN = [
+  { id: "pr-comp-high", entity_type: "compliance_items", risk: "High", amount_cents: null, assignee_role: "maintenance_supervisor" },
+  { id: "pr-comp-low", entity_type: "compliance_items", risk: "Low", amount_cents: null, assignee_role: "maintenance_supervisor" },
+  { id: "pr-fix", entity_type: "residents", risk: "Low", amount_cents: null, assignee_role: "admin" },
+  { id: "pr-bill", entity_type: "bills", risk: "Low", amount_cents: 120000, assignee_role: "accountant" },
+  { id: "pr-renew", entity_type: "leases", risk: "Medium", amount_cents: 244000, assignee_role: "property_manager" },
+  { id: "pr-lead", entity_type: "prospects", risk: "Low", amount_cents: null, assignee_role: "leasing_agent" },
+  { id: "pr-odd", entity_type: "not_an_entity", risk: "Low", amount_cents: null, assignee_role: null },
+];
+const actorAs = (role: (typeof INTERNAL_ROLES)[number]): Actor => ({ ...DANIEL, personaId: role, role });
+
+function seedQueue() {
+  const { raw, db } = openFixture();
+  const add = raw.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, confidence, risk, amount_cents, assignee_role, queue_state, created_at) VALUES ('base', ?, 'compliance', ?, 'x1', 'p01', 'x.do', ?, 0.9, ?, ?, ?, 'needs_you', '2026-11-04T00:30:00Z')");
+  for (const p of OPEN) add.run(p.id, p.entity_type, p.id, p.risk, p.amount_cents, p.assignee_role);
+  return db;
+}
+
+describe("the approve button, its label, the Needs you count and the server agree", () => {
+  it("a property manager can't approve a high-risk compliance item; the label names who can", () => {
+    const high = { ...OPEN[0], queue_state: "needs_you" };
+    expect(staffDecision("property_manager", high)).toMatchObject({ ok: false });
+    // Routed to the maintenance supervisor, who has write (not approve) access to risk: they can't either.
+    expect(staffDecision("maintenance_supervisor", high)).toMatchObject({ ok: false });
+    expect(staffDecision("admin", high)).toEqual({ ok: true });
+    expect(approverLabel(high)).toBe("Approver: principal, regional manager, accountant or admin");
+    expect(staffDecision("property_manager", { ...OPEN[1], queue_state: "needs_you" })).toEqual({ ok: true });
+  });
+
+  it("for every staff role, the SQL count, the listed rows, the flags and canDecide match", async () => {
+    const db = seedQueue();
+    for (const role of INTERNAL_ROLES) {
+      const actor = actorAs(role);
+      const data = { db, ws: WS, actor };
+      const persona = { ...getPersona("daniel")!, role };
+      const expected = [];
+      for (const p of OPEN) if ((await canDecide({ db, ws: WS, actor, persona }, { ...p, queue_state: "needs_you" })).ok) expected.push(p.id);
+      const d = decidableSql(role);
+      const counted = await sql<{ id: string }>(data, `SELECT p.id FROM {ai_proposals} p WHERE ${d.sql}`, d.params);
+      expect(counted.map((r) => r.id).sort(), role).toEqual(expected.sort());
+      const page = await proposalsPage(data, { queue: "needs_you", size: 50 });
+      expect(page.rows.map((r) => r.id).sort(), role).toEqual(expected.sort());
+      expect(page.total, role).toBe(expected.length);
+      expect(page.counts.needs_you ?? 0, role).toBe(expected.length);
+      expect(page.rows.every((r) => r.can_decide === true && r.decide_reason === null), role).toBe(true);
+    }
+  });
+
+  it("Sam (admin) decides the compliance items; Marcus (property manager) the low-risk ones in his module", async () => {
+    const db = seedQueue();
+    const ids = async (actor: Actor) => (await proposalsPage({ db, ws: WS, actor }, { queue: "needs_you", size: 50 })).rows.map((r) => r.id).sort();
+    expect(await ids(actorAs("admin"))).toEqual(["pr-comp-high", "pr-comp-low"]);
+    expect(await ids(MARCUS)).toEqual(["pr-comp-low", "pr-fix", "pr-lead", "pr-odd"].sort());
   });
 });
