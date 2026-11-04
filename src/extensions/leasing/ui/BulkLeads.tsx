@@ -18,9 +18,11 @@ export function SendFollowUps({ ids, label, who, size = "sm" }: { ids: string[];
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<number | null>(null);
   const [result, setResult] = useState<BulkResult | null>(null);
+  const [total, setTotal] = useState(0);
   const busy = done != null && !result;
 
   const send = async () => {
+    setTotal(ids.length);
     setDone(0);
     const r = await runBulk("prospects", "prospects.follow_up", ids, { onProgress: setDone });
     setResult(r);
@@ -34,20 +36,21 @@ export function SendFollowUps({ ids, label, who, size = "sm" }: { ids: string[];
     if (!o) { setDone(null); setResult(null); }
   };
 
-  if (!ids.length) return null;
+  // Stay mounted while the dialog is open: the refresh after sending can empty the list.
+  if (!ids.length && !open) return null;
   return (
     <>
       <Button size={size} variant="outline" onClick={() => setOpen(true)} aria-label={`${label}: ${who}`}><Send data-icon="inline-start" />{label}</Button>
       <Dialog open={open} onOpenChange={close}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send {ids.length} follow-up{ids.length === 1 ? "" : "s"}?</DialogTitle>
+            <DialogTitle>{result ? "Follow-ups sent" : `Send ${ids.length} follow-up${ids.length === 1 ? "" : "s"}?`}</DialogTitle>
             <DialogDescription>Each of {who} gets the standard follow-up email from you, offering a tour. Leads already contacted today, or no longer open, are skipped. Every send is logged on the lead.</DialogDescription>
           </DialogHeader>
           {done != null && (
             <div className="flex flex-col gap-1.5" role="status">
-              <Progress value={(done / ids.length) * 100} aria-label="Sending follow-ups" />
-              <p className="text-[12.5px] text-muted-foreground tabular-nums">{result ? bulkSummary(result, "Sent") : `Sending ${done} of ${ids.length}…`}</p>
+              <Progress value={total ? (done / total) * 100 : 100} aria-label="Sending follow-ups" />
+              <p className="text-[12.5px] text-muted-foreground tabular-nums">{result ? bulkSummary(result, "Sent") : `Sending ${done} of ${total}…`}</p>
             </div>
           )}
           <DialogFooter>
