@@ -14,33 +14,37 @@ import { RecordPaymentButton } from "@/extensions/receivables/ui/RecordPayment";
 
 export const metadata: Metadata = { title: "Record payment · Propniti" };
 
-type Props = { searchParams: Promise<{ q?: string }> };
-type Hit = { lease_id: string; household: string; property: string; unit: string; status: string };
+type Props = { searchParams: Promise<{ q?: string; property?: string }> };
+type Hit = { lease_id: string; property_id: string; household: string; property: string; unit: string; status: string };
 
-async function find(ctx: QueryCtx, q: string): Promise<Hit[]> {
+async function find(ctx: QueryCtx, q: string, property?: string): Promise<Hit[]> {
   const term = `%${q.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
   const scope = ctx.actor.propertyIds === "all" ? "" : "AND l.property_id IN (SELECT value FROM json_each(?))";
   const res = await ctx.db
     .prepare(
-      `SELECT l.id AS lease_id, h.name AS household, p.name AS property, u.number AS unit, l.status
+      `SELECT l.id AS lease_id, l.property_id, h.name AS household, p.name AS property, u.number AS unit, l.status
        FROM ${effective("leases", ctx.ws)} AS l JOIN ${effective("households", ctx.ws)} AS h ON h.id = l.household_id
        JOIN ${effective("properties", ctx.ws)} AS p ON p.id = l.property_id LEFT JOIN ${effective("units", ctx.ws)} AS u ON u.id = l.unit_id
        WHERE (h.name LIKE ?1 ESCAPE '\\' OR l.id LIKE ?1 ESCAPE '\\' OR u.number = ?2
               OR l.household_id IN (SELECT r.household_id FROM ${effective("residents", ctx.ws)} AS r WHERE r.first_name || ' ' || r.last_name LIKE ?1 ESCAPE '\\'))
-         AND l.status NOT IN ('Expired', 'Terminated') ${scope}
+         AND l.status NOT IN ('Expired', 'Terminated') ${property ? "AND l.property_id = ?3" : ""} ${scope}
        ORDER BY h.name LIMIT 8`,
     )
-    .bind(term, q, ...(ctx.actor.propertyIds === "all" ? [] : [JSON.stringify(ctx.actor.propertyIds)]))
+    .bind(term, q, ...(property ? [property] : []), ...(ctx.actor.propertyIds === "all" ? [] : [JSON.stringify(ctx.actor.propertyIds)]))
     .all<Hit>();
   return res.results.map((r) => ({ ...r }));
 }
 
 export default async function RecordPaymentPage({ searchParams }: Props) {
-  const q = ((await searchParams).q ?? "").trim().slice(0, 80);
+  const sp = await searchParams;
+  const q = (sp.q ?? "").trim().slice(0, 80);
   const session = await staffSession();
   if (!can(session.actor.role, "charges.record_payment", "charges")) return <div className="p-6"><EmptyState title="Recording payments isn't part of your role" description="Property managers and accountants record payments received in the office." action={{ label: "Go to your home", href: "/app" }} /></div>;
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
-  const hits: Hit[] = q ? await find(ctx, q) : (await delinquentLeases(ctx, { page: 1, size: 6, sort: "days" })).rows.map((r) => ({ lease_id: r.lease_id, household: r.household, property: r.property, unit: r.unit, status: r.lease_status }));
+  // "Record another" keeps the property of the payment just recorded (?property=).
+  const property = sp.property && /^[A-Za-z0-9_-]{1,40}$/.test(sp.property) ? sp.property : undefined;
+  const hits: Hit[] = q ? await find(ctx, q, property) : (await delinquentLeases(ctx, { property, page: 1, size: 6, sort: "days" })).rows.map((r) => ({ lease_id: r.lease_id, property_id: r.property_id, household: r.household, property: r.property, unit: r.unit, status: r.lease_status }));
+  const propertyName = property ? hits[0]?.property ?? null : null;
   const ledgers = await Promise.all(hits.map(async (h) => ({ h, open: (await leaseLedger(ctx, h.lease_id)).rows.filter((r) => r.kind === "charge" && (r.open ?? 0) > 0 && r.status !== "Processing") })));
 
   return (
@@ -49,9 +53,16 @@ export default async function RecordPaymentPage({ searchParams }: Props) {
       <form role="search" className="flex items-center gap-2 rounded-lg border bg-card px-3 focus-within:ring-2 focus-within:ring-ring/50">
         <Search className="size-4 text-muted-foreground" aria-hidden />
         <label htmlFor="rp-q" className="sr-only">Resident, unit or lease</label>
+        {property && <input type="hidden" name="property" value={property} />}
         <input id="rp-q" name="q" defaultValue={q} autoFocus autoComplete="off" spellCheck={false} placeholder="Resident name, unit number or lease ID…" className="h-10 flex-1 bg-transparent text-[13.5px] outline-none" />
       </form>
-      {!q && <h2 className="text-[12.5px] font-medium text-muted-foreground">Longest overdue in your properties</h2>}
+      {property && (
+        <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          {q ? "Searching" : "Showing"} {propertyName ?? "one property"} only.
+          <Link href={q ? `/app/receivables/record-payment?q=${encodeURIComponent(q)}` : "/app/receivables/record-payment"} className="text-primary hover:underline">All your properties</Link>
+        </p>
+      )}
+      {!q && <h2 className="text-[12.5px] font-medium text-muted-foreground">Longest overdue {property ? `at ${propertyName ?? "this property"}` : "in your properties"}</h2>}
       {ledgers.length === 0 ? (q
         ? <EmptyState compact kind="filtered" title={`No current lease matches “${q}”`} description="Try the last name, the unit number (412) or the lease ID (L-10001)." />
         : <EmptyState compact kind="table" title="No overdue balances in your properties" description="Search for a resident to record a payment against a charge that isn't due yet." />) : (
@@ -69,7 +80,7 @@ export default async function RecordPaymentPage({ searchParams }: Props) {
                       <tr key={c.id} className="border-t first:border-0">
                         <td className="px-3 py-1.5"><Link href={c.href} className="font-medium hover:text-primary hover:underline">{c.description}</Link><span className="ml-2 text-[11.5px] text-muted-foreground">due {formatDate(c.date, "always")}</span></td>
                         <td className="px-3 text-right tabular-nums"><Money value={c.open ?? 0} cents tone="none" /> open</td>
-                        <td className="w-40 px-3 py-1.5 text-right"><RecordPaymentButton size="xs" charge={{ id: c.id, description: c.description, open: (c.open ?? 0) / 100, due_on: c.date }} /></td>
+                        <td className="w-40 px-3 py-1.5 text-right"><RecordPaymentButton size="xs" charge={{ id: c.id, description: c.description, open: (c.open ?? 0) / 100, due_on: c.date }} next={{ leaseId: h.lease_id, propertyId: h.property_id }} /></td>
                       </tr>
                     ))}
                   </tbody>

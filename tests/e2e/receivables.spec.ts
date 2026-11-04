@@ -54,6 +54,21 @@ test("delinquency rows: remind once, then open record payment on that lease", as
   expect(errors).toEqual([]);
 });
 
+test("record payment: after recording, record another at the same property or view the ledger", async ({ page }) => {
+  const errors = await as(page, "marcus");
+  await go(page, "/app/receivables/record-payment");
+  await page.getByRole("button", { name: "Record payment" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount received").fill("10.00");
+  await dialog.getByRole("button", { name: /Record \$10\.00/ }).click();
+  await expect(dialog.getByRole("heading", { name: "Payment recorded" })).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "View ledger" })).toHaveAttribute("href", /\/app\/receivables\/ledger\/L-/);
+  await dialog.getByRole("link", { name: "Record another" }).click();
+  await expect(page).toHaveURL(/record-payment\?property=p\d+/);
+  await expect(page.getByText(/Showing .* only\./)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("collections workbench explains each score and drafts in English or Spanish", async ({ page }) => {
   const errors = await as(page, "marcus");
   await go(page, "/app/receivables/collections?step=reminder");
