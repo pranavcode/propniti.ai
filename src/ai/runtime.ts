@@ -218,7 +218,9 @@ export async function modelLoop(ctx: AgentCtx, opts: { system: string; prompt: s
     }
     let reply;
     try {
-      reply = await model.chat(system, turns, specs, { timeoutMs: Math.max(5_000, ctx.deadline - Date.now()) });
+      // Never past the deadline: the run's hard stop comes 3 s after it, and the rules path below
+      // (the fallback when the model gives up) has to fit in that gap.
+      reply = await model.chat(system, turns, specs, { timeoutMs: ctx.deadline - Date.now() });
     } catch (err) {
       console.error(`[ai] ${model.info.label} failed, using rules:`, errText(err));
       await ctx.step({ kind: "message", output: { model_error: errText(err), fallback: "rules" }, ok: false });

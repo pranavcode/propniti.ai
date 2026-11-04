@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setModelForTests, type ChatModel, type Reply, type Turn } from "../providers";
 import { startRun, sweep, drainEvents, claimSweep } from "../orchestrator";
 import { executeProposal } from "../effects";
@@ -251,11 +251,25 @@ describe("sweep and events", () => {
       structured: () => new Promise(() => {}),
     });
     const { raw, db } = openFixture();
-    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 50 })).done;
+    // Date stands still, so the model call starts before the deadline however slow the machine is
+    // (otherwise the run can pass its 50 ms before the call and finish on the rules instead).
+    // The hard stop is a real timer and still fires.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 50 })).done.finally(() => vi.useRealTimers());
     expect(r.status).not.toBe("failed");
     const run = raw.prepare("SELECT status, summary FROM agent_runs WHERE id = ?").get(r.runId) as Record<string, string>;
     expect(run.status).not.toBe("running");
     expect(run.summary).toMatch(/time budget/);
+  }, 20_000);
+
+  it("stops a model turn at the run's deadline, so the rules still propose before the hard stop", async () => {
+    // A model that answers only when its call times out, as a slow one does.
+    const timesOut = (_s: string, _t: Turn[], _x: unknown, o?: { timeoutMs?: number }) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timed out after ${o?.timeoutMs} ms`)), o?.timeoutMs));
+    setModelForTests({ info: { provider: "anthropic", model: "claude-opus-5", label: "Slow", native: true }, chat: timesOut, structured: () => new Promise(() => {}) });
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 1_000 })).done;
+    expect(r.summary).toMatch(/^Rules: /);
+    expect(proposals(raw, r.runId).length).toBeGreaterThan(0);
   }, 20_000);
 });
 

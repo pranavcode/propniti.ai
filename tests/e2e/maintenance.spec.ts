@@ -1,5 +1,5 @@
 import { expect as baseExpect, test } from "@playwright/test";
-import { as, BASE, GREETING, go, openFull, reload, watch } from "./helpers";
+import { as, BASE, GREETING, go, openFull, ownWorkspace, reload, watch } from "./helpers";
 
 // Maintenance as Tom Alvarez (maintenance supervisor): home → chart drill-down → intake with the
 // Maintenance Triage Agent → dispatch → board and calendar → vendor invoice approve-and-pay →
@@ -100,7 +100,9 @@ test("technician view starts a job and logs time", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("a triage suggestion is dispatched from the home queue, and late make-readies escalate", async ({ page }) => {
+test("a triage suggestion is dispatched from the home queue, and late make-readies escalate", async ({ page, context }) => {
+  // The queue's suggestions are the seeded ones, not what earlier tests and agent sweeps left.
+  await ownWorkspace(context);
   const errors = watch(page);
   await go(page, `${BASE}/app/maintenance`);
   await expect(page.getByRole("button", { name: /Accept \d+ high-confidence suggestions?/ })).toBeVisible();
