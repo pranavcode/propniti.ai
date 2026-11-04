@@ -9,9 +9,10 @@ import { OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 import { AGENT_KEYS } from "../types";
 
-// Who filed or uploaded a document, stored as a staff id or an agent key, shown as a name.
+// Who filed or uploaded a document, stored as a staff, vendor or applicant id or an agent key, shown as a name.
+const sqlText = (v: string) => `'${v.replace(/'/g, "''")}'`;
 const actorName = (col: string) =>
-  `coalesce((SELECT s.name FROM {staff} s WHERE s.id = ${col}), CASE ${col} ${AGENT_KEYS.map((k) => `WHEN '${k}' THEN '${agentName(k)}'`).join(" ")} ELSE ${col} END)`;
+  `coalesce((SELECT s.name FROM {staff} s WHERE s.id = ${col}), (SELECT v.company FROM {vendors} v WHERE v.id = ${col}), (SELECT a.first_name || ' ' || a.last_name FROM {applicants} a WHERE a.id = ${col}), CASE ${col} ${AGENT_KEYS.map((k) => `WHEN ${sqlText(k)} THEN ${sqlText(agentName(k))}`).join(" ")} ELSE ${col} END)`;
 
 registerEntity({
   key: "documents",

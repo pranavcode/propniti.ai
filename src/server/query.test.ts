@@ -289,6 +289,15 @@ describe("rows", () => {
     expect(rows.find((r) => r.id === "doc-2")).toMatchObject({ classified_by: "Lena Ortiz", uploaded_by: "Payables Agent" });
   });
 
+  it("names a vendor or applicant who uploaded a document", async () => {
+    await db.prepare("INSERT INTO vendors (workspace_id, id, company, trade, bank_last4, tin_last4) VALUES ('base', 'v9', 'Lone Star Plumbing', 'Plumbing', '1111', '2222')").run();
+    await db.prepare("INSERT INTO applicants (workspace_id, id, first_name, last_name, email, created_at) VALUES ('base', 'apl-0001', 'Ana', 'Ruiz', 'ana@x.example', '2026-10-01T00:00:00Z')").run();
+    await db.prepare("INSERT INTO documents (workspace_id, id, property_id, name, url, uploaded_at, classified_by, uploaded_by) VALUES ('base', 'doc-v', 'p01', 'COI', '/x', '2026-10-01T00:00:00Z', 'v9', 'v9'), ('base', 'doc-a', 'p01', 'Pay stub', '/y', '2026-10-01T00:00:00Z', 'apl-0001', 'apl-0001')").run();
+    const rows = (await list(await ctx("daniel"), "documents", {})).rows;
+    expect(rows.find((r) => r.id === "doc-v")).toMatchObject({ classified_by: "Lone Star Plumbing", uploaded_by: "Lone Star Plumbing" });
+    expect(rows.find((r) => r.id === "doc-a")).toMatchObject({ classified_by: "Ana Ruiz", uploaded_by: "Ana Ruiz" });
+  });
+
   it("derives charge status from payments", async () => {
     const c = await ctx("daniel");
     expect((await getRow(c, "charges", "c-p01-u1"))!.status).toBe("Paid");
