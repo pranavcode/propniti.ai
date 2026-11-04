@@ -32,13 +32,15 @@ Propniti is property management software for US residential and commercial portf
 
 **Non-goals (v2)**
 
-- Real accounts, real payments and real messages. Sign-in is a persona picker; payments and messages are simulated.
-- Live sync with other property management systems.
+- Real accounts, real payments and real messages. Sign-in uses demo accounts with one published password; payments and messages are simulated.
+- Live sync with other property management systems. Data comes in through file import only.
 - Markets outside the US.
 
 ## Personas
 
-All names and companies are fictional. A visitor picks a persona on [propniti.ai/login](https://propniti.ai/login) and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). The old `/demo` link now goes to `/login`.
+All names and companies are fictional. A visitor signs in on [propniti.ai/login](https://propniti.ai/login) with a demo account, or picks a person's card, and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). The old `/demo` link now goes to `/login`.
+
+**Demo accounts.** Each persona has the email `<id>@propniti.demo` (for example `marcus@propniti.demo`), and every account uses the published password `propniti-demo`. Clicking a card fills the form; double-clicking a card, or its *Sign in now* button, signs in straight away. `/login?as=<id>` prefills a person, and a `next` link to an `/app` or `/portal` page is kept. The browser remembers the last person, and a visitor who is already signed in sees *Continue as …* and *Switch person*. The form also works without JavaScript.
 
 | Persona | Role | Scope | Lands on |
 | --- | --- | --- | --- |
@@ -66,12 +68,17 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Persona sign-in at `/login` and role switch from the avatar menu | Built | No passwords; a cookie holds the chosen persona |
+| Sign-in at `/login` with a demo email and password, or a one-click persona card; role switch from the avatar menu | Built | One published password, checked on the server in constant time; a cookie holds the chosen persona. Not an account system |
 | A home page per role | Built | See [Personas](#personas) for each landing page |
 | List pages for every record type, with search, filters, status tabs, saved and shared views, CSV export and server-side paging (25, 50 or 100 rows) | Built | Generated from each record type's definition |
 | Record pages with tabs, Activity, Notes, Tasks and Documents, an AI summary and a Data health panel | Built | Tabs appear when the record type supports them |
 | Record peek drawer: a list row opens the record in a side drawer (a bottom sheet on phones), with J and K to move between rows and *Open full page* | Built | The URL carries `?peek=<id>`, so a drawer can be linked |
 | ⌘K command palette: records, pages, quick actions and "Ask AI" | Built | |
+| Breadcrumbs: section and group names open their first page; *Home* opens the persona's home | Built | |
+| AI-powered pages marked in the sidebar and ⌘K with a sparkle (Inbox, Copilot, Agents, Approvals, AI activity, Automations, Data health) | Built | Tooltip: "AI-powered: agents propose, you approve" |
+| Inbox at `/app/inbox`: conversations waiting on your reply, agent proposals you can decide, and your alerts, with tabs *All*, *Messages*, *Approvals* and *Alerts* | Built | 25 rows a page; a sidebar badge counts what needs you. *Reply* and *Review* open the page that does the work |
+| My tasks at `/app/tasks`: tasks assigned to you or your role, with *Open*, *Overdue*, *Today*, *Upcoming* and *Done* views, filters, *New task* and mark done or reopen | Built | Due dates use the demo date. A double click changes a task once |
+| A record outside your scope opens an in-app page: "This record isn't in your scope or doesn't exist" | Built | Unknown and out-of-scope records look the same |
 | Locked records (paid bills, sent offers, ended leases) can't be edited | Partial | The server refuses the save; the Edit button still shows |
 | Natural-language list filter | Not built | The `/api/ai/nl-filter` route exists, but no list page calls it |
 
@@ -103,7 +110,7 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | --- | --- | --- |
 | Property manager's Today page: briefing with links, KPIs, charts, approvals, leases ending without an offer | Built | Marcus |
 | Resident 360: ledger, lease, terms and rent schedule | Built | |
-| Inbox: *Suggest a reply*, edit, send | Built | Messages are stored; nothing is delivered outside the app |
+| Conversations (`/app/communications/inbox`): *Suggest a reply*, edit, send | Built | Messages are stored; nothing is delivered outside the app |
 | Lease abstraction: reads the lease on file, cites pages, flags mismatches and fixes the record | Built | |
 | Announcements: AI draft for a property, then send to its residents | Built | Delivery is simulated |
 | Delivery by email or SMS | Not built | Settings → Integrations shows simulated connection status only |
@@ -146,10 +153,15 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Owner approves proposals waiting on the owner | Partial | The owner portal lists repairs over the owner's limit. Agent proposals in *Waiting on others* don't appear there; a principal can decide them |
 | AI activity: every run with trigger, model, tokens and cost; an AI audit log | Built | `/app/ai/activity` |
 | Run trace that streams steps while the run is going | Built | `/app/ai/runs/<id>` |
-| Assistant (⌘J and `/app/copilot`): Ask, Do and Help modes; each turn is a traced run; saved conversations | Built | Do mode turns rent-reminder requests into proposals |
+| Assistant (⌘J and `/app/copilot`): Ask, Do and Help modes; each turn is a traced run; saved conversations | Built | Do mode turns rent-reminder requests into proposals. `/app/copilot` lists the 30 most recent conversations; the side panel keeps a conversation for the session only |
+| *Ask Propniti* chat bubble on staff pages: opens the assistant with page-aware suggested questions, and offers one tip at a time from real data | Built | At most one tip per page view, two minutes apart and five per session; never during a tour, typing or a dialog. *Show tips* turns them off |
+| Chat history across sessions in the assistant panel | Not built | <!-- TODO: chat history (in flight) --> |
+| Readable run steps: each agent step as a plain sentence with linked record names, raw input and output behind *Technical details* | Built | Records outside the viewer's scope show their type only |
+| *Summarize with AI* on a record without a summary (record page and peek drawer) | Built | Same scope checks, figure checks and rules fallback as stored summaries; the result is kept in the visitor's copy |
+| *Improve with AI* | Not built | <!-- TODO: Improve with AI (in flight) --> |
 | AI summaries on records, computed from the record's current figures | Built | See [Source labels](#source-labels) |
-| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* | Built | Fixes that touch money, fraud or legal status go to the approvals inbox |
-| Automations, inbox and tasks pages | In progress | `/app/automations`, `/app/inbox` and `/app/tasks` are being built; this spec will describe them once merged <!-- TODO: update when these pages merge --> |
+| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* | Built | Fixes that touch money, fraud or legal status, and anything not low risk, always wait in the approvals inbox, whoever clicks. A low-risk fix runs only if the person clicking may decide it |
+| Automations at `/app/automations`: every agent with its schedule, events, autonomy, last run, next run and 30-day runs and failures; the 15-minute sweep; event triggers; approval rules; rules built into the product | Built | Events that nothing raises yet are marked as such. Settings → Automations now opens this page |
 
 ### Portals and public site
 
@@ -168,10 +180,26 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Requirement | Status | Notes |
 | --- | --- | --- |
 | Users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | |
-| Import properties and units from a CSV with AI column matching | Built | `/app/settings/import`. Creates properties and units only, not leases or residents |
+| Import from other systems: properties, units, residents, leases (rent roll, deposits, opening balances), owners, vendors and aged balances | Built | `/app/settings/import`. See [Import](#import) |
 | Integrations | Partial | Status cards only; no outside service is called |
 | Platform console: customer orgs, system health, AI usage | Built | Platform admin only |
+| Collapsible home and dashboard sections, remembered per persona in this browser; *Reset layout* in the avatar menu | Built | Reset clears collapsed sections and sidebar, panel and drawer sizes; tours, tips, theme and saved views are kept |
+| First-visit splash and tour tips as toasts | Not built | A first tour is offered once on a first visit. <!-- TODO: splash and tour toasts (in flight) --> |
 | Real sign-in and accounts | Not built | |
+
+## Import
+
+`/app/settings/import` (*Settings → Import data*) brings a portfolio over from another system in six steps: *Source*, *Files*, *Columns*, *Review*, *Preview*, *Done*.
+
+- **Sources.** AppFolio, Buildium, Yardi Breeze, Yardi Voyager, Rent Manager, Propertyware, DoorLoop, TenantCloud, Entrata, or *Other / spreadsheet*. Each tool has report presets that match columns by name, and synthetic sample files to try.
+- **What it creates.** Properties, units, residents, leases from a rent roll (with deposits, recurring charges and opening balances when the file has them), owners and owner entities, vendors, and open balances by age.
+- **Files.** CSV, TSV or Excel (.xlsx); up to 6 files, 3 MB and 2,000 rows each. Files are read in the browser.
+- **Checks are code.** Parsing, value checks, the preview and the write are all done by code. Errors must be fixed or left out before importing. Records already on file are matched and counted, never changed. Opening balances post only to leases the same import creates.
+- **AI is optional.** With *Use AI to help map and clean up* on, a model sees only the column headers, the first 5 rows and up to 30 flagged cells per file (60 characters each). It suggests column matches for unmatched columns and cleanups. Nothing changes until a person accepts a suggestion, one by one or with *Accept all*. With the switch off, or no model configured, columns are matched by preset and name, and nothing is sent to a model.
+- **One write, once.** The import is one database batch behind an audit lock, so running the same import twice writes nothing the second time.
+- **Who.** Staff only. Each record type follows the role's create rights: new properties need a principal or regional manager; opening balances, deposits and recurring charges need a principal, regional manager, property manager or accountant.
+- **Undo.** *Recent imports* lists the last 10, each with *Undo import*. Undo removes the records that import created, including later edits to them. It is refused if other records now point at them (a work order, a note, a payment, a unit added by hand) or if any are at a property outside the person's scope. Imported data lives in the visitor's private copy and resets at midnight Pacific.
+- **After import.** The import raises `import.completed`; the Data Health agent checks the new records at the next sweep.
 
 ## Agent behaviour
 
@@ -186,14 +214,18 @@ Each agent has a goal, a tool allow-list, triggers, a default autonomy level and
 | Payables | Accountant | Bills waiting for approval: coding, amount history, duplicates, bank changes | Every 2 hours | `invoice.received`, `vendor.bank_changed` | Approve first |
 | Owner reporting | Accountant | Owner NOI changes over 3% month over month, explained from computed drivers | 1st of the month 12:00 | `statement.closed` | Approve first |
 | Compliance | Maintenance supervisor | Certificates expiring within 30 days, vendors working uninsured, permits and inspections | Daily 15:00 | `coi.expiring` | Auto within policy |
-| Data Health | Admin | Open data issues: duplicates, miscoded bills, contact details, addresses | Daily 06:00 | `data_issue.detected`, `import.completed` | Approve first |
+| Data Health | Admin | Open data issues: duplicates, miscoded bills, contact details, addresses | Daily 06:00 | `data_issue.detected`, `import.completed` | Auto within policy |
+
+Nothing in the product raises `coi.expiring`, `screening.completed`, `statement.closed`, `data_issue.detected` or `prospect.created` yet. The Automations page says so, and those agents cover that work on their schedule.
 
 ### Triggers
 
 - **Schedule.** A Cloudflare Cron Trigger runs a sweep every 15 minutes. Each sweep does one unit of work: either the events of one listening agent, or the most overdue scheduled agent. Sweeps run only in visitor workspaces that were active in the last 30 minutes, at most 10 of them.
 - **Run on visit.** If no sweep has run for about 17 minutes, the first AI page or request starts one in the background.
-- **Events.** Actions write events to an outbox. The sweep raises date-driven events too: `charge.overdue` when rent passes its 3-day grace, and `lease.expiring` when a lease comes within 90 days. A public application and a completed import start their agent right away.
+- **Events.** Actions write events to an outbox. The sweep raises date-driven events too: `charge.overdue` when rent passes its 3-day grace, and `lease.expiring` when a lease comes within 90 days. A public application starts the Leasing agent right away. A completed import raises `import.completed`, which the Data Health agent picks up at the next sweep.
 - **Run now.** Any role with access to the intelligence module can start an agent from `/app/agents`. A side sheet shows the run as it happens.
+
+`/app/automations` shows all of this in one place: each agent's schedule and events, the sweep's last and next run, how many events are waiting, the approval rules, and the rules built into the product (data health checks, late-fee and returned-payment fee caps, payment clearing, the midnight reset).
 
 Each run has a time limit, a step limit and a 50-cent model budget. A run that hits its time limit keeps what it already did.
 
@@ -207,7 +239,7 @@ Write tools never move money. They create a proposal, or, after approval, call t
 
 ### Routing: autonomy, risk and policy
 
-The Agents page offers two autonomy levels per agent:
+The Agents and Automations pages offer two autonomy levels per agent. Only a principal, regional manager or admin can turn an agent on or off or change its autonomy, schedule or approval policies; other roles see the setting read-only. Legal and safety policies can't be set to act alone.
 
 - **Approve first.** Every proposal waits for a person.
 - **Auto within policy.** A proposal applies on its own only when all of these hold: its risk is Low, it is not marked always-human, and its amount is within the policy limit. It runs in the visitor's own workspace and is logged.
@@ -233,6 +265,7 @@ Some owner entities override the maintenance and bill limits. On money actions, 
 - Each proposal shows its title, amount, risk, source, reasons, confidence (High, Medium or Low with a percentage), the records it used and a link to its run.
 - A person approves, rejects, or edits the wording of a drafted message and then approves. Recipient, record and amounts can't be edited.
 - Before an approved proposal runs, the server checks again that the record is in the approver's scope, that its key fields haven't changed since the agent looked, and that the action is still allowed. It runs once.
+- The same decision rule applies wherever a proposal can be run: the approvals inbox, the record's action buttons and Data Health. A money, legal or safety proposal the person can't decide stays in the approvals inbox; a low-risk one they can't decide is refused.
 - Re-running an agent doesn't duplicate a proposal that is still open.
 
 ### Source labels
@@ -272,7 +305,7 @@ Model providers are live. Everything else is simulated.
 | Bank feeds, ACH, card payments | Plaid, bank ACH, Stripe | Simulated; status cards in Settings → Integrations |
 | Email and SMS | — | Simulated; messages stay in the app |
 | Listing syndication | — | Simulated status card |
-| Other property management systems | — | CSV import of properties and units only |
+| Other property management systems | AppFolio, Buildium, Yardi Breeze, Yardi Voyager, Rent Manager, Propertyware, DoorLoop, TenantCloud, Entrata, any spreadsheet | File import (CSV, TSV, XLSX); no live sync |
 
 ## Non-functional requirements
 
@@ -286,9 +319,10 @@ Model providers are live. Everything else is simulated.
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
 | Abuse | Bounded writes | Same-origin check on writes; 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
 | Reliability | AI failure doesn't block work | Rules take over and the label says so |
-| Tests | Regressions caught before deploy | 580 unit tests in 68 files; 47 end-to-end tests across 12 specs, run against production after each deploy |
+| Tests | Regressions caught before deploy | 922 unit tests in 98 files; 85 end-to-end tests in 20 specs, run against production after each deploy |
+| Errors | No database internals shown to people | AI routes, Data Health results and run steps show "The database is busy; try again in a moment" for database errors; the detail goes to the server log |
 
-**Known gaps.** No real authentication: anyone can pick any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. Six AI routes have no origin check (they are rate limited and size capped). There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
+**Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. Six AI routes have no origin check (they are rate limited and size capped). There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
 
 ## Release plan
 
@@ -296,7 +330,9 @@ Model providers are live. Everything else is simulated.
 | --- | --- | --- |
 | V1 prototype | Six role views, AI invoice reading and validation, simulated trust-account payments, ratings, rent-roll import | Replaced by v2 |
 | v2 | 13 personas with scoped homes; 64 record types in 13 modules; eight scheduled and event-driven agents with approvals, autonomy and policy limits; run traces; assistant; Data Health; record peek drawer; four portals; public listings and applications; per-visitor overlay on a shared base | Live at propniti.ai since 4 November 2026 |
-| Pilot readiness | Real sign-in and accounts, real payment and messaging providers in test mode, owner-portal approval of agent proposals, AP inbox intake of portal invoices, natural-language list filters | Not built |
+| v2 updates | Demo sign-in form; Inbox; My tasks; Automations; import from other tools with optional AI help; *Ask Propniti* chat bubble; sparkle marks on AI pages; clickable breadcrumbs; approval checks on Data Health fixes and record actions; in-app not-found page; readable run steps; *Summarize with AI*; collapsible home sections | Live, 4 November 2026 |
+| Next | Chat history, *Improve with AI*, first-visit tips | In progress <!-- TODO: update as these merge --> |
+| Pilot readiness | Real accounts and identity provider, real payment and messaging providers in test mode, owner-portal approval of agent proposals, AP inbox intake of portal invoices, natural-language list filters | Not built |
 
 ## Open questions
 
