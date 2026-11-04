@@ -140,7 +140,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
                 return (
                   <Fragment key={r.lease_id}>
                     <tr className={cn("border-t", isOpen && "bg-muted/30")}>
-                      <td className="px-3 py-2 align-top"><Checkbox aria-label={`Select ${r.resident}`} disabled={!canPick} checked={picked.has(r.lease_id)} onCheckedChange={(v) => toggle(r.lease_id, !!v)} /></td>
+                      <td className="px-3 py-2"><Checkbox aria-label={`Select ${r.resident}`} disabled={!canPick} checked={picked.has(r.lease_id)} onCheckedChange={(v) => toggle(r.lease_id, !!v)} /></td>
                       <td className="max-w-0 px-2 py-2">
                         {r.dataError && <span className="float-right ml-1 mt-0.5 rounded bg-tone-warning/12 px-1.5 text-[10.5px] font-medium text-tone-warning" title="Lease rent looks 10× too high">Rent typo</span>}
                         <button type="button" aria-expanded={isOpen} aria-controls={`wb-${r.lease_id}`} onClick={() => setOpen(isOpen ? null : r.lease_id)} className="block max-w-full truncate text-left font-medium hover:text-primary">{r.resident}</button>
