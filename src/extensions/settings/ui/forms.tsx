@@ -253,7 +253,7 @@ export function InviteUser({ roles, regions, properties }: { roles: { value: str
 }
 
 // ---------------------------------------------------------------------------------------------
-// Approval policy edit (generic PATCH; the change history is the audit trail it writes)
+// Approval policy edit (PATCH /api/ai/policies; the change history is the audit trail it writes)
 // ---------------------------------------------------------------------------------------------
 
 export type PolicyRow = { id: string; name: string; category: string; limit: number | null; approver_role: string; owner_approval_over: number | null; always_human: boolean };
@@ -268,7 +268,8 @@ export function EditPolicy({ p, roles }: { p: PolicyRow; roles: { value: string;
   const bad = [v.limit, v.owner].some((x) => x.trim() !== "" && !Number.isFinite(dollars(x)));
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await save("PATCH", `/api/e/approval_policies/${encodeURIComponent(p.id)}`, { limit: v.human ? null : dollars(v.limit), owner_approval_over: dollars(v.owner), approver_role: v.approver, always_human: v.human });
+    const cents = (x: number | null) => (x == null ? null : Math.round(x * 100));
+    const ok = await save("PATCH", `/api/ai/policies/${encodeURIComponent(p.id)}`, { limit_cents: v.human ? null : cents(dollars(v.limit)), owner_approval_over_cents: cents(dollars(v.owner)), approver_role: v.approver, always_human: v.human });
     if (ok) setOpen(false);
   };
   return (

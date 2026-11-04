@@ -9,7 +9,8 @@ import { list } from "@/server/query";
 import { ChangeHistory } from "@/extensions/settings/History";
 import { NoAccess, settingsSession } from "@/extensions/settings/pages";
 import { rows } from "@/extensions/settings/data";
-import { canEditSettings, canSettings } from "@/extensions/settings/nav";
+import { canSettings } from "@/extensions/settings/nav";
+import { canEditPolicies } from "@/ai/policy-editors";
 import { EditPolicy, type PolicyRow } from "@/extensions/settings/ui/forms";
 
 export const metadata = { title: "Approval policies · Propniti" };
@@ -51,7 +52,7 @@ function Table({ items, canEdit }: { items: P[]; canEdit: boolean }) {
 export default async function ApprovalsPage() {
   const { session, ctx } = await settingsSession();
   if (!canSettings(session.actor.role)) return <NoAccess />;
-  const canEdit = canEditSettings(session.actor.role);
+  const canEdit = canEditPolicies(session.actor.role);
   const [res, agents] = await Promise.all([
     list(ctx, "approval_policies", { size: 100, sort: ["category", "asc"] }),
     rows<{ id: string; name: string; autonomy: string; category: string | null }>(ctx, "SELECT a.id, a.name, a.autonomy, p.category FROM {agent_definitions} a LEFT JOIN {approval_policies} p ON p.id = a.approval_policy_id ORDER BY a.name"),

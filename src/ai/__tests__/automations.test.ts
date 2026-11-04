@@ -3,6 +3,7 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { getEntity } from "@/entities";
 import { autonomyLevel, automationsView, canEditPolicies, describeCron, sweepTiming } from "../automations";
+import { runsPage } from "../views";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
 
 const SAM: Actor = { personaId: "sam", name: "Sam Okafor", role: "admin", scope: { kind: "org", label: "All" }, propertyIds: "all" };
@@ -59,7 +60,7 @@ describe("automations view", () => {
     expect(c.scope).toContain("Leases");
     expect(c.href).toBe("/app/ai/activity?agent=collections");
     expect(v.agents.find((a) => a.key === "maintenance_triage")!.autonomy).toMatchObject({ value: "auto_within_policy", label: "Auto within policy" });
-    expect(v.can).toMatchObject({ editAutonomy: true, settings: true, editPolicies: true, policiesHref: "/app/agents" });
+    expect(v.can).toMatchObject({ editAutonomy: true, settings: true, editPolicies: true, policiesHref: "/app/settings/approvals" });
   });
 
   it("an agent turned off shows Off and no next run", async () => {
@@ -86,16 +87,17 @@ describe("automations view", () => {
   it("a property-scoped manager drills into the agent's runs, not a trace outside their scope", async () => {
     const { raw, db } = openFixture();
     seedRuns(raw);
+    raw.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, confidence, run_id, created_at) VALUES (?, 'pr-c2', 'collections', 'leases', 'l1', 'p01', 'leases.send_reminder', 't', 0.9, 'run-c2', '2026-11-04T14:00:00Z')").run(WS);
     const v = await automationsView({ db, ws: WS, actor: MARCUS }, NOW);
     expect(v.agents.find((a) => a.key === "collections")!.lastRun!.href).toBe("/app/ai/activity?agent=collections");
-    expect(v.can).toMatchObject({ editAutonomy: true, settings: false, editPolicies: false, policiesHref: null });
+    expect(v.can).toMatchObject({ editAutonomy: false, settings: false, editPolicies: false, policiesHref: null });
   });
 
-  it("an admin reads agents but can't change autonomy, and edits approval policies in settings", async () => {
+  it("an admin changes autonomy and edits approval policies in settings", async () => {
     const { db } = openFixture();
     const v = await automationsView({ db, ws: WS, actor: SAM }, NOW);
     expect(getPersona("sam")!.role).toBe("admin");
-    expect(v.can).toMatchObject({ editAutonomy: false, settings: true, editPolicies: true, policiesHref: "/app/settings/approvals" });
+    expect(v.can).toMatchObject({ editAutonomy: true, settings: true, editPolicies: true, policiesHref: "/app/settings/approvals" });
   });
 
   it("lists the org approval policies in decision order with what always needs a person", async () => {
@@ -109,6 +111,8 @@ describe("automations view", () => {
 
   it("counts the data-health rules the agent checks and lists the state fee caps", async () => {
     const { raw, db } = openFixture();
+    // Not run by the agent: computed checks, disabled rules and anything that isn't a single SELECT.
+    raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind, check_sql, enabled) VALUES ('base', 'x.computed', 'leases', 'c', 'info', 'd', 'computed', NULL, 1), ('base', 'x.off', 'leases', 'o', 'info', 'd', 'sql', 'SELECT id FROM leases', 0), ('base', 'x.multi', 'leases', 'm', 'info', 'd', 'sql', 'SELECT 1; SELECT 2', 1)").run();
     raw.prepare("INSERT INTO state_rules (workspace_id, id, state, rule, value, effective_from) VALUES ('base', 'sr1', 'TX', 'late_fee_cap_pct', '10', '2015-01-01'), ('base', 'sr2', 'TX', 'late_fee_cap_pct', '12', '2027-01-01'), ('base', 'sr3', 'AZ', 'nsf_fee_cap_cents', '2500', '2015-01-01')").run();
     const v = await automationsView({ db, ws: WS, actor: DANIEL }, NOW);
     expect(v.dataRules).toBe(1);
@@ -125,5 +129,26 @@ describe("what people can change", () => {
   it("the sample automation rules that never ran are not exposed as records", () => {
     expect(getEntity("automation_rules")).toBeUndefined();
     expect(getEntity("automation_runs")).toBeUndefined();
+  });
+});
+
+describe("run counts follow the viewer's scope", () => {
+  it("a property manager's counts, failures and last run match the runs list they can open", async () => {
+    const { raw, db } = openFixture();
+    const run = (id: string, status: string, at: string, by: string | null) =>
+      raw.prepare("INSERT INTO agent_runs (workspace_id, id, agent_key, trigger_kind, started_by, status, started_at) VALUES (?, ?, 'collections', 'schedule', ?, ?, ?)").run(WS, id, by, status, at);
+    const prop = (id: string, runId: string, pid: string) =>
+      raw.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, confidence, run_id, created_at) VALUES (?, ?, 'collections', 'leases', 'l1', ?, 'leases.send_reminder', 't', 0.9, ?, '2026-11-04T10:00:00Z')").run(WS, id, pid, runId);
+    run("run-in", "done", "2026-11-02T14:00:00Z", null);
+    prop("pr-in", "run-in", "p01");
+    run("run-mine", "failed", "2026-11-03T14:00:00Z", "marcus");
+    run("run-out", "failed", "2026-11-04T14:00:00Z", null);
+    prop("pr-out", "run-out", "p10");
+    const m = { db, ws: WS, actor: MARCUS };
+    const c = (await automationsView(m, NOW)).agents.find((a) => a.key === "collections")!;
+    expect(c).toMatchObject({ runs30: (await runsPage(m, { agent: "collections" })).total, failed30: (await runsPage(m, { agent: "collections", status: "failed" })).total });
+    expect(c).toMatchObject({ runs30: 2, ok30: 1, failed30: 1, lastRun: { id: "run-mine" }, status: { label: "Last run failed" } });
+    const d = (await automationsView({ db, ws: WS, actor: DANIEL }, NOW)).agents.find((a) => a.key === "collections")!;
+    expect(d).toMatchObject({ runs30: 3, failed30: 2, lastRun: { id: "run-out" } });
   });
 });

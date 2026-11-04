@@ -7,6 +7,7 @@ import { sql, type DataCtx } from "./data";
 import { lastSweep, loadPolicies, SWEEP_EVERY_MS } from "./orchestrator";
 import { agentCards } from "./views";
 import { canEditPolicies } from "./policy-editors";
+import { isRunnableRule, RUNNABLE_RULES_SQL } from "./data-rules";
 export { canEditPolicies } from "./policy-editors";
 
 // Read model for /app/automations: what runs on its own, when, and under which rules. Everything
@@ -102,8 +103,7 @@ export async function automationsView(data: DataCtx, nowMs = Date.now()) {
     loadPolicies(data.db, data.ws).catch(() => ((policiesOk = false), [])),
     lastSweep(data.db),
     sql<{ type: string; n: number }>(data, "SELECT type, count(*) AS n FROM {events} WHERE processed_at IS NULL GROUP BY type"),
-    // The rules the Data Health agent actually runs (data-health.ts): shipped, enabled SQL checks.
-    data.db.prepare("SELECT count(*) AS n FROM data_rules WHERE workspace_id = 'base' AND deleted = 0 AND enabled = 1 AND check_kind = 'sql'").first<{ n: number }>(),
+    data.db.prepare(RUNNABLE_RULES_SQL).all<{ check_kind: string; check_sql: string | null }>(),
     sql<{ state: string; rule: string; value: string }>(data, "SELECT state, rule, value FROM {state_rules} WHERE rule IN ('late_fee_cap_pct', 'nsf_fee_cap_cents') AND effective_from <= ? ORDER BY effective_from", [AS_OF], { unscoped: true }),
   ]);
 
@@ -140,7 +140,7 @@ export async function automationsView(data: DataCtx, nowMs = Date.now()) {
   const access = PERMISSIONS[role].intelligence ?? "none";
   const settings = (PERMISSIONS[role].settings ?? "none") !== "none";
   const editPolicies = canEditPolicies(role);
-  const policiesHref = PERMISSIONS[role].settings === "approve" ? "/app/settings/approvals" : editPolicies ? "/app/agents" : settings ? "/app/settings/approvals" : null;
+  const policiesHref = settings ? "/app/settings/approvals" : editPolicies ? "/app/agents" : null;
 
   return {
     agents, events,
@@ -150,9 +150,9 @@ export async function automationsView(data: DataCtx, nowMs = Date.now()) {
       id: p.id, category: p.category, limit: p.limitCents == null ? null : p.limitCents / 100, ownerOver: p.ownerApprovalOverCents == null ? null : p.ownerApprovalOverCents / 100,
       approver: roleTitle(p.approverRole), alwaysHuman: p.alwaysHuman,
     })),
-    dataRules: Number(rules?.n ?? 0),
+    dataRules: rules.results.filter(isRunnableRule).length,
     stateCaps: { lateFeePct: capList("late_fee_cap_pct"), nsfCents: capList("nsf_fee_cap_cents") },
-    can: { view: access !== "none", editAutonomy: access === "approve", settings, editPolicies, policiesHref },
+    can: { view: access !== "none", editAutonomy: editPolicies, settings, editPolicies, policiesHref },
   };
 }
 export type AutomationsView = Awaited<ReturnType<typeof automationsView>>;

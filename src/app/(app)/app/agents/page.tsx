@@ -27,7 +27,7 @@ export default async function AgentsPage() {
         actions={<><Button asChild variant="outline" size="sm"><Link href="/app/ai/activity">All runs</Link></Button><Button asChild size="sm"><Link href="/app/ai/approvals">Approvals{pending ? ` (${pending})` : ""}</Link></Button></>}
       />
       <div className="mt-5">
-        <AgentsCenter agents={agents} status={status} canManage={access === "approve"} canRun={access !== "none"} canEditPolicies={canEditPolicies(persona.role)} />
+        <AgentsCenter agents={agents} status={status} canManage={canEditPolicies(persona.role)} canRun={access !== "none"} canEditPolicies={canEditPolicies(persona.role)} />
       </div>
     </main>
   );

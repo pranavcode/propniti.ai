@@ -91,8 +91,9 @@ registerEntity({
     related: [],
   },
   capabilities: { activity: true, notes: true },
-  permissions: { read: READERS, update: ADMINS, create: ADMINS, delete: ADMINS },
-  writes: "generic",
+  // One write path: PATCH /api/ai/policies/[id], for the roles in src/ai/policy-editors.ts.
+  permissions: { read: READERS },
+  writes: "none",
   help: { summary: "How much agents and staff may approve alone, who approves above that, and when the owner signs off. Money, legal and safety thresholds.", article: "approval-policies-limits" },
 });
 

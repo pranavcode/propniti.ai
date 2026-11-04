@@ -37,19 +37,20 @@ test("principal sees every automation, changes autonomy and drills into an agent
   await page.getByRole("option", { name: "Approve first" }).click();
   await expect(select).toHaveText(/Approve first/);
 
+  // A fresh load, so the click doesn't race the refresh that follows the save.
+  await go(page, `${BASE}/app/automations`);
   await agents.getByRole("link", { name: "Collections agent", exact: true }).click();
   await expect(page).toHaveURL(/\/app\/ai\/activity\?agent=collections/);
   await expect(page.getByRole("heading", { name: "AI activity" })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test("admin reads autonomy and edits approval policies in settings", async ({ page, context }) => {
+test("admin changes autonomy and edits approval policies in settings", async ({ page, context }) => {
   await as(context, "sam");
   const errors = watch(page);
   await go(page, `${BASE}/app/automations`);
   await expect(page.getByRole("heading", { name: "Automations", level: 1 })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: /Autonomy for/ })).toHaveCount(0);
-  await expect(page.getByRole("table", { name: "Agents" }).getByText("Auto within policy").first()).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Autonomy for Compliance agent" })).toBeVisible();
   await page.getByRole("link", { name: "Edit approval policies" }).click();
   await expect(page).toHaveURL(/\/app\/settings\/approvals$/);
   expect(errors).toEqual([]);
@@ -61,7 +62,9 @@ test("property manager sees the same automations without settings links", async 
   await go(page, `${BASE}/app/automations`);
   await expect(page.getByRole("heading", { name: "Automations", level: 1 })).toBeVisible();
   await expect(page.getByRole("table", { name: "Agents" }).getByRole("link", { name: "Compliance agent", exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Autonomy for Compliance agent" })).toBeVisible();
+  // Autonomy applies to the whole org, so a property manager reads it.
+  await expect(page.getByRole("combobox", { name: /Autonomy for/ })).toHaveCount(0);
+  await expect(page.getByRole("table", { name: "Agents" }).getByText("Auto within policy").first()).toBeVisible();
   await expect(page.locator("main a[href^='/app/settings']")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -94,4 +97,21 @@ test("approval policies page says agents apply the org defaults", async ({ page,
   await as(context, "sam");
   await go(page, `${BASE}/app/settings/approvals`);
   await expect(page.getByText(/Agents currently apply these org defaults/)).toBeVisible();
+});
+
+test("a principal edits an approval policy in settings and it is audited", async ({ page, context }) => {
+  await as(context, "daniel");
+  await go(page, `${BASE}/app/settings/approvals`);
+  const row = page.getByRole("row", { name: /Concession/ }).first();
+  await row.getByRole("button", { name: /Edit/ }).click();
+  const limit = page.getByRole("dialog").getByRole("textbox").first();
+  await limit.fill("600");
+  await page.getByRole("dialog").getByRole("button", { name: /Save/ }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("row", { name: /Concession/ }).first()).toContainText("$600");
+  // Put it back.
+  await page.getByRole("row", { name: /Concession/ }).first().getByRole("button", { name: /Edit/ }).click();
+  await page.getByRole("dialog").getByRole("textbox").first().fill("500");
+  await page.getByRole("dialog").getByRole("button", { name: /Save/ }).click();
+  await expect(page.getByRole("row", { name: /Concession/ }).first()).toContainText("$500");
 });
