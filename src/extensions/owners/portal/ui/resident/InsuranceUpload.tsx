@@ -86,7 +86,7 @@ export function InsuranceUpload({ me, today, label = "Upload declarations page",
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={`ri-${k}`}>{LABELS[k]}</Label>
-        {aiKept(k) && <span className="inline-flex items-center gap-1 text-[11px] font-medium text-tone-ai"><Sparkles className="size-3" aria-hidden />Read by AI</span>}
+        {aiKept(k) && <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-tone-ai"><Sparkles className="size-3" aria-hidden />Read by AI</span>}
       </div>
       {input}
     </div>
