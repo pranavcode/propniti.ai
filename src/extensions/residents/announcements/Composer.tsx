@@ -11,7 +11,7 @@ import { ComposerForm } from "./ComposerForm";
 export async function Composer({ id, run, src, property }: { id?: string; run?: string; src?: string; property?: string }) {
   const ctx = await pageCtx();
   if (!["principal", "regional_manager", "property_manager"].includes(ctx.actor.role)) {
-    return <main className="p-6"><EmptyState title="Announcements are sent by property managers" description="Switch role from your avatar menu to write one." action={{ label: "Back to announcements", href: "/app/communications/announcements" }} /></main>;
+    return <div className="p-6"><EmptyState title="Announcements are sent by property managers" description="Switch role from your avatar menu to write one." action={{ label: "Back to announcements", href: "/app/communications/announcements" }} /></div>;
   }
   const s = scopeIn(ctx.actor, "p.id");
   const [props, templates] = await Promise.all([
@@ -20,11 +20,11 @@ export async function Composer({ id, run, src, property }: { id?: string; run?: 
   ]);
   const a = id ? await one(ctx, "SELECT * FROM {announcements} WHERE id = ?", [id]) : null;
   const pid = a ? JSON.parse(String(a.audience ?? "{}")).property_ids?.[0] : property;
-  if (a && (!pid || !props.some((p) => p.id === pid))) return <main className="p-6"><EmptyState title="Announcement not found" description="It may belong to a property outside your scope." action={{ label: "Back to announcements", href: "/app/communications/announcements" }} /></main>;
-  if (a && a.status === "Sent") return <main className="p-6"><EmptyState title="This announcement was already sent" action={{ label: "Open it", href: `/app/communications/announcements/${encodeURIComponent(String(a.id))}` }} /></main>;
+  if (a && (!pid || !props.some((p) => p.id === pid))) return <div className="p-6"><EmptyState title="Announcement not found" description="It may belong to a property outside your scope." action={{ label: "Back to announcements", href: "/app/communications/announcements" }} /></div>;
+  if (a && a.status === "Sent") return <div className="p-6"><EmptyState title="This announcement was already sent" action={{ label: "Open it", href: `/app/communications/announcements/${encodeURIComponent(String(a.id))}` }} /></div>;
 
   return (
-    <main className="flex flex-col gap-4 px-4 pt-5 pb-10 md:px-6">
+    <div className="flex flex-col gap-4 px-4 pt-5 pb-10 md:px-6">
       <div>
         <div className="flex items-center gap-1 text-[12px] text-muted-foreground"><Link href="/app/communications/announcements" className="hover:text-foreground hover:underline">Announcements</Link><ChevronRight className="size-3" />{a ? "Draft" : "New"}</div>
         <h1 className="mt-0.5 flex items-center gap-2 text-[20px] font-semibold tracking-tight"><Megaphone className="size-5 text-muted-foreground" />{a ? String(a.title) : "New announcement"}</h1>
@@ -37,6 +37,6 @@ export async function Composer({ id, run, src, property }: { id?: string; run?: 
         provenance={run ? { runId: run, source: src === "live" ? "live" : "rules" } : null}
         initialProperty={pid ?? props[0]?.id ?? ""}
       />
-    </main>
+    </div>
   );
 }

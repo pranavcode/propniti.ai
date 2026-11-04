@@ -21,7 +21,7 @@ export default async function MyJobs({ searchParams }: Props) {
   const sp = await searchParams;
   const { actor, ws } = await currentSession();
   if (!can(actor.role, "work_orders.set_status", "work_orders")) {
-    return <main className="p-6"><EmptyState title="The technician view is for maintenance staff" description="Switch to the maintenance supervisor from your avatar menu." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="The technician view is for maintenance staff" description="Switch to the maintenance supervisor from your avatar menu." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const db = getPlatform().db;
   const techs = await technicians(db, ws, actor);
@@ -35,7 +35,7 @@ export default async function MyJobs({ searchParams }: Props) {
   const photos = SAMPLE_PHOTOS.map((url) => ({ url, label: PHOTO_TAGS[photoTag(url)!].label }));
   const active = jobs.filter((j) => j.status === "In progress").length;
   return (
-    <main>
+    <div>
       <PageHeader title={tech ? `${tech.name.split(" ")[0]}'s jobs` : "Technician jobs"}
         meta={tech ? <><span className="tabular-nums">{jobs.length} open</span><span>·</span><span>{active} in progress</span><span>·</span><span>{jobs.filter((j) => j.past_sla).length} past SLA</span></> : undefined}>
         {techs.length > 0 && (
@@ -55,6 +55,6 @@ export default async function MyJobs({ searchParams }: Props) {
             : <EmptyState title={tech ? "No open jobs" : "No technicians with open jobs"} description={tech ? "New in-house jobs show here as soon as they're dispatched." : "Dispatch a request to an in-house technician from the triage page."} action={{ label: "Back to maintenance", href: "/app/maintenance" }} />}
         </div>
       </PageBody>
-    </main>
+    </div>
   );
 }

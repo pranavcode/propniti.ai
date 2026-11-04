@@ -159,7 +159,7 @@ export default async function CompliancePage() {
   const role = session.actor.role;
   const readable = LISTS.filter((l) => getEntity(l.entity) && can(role, "read", l.entity));
   if (!readable.length) {
-    return <main className="p-6"><EmptyState title="Compliance isn't part of your role" description="Switch role from your avatar menu to see certificates, inspections and legal cases." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="Compliance isn't part of your role" description="Switch role from your avatar menu to see certificates, inspections and legal cases." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const { data } = await pageData();
@@ -173,7 +173,7 @@ export default async function CompliancePage() {
   const props = proposals ? (JSON.parse(JSON.stringify(proposals.rows)) as ProposalJson[]) : null;
 
   return (
-    <main>
+    <div>
       <PageHeader
         icon={<ShieldAlert />}
         title="Compliance"
@@ -225,6 +225,6 @@ export default async function CompliancePage() {
           </div>
         )}
       </PageBody>
-    </main>
+    </div>
   );
 }

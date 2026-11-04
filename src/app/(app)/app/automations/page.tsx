@@ -29,16 +29,16 @@ export default async function AutomationsPage() {
   const v = await automationsView(data);
   if (!v.can.view) {
     return (
-      <main className="p-6">
+      <div className="p-6">
         <EmptyState kind="table" title="Automations aren't part of your role" description="Ask an admin if you need to see which agents and rules run on their own." secondary={{ label: "Go to your home", href: "/app" }} />
-      </main>
+      </div>
     );
   }
   const on = v.agents.filter((a) => a.enabled).length;
   const queued = v.events.reduce((s, e) => s + e.queued, 0);
   const { lateFeePct, nsfCents } = v.stateCaps;
   return (
-    <main>
+    <div>
       <PageHeader
         className="[&>div:first-child>div:first-child]:basis-72"
         icon={<Workflow />}
@@ -198,6 +198,6 @@ export default async function AutomationsPage() {
           </div>
         </Section>
       </PageBody>
-    </main>
+    </div>
   );
 }

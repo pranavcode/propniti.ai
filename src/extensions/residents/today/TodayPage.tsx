@@ -99,7 +99,7 @@ export async function TodayPage() {
   const kpi = (m: Awaited<typeof kColl>) => ({ value: m?.value ?? null, previous: m?.previous ?? null, spark: m?.spark });
 
   return (
-    <main className="flex flex-col gap-5 px-4 pt-5 pb-10 md:px-6">
+    <div className="flex flex-col gap-5 px-4 pt-5 pb-10 md:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[20px] font-semibold tracking-tight">{personaGreeting(persona)}</h1>
@@ -235,6 +235,6 @@ export async function TodayPage() {
           </table>
         </section>
       )}
-    </main>
+    </div>
   );
 }

@@ -18,7 +18,7 @@ export default async function AgentsPage() {
   const access = PERMISSIONS[persona.role].intelligence ?? "none";
   const pending = agents.reduce((s, a) => s + a.pending, 0);
   return (
-    <main>
+    <div>
       <PageHeader
         icon={<Bot />}
         title="Agents"
@@ -30,6 +30,6 @@ export default async function AgentsPage() {
       <div className="mt-5">
         <AgentsCenter agents={agents} status={status} canManage={canEditPolicies(persona.role)} canRun={access !== "none"} canEditPolicies={canEditPolicies(persona.role)} />
       </div>
-    </main>
+    </div>
   );
 }

@@ -17,7 +17,7 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 export default async function BudgetVsActualPage({ searchParams }: Props) {
   const session = await currentSession();
   if (!can(session.actor.role, "read", "budgets")) {
-    return <main className="p-6"><EmptyState title="Budgets aren't part of your role" description="Switch role from your avatar menu to see budget vs actual as an accountant or manager." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState title="Budgets aren't part of your role" description="Switch role from your avatar menu to see budget vs actual as an accountant or manager." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const sp = await searchParams;
   const db = getPlatform().db;
@@ -30,7 +30,7 @@ export default async function BudgetVsActualPage({ searchParams }: Props) {
   const params = Object.fromEntries(Object.entries({ property: property ?? "", year: one(sp.year), type: one(sp.type) }).filter(([, v]) => v));
 
   return (
-    <main>
+    <div>
       <PageHeader icon={<BarChart3 />} title="Budget vs actual"
         description="Every property against its approved budget, by GL account and month. Click a cell for the journal entries behind it, or ✦ to have the variance explained."
         meta={<><span>{session.actor.scope.label}</span><span>Actuals through the last closed month</span></>}>
@@ -39,6 +39,6 @@ export default async function BudgetVsActualPage({ searchParams }: Props) {
       <PageBody>
         <Bva session={session} year={year} type={type} property={property} explain={one(sp.explain) || null} params={params} />
       </PageBody>
-    </main>
+    </div>
   );
 }

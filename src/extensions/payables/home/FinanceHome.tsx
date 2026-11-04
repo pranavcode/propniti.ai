@@ -48,7 +48,7 @@ export async function FinanceHome({ session }: { session: Session }) {
   const forecast = (h.forecast?.weeks ?? []) as unknown as ChartPoint[];
 
   return (
-    <main>
+    <div>
       <PageHeader
         title={personaGreeting(persona)}
         meta={<><span>{persona.title}</span><span>·</span><span>{persona.scope.label}</span><span>·</span><span>Books closed through {monthLong(h.lastClosed)}</span></>}
@@ -140,6 +140,6 @@ export async function FinanceHome({ session }: { session: Session }) {
           </Section>
         )}
       </PageBody>
-    </main>
+    </div>
   );
 }
