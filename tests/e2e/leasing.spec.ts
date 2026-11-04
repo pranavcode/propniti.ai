@@ -219,3 +219,18 @@ test("broker desk: reassign an agent's stale leads, then follow up on another ag
   await expect(page.getByRole("dialog").getByText(/^Sent \d+/)).toBeVisible({ timeout: 60_000 });
   expect(errors).toEqual([]);
 });
+
+test("pipeline: Undo in the move toast puts the card back", async ({ page, context }) => {
+  await as(context, "lena");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/leasing/pipeline`);
+  const board = new Board(page);
+  await expect(board.root).toBeVisible(FIRST_PAINT);
+  const name = await board.openMoveMenu("Lead");
+  await page.getByRole("menuitem", { name: "Tour", exact: true }).click();
+  await expect(page.getByText(`${name} moved to Tour`)).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText(`${name} moved back to Lead`)).toBeVisible(FIRST_PAINT);
+  await expect(board.column("Lead").getByRole("link", { name, exact: true }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

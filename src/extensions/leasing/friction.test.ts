@@ -233,3 +233,27 @@ describe("broker: reassign stale leads", () => {
     await expect(runAction(ctx, resolveAction("prospects", "reassign"), "pr-r1", { to: "s-new" })).rejects.toThrow(/can't/);
   });
 });
+
+describe("pipeline undo", () => {
+  it("offers Undo only when the board rules allow the move back", async () => {
+    const { canUndo } = await import("./pipeline");
+    const agent = { role: "leasing_agent" as const, hasApplication: true, toured: true };
+    expect(canUndo("lead", "tour", { ...agent, hasApplication: false })).toBe(true);
+    expect(canUndo("applied", "screening", agent)).toBe(true);
+    // An approval stands, and a lead that applied can't go back to touring.
+    expect(canUndo("screening", "approved", { ...agent, role: "broker" })).toBe(false);
+    expect(canUndo("tour", "applied", agent)).toBe(false);
+  });
+
+  it("moving back runs the same action and is logged", async () => {
+    const db = getPlatform().db;
+    await db.prepare("INSERT INTO prospects (workspace_id, id, property_id, name, stage, created_at) VALUES ('base', 'pr-u', 'p01', 'Uma Reed', 'Contacted', '2026-10-28T15:00:00Z')").run();
+    const ctx = await ctxFor("lena");
+    const a = resolveAction("prospects", "move_stage");
+    expect((await runAction(ctx, a, "pr-u", { to: "tour" })).status).toBe(200);
+    expect((await runAction(ctx, a, "pr-u", { to: "lead" })).status).toBe(200);
+    const row = await db.prepare("SELECT stage FROM prospects WHERE workspace_id = ? AND id = 'pr-u'").bind(WS).first<{ stage: string }>();
+    expect(row?.stage).toBe("Contacted");
+    expect(await count("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND entity_id = 'pr-u' AND action = 'prospects.move_stage'", WS)).toBe(2);
+  });
+});
