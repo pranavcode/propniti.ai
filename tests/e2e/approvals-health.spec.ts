@@ -44,10 +44,13 @@ test("Marcus sees how many low-risk items match on every page before approving t
 
 test("Sam can't decide approvals, so he can notify the approver", async ({ page, context }) => {
   await as(context, "sam");
-  // Admins approve compliance items themselves; data fixes and bills go to someone else.
-  await go(page, `${BASE}/app/ai/approvals?agent=data_health`);
-  const first = page.locator("article[id^=proposal-]").filter({ has: page.getByRole("button", { name: "Notify approver" }) }).first();
-  const item = page.locator(`article#${await first.getAttribute("id")}`);
+  // Admins approve compliance items themselves; data fixes and bills go to someone else, so they
+  // sit under "Waiting on others", not "Needs you".
+  await go(page, `${BASE}/app/ai/approvals?tab=waiting&agent=data_health`);
+  await expect(page.getByRole("tab", { name: /^Waiting on others/, selected: true })).toBeVisible();
+  // This tab lists rows (div), not cards (article).
+  const first = page.locator("[id^=proposal-]").filter({ has: page.getByRole("button", { name: "Notify approver" }) }).first();
+  const item = page.locator(`[id="${await first.getAttribute("id")}"]`);
   await expect(item.getByRole("button", { name: /Needs approver/ })).toBeVisible();
   await item.getByRole("button", { name: "Notify approver" }).click();
   // A rerun on the same day finds it already sent; the first click names who was notified.
