@@ -1,6 +1,8 @@
 import "server-only";
-import { getEntity, type EntityDef, type FieldDef, type Role } from "@/entities";
-import type { ColumnKind, DataColumn, Facet, StatusTabs } from "@/components/app/data-table/types";
+import type { ZodType } from "zod";
+import { can, getEntity, type EntityDef, type FieldDef, type Role } from "@/entities";
+import { actionsFor, getAction } from "@/extensions/actions";
+import type { BulkAction, ColumnKind, DataColumn, Facet, StatusTabs } from "@/components/app/data-table/types";
 import { editable, type FacetOptions } from "@/server/query";
 
 // EntityDef → the plain data the client components need (DataTable columns and facets, form
@@ -103,4 +105,15 @@ export function formFields(def: EntityDef, role: Role, mode: "create" | "update"
   }
   // Required fields first, then the def's order.
   return out.sort((a, b) => Number(!!b.required) - Number(!!a.required));
+}
+
+// Bulk buttons for a list: the def's list.bulkActions plus any action on the entity marked
+// `bulk` that runs in one click (no input to fill, no money moved), labelled from the action.
+export function bulkActions(def: EntityDef, role: Role): BulkAction[] {
+  const oneClick = actionsFor(def.key).filter((a) => a.bulk && !a.money && (!a.input || (a.input as ZodType).safeParse({}).success)).map((a) => a.key);
+  return [...new Set([...(def.list.bulkActions ?? []), ...oneClick])].flatMap((k) => {
+    const a = getAction(k);
+    if (!a || !can(role, k, def.key)) return [];
+    return [{ key: k, label: a.label, tone: a.confirm?.tone === "danger" ? "danger" as const : "default" as const, confirm: a.confirm ? a.confirm.body ?? a.confirm.title : undefined }];
+  });
 }

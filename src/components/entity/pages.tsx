@@ -22,7 +22,7 @@ import { RecordActions } from "./RecordActions";
 import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
 import { withActorNames } from "@/server/actors";
-import { columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
+import { bulkActions, columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
 
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
 // Static routes under src/app/(app)/app/ override these for custom pages.
@@ -119,7 +119,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
         rowHref={`${def.route}/{id}`}
         exportHref={`/api/e/${def.key}/export.csv`}
         views={def.list.savedViews}
-        bulkActions={(def.list.bulkActions ?? []).filter((k) => can(role, k, def.key)).map((k) => ({ key: k, label: k.split(".")[1].replace(/_/g, " ") }))}
+        bulkActions={bulkActions(def, role)}
         searchPlaceholder={`Search ${def.label.many.toLowerCase()}…`}
         empty={{ title: `No ${def.label.many.toLowerCase()} yet`, description: def.help?.summary, action: createFields ? { label: `New ${def.label.one.toLowerCase()}`, href: `${def.route}?new=1` } : undefined }}
         error={error}
