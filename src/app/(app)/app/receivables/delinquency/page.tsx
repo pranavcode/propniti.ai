@@ -7,6 +7,7 @@ import { can } from "@/entities";
 import { Money } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { ScrollX } from "@/components/app/ScrollX";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { AS_OF } from "@/seed/constants";
@@ -59,8 +60,9 @@ export default async function DelinquencyPage({ searchParams }: Props) {
       </PageHeader>
 
       {!props ? <ErrorBanner title="Aging couldn't load" message="Refresh the page to try again." /> : props.length === 0 ? <EmptyState kind="table" title="Nobody is past due" description="Every charge in your properties is paid or not yet due." /> : (
-        <section aria-labelledby="by-property" className="overflow-x-auto rounded-lg border">
+        <section aria-labelledby="by-property">
           <h2 id="by-property" className="sr-only">Aging by property</h2>
+          <ScrollX className="rounded-lg border">
           <table className="w-full min-w-[720px] text-[13px]">
             <thead className="bg-muted/60 text-[11.5px] text-muted-foreground">
               <tr>
@@ -108,6 +110,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
               </tfoot>
             )}
           </table>
+          </ScrollX>
         </section>
       )}
 
@@ -127,12 +130,12 @@ export default async function DelinquencyPage({ searchParams }: Props) {
         </div>
         {!drill ? <ErrorBanner title="Residents couldn't load" message="Refresh the page to try again." /> : drill.rows.length === 0 ? <EmptyState compact kind="filtered" title="No one in this cell" description="Choose another property or age bucket." /> : (
           <>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[960px] text-[13px]">
+            <ScrollX className="rounded-lg border">
+              <table className="w-full min-w-[560px] text-[13px] lg:min-w-[960px]">
                 <thead className="bg-muted/60 text-[11.5px] text-muted-foreground">
                   <tr>
-                    <th scope="col" className="w-[26%] px-3 py-2 text-left font-medium">Resident</th>
-                    <th scope="col" className="px-3 py-2 text-left font-medium">Unit</th>
+                    <th scope="col" className="w-[44%] px-3 py-2 text-left font-medium sm:w-[26%]">Resident</th>
+                    <th scope="col" className="px-3 py-2 text-left font-medium max-sm:hidden">Unit</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">Past due</th>
                     {BUCKETS.map((b) => <th key={b.key} scope="col" className="hidden px-3 py-2 text-right font-medium lg:table-cell">{b.label}</th>)}
                     <th scope="col" className="px-3 py-2 text-right font-medium">Days late</th>
@@ -144,9 +147,10 @@ export default async function DelinquencyPage({ searchParams }: Props) {
                     <tr key={r.lease_id} className="border-t hover:bg-muted/30">
                       <td className="max-w-0 px-3 py-1.5">
                         {r.resident_id ? <PeekLink entity="residents" id={r.resident_id} href={`/app/residents/${r.resident_id}`} className="block truncate font-medium hover:text-primary hover:underline">{r.household}</PeekLink> : <span className="block truncate font-medium">{r.household}</span>}
+                        <span className="block truncate text-[11.5px] text-muted-foreground sm:hidden">{r.property} #{r.unit}</span>
                         <span className="block truncate text-[11.5px] text-muted-foreground">{r.lease_id} · {r.lease_status}{r.rent_cents ? <> · rent <Money value={r.rent_cents} cents style="whole" tone="none" /></> : null}</span>
                       </td>
-                      <td className="px-3 text-muted-foreground">{r.property} #{r.unit}</td>
+                      <td className="px-3 text-muted-foreground max-sm:hidden">{r.property} #{r.unit}</td>
                       <td className="px-3 text-right font-medium tabular-nums"><Link href={chargesHref({ "f.lease_id": r.lease_id })} className="hover:text-primary hover:underline"><Money value={r.total} cents tone="none" /></Link></td>
                       {COLS.map((c) => <td key={c.key} className="hidden px-3 text-right tabular-nums text-muted-foreground lg:table-cell">{r[c.key] ? <Money value={r[c.key]} cents style="whole" tone="none" /> : "—"}</td>)}
                       <td className="px-3 text-right tabular-nums">{r.days_late}</td>
@@ -161,7 +165,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollX>
             <Pager page={page} size={SIZE} total={drill.total} params={sp} base="/app/receivables/delinquency" />
           </>
         )}

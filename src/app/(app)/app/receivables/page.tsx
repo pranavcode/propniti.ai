@@ -78,7 +78,7 @@ export default async function ReceivablesPage() {
         <KpiCard label="Dispositions due" value={dispo?.value ?? null} format="count" goodWhen="down" href="/app/receivables/deposits?view=due" footnote="Move-outs waiting on a deposit statement" />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <ScheduledVsCollected actor={session.actor} />
         <AgingCard actor={session.actor} />
         {byProp ? (
@@ -93,7 +93,7 @@ export default async function ReceivablesPage() {
         ) : <ErrorBanner title="Delinquency trend couldn't load" />}
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <section className="rounded-lg border bg-card">
           <header className="flex items-center justify-between border-b px-4 py-2.5">
             <h2 className="text-[13.5px] font-semibold">Highest-risk residents</h2>

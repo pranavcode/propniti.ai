@@ -105,16 +105,16 @@ export function CollapsibleSection({ id, title, label, description, summary, act
   children: React.ReactNode;
 }) {
   return (
-    <Collapsible id={id} label={label ?? (typeof title === "string" ? title : id)} className={cn("scroll-mt-4", className)}>
-      <div className="mb-2.5 flex items-end gap-3 group-data-collapsed/collapse:mb-0 group-data-collapsed/collapse:items-center">
-        <div className="min-w-0 flex-1">
+    <Collapsible id={id} label={label ?? (typeof title === "string" ? title : id)} className={cn("min-w-0 scroll-mt-4", className)}>
+      <div className="mb-2.5 flex flex-wrap items-end gap-x-3 gap-y-2 group-data-collapsed/collapse:mb-0 group-data-collapsed/collapse:flex-nowrap group-data-collapsed/collapse:items-center">
+        <div className="min-w-[min(100%,16rem)] flex-1 group-data-collapsed/collapse:min-w-0">
           <div className="flex min-w-0 items-baseline gap-2">
             <h2 className="shrink-0 text-[14px] font-semibold tracking-tight">{title}</h2>
             {summary != null && <WhenCollapsed><span className="min-w-0 truncate text-[12.5px] text-muted-foreground">{summary}</span></WhenCollapsed>}
           </div>
           {description && <WhenExpanded><p className="text-[12.5px] text-muted-foreground">{description}</p></WhenExpanded>}
         </div>
-        {actions && <div className="flex items-center gap-1.5">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-1.5 max-sm:order-last">{actions}</div>}
         <CollapseButton />
       </div>
       <CollapseBody>{children}</CollapseBody>
