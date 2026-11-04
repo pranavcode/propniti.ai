@@ -152,7 +152,7 @@ export default async function MaintenanceHome() {
               <Button asChild size="sm" variant="outline"><Link href={`/app/maintenance/work-orders?f.status=New`}>Unassigned work orders</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/turnovers?view=open">Make-ready board</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/preventive?view=due-7">Preventive due this week</Link></Button>
-              <Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/board?view=calendar"><CalendarRange />Calendar</Link></Button>
+              <Button asChild size="sm" variant="outline"><Link href="/app/maintenance/board?view=calendar"><CalendarRange />Calendar</Link></Button>
             </div>
           </div>
         </div>

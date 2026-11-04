@@ -105,7 +105,7 @@ export async function FinanceHome({ session }: { session: Session }) {
               <Button asChild size="sm" variant="outline"><Link href="/app/banking/reconciliations?f.status=Open"><Landmark />Reconcile</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/finance/payment-run"><CircleDollarSign />Payment run</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/finance/1099"><FileStack />1099s</Link></Button>
-              {persona.quickActions.map((a) => <Button key={a.href} asChild size="sm" variant="ghost"><Link href={a.href}>{a.label}</Link></Button>)}
+              {persona.quickActions.map((a) => <Button key={a.href} asChild size="sm" variant="outline"><Link href={a.href}>{a.label}</Link></Button>)}
             </div>
           </div>
         </div>

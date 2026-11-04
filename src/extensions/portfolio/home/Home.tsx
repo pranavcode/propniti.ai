@@ -85,7 +85,7 @@ function QuickActions({ actions, extra }: { actions: { label: string; href: stri
   return (
     <div className="flex flex-wrap gap-1.5">
       {extra.map((a) => <Button key={a.href} asChild size="sm" variant="outline"><Link href={a.href}><a.icon />{a.label}</Link></Button>)}
-      {actions.map((a) => <Button key={a.href} asChild size="sm" variant="ghost"><Link href={a.href}>{a.label}</Link></Button>)}
+      {actions.map((a) => <Button key={a.href} asChild size="sm" variant="outline"><Link href={a.href}>{a.label}</Link></Button>)}
     </div>
   );
 }
