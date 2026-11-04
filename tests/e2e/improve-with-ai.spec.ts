@@ -20,7 +20,7 @@ test("open from a red KPI, see drivers, create the plan and find its proposals i
   await expect(panel.getByText(/past due across \d+ households/)).toBeVisible();
   await expect(panel.getByText(/of the 30\+ day balance is \d+ households at/).first()).toBeVisible();
   await expect(panel.getByText("What agents can do")).toBeVisible();
-  await expect(panel.getByText(/Collections agent · Offer payment plan/)).toBeVisible();
+  await expect(panel.getByText(/Collections Agent · Offer payment plan/)).toBeVisible();
   await expect(panel.getByText("Always a person")).toBeVisible();
   await expect(panel.getByText("Computed from your records")).toBeVisible();
 

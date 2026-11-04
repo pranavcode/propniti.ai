@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 import { agentName } from "@/ai/ui/labels";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
-import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
+import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import type { ProposalJson } from "@/ai/ui/client";
+import { ImprovableKpi } from "@/components/app/ai/ImproveWithAI";
 import { ExplainableKpi, ExplainLink } from "../ui/Explain";
 import { ApprovalQueue, CompareTable, HomeAsk } from "./client";
 import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, type CompareRow, type HomeMetrics } from "./data";
@@ -95,7 +96,8 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
   const k = m.kpis;
   const foot = `${monthLong(LAST_CLOSED)}`;
   const noAi = !k.aiHours.spark.some((v) => v > 0);
-  const delinquent = <KpiCard label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel="vs month end" spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
+  // Explain reads month-end figures, so this live figure offers Improve with AI only (as Receivables does).
+  const delinquent = <ImprovableKpi metric="receivables.aging_live" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel="vs month end" spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
   return (
     <KpiRow className="xl:grid-cols-5">
       <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
