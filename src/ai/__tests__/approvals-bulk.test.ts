@@ -137,6 +137,12 @@ describe("notify approver", () => {
     expect(await notifyApprover(s, prop(f.raw, "di-a25"))).toMatchObject({ ok: true, notified: ["Daniel Reyes"] });
   });
 
+  it("sends a life-safety item to the regional manager in scope, as decide.ts routes it", async () => {
+    const f = await seed();
+    f.raw.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, confidence, risk, queue_state, assignee_role, created_at) VALUES (?, 'prop-fire', 'compliance', 'compliance_items', 'ci1', 'p01', 'compliance_items.schedule', 'Overdue: fire inspection', 0.9, 'High', 'needs_you', 'maintenance_supervisor', '2026-11-03T10:00:00Z')").run(WS);
+    expect(await notifyApprover({ db: f.db, ws: WS, ...SAM }, "prop-fire")).toMatchObject({ ok: true, notified: ["Priya Shah"] });
+  });
+
   it("refuses when the persona can decide it, or it is decided or unknown", async () => {
     const f = await seed();
     const marcus = { db: f.db, ws: WS, actor: MARCUS, persona: getPersona("marcus")! };

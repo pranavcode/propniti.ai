@@ -2,13 +2,15 @@ import { demoNowIso } from "@/lib/clock";
 import { PERSONAS, type Persona } from "@/auth/personas";
 import { scopeProperties } from "@/server/permissions";
 import { sql } from "./data";
+import { approverRoles, routeTo } from "./decide";
 import { canDecide } from "./http";
 import type { AiSession } from "./session";
 import { proposal } from "./views";
 
 // "Notify approver": someone who can see a proposal but not decide it (an admin, a leasing agent)
 // pings the people who can. Recipients are staff whose scope covers the proposal's property and who
-// may decide it: the assignee role, or else the nearest manager up the chain. One notification per proposal,
+// may decide it (decide.ts): the role the rule routes it to (life-safety goes to the regional
+// manager), else the assignee role, else the nearest manager up the chain. One notification per proposal,
 // recipient and day: the id carries the date and the unique index drops repeats, double clicks included.
 
 const CHAIN = ["property_manager", "regional_manager", "principal"];
@@ -24,15 +26,15 @@ export async function notifyApprover(s: Who, id: string, nowIso = demoNowIso()):
 
   const ws = s.ws === "base" ? null : s.ws;
   const able: Persona[] = [];
+  const roles = approverRoles(p);
   for (const persona of PERSONAS) {
-    if (persona.portal || persona.id === s.persona.id) continue;
+    if (persona.portal || persona.id === s.persona.id || !roles.includes(persona.role)) continue;
     const propertyIds = await scopeProperties(s.db, ws, persona);
     if (p.property_id && propertyIds !== "all" && !propertyIds.includes(String(p.property_id))) continue;
     const actor = { personaId: persona.id, name: persona.name, role: persona.role, scope: persona.scope, propertyIds };
     if ((await canDecide({ db: s.db, ws: s.ws, actor, persona }, p)).ok) able.push(persona);
   }
-  // The assignee role when anyone in scope holds it; otherwise the nearest manager up the chain.
-  const to = [p.assignee_role, ...CHAIN].map((role) => able.filter((x) => x.role === role)).find((x) => x.length) ?? able;
+  const to = [routeTo(p), p.assignee_role, ...CHAIN].map((role) => able.filter((x) => x.role === role)).find((x) => x.length) ?? able;
   if (!to.length) return { ok: false, status: 409, error: "No one in scope can decide this one; check the approval policies." };
 
   const day = nowIso.slice(0, 10);
