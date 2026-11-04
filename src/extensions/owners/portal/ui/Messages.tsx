@@ -9,7 +9,8 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { useMounted } from "@/hooks/use-mounted";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { textareaClass } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { EmptyState } from "@/components/app/states";
 import { StatusBadge } from "@/components/app/display";
 import { usePortalAction } from "./usePortalAction";
@@ -51,7 +52,7 @@ export function Messages({ base, entity, me, threads, active, messages, teamName
         <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" aria-label="Subject" name="subject" autoComplete="off" className="mb-2" />
       )}
       <div className="flex items-end gap-2">
-        <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={active && !composing ? "Write a reply…" : "How can we help?"} aria-label="Message" name="message" rows={2} className="min-h-[44px] resize-none"
+        <AutoTextarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={active && !composing ? "Write a reply…" : "How can we help?"} aria-label="Message" name="message" rows={2} className={textareaClass}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send(); }} />
         <Button onClick={send} disabled={!body.trim() || !!busy} aria-label="Send message"><Send />{busy ? "Sending…" : "Send"}</Button>
       </div>

@@ -73,7 +73,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
         )}
       </div>
 
-      <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3 [scrollbar-width:thin]", collapsed ? "px-2" : "px-2.5")}>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3", collapsed ? "px-2" : "px-2.5")}>
         {data.nav.map((section) => {
           const isClosed = closed.includes(section.section);
           return (

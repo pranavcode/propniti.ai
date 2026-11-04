@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { AtSign, Pin } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar, RelativeDate } from "../display";
 import { useShellMaybe } from "../shell/context";
@@ -120,7 +121,7 @@ function Composer({ people, onSend }: { people: Person[]; onSend: (body: string)
 
   return (
     <div className="relative rounded-lg border bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/15">
-      <textarea autoComplete="off"
+      <AutoTextarea autoComplete="off"
         ref={ref}
         value={text}
         rows={2}
@@ -136,7 +137,7 @@ function Composer({ people, onSend }: { people: Person[]; onSend: (body: string)
         }}
         placeholder="Add a note. Type @ to mention a teammate…"
         aria-label="New note"
-        className="block w-full resize-none bg-transparent px-3 pt-2.5 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/80"
+        className="block w-full bg-transparent px-3 pt-2.5 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/80"
       />
       <div className="flex items-center gap-2 px-2 pb-2">
         <button type="button" onClick={() => { onChange(text + (text && !text.endsWith(" ") ? " @" : "@"), text.length + 2); ref.current?.focus(); }} className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Mention someone"><AtSign className="size-3.5" /></button>
