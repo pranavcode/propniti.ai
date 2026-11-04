@@ -19,7 +19,8 @@ const PAD = 6;
 
 function findTarget(target?: string) {
   if (!target) return null;
-  const els = document.querySelectorAll<HTMLElement>(`[data-tour="${target}"]`);
+  // A plain name is a data-tour value; anything else is a CSS selector (pages a tour only points at).
+  const els = document.querySelectorAll<HTMLElement>(/^[\w-]+$/.test(target) ? `[data-tour="${target}"]` : target);
   for (const el of els) { const r = el.getBoundingClientRect(); if (r.width && r.height) return el; }
   return null;
 }
@@ -48,14 +49,7 @@ export function useTour(tours: TourDef[], store: TourStore = localTourStore) {
 
   const dismiss = useCallback(() => setActive((a) => { if (a) save(a.tour.id, a.step, "Dismissed"); return null; }), [save]);
 
-  // First visit: offer the first tour once.
-  useEffect(() => {
-    const first = tours[0];
-    if (!first || store.get(first.id)) return;
-    const t = setTimeout(() => start(first.id), 1200);
-    return () => clearTimeout(t);
-  }, [tours, store, start]);
-
+  // Nothing starts on its own: the home welcome splash and the feature-tour toasts offer tours.
   return { active, start, go, dismiss };
 }
 

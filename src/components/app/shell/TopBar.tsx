@@ -3,7 +3,7 @@
 import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { Fragment, useMemo } from "react";
-import { BookOpen, Check, ChevronRight, CircleHelp, Compass, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";
+import { BookOpen, Check, ChevronRight, CircleHelp, Compass, House, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -11,6 +11,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Kbd, PersonAvatar } from "../display";
 import { humanize } from "../status";
 import { useShell } from "./context";
+import { showWelcome } from "../welcome/WelcomeSplash";
+import { resetWhatsNew } from "../welcome/WhatsNew";
 import { NotificationsMenu } from "./Notifications";
 import { activeHref } from "./Sidebar";
 import { exitPersona, switchPersona } from "./persona";
@@ -108,6 +110,8 @@ function HelpMenu() {
         <DropdownMenuItem asChild><Link href="/docs"><BookOpen /> Help center and docs</Link></DropdownMenuItem>
         <DropdownMenuItem onSelect={openShortcuts}><Keyboard /> Keyboard shortcuts <Kbd className="ml-auto">?</Kbd></DropdownMenuItem>
         <DropdownMenuItem onSelect={openSetup}><ListChecks /> Setup checklist</DropdownMenuItem>
+        <DropdownMenuItem onSelect={showWelcome}><House /> Show welcome screen</DropdownMenuItem>
+        <DropdownMenuItem onSelect={resetWhatsNew}><Sparkles /> Show what&apos;s new again</DropdownMenuItem>
         </DropdownMenuGroup>
         {data.tours.length > 0 && (
           <>

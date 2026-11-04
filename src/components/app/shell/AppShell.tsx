@@ -14,6 +14,9 @@ import { ChatBubble, showsBubble } from "../guide/ChatBubble";
 import { pageGuide } from "../guide/pages";
 import { SetupChecklist } from "../onboarding/SetupChecklist";
 import { TourOverlay, useTour } from "../tour/TourEngine";
+import { AskAutoOpen } from "../welcome/AskAutoOpen";
+import { WelcomeSplash } from "../welcome/WelcomeSplash";
+import { WhatsNew } from "../welcome/WhatsNew";
 import { AI_MAX_W, AI_MIN_W, AssistantPanel } from "./AssistantPanel";
 import { CommandPalette } from "./CommandPalette";
 import { ShellCtx, useShell, type AssistantContext, type ShellContext } from "./context";
@@ -149,6 +152,9 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
         </Dialog>
         <TourOverlay active={tour.active} go={tour.go} dismiss={tour.dismiss} />
         <ChatBubble />
+        <WelcomeSplash />
+        <WhatsNew />
+        <AskAutoOpen />
         {/* Toasts sit above the chat bubble. */}
         <Toaster theme={theme} position="bottom-right" closeButton {...(showsBubble(pathname) && { offset: { bottom: 76 }, mobileOffset: { bottom: 76 } })} />
       </TooltipProvider>

@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "../display";
 import { SetupPill } from "../onboarding/SetupChecklist";
+import { NewDot, useNewDot } from "../welcome/WhatsNew";
 import { useShell } from "./context";
 import { AppMark } from "./AppMark";
 import type { ShellNavItem, ShellNavSection } from "./types";
@@ -116,6 +117,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
 
 function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellNavItem; active: boolean; collapsed?: boolean; nested?: boolean; onNavigate: (e: React.MouseEvent, href: string) => void }) {
   const count = item.count ? (item.count > 999 ? "999+" : String(item.count)) : null;
+  const isNew = useNewDot(item.href);
   const link = (
     <Link
       href={item.href}
@@ -129,13 +131,14 @@ function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellN
       )}
     >
       {!nested && <span className={cn("shrink-0 [&_svg]:size-4", active ? "text-primary" : "text-muted-foreground group-hover/nav:text-foreground")}>{item.icon}</span>}
-      {!collapsed && <span className={cn("min-w-0 truncate", !item.ai && "flex-1")}>{item.label}</span>}
+      {!collapsed && <span className={cn("min-w-0 truncate", !item.ai && !isNew && "flex-1")}>{item.label}</span>}
       {item.ai && !collapsed && (
         <Tooltip>
-          <TooltipTrigger asChild><span data-ai-mark className="mr-auto flex shrink-0 text-tone-ai"><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span></TooltipTrigger>
+          <TooltipTrigger asChild><span data-ai-mark className={cn("flex shrink-0 text-tone-ai", !isNew && "mr-auto")}><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span></TooltipTrigger>
           <TooltipContent side="right">AI-powered: agents propose, you approve</TooltipContent>
         </Tooltip>
       )}
+      {isNew && <NewDot collapsed={collapsed} className={collapsed ? undefined : "mr-auto"} />}
       {count && !collapsed && (
         <span className={cn("ml-auto rounded px-1.5 text-[11px] leading-[18px] font-medium tabular-nums", item.countTone === "attention" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{count}</span>
       )}

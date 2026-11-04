@@ -12,7 +12,7 @@ const input = (over: Partial<NudgeInput> = {}): NudgeInput => ({
 });
 
 const gate = (over: Partial<Gate> = {}): Gate => ({
-  now: 10 * GAP_MS, prefs: {}, session: { shown: [] }, shownThisView: false, tourActive: false, firstTourPending: false, typing: false, overlay: false, ...over,
+  now: 10 * GAP_MS, prefs: {}, session: { shown: [] }, shownThisView: false, tourActive: false, typing: false, overlay: false, ...over,
 });
 
 describe("eligibility", () => {
@@ -23,7 +23,6 @@ describe("eligibility", () => {
   it("never shows when tips are off, during a tour, while typing or under a dialog", () => {
     expect(blockedBy(gate({ prefs: { off: true } }))).toBe("off");
     expect(blockedBy(gate({ tourActive: true }))).toBe("tour");
-    expect(blockedBy(gate({ firstTourPending: true }))).toBe("tour");
     expect(blockedBy(gate({ typing: true }))).toBe("typing");
     expect(blockedBy(gate({ overlay: true }))).toBe("overlay");
   });
@@ -101,10 +100,9 @@ describe("selection", () => {
     expect(pickNudge(input({ facts: NONE, page: { explain: false, peekRows: true } }))!.id).toBe("tip.peek");
   });
 
-  it("offers a page's own tour if it was never started, and the basics tour only after a skip", () => {
+  it("leaves a page's own tour to the feature-tour toast, and offers the basics tour only after a skip", () => {
     const pageTour: TourState = { id: "pm-today", title: "Your day", steps: 5, paths: ["/app/today"], status: null, step: 0 };
-    expect(pickNudge(input({ facts: NONE, tours: [basics("Completed", 7), pageTour] }))).toMatchObject({ id: "tour.pm-today", action: { kind: "tour", tour: "pm-today" } });
-    expect(pickNudge(input({ facts: NONE, tours: [basics("Completed", 7), { ...pageTour, status: "Dismissed" }] }))).toBeNull();
+    expect(pickNudge(input({ facts: NONE, tours: [basics("Completed", 7), pageTour] }))).toBeNull();
     expect(pickNudge(input({ facts: NONE, tours: [basics("Dismissed", 0)] }))).toMatchObject({ id: "tour.basics", action: { kind: "tour", tour: "app-basics" } });
     expect(pickNudge(input({ facts: NONE, tours: [basics("Dismissed", 4)] }))).toBeNull();
   });
