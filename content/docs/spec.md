@@ -365,7 +365,7 @@ Model providers are live. Everything else is simulated.
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
 | Abuse | Bounded writes | Same-origin check on writes and on the AI routes the app calls (the read-only status and run-stream routes excepted); 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
 | Reliability | AI failure doesn't block work | Rules take over and the label says so |
-| Tests | Regressions caught before deploy | 1,272 unit tests in 141 files; 190 end-to-end tests in 34 specs, with the touched specs run against production after each deploy |
+| Tests | Regressions caught before deploy | 1,279 unit tests in 141 files; 190 end-to-end tests in 34 specs, with the touched specs run against production after each deploy |
 | Errors | No database internals shown to people | AI routes, Data Health results and run steps show "The database is busy; try again in a moment" for database errors; the detail goes to the server log |
 
 **Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).

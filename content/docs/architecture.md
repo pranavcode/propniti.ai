@@ -217,7 +217,7 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 
 | Check | Count | What it covers |
 | --- | --- | --- |
-| Unit tests (Vitest) | 1,272 in 141 files (1 skipped) | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
+| Unit tests (Vitest) | 1,279 in 141 files (1 skipped) | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
 | End-to-end tests (Playwright) | 190 in 34 specs | Each persona's main flows, the portals, the public site, the peek drawer, sign-in, Inbox, My tasks, Automations, import, guided setup, downloads, action feedback, layout and theme, the chat bubble, assistant history, *Ask about this*, *Right now*, the welcome screen, readable runs, summaries, collapsible sections, bulk actions and approvals; the touched specs run against production after each deploy |
 | Live AI evals | 17 case files, 138 cases (86 live) | Agent and assistant behaviour against a live model, scored by fixed-rule graders (`npm run eval`) |
 
