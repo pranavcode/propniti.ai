@@ -18,7 +18,7 @@ const sum = (bills: RunBill[]) => bills.reduce((s, b) => s + b.amount_cents, 0);
 // Build a payment run: pick approved past-due bills by vendor, review what will be paid and what
 // goes to approvals, then pay. Held vendors can't be selected. Big runs are sent in chunks of 25;
 // each bill pays once however often a chunk is sent.
-export function PaymentRunBuilder({ vendors }: { vendors: RunVendor[] }) {
+export function PaymentRunBuilder({ vendors, approvers }: { vendors: RunVendor[]; approvers: string }) {
   const router = useRouter();
   const payable = useMemo(() => vendors.filter((v) => !v.hold).flatMap((v) => v.bills), [vendors]);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(payable.map((b) => b.id)));
@@ -136,7 +136,7 @@ export function PaymentRunBuilder({ vendors }: { vendors: RunVendor[] }) {
                 {toApprove.length > 0 && (
                   <div className="rounded-md border border-tone-warning/30">
                     <div className="flex items-center justify-between border-b bg-tone-warning/10 px-3 py-1.5 font-medium"><span>Send to approvals · {plural(toApprove.length, "bill")}</span><span className="tabular-nums">{usd(sum(toApprove))}</span></div>
-                    <p className="px-3 py-1.5 text-[12.5px] text-muted-foreground">Over the bill-payment approval limit, so they aren&apos;t paid in this run. Each waits in the approvals inbox for {[...new Set(toApprove.map((b) => (b.over_limit!.owner ? "the owner" : `the ${b.over_limit!.approver.replace(/_/g, " ")}`)))].join(" or ")}.</p>
+                    <p className="px-3 py-1.5 text-[12.5px] text-muted-foreground">Over the bill-payment approval limit, so they aren&apos;t paid in this run. Each waits in the approvals inbox for a {approvers}.</p>
                   </div>
                 )}
                 {held.length > 0 && <p className="text-[12.5px] text-muted-foreground">Not included: {held.map((v) => v.vendor).join(", ")} (payment hold until a bank change is verified).</p>}

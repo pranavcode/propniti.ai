@@ -36,7 +36,7 @@ export default async function PaymentRunPage() {
             {bills.length ? <>{bills.length} approved bills, {usd(total)}, from {run.vendors.length} vendors.</> : "No approved bills are past due."}
             {run.pendingApproval.n > 0 && <> {run.pendingApproval.n} more past-due bills ({usd(run.pendingApproval.cents)}) still need approval before they can be paid: <Link href="/app/payables/bills?view=to-approve" className="text-primary hover:underline">Approve bills</Link>.</>}
           </p>
-          {bills.length ? <PaymentRunBuilder vendors={run.vendors} /> : <EmptyState kind="table" title="Nothing to pay" description="Every approved bill is paid or not yet due." action={{ label: "Open payables", href: "/app/payables/bills" }} />}
+          {bills.length ? <PaymentRunBuilder vendors={run.vendors} approvers={run.approvers} /> : <EmptyState kind="table" title="Nothing to pay" description="Every approved bill is paid or not yet due." action={{ label: "Open payables", href: "/app/payables/bills" }} />}
         </>
       )}
     </main>

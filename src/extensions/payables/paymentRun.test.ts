@@ -86,6 +86,27 @@ describe("paying a payment run", () => {
     expect([a.status, b.status].sort()).toEqual([200, 409]);
   });
 
+  it("routes every over-limit bill to staff approvers, never to the owner portal, and re-sends after a rejection", async () => {
+    const c = await ctx("grace");
+    const over = bills((await paymentRunCandidates(c)).vendors).filter((b) => !b.hold && b.over_limit);
+    const r = await payRun(c, over.slice(0, 25).map((b) => b.id));
+    expect(r.results.every((x) => x.outcome === "approval")).toBe(true);
+    expect(r.results[0].message).toMatch(/approval limit.*waiting for a principal, regional manager or accountant/);
+    const rows = await db.prepare("SELECT queue_state, assignee_role, why FROM ai_proposals WHERE workspace_id = ?").bind(c.ws).all<{ queue_state: string; assignee_role: string; why: string }>();
+    expect(rows.results.length).toBe(r.results.length);
+    expect(rows.results.every((p) => p.queue_state === "needs_you" && p.assignee_role !== "owner" && !/owner/i.test(p.why))).toBe(true);
+
+    const first = over[0].id;
+    const again = await payRun(c, [first]);
+    expect(again.results[0].message).toMatch(/Already waiting/);
+    const prop = (await db.prepare("SELECT id FROM ai_proposals WHERE workspace_id = ? AND entity_id = ?").bind(c.ws, first).first<{ id: string }>())!.id;
+    await db.prepare("INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, decided_at) VALUES (?, 'dec-test', ?, 'Rejected', 'daniel', '', '2026-11-04T18:00:00Z')").bind(c.ws, prop).run();
+    const resent = await payRun(c, [first]);
+    expect(resent.status).toBe(200);
+    expect(resent.results[0].message).not.toMatch(/Already waiting/);
+    expect(await count("SELECT count(*) AS n FROM ai_proposals p WHERE p.workspace_id = ? AND p.entity_id = ? AND NOT EXISTS (SELECT 1 FROM ai_decisions d WHERE d.workspace_id = p.workspace_id AND d.proposal_id = p.id)", c.ws, first)).toBe(1);
+  });
+
   it("skips a held vendor's bills without paying them", async () => {
     const c = await ctx("grace");
     const v = (await paymentRunCandidates(c)).vendors.find((x) => !x.hold && x.bills.some((b) => !b.over_limit))!;
