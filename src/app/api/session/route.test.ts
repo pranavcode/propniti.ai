@@ -53,7 +53,7 @@ describe("POST /api/session with email and password", () => {
   it("says which field is wrong and sets no cookie", async () => {
     const unknown = await post({ email: "mallory@propniti.demo", password: DEMO_PASSWORD }, { json: true });
     expect(unknown.status).toBe(401);
-    expect(await unknown.json()).toEqual({ field: "email", error: "No demo account with that email — pick a person below." });
+    expect(await unknown.json()).toEqual({ field: "email", error: "No demo account with that email — pick a person from the list." });
     expect(unknown.headers.get("set-cookie")).toBeNull();
 
     const wrong = await post({ email: "marcus@propniti.demo", password: "propniti-dem" }, { json: true });

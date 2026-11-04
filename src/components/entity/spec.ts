@@ -4,6 +4,7 @@ import { can, getEntity, type EntityDef, type FieldDef, type Role, type Row } fr
 import { actionsFor, getAction } from "@/extensions/actions";
 import type { BulkAction, ColumnKind, DataColumn, Facet, StatusTabs } from "@/components/app/data-table/types";
 import { editable, type FacetOptions } from "@/server/query";
+import { helpFor } from "@/lib/glossary";
 
 // EntityDef → the plain data the client components need (DataTable columns and facets, form
 // fields, fact labels). Defs hold functions and icons, so they never cross to the client.
@@ -49,6 +50,7 @@ export function tableColumns(def: EntityDef, role: Role, omit: string[] = []): D
       primary,
       thumbnail: primary && !!def.image,
       moneyStyle: f.type === "money" && f.format === "compact" ? "compact" : undefined,
+      help: helpFor(f.label, f.help),
     });
   }
   // The title column leads.
@@ -59,9 +61,10 @@ export function tableFacets(def: EntityDef, role: Role, options: FacetOptions): 
   const out: Facet[] = [];
   for (const [key, f] of visible(def, role)) {
     if (!f.facet || key === def.list.statusTabs) continue;
-    if (f.type === "date" || f.type === "datetime") out.push({ key, label: f.label, kind: "date" });
-    else if (f.type === "number" || f.type === "money") out.push({ key, label: f.label, kind: f.type === "money" ? "money" : "number" });
-    else if (options[key]) out.push({ key, label: f.label, kind: f.type === "ref" ? "ref" : "enum", options: options[key].map((o) => ({ value: o.value, label: o.label, count: o.count, tone: f.enum?.find((e) => e.value === o.value)?.tone })) });
+    const help = helpFor(f.label, f.help);
+    if (f.type === "date" || f.type === "datetime") out.push({ key, label: f.label, kind: "date", help });
+    else if (f.type === "number" || f.type === "money") out.push({ key, label: f.label, kind: f.type === "money" ? "money" : "number", help });
+    else if (options[key]) out.push({ key, label: f.label, kind: f.type === "ref" ? "ref" : "enum", options: options[key].map((o) => ({ value: o.value, label: o.label, count: o.count, tone: f.enum?.find((e) => e.value === o.value)?.tone })), help });
   }
   return out;
 }

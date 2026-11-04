@@ -1,6 +1,7 @@
 import "server-only";
 import { can, getEntity, type EntityDef, type FieldDef, type Role } from "@/entities";
 import { getAction } from "@/extensions/actions";
+import { helpFor } from "@/lib/glossary";
 import type { BulkAction, ColumnKind, DataColumn, Facet, FacetOption, SavedView, StatusTabs } from "./types";
 
 // EntityDef → the plain DataTable props (server side; defs hold functions and stay here).
@@ -43,6 +44,7 @@ export function columnsFor(def: EntityDef, role: Role): DataColumn[] {
       primary,
       thumbnail: primary && !!def.image,
       moneyStyle: f.format === "compact" ? "compact" : undefined,
+      help: helpFor(f.label, f.help),
     });
   }
   // Title column first.
@@ -55,11 +57,12 @@ export function facetsFor(def: EntityDef, role: Role, refOptions: Record<string,
   const out: Facet[] = [];
   for (const [key, f] of Object.entries(def.fields)) {
     if (!f.facet || f.hiddenFor?.includes(role)) continue;
-    if (f.type === "enum") out.push({ key, label: f.label, kind: "enum", options: (f.enum ?? []).map((e) => ({ value: e.value, label: e.label, tone: e.tone })) });
-    else if (f.type === "ref" && refOptions[key]) out.push({ key, label: f.label, kind: "ref", options: refOptions[key] });
-    else if (f.type === "date" || f.type === "datetime") out.push({ key, label: f.label, kind: "date" });
-    else if (f.type === "money") out.push({ key, label: f.label, kind: "money" });
-    else if (f.type === "number") out.push({ key, label: f.label, kind: "number" });
+    const help = helpFor(f.label, f.help);
+    if (f.type === "enum") out.push({ key, label: f.label, kind: "enum", options: (f.enum ?? []).map((e) => ({ value: e.value, label: e.label, tone: e.tone })), help });
+    else if (f.type === "ref" && refOptions[key]) out.push({ key, label: f.label, kind: "ref", options: refOptions[key], help });
+    else if (f.type === "date" || f.type === "datetime") out.push({ key, label: f.label, kind: "date", help });
+    else if (f.type === "money") out.push({ key, label: f.label, kind: "money", help });
+    else if (f.type === "number") out.push({ key, label: f.label, kind: "number", help });
   }
   return out;
 }

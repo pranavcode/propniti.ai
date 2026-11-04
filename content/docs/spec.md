@@ -1,265 +1,357 @@
 ## Overview
 
-Propniti is an agent-first property management platform for US multifamily and commercial portfolios. AI agents do the routine operations work. A property manager approves anything that moves money. This spec covers V1 — what the live prototype at [propniti.ai](https://propniti.ai) already does, and what is planned next. Source code: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
+Propniti is property management software for US residential and commercial portfolios. Eight AI agents do routine operations work. People approve anything that involves money, legal terms or safety. This spec describes v2, the version live at [propniti.ai](https://propniti.ai), and marks each requirement as built, partial or not built. Source code: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
 
-**Problem.** Property managers spend their day on repetitive work: chasing rent, checking vendor invoices against purchase orders, reminding tenants about renewals and re-keying data between tools. Incumbents such as AppFolio and Buildium are systems of record. They store the data, but the manager still does the work.
+**Promise.** Know your portfolio is right. Propniti checks, explains and corrects the operations data that money decisions depend on.
 
-**Solution.** An always-on orchestrator agent watches every property, tenancy, work order and payment. It nudges people about pending actions. It reads and validates documents such as invoices and bills. It runs multi-step operations end to end. The manager approves or sends work back. The agent does the rest.
+| Area | What v2 has |
+| --- | --- |
+| Staff app | One app at `/app` for nine staff roles, each with its own home page and scope |
+| Record types | 64 record types in 13 modules (portfolio, leasing, residents, maintenance, communications, receivables, payables, accounting, owners, risk, intelligence, settings, platform) |
+| AI agents | Collections, Renewals, Leasing, Maintenance triage, Payables, Owner reporting, Compliance and Data Health |
+| Portals | Owner, resident, vendor and applicant portals at `/portal/...` |
+| Public site | Listings, tour booking and applications at `/listings` and `/apply/...`, with no sign-in |
+| Sample data | 30 properties (3,318 units) in Austin, Dallas, Atlanta and Phoenix, with 18 closed months of history |
 
-**Moat.** An agent validates financial documents, and an audit log records every decision. The agent reads a vendor's invoice (photo or PDF), checks it against the purchase order and scores its confidence. Rule-based checks can overrule the model. Every payment waits for a person.
+**Product principles.**
 
-**Long-term direction.** The same property data feeds ESG reporting. V2 starts with CRREM (Carbon Risk Real Estate Monitor) decarbonisation-pathway analysis for large multifamily and commercial properties. ESG platforms such as Measurabl use this analysis.
+- **AI is visible and accountable.** Every AI output shows its source (a live model, a stored earlier result, or rules) and links to the run that produced it.
+- **Figures come from data, never from the model.** The code computes every number. A model only words answers and suggests actions. Model text that states a figure the data doesn't contain is thrown away and the rules text is shown instead.
+- **Every number clicks through.** KPIs, charts and totals open the records behind them.
+- **Fair housing.** Applicant scoring never uses protected characteristics. Criminal history is never scored; it goes to a person.
 
 ## Goals and non-goals
 
-V1 proves that agents can take routine operations off a property manager's plate without making costly mistakes.
+**Goals (v2)**
 
-**Goals (V1)**
+- Each role sees its own home, its own records and its own next actions, scoped to its region, properties or own record.
+- Agents run on a schedule and on events, without a person starting them. Each run is recorded step by step.
+- Agents propose; people decide. Low-risk actions inside approval-policy limits may apply on their own when an admin allows it.
+- Bad data is found and fixed before owners or auditors see it.
+- Money rules (idempotent payments, trust balance checks, bank-change holds) run on the server.
 
-- A new manager brings in their existing portfolio within minutes. They use the rent roll their current tool already exports.
-- One manager sees and acts on everything that needs attention from a single dashboard. Each item takes one click.
-- The agent reads each vendor invoice and checks it against the purchase order before anyone pays. A clean invoice takes one approval.
-- Every dollar is traceable through the trust account: rent in, management fee, vendor bills and owner payouts. Each party sees their own share.
-- Overdue rent, expiring leases and poor ratings show up as alerts. Alerts reach each person on their preferred channel.
-- Every AI result carries a confidence score and its evidence. No AI result moves money on its own.
-- Every role — manager, owner, tenant, maintenance, vendor, admin — has a view built for its job.
+**Non-goals (v2)**
 
-**Non-goals (V1)**
-
-- Replacing AppFolio or Buildium as the accounting system of record.
-- Marketing and CRM for leasing vacant units.
-- CRREM and ESG reporting (V2).
-- Markets outside the US. Decided: V1 is US-only — ACH payments, US phone numbers and IRS 1099-NEC forms for vendors.
+- Real accounts, real payments and real messages. Sign-in uses demo accounts with one published password; payments and messages are simulated.
+- Live sync with other property management systems. Data comes in through file import only.
+- Markets outside the US.
 
 ## Personas
 
-The property manager is the primary user and buyer. Every other role sees only its own slice.
+All names and companies are fictional. A visitor signs in on [propniti.ai/login](https://propniti.ai/login) with a demo account, or picks a person from the list beside the form, and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). The old `/demo` link now goes to `/login`.
 
-| Persona | Needs | Views in the prototype |
-| --- | --- | --- |
-| **Property manager** (primary) | Run more properties with less manual work; approve agent actions | Dashboard, properties, tenants, work orders, assistant; a detail page for each work order, tenancy and property |
-| Owner | See how their buildings perform without chasing the manager | Overview, tenants, maintenance and payouts — for their properties only |
-| Tenant | Know what they owe and when; pay; raise issues | Home, rent and invoices (pay by ACH), maintenance requests |
-| Maintenance | Receive jobs, report progress, prove completion | My jobs: start, add photo notes, mark complete |
-| Vendor | Get work orders, invoice against the PO, get paid | Work orders with AI invoice upload, payments and 1099-NEC status, company profile |
-| Admin | Manage users and watch the system | System health (including the active AI provider), users and ID-verification status, audit log |
+**Demo accounts.** Each persona has the email `<id>@propniti.demo` (for example `marcus@propniti.demo`), and every account uses the published password `propniti-demo`. Beside the form, *Pick a person* lists all 13 people: click one (or move with the arrow keys) to fill the form, then *Sign in as …*; double-click signs in straight away. *What each person sees*, below, describes each persona. `/login?as=<id>` prefills a person, and a `next` link to an `/app` or `/portal` page is kept. The browser remembers the last person, and a visitor who is already signed in sees *Continue as …* and *Switch person*. The form also works without JavaScript.
 
-In the demo, a separate **Demo** control at the bottom of the screen switches between roles. It is a demo aid, not part of the product.
-
-## Use cases and status
-
-The prototype covers nine use cases end to end. They include simulated payment flows, ratings and AI-native onboarding. Live sync with other tools, marketing and CRREM come later.
-
-| Use case | Feature | Personas | Status |
+| Persona | Role | Scope | Lands on |
 | --- | --- | --- | --- |
-| Run more properties per manager | Dashboard with portfolio stats, alerts with one-click actions and agent activity; detail pages | Manager | Built |
-| Vendor work-order automation | AI validation of the invoice against the PO, confidence score, approve and pay, or send back | Manager, vendor | Built |
-| Read invoices and bills with AI | Upload a photo or PDF; a vision model extracts vendor, line items and total, and checks the document is consistent | Vendor, manager | Built |
-| Track critical events | Overdue-rent, lease-renewal and low-rating alerts; nudges on each person's channel | Manager, tenant | Built |
-| Query to action | Assistant answers from portfolio data. The app computes figures for overdue rent, renewals and open work orders; the model suggests next actions | Manager | Built |
-| A view per role | Role-specific screens | All | Built |
-| Money through a trust account | Rent → trust account → 8% management fee → owner payout net of vendor bills; vendor payouts on approval; pending → cleared (simulated ACH) | Tenant, manager, owner, vendor | Built (simulated) |
-| Ratings and feedback | Ratings after jobs and for managers and properties; profile averages; 1–2★ alerts | Tenant, manager, maintenance, vendor | Built |
-| Onboarding and data import | AI-native setup: import a CSV/TSV rent roll from AppFolio, Buildium, Yardi or a spreadsheet, or paste free text; row checks; bank connection and invites (simulated) | Manager | Built |
-| Live sync with other tools | Ongoing two-way sync with AppFolio or Buildium through their APIs | Manager | Later |
-| Marketing and CRM | Lead follow-up for vacant units | Manager | Later |
-| CRREM carbon pathways | Property energy data compared with decarbonisation pathways | Owner, manager | V2 |
+| Daniel Reyes | Principal | All 30 properties, 4 metros | `/app` (portfolio home) |
+| Priya Shah | Regional manager | Texas, 14 properties | `/app` (regional home) |
+| Marcus Bell | Property manager | 3 Austin properties | `/app/today` |
+| Lena Ortiz | Leasing agent | 3 Austin properties | `/app/leasing/today` |
+| Rachel Moore | Managing broker | Brokerage, all properties | `/app/leasing/broker` |
+| Grace Kim | Senior accountant | All owner entities | `/app/finance` |
+| Tom Alvarez | Maintenance supervisor | Texas, 14 properties | `/app/maintenance` |
+| Sam Okafor | Administrator | Org settings | `/app/admin` |
+| Nadia Brooks | Platform admin | All customer orgs | `/app/admin` |
+| Helen Carter | Owner, Bluebonnet Residential Fund II | Own entities | `/portal/owner` |
+| Jordan Lee | Resident, The Lofts at Riverside #412 | Own lease | `/portal/resident` |
+| Luis Ramirez | Vendor, Lone Star Plumbing | Own jobs | `/portal/vendor` |
+| Priyanka Rao | Applicant, Barton Creek Commons | Own application | `/portal/applicant` |
+
+A role × module matrix sets what each role may do in each module: none, read, write or approve. Settings → Roles shows it. Portal personas see only rows tied to their own record, and staff pages send them back to their portal.
 
 ## Functional requirements
 
-Each requirement states what must be true for it to count as done. Items marked built are verified in the live prototype.
+Status: **Built** means it works end to end on propniti.ai. **Partial** means part of it works; the note says which part. **Not built** means it is not in the code.
 
-### Dashboard and detail pages (built)
+### Navigation and records
 
-- The dashboard shows the number of properties and units, occupancy, rent collected against rent billed for the month, and the count of items needing attention.
-- Each alert (overdue rent, lease renewal, invoice to validate) links to its detail page. It offers its action in one click: Nudge tenant, Send renewal offer or Review.
-- Work orders, tenancies and properties each have a detail page with a "Back to dashboard" link. Work-order IDs in the agent activity feed link to their page.
-- A tenancy page shows rent, lease dates, overdue balance, contact details and preferred channel, invoices and messages sent. A property page shows occupancy, owner, tenancies and work orders.
-
-### Vendor invoice validation (built)
-
-- For a submitted work order, "Run AI validation" compares the total, each line item and the photo count with the purchase order. It returns a decision (approve, review or reject), a confidence from 0 to 1, the matched evidence and every issue.
-- A total within 2% of the PO counts as a match. Validation groups line items by the text before the first comma (ignoring case). It compares each group one-to-one with the same group on the PO. So a changed quantity shows as a price mismatch. Validation never approves an invoice if it has no lines, contains negative amounts, its lines don't add up to its stated total to the cent, or it leaves out a PO item.
-- At 85% confidence or higher with no issues the action reads "Approve & pay (one tap)". Otherwise it reads "Approve & pay anyway". "Send back to vendor" sends the issues to the vendor.
-- Only a submitted job can be approved, so a repeat click does nothing. The app refuses approval when the trust account can't cover the payout. An approved vendor job shows Payment pending until its payout clears, then Paid. The vendor gets a message. Their year-to-date total counts cleared payouts only. The app discards a validation result if the invoice changed while it was running.
-
-### AI document reading (built)
-
-- Vendors (on their work order) and managers (on the work-order page) can upload a JPEG, PNG, WebP or PDF of up to 4 MB.
-- The model extracts vendor, invoice number, date, line items, total and currency. Five checks follow: it is an invoice or bill; vendor and invoice number are present; line items add up to the total (within 1% or $1); amounts are in US dollars; legibility is 70% or higher.
-- A failed check blocks use of the result. A legibility score under 70% needs an explicit confirmation that someone checked the figures against the document. The extracted lines can then fill the vendor's invoice or replace the submitted figures on a work order. Validation then runs again.
-- Files are read in memory and discarded; nothing is stored. The upload panel links two sample invoices, one clean and one with problems.
-
-### Events and nudges (built)
-
-- Overdue rent invoices and leases ending within 45 days raise alerts.
-- A nudge or renewal offer goes to the person's preferred channel (SMS, WhatsApp, email or voice). It also appears in their in-app inbox and the audit log. The prototype simulates delivery.
-
-### Assistant (built)
-
-- The manager asks a question in plain English. The answer uses portfolio data only and lists up to three suggested actions. Suggested prompts cover late rent, lease renewals and open work orders.
-- For questions about overdue rent, lease renewals and open work orders, the figures in the answer always come from the app's own calculation. The model adds only the suggested actions, and a note says so. For other questions, the model answers from the portfolio data. The app tells the model to treat that data as data, never instructions.
-
-### Other roles (built)
-
-- **Tenant:** sees next payment, rent and lease dates; pays an invoice (simulated ACH); reports an issue, which creates a job assigned to maintenance.
-- **Maintenance:** starts a job, adds photo notes and marks it complete (status Completed).
-- **Vendor:** submits an invoice against the PO with photos; sees payouts and 1099-NEC status (issued at $600 or more a year).
-- **Owner:** sees occupancy, last payout, tenants and work orders for their own properties only.
-- **Admin:** sees users and ID-verification status, system health including the active AI provider, and the full audit log; can reset the demo data to its starting state.
-
-### Payments through a trust account (simulated)
-
-- A tenant pays a due or overdue invoice by bank (ACH). The invoice shows Processing, and a pending transfer into the trust account appears. About 8 seconds later (simulated settlement), the transfer clears. The invoice then shows Paid, and the app tells the tenant the payment was received.
-- When rent clears, the 8% management fee moves from trust to the manager in the same step (e.g. $148 on $1,850).
-- Approving a vendor invoice creates a pending vendor payout from trust, charged to that property's owner. The payout clears the same way, and the app notifies the vendor.
-- Each owner's statement shows, since their last payout: cleared rent, minus management fees, minus vendor bills (pending or cleared). *Pay owner* sends the balance from trust and closes the statement. The app refuses it when nothing is owed or the trust account can't cover it.
-- Every transfer carries an idempotency key (e.g. one rent transfer per invoice), so a double click or retry never moves money twice. The server enforces every money rule, and the browser can't bypass them.
-- The manager's Payments tab shows the trust balance (cleared, available, incoming, outgoing), owner statements and every transfer, newest first; owners and vendors see their own payouts.
-
-### Ratings and feedback
-
-- Tenants rate each finished job on their unit, their property manager and their building. A job is finished when it is Paid, or Completed for in-house work. For a job, tenants rate the vendor or the in-house maintenance worker. Managers rate the vendor or maintenance worker on each paid job.
-- A rating is 1–5 stars plus an optional comment of up to 300 characters; submitting requires a star value.
-- One rating per person, subject and job: rating again replaces the earlier one.
-- Averages and counts show on the vendor profile, the maintenance worker's page, property pages, the owner's overview and the manager's Ratings tab.
-- Any 1–2 star rating raises a dashboard alert for the manager, linked to the work order when there is one.
-
-### Onboarding and portfolio import
-
-- A manager who signs up lands on a five-step setup: portfolio, review, get paid, invite, done. The manager can skip it and reopen it from the Properties tab.
-- **Import a file:** a CSV or TSV rent roll (up to 2 MB) from AppFolio, Buildium, Yardi, Rent Manager or a spreadsheet. AI matches the columns to property, address, unit, tenant, email, phone, rent, lease start, lease end and owner. The app accepts a match only if that column exists. Name-based matching fills any gaps. The manager can change every match.
-- **Paste anything:** AI turns free text (an email, notes, a copied table) into rows. Without a model, the app still reads a pasted table. For free text, it asks for a table or file instead.
-- The app checks every row before import. Errors (row skipped): missing property, unit, tenant or rent; rent that isn't a positive amount; invalid dates; lease ending before it starts; the same property and unit twice; a unit already in the portfolio. Warnings (row kept): no lease end (month-to-month), doubtful email, rent above $50,000.
-- Importing adds properties (reused by name), tenants, tenancies (marked *Renewal due* when the lease ends within 45 days) and next month's rent invoice. Repeated imports never reuse IDs or duplicate a unit already in the portfolio. Properties with retail, office or plaza-style names or “Suite” units are typed commercial. The app rejects files with an unclosed or misplaced quote, or rows of the wrong width, and shows a message.
-- Then: connect a trust account (simulated bank selection) and invite owners and vendors by email. Invalid addresses block sending. *Done* opens the dashboard with the imported portfolio.
-- The app does not accept Excel (.xlsx). The screen asks for a CSV export.
-
-### Form validation
-
-- Sign-in, sign-up and password reset require a valid email and an 8+ character password. Forms stay disabled until the page has loaded.
-- Vendor invoices need a description on every line, amounts of $0 or more, and a total above $0.
-- A tenant's issue report needs at least 5 characters. Maintenance photos and assistant questions can't be submitted empty.
-
-### Access (prototype only)
-
-- The marketing site at propniti.ai links to sign-in, sign-up and password-reset screens. They are UI only: no accounts are created and nothing is sent.
-
-## Agent behaviour and confidence policy
-
-The agent decides and explains. People approve anything that moves money. Rule-based checks can overrule the model.
-
-| Action | What the agent does | Example from the prototype |
+| Requirement | Status | Notes |
 | --- | --- | --- |
-| Nudge | Reminds a person about a pending action on their preferred channel | Overdue-rent reminder to Marcus Lee by SMS |
-| Validate | Checks an invoice and its photos against the PO | WO-1042 bills $575 against a $300 PO: flagged |
-| Read documents | Extracts structured data from an invoice or bill image or PDF | CoolAir HVAC invoice CA-88342, $600 |
-| Sequence of operations | Runs a multi-step task end to end | Invoice → validation → approval → vendor payout and message |
-| Answer | Answers portfolio questions with suggested actions | "Who is late on rent?" |
+| Sign-in at `/login` with a demo email and password, or the *Pick a person* list beside the form (click fills, arrow keys move, double-click signs in); role switch from the avatar menu or the banner's *Switch* | Built | One published password, checked on the server in constant time; a cookie holds the chosen persona. Not an account system |
+| A home page per role | Built | See [Personas](#personas) for each landing page |
+| List pages for every record type, with search, filters, status tabs, saved and shared views, CSV export and server-side paging (25, 50 or 100 rows) | Built | Generated from each record type's definition |
+| *Select all N matching* for bulk actions, real bulk labels, *New* forms prefilled from the current filter, *View* links in toasts | Built | Bulk selection is rate limited |
+| Record pages with tabs, Activity, Notes, Tasks and Documents, an AI summary and a Data health panel | Built | Tabs appear when the record type supports them |
+| Record peek drawer: a list row opens the record in a side drawer (a bottom sheet on phones), with J and K to move between rows and *Open full page* | Built | The URL carries `?peek=<id>`, so a drawer can be linked |
+| ⌘K command palette: records, pages, quick actions and "Ask AI" | Built | |
+| Breadcrumbs: section and group names open their first page; *Home* opens the persona's home | Built | |
+| AI-powered pages marked in the sidebar and ⌘K with a sparkle (Inbox, Copilot, Agents, Approvals, AI activity, Automations, Data health); the *AI agents* section sits near the top of the sidebar | Built | Tooltip: "AI-powered: agents propose, you approve" |
+| Inbox at `/app/inbox`: conversations waiting on your reply, agent proposals you can decide, and your alerts, with tabs *All*, *Messages*, *Approvals* and *Alerts* | Built | 25 rows a page; a sidebar badge counts what needs you. *Reply* and *Review* open the page that does the work |
+| My tasks at `/app/tasks`: tasks assigned to you or your role, with *Open*, *Overdue*, *Today*, *Upcoming* and *Done* views, filters, *New task*, mark done or reopen, *Snooze* and *Reassign* | Built | Due dates use the demo date. A double click changes a task once |
+| A record outside your scope opens an in-app page: "This record isn't in your scope or doesn't exist" | Built | Unknown and out-of-scope records look the same |
+| Locked records (paid bills, sent offers, ended leases) can't be edited | Partial | The server refuses the save; the Edit button still shows |
+| Natural-language list filter | Not built | The `/api/ai/nl-filter` route exists, but no list page calls it |
 
-**Triggers.** In the design, a scheduled sweep every 15 minutes looks for due rent, expiring leases and stuck work orders. Events (a question, an upload, a submission, a reply) start work immediately. In the prototype, the agent runs when a person triggers it.
+### Portfolio and reporting
 
-**Confidence policy.**
-
-- Every result carries a confidence from 0 to 1 and the evidence behind it.
-- 85% or higher with no issues allows one-tap approval. Below that, a person reviews the evidence.
-- The model can't approve what the rule-based checks flag: the decision drops to review and confidence is capped at 60%.
-- Every payment needs a person's approval in V1, however confident the agent is.
-- Every result is labelled with its source — Workers AI, Claude, OpenAI or Mock AI. If no real model is configured, or a call fails, the app shows the rule-based result and says so.
-
-### Example: vendor work order
-
-![Money moves only after a manager approves](/docs/spec/vendor-work-order-flow.svg#760x316)
-
-In V1 every payment needs a manager's approval. A confident result takes one tap. A doubtful one shows the evidence, and the manager can send it back to the vendor.
-
-## Core data entities
-
-Tenancy is the hub that ties a property to a tenant and their lease. A work order ties a property to a vendor and a purchase order.
-
-| Entity | Key fields | Status |
+| Requirement | Status | Notes |
 | --- | --- | --- |
-| Property | name, address, type, units, occupied units, owner | Built |
-| User | role, contact, preferred channel, ID-verification status | Built |
-| Vendor | company, trade, paid this year before the ledger (cleared payouts are added) | Built |
-| Tenancy | property, unit, tenant, rent, cadence, lease start and end, status | Built |
-| Rent invoice | tenancy, amount, generated and due dates, status (due, overdue, processing, paid) | Built |
-| Work order | property, unit, vendor or in-house assignee, estimate, status (assigned, in progress, submitted, changes requested, payment pending, paid, completed), purchase order, submission, validation result | Built |
-| Purchase order | number, line items, total, photos required | Built (part of the work order) |
-| Transfer | idempotency key, kind (rent, management fee, vendor payout, owner payout), from and to party, amount, property, reference, status (pending, cleared, returned), statement it was paid out in | Built (simulated ACH) |
-| Rating | rater, subject (maintenance worker, vendor, manager or property), stars 1–5, comment, work order | Built |
-| Notification | recipient, channel, message, time | Built |
-| Audit entry | time, actor (person or agent), action, detail | Built |
-| Setup | connected bank, invites sent, rows imported, completed | Built (onboarding) |
+| Portfolio and regional homes with KPIs, charts, a property comparison and an approvals queue | Built | Daniel and Priya |
+| *Explain* on KPIs and per-property variance: drivers and the properties that moved the number | Built | Facts computed; a model words them, or rules do |
+| Property NOI shows the last closed month | Built | Labelled "NOI (last month)"; the month in progress is never used |
+| What-if: rent, occupancy and expense changes recompute NOI per property, with an optional narrated explanation | Built | The math is deterministic; the narration is a traced agent run |
+| Reports: P&L, rent roll, AR aging, NOI by property, cash forecast; *Build report* from a question | Built | The question becomes a report spec; rules are the fallback |
+| Budget vs actual with *Explain a variance* | Built | |
 
-The prototype folds the design's separate communication-channel and agreement entities into User and Tenancy. Prototype data lives on the server, in Cloudflare D1 (SQLite on Docker). Each visitor gets a private copy, kept by a cookie, that resets at midnight Pacific time. Production uses PostgreSQL (see the [Solution Architecture document](/docs/architecture)).
+### Leasing
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Leasing day view: briefing, tours, follow-ups due, agent proposals | Built | Lena |
+| Pipeline board: move prospects between stages, with *Undo* | Built | |
+| Follow-ups: send one or *Send all*; stale leads followed up or reassigned in bulk; *Rewrite with AI* on drafts | Built | |
+| Listing editor with *Draft with AI* and a fair-housing language check | Built | Flagged wording blocks the save |
+| Application scoring with reasons for and against, and a recommendation | Built | Rules score; criminal history is never scored |
+| Broker decision on the application record: approve, approve with conditions, deny | Built | A conditional approval needs a reason |
+| Renewals: the agent prices an offer with reasons; a person accepts or edits, drafts with AI and sends; renewal drafts prepared in bulk and renewal follow-ups | Built | An approver's edits reach the sent message |
+
+### Residents and communications
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Property manager's Today page: briefing with links, KPIs, charts, approvals, leases ending without an offer | Built | Marcus |
+| Resident 360: ledger, lease, terms and rent schedule | Built | |
+| Conversations (`/app/communications/inbox`): *Suggest a reply*, edit, send | Built | Messages are stored; nothing is delivered outside the app |
+| Lease abstraction: reads the lease on file, cites pages, flags mismatches and fixes the record | Built | |
+| Announcements: AI draft for a property, then send to its residents | Built | Delivery is simulated |
+| Delivery by email or SMS | Not built | Settings → Integrations shows simulated connection status only |
+
+### Maintenance and compliance
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Maintenance home: SLA KPIs, triage queue, approvals, invoices to approve, vendor insurance | Built | Tom |
+| Intake: a plain-language request is saved and triaged by the agent (trade, urgency, cost estimate, vendor); *Dispatch as suggested* | Built | Uses the same decide rule; confidence is checked on the server |
+| Request certificates of insurance from vendors; vendor certificates prefilled and read by AI; escalate late make-readies | Built | |
+| Board and calendar of open work orders | Built | |
+| Technician view: start a job, log time, mark done | Built | |
+| Vendor invoice check against the purchase order, then *Approve and pay* once | Built | Rules only (totals within 2%, line groups, line sums, photos on file). Payment is blocked while a vendor bank change is unverified, or above the owner's limit without the owner's approval |
+| Compliance: certificates of insurance, permits, inspections, legal cases, with an expiries timeline | Built | Legal cases are hidden from roles without access |
+
+### Finance
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Receivables: delinquency aging that drills to residents, ledgers and charges | Built | |
+| Record a payment; a double click records one payment | Built | Simulated money |
+| Collections workbench: a rules risk score with reasons, drafted reminders in English or Spanish; *Remind* and *Record payment* from the delinquency list | Built | |
+| Payment run: pay approved bills in one run; bills over the limit go to staff approvers | Built | Simulated money |
+| Collection rate: the share of each month's own charges paid so far, never over 100% | Built | Paying down older balances no longer counts toward the current month |
+| Returned payments with a state-capped fee; deposit dispositions | Built | |
+| AP inbox: read an uploaded invoice, suggest GL coding, run payables checks, approve and pay | Built | Reading uses a vision model when one is configured; otherwise manual entry |
+| Hold payments on an unverified vendor bank change; a different person must verify it | Built | |
+| Owner statements with *Explain* per line and distributions | Built | |
+| Bank reconciliation with suggested matches | Built | |
+| 1099 preparation | Built | |
+| Vendor invoices from the portal reach the AP inbox | Not built | They appear on the work order's *Invoice and PO* tab only |
+
+### AI and data health
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Eight agents on a schedule, on events and on *Run now* | Built | See [Agent behaviour](#agent-behaviour). Agent names read in title case, for example *Collections Agent* |
+| Agents page: status, counters, autonomy, *Run now*, approval-policy limits | Built | `/app/agents` |
+| Approvals inbox with tabs *Needs you*, *Handled automatically*, *Waiting on others*, *Decided*; bulk approve of low-risk items | Built | `/app/ai/approvals` |
+| Approvals deep link: `?proposal=<id>` or `?record=applications/<id>` opens and highlights that proposal | Built | |
+| Approvals inbox filters, *Approve all low-risk matching*, *Waiting on others* with *Notify approver* | Built | Bulk approval covers low-risk items only |
+| Owner approves proposals waiting on the owner | Partial | The owner portal lists repairs over the owner's limit. Agent proposals in *Waiting on others* don't appear there; a principal can decide them |
+| AI activity: every run with trigger, model, tokens and cost; an AI audit log | Built | `/app/ai/activity` |
+| Run trace that streams steps while the run is going | Built | `/app/ai/runs/<id>` |
+| Assistant (⌘J and `/app/copilot`): Ask, Do and Help modes; each turn is a traced run; saved conversations | Built | Do mode turns rent-reminder requests into proposals. `/app/copilot` lists the 30 most recent conversations; the side panel keeps a conversation for the session only |
+| *Ask Propniti* chat bubble on staff pages: opens the assistant with page-aware suggested questions, and offers one tip at a time from real data | Built | At most one tip per page view, two minutes apart and five per session; never during a tour, typing or a dialog. *Show tips* turns them off |
+| Chat history in the assistant panel: recent conversations per persona, *New*, open as a page | Built | |
+| *Ask about this* on a record: the assistant answers about that record, using its facts by name | Built | Also in the portals, limited to the person's own records |
+| *Right now* in the assistant panel: up to three one-click items from your counts (approvals waiting, past-due balances, data issues) | Built | |
+| Do mode can start agents | Built | Their proposals follow the normal approval rules |
+| *Improve with AI* on a red KPI (delinquency, occupancy, work-order SLA): drivers computed from the records, a plan of real agent actions with expected effects from history, and *Have agents do this* | Built | Proposals go through the normal approval rules; the card then shows what changed on the plan's records. A second plan for the same card is refused while one runs |
+| Definitions on labels: KPI, chart, column, filter, record-fact and autonomy labels show a plain-English definition on hover, focus or tap, with a *Learn more* link | Built | From field or KPI help first, then a glossary of property-management terms |
+| Help article pages at `/app/help/<id>` | Built | The assistant's help citations link here |
+| Readable run steps: each agent step as a plain sentence with linked record names, raw input and output behind *Technical details* | Built | Records outside the viewer's scope show their type only |
+| *Summarize with AI* on a record without a summary (record page and peek drawer) | Built | Same scope checks, figure checks and rules fallback as stored summaries; the result is kept in the visitor's copy |
+| AI summaries on records, computed from the record's current figures | Built | See [Source labels](#source-labels) |
+| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes*, filters from links, bulk apply up to 50 | Built | Fixes that touch money, fraud or legal status, and anything not low risk, always wait in the approvals inbox, whoever clicks. A low-risk fix runs only if the person clicking may decide it |
+| Automations at `/app/automations`: every agent with its schedule, events, autonomy, last run, next run and 30-day runs and failures; the 15-minute sweep; event triggers; approval rules; rules built into the product | Built | Events that nothing raises yet are marked as such. Settings → Automations now opens this page |
+
+### Portals and public site
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Owner portal: briefing, statements with *Explain*, repair approvals, properties, documents, messages | Built | |
+| Resident portal: pay rent, autopay, requests with an AI first read, lease and renewal (*Ask about renewing*), renters insurance upload, messages | Built | The first read is rules; staff verify uploaded insurance |
+| Vendor portal: accept or decline jobs, send invoices (read from a file), payments, insurance certificates | Built | |
+| Applicant portal: status timeline, documents checklist, $55 fee, messages | Built | No real card is charged |
+| *Ask AI* in each portal, answered from the person's own records | Built | Rules answer; a model may reword without adding figures |
+| Public listings: search by metro, listing detail with pricing and fees, ask about a unit, book a tour | Built | Fair-housing questions get fixed policy text |
+| Public application in five steps; the Leasing agent scores it right away; the broker sees it in approvals | Built | Only file names are stored for documents |
+
+### Settings and platform
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | |
+| Import from other systems: properties, units, residents, leases (rent roll, deposits, opening balances), owners, vendors and aged balances | Built | `/app/settings/import`. See [Import](#import) |
+| Integrations | Partial | Status cards only; no outside service is called |
+| Platform console: customer orgs, system health, AI usage | Built | Platform admin only |
+| Collapsible home and dashboard sections, remembered per persona in this browser; *Reset layout* in the avatar menu | Built | Reset clears collapsed sections and sidebar, panel and drawer sizes; tours, tips, theme and saved views are kept |
+| Welcome splash on the home page once a demo day per persona (greeting, what Propniti does for the role, what's new, up to three things waiting); *Don't show again*; *Help › Show welcome screen* brings it back | Built | |
+| New-feature dots in the sidebar until the page is visited, and one toast per page view offering that feature's tour | Built | |
+| The assistant panel opens on its own once a demo day per persona | Built | After the splash closes, or on the day's first page view |
+| Real sign-in and accounts | Not built | |
+
+## Import
+
+`/app/settings/import` (*Settings → Import data*) brings a portfolio over from another system in six steps: *Source*, *Files*, *Columns*, *Review*, *Preview*, *Done*.
+
+- **Sources.** AppFolio, Buildium, Yardi Breeze, Yardi Voyager, Rent Manager, Propertyware, DoorLoop, TenantCloud, Entrata, or *Other / spreadsheet*. Each tool has report presets that match columns by name, and synthetic sample files to try.
+- **What it creates.** Properties, units, residents, leases from a rent roll (with deposits, recurring charges and opening balances when the file has them), owners and owner entities, vendors, and open balances by age.
+- **Files.** CSV, TSV or Excel (.xlsx); up to 6 files, 3 MB and 2,000 rows each. Files are read in the browser.
+- **Checks are code.** Parsing, value checks, the preview and the write are all done by code. Errors must be fixed or left out before importing. Records already on file are matched and counted, never changed. Opening balances post only to leases the same import creates.
+- **AI is optional.** With *Use AI to help map and clean up* on, a model sees only the column headers, the first 5 rows and up to 30 flagged cells per file (60 characters each). It suggests column matches for unmatched columns and cleanups. Nothing changes until a person accepts a suggestion, one by one or with *Accept all*. With the switch off, or no model configured, columns are matched by preset and name, and nothing is sent to a model.
+- **One write, once.** The import is one database batch behind an audit lock, so running the same import twice writes nothing the second time.
+- **Who.** Staff only. Each record type follows the role's create rights: new properties need a principal or regional manager; opening balances, deposits and recurring charges need a principal, regional manager, property manager or accountant.
+- **Undo.** *Recent imports* lists the last 10, each with *Undo import*. Undo removes the records that import created, including later edits to them. It is refused if other records now point at them (a work order, a note, a payment, a unit added by hand) or if any are at a property outside the person's scope. Imported data lives in the visitor's private copy and resets at midnight Pacific.
+- **After import.** The import raises `import.completed`; the Data Health agent checks the new records at the next sweep.
+
+## Agent behaviour
+
+Each agent has a goal, a tool allow-list, triggers, a default autonomy level and the actions its proposals may run.
+
+| Agent | Owner role | Watches for | Schedule (UTC) | Events | Default autonomy |
+| --- | --- | --- | --- | --- | --- |
+| Collections | Property manager | Residents who owe rent: reminder, payment plan at 31–90 days, legal referral at 90+ | Daily 14:00 | `payment.failed`, `charge.overdue` | Approve first |
+| Renewals | Property manager | Leases ending within 90 days with no offer; price toward market, capped at +5% | Mondays 13:00 | `lease.expiring` | Approve first |
+| Leasing | Leasing agent | Applications to score for the broker; prospects with no contact in 3 days | Every 4 hours | `application.submitted`, `screening.completed` | Approve first |
+| Maintenance triage | Maintenance supervisor | New work orders: trade, urgency, cost estimate, best vendor, owner limit | Every 15 minutes | `wo.created`, `service_request.created` | Auto within policy |
+| Payables | Accountant | Bills waiting for approval: coding, amount history, duplicates, bank changes | Every 2 hours | `invoice.received`, `vendor.bank_changed` | Approve first |
+| Owner reporting | Accountant | Owner NOI changes over 3% month over month, explained from computed drivers | 1st of the month 12:00 | `statement.closed` | Approve first |
+| Compliance | Maintenance supervisor | Certificates expiring within 30 days, vendors working uninsured, permits and inspections | Daily 15:00 | `coi.expiring` | Auto within policy |
+| Data Health | Admin | Open data issues: duplicates, miscoded bills, contact details, addresses | Daily 06:00 | `data_issue.detected`, `import.completed` | Auto within policy |
+
+Nothing in the product raises `coi.expiring`, `screening.completed`, `statement.closed`, `data_issue.detected` or `prospect.created` yet. The Automations page says so, and those agents cover that work on their schedule.
+
+### Triggers
+
+- **Schedule.** A Cloudflare Cron Trigger runs a sweep every 15 minutes. Each sweep does one unit of work: either the events of one listening agent, or the most overdue scheduled agent. Sweeps run only in visitor workspaces that were active in the last 30 minutes, at most 10 of them.
+- **Run on visit.** If no sweep has run for about 17 minutes, the first AI page or request starts one in the background.
+- **Events.** Actions write events to an outbox. The sweep raises date-driven events too: `charge.overdue` when rent passes its 3-day grace, and `lease.expiring` when a lease comes within 90 days. A public application starts the Leasing agent right away. A completed import raises `import.completed`, which the Data Health agent picks up at the next sweep.
+- **Run now.** Any role with access to the intelligence module can start an agent from `/app/agents`. A side sheet shows the run as it happens.
+
+`/app/automations` shows all of this in one place: each agent's schedule and events, the sweep's last and next run, how many events are waiting, the approval rules, and the rules built into the product (data health checks, late-fee and returned-payment fee caps, payment clearing, the midnight reset).
+
+Each run has a time limit, a step limit and a 50-cent model budget. A run that hits its time limit keeps what it already did.
+
+### How a run works
+
+1. **Collect.** Rules find candidates through logged tool calls. Figures come from the data.
+2. **Model.** When a model is configured, it checks the candidates with the same read tools, drafts messages and proposes. Every proposal must match a rules candidate, and the rules set its amount, risk and confidence.
+3. **Rules.** With no model, or if the model fails, the rules propose the candidates as written. Candidates the rules mark mandatory (fraud, safety, legal) are always proposed, whatever the model says.
+
+Write tools never move money. They create a proposal, or, after approval, call the guarded money actions.
+
+### Routing: autonomy, risk and policy
+
+The Agents and Automations pages offer two autonomy levels per agent. Only a principal, regional manager or admin can turn an agent on or off or change its autonomy, schedule or approval policies; other roles see the setting read-only. Legal and safety policies can't be set to act alone.
+
+- **Approve first.** Every proposal waits for a person.
+- **Auto within policy.** A proposal applies on its own only when all of these hold: its risk is Low, it is not marked always-human, and its amount is within the policy limit. It runs in the visitor's own workspace and is logged.
+
+Every other proposal goes to a person. A proposal with no stated risk counts as Medium. An amount with no policy limit counts as over the limit. An amount over the owner threshold waits for the owner.
+
+Approval policies in the sample data (org defaults):
+
+| Category | Auto-approve up to | Owner approves over | Approver |
+| --- | --- | --- | --- |
+| Maintenance spend | $750 | $2,500 | Property manager |
+| Bill payment | $5,000 | — | Accountant |
+| Concession | $500 | — | Regional manager |
+| Write-off | $0 | — | Accountant |
+| Legal | Always a person | — | Principal |
+| Safety | Always a person | — | Maintenance supervisor |
+| Owner distribution | Always a person | — | Accountant |
+
+Some owner entities override the maintenance and bill limits. On money actions, only the owner threshold for maintenance spend is enforced in the money code; the other limits route proposals.
+
+### Approvals
+
+- Each proposal shows its title, amount, risk, source, reasons, confidence (High, Medium or Low with a percentage), the records it used and a link to its run.
+- A person approves, rejects, or edits the wording of a drafted message and then approves. Recipient, record and amounts can't be edited.
+- Before an approved proposal runs, the server checks again that the record is in the approver's scope, that its key fields haven't changed since the agent looked, and that the action is still allowed. It runs once.
+- One decision rule (`src/ai/decide.ts`) sets the buttons, the *Needs you* counts and the server check, so they always agree. Low-risk items with no amount need write access to the module; anything with money, legal or safety risk needs approve access. Life-safety items (high-risk items in the risk module, such as an overdue fire inspection) are decided only by the property's regional manager or the principal. Over the owner's limit, the owner or a principal decides.
+- Wherever a proposal can be run (the approvals inbox, a record's action buttons, Data Health), one the person can't decide stays in the approvals inbox, or is refused if it is low risk.
+- Re-running an agent doesn't duplicate a proposal that is still open.
+
+### Source labels
+
+Every AI output says where it came from.
+
+| Where | Labels |
+| --- | --- |
+| Badges on proposals, answers and drafts | **AI** (a live model call), **AI · saved** (stored from an earlier run), **Rule-based fallback** (no model, so fixed rules wrote it; figures still come from the data) |
+| AI summaries on record pages and in the peek drawer | **Rules · from this record's current figures**, **Generated · model · time**, **Precomputed · model · time** |
+
+A stored model summary is shown only while the facts it was written from still match the record. When the figures change, the rules sentence is written from the current figures instead.
+
+Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Scout) on Cloudflare; `AI_PROVIDER` can force one. With no model, everything runs on rules and says so.
+
+## Data model
+
+| Layer | What it holds |
+| --- | --- |
+| Shared base | The sample portfolio: 30 properties, their units, residents, leases, ledgers, vendors, owners, work orders, 18 closed months of metrics, agent history and data issues. Read-only while the app runs |
+| Visitor overlay | Each visitor's changes, in rows with the same ids. An overlay row replaces the base row with that id; a deleted overlay row hides it |
+
+- The schema has 106 tables (`migrations/0002_v2.sql`, plus migrations 0003–0007 for indexes and later fields).
+- Money is stored as integer cents. Transfers and the audit log are append-only.
+- AI tables: agent definitions, runs, steps, events, proposals, decisions, approval policies, summaries and assistant threads.
+- Each visitor's overlay is private, found by an HttpOnly cookie, and deleted at the first midnight Pacific after it was created.
+- **Demo clock.** "Today" is fixed at 4 November 2026 plus the current Pacific time of day. Books are closed through October 2026.
 
 ## Integrations
 
-AI providers are live today. Payment, messaging and identity providers are chosen, and the prototype simulates them.
+Model providers are live. Everything else is simulated.
 
 | Need | Provider | Status |
 | --- | --- | --- |
-| AI, vision and text (default) | Cloudflare Workers AI — Llama 4 Scout 17B | Live on propniti.ai |
-| AI (optional) | Anthropic Claude or OpenAI | Live when an API key is configured |
-| Bank linking | Plaid | Planned; simulated |
-| Rent collection and payouts | Stripe and Stripe Connect (ACH, 1099 filing) | Planned; simulated |
-| SMS, WhatsApp, voice | Twilio | Planned; simulated |
-| Email | SendGrid | Planned; simulated |
-| Identity verification | Persona | Planned; status shown on users |
-| Property management systems | AppFolio, Buildium | Later; needs partner API access |
-| Carbon pathways | CRREM | V2 |
+| AI (default on Cloudflare) | Workers AI, Llama 4 Scout | Live |
+| AI (optional) | Anthropic Claude or OpenAI | Live when a key is set |
+| Bank feeds, ACH, card payments | Plaid, bank ACH, Stripe | Simulated; status cards in Settings → Integrations |
+| Email and SMS | — | Simulated; messages stay in the app |
+| Listing syndication | — | Simulated status card |
+| Other property management systems | AppFolio, Buildium, Yardi Breeze, Yardi Voyager, Rent Manager, Propertyware, DoorLoop, TenantCloud, Entrata, any spreadsheet | File import (CSV, TSV, XLSX); no live sync |
 
 ## Non-functional requirements
 
-Security and trust come first because the product handles money and personal data.
-
-| Area | Requirement | Prototype today |
+| Area | Requirement | v2 today |
 | --- | --- | --- |
-| Security | Validate and size-cap every input; rate-limit AI routes per client; strict browser security headers | Schema validation; byte limits enforced while the body streams in (256 KB JSON, 4 MB uploads); 20 AI requests a minute per client on every AI route (invoice reading, validation, assistant, import mapping and parsing), with the client identified by Cloudflare's client IP, or a configured trusted proxy header elsewhere; CSP, HSTS, framing denied |
-| Uploads | Accept only known document types; never retain files | File-signature check (JPEG, PNG, WebP, PDF), 4 MB cap, read and discard |
-| Imports | Bounded, private handling of portfolio files | CSV/TSV up to 2 MB, read in the browser; only column headers and up to 5 sample rows go to the AI for column matching; pasted text capped at 20,000 characters |
-| Money | No double payments; nothing paid out that isn't held | Idempotency key per transfer; only submitted jobs can be approved; vendor approvals and owner payouts refused when trust can't cover them; enforced on the server, so a double click creates one payment |
-| AI safety | Treat documents as data; validate model output; let rules overrule the model; people approve payments | In place, plus computed figures in assistant answers |
-| Privacy | Hold payment tokens, never card or bank numbers; encrypt personal data at rest | By design; no real personal data in the prototype. Imported rows stay stored until the visitor's workspace is wiped at midnight Pacific time |
-| Reliability | An AI failure must not block the workflow | Falls back to the rule-based result with a visible note |
-| Portability | Run on any cloud | Cloudflare Workers and a Docker image |
-| Accessibility | Labelled controls, keyboard use, readable contrast, reduced motion respected | Labelled controls and star-rating radio groups; reduced motion respected on the marketing site |
-| Auditability | Record every human and agent action | Audit log in admin and on each work-order page, including transfers, payouts, ratings and imports |
+| Scale | Bounded queries and pages | 30 properties and 3,318 units of sample data; pages of 25, 50 or 100 rows; CSV exports capped at 10,000 rows |
+| Scope | No reads or writes outside a persona's scope | Every list, metric and export filters by scope in SQL. Portal users see only their own records. The scope check runs inside the write |
+| Workflow | Status fields change only through their actions | System fields are set only by named actions; ledger tables are actions-only; locked records refuse edits |
+| Money | No double payments; nothing paid that isn't held | Guarded SQL batches, one live transfer per idempotency key, trust balance recomputed in SQL, bank-change hold |
+| AI safety | Model output can't act or invent figures | Untrusted text framed as data; schema-checked output; proposals must match a rules candidate; unsupported figures rejected |
+| AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
+| Abuse | Bounded writes | Same-origin check on writes and on the AI routes the app calls (the read-only status and run-stream routes excepted); 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
+| Reliability | AI failure doesn't block work | Rules take over and the label says so |
+| Tests | Regressions caught before deploy | 1,133 unit tests in 120 files; 120 end-to-end tests in 28 specs, run against production after each deploy |
+| Errors | No database internals shown to people | AI routes, Data Health results and run steps show "The database is busy; try again in a moment" for database errors; the detail goes to the server log |
 
-Authentication is not built: the sign-in screens are UI only. The workspace cookie is the only key to a visitor's demo data. The assistant still reads the portfolio the browser sends, not the server's copy.
-
-## Success metrics
-
-V1 succeeds if managers run more properties and trust the agent's work. Targets are set from a pilot baseline.
-
-| Metric | What it shows |
-| --- | --- |
-| Properties (doors) per manager | The core promise: more properties, same team |
-| Share of agent actions completed without human edits | Automation is real |
-| Approval rate of agent-proposed actions | Agent judgement matches the manager's |
-| Invoice extraction accuracy (fields correct against the document) | Document reading can be trusted |
-| Invoice errors caught before payment | Vendor automation saves money |
-| Agent approvals later reversed | Hallucination stays low |
-| Missed renewals and late payments | Event tracking works |
-| Time to onboard a portfolio | Onboarding is smooth, once built |
+**Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
 
 ## Release plan
 
-V1 is live as a prototype. It now includes simulated payment flows, ratings, AI-native onboarding and server-side demo storage. Next is the work needed for a real pilot.
-
 | Release | Contents | Status |
 | --- | --- | --- |
-| V1 prototype | Marketing site and demo sign-in; six role views; dashboard and detail pages; AI invoice reading and validation with confidence and policy checks; alerts and nudges; assistant with computed figures; security hardening; Cloudflare and Docker deployment | Live at propniti.ai |
-| V1 additions | Trust-account payment flows with the 8% management fee, owner statements and payouts (simulated ACH); ratings and feedback with low-rating alerts; AI-native onboarding with CSV/TSV and pasted-text import; stricter form validation; server-side demo storage (a private Cloudflare D1 workspace per visitor, reset at midnight Pacific time) with money rules enforced on the server | Live at propniti.ai |
-| Pilot readiness | Real authentication, shared database, Stripe, Plaid and Twilio in test mode, Excel import, live AppFolio and Buildium API sync | Later |
-| V2 | CRREM carbon-pathway reporting; marketing and CRM | Later |
+| V1 prototype | Six role views, AI invoice reading and validation, simulated trust-account payments, ratings, rent-roll import | Replaced by v2 |
+| v2 | 13 personas with scoped homes; 64 record types in 13 modules; eight scheduled and event-driven agents with approvals, autonomy and policy limits; run traces; assistant; Data Health; record peek drawer; four portals; public listings and applications; per-visitor overlay on a shared base | Live at propniti.ai since 4 November 2026 |
+| v2 updates | Demo sign-in form; Inbox; My tasks; Automations; import from other tools with optional AI help; *Ask Propniti* chat bubble; sparkle marks on AI pages; clickable breadcrumbs; approval checks on Data Health fixes and record actions; in-app not-found page; readable run steps; *Summarize with AI*; collapsible home sections | Live, 4 November 2026 |
+| v2 updates (evening) | Chat history, *Ask about this*, *Right now*, Do mode starts agents; welcome splash, tour toasts and new-feature dots; approvals and bulk friction fixes; leasing, money and operations shortcuts; one decide rule with life-safety approvals; collection rate per month's charges; *Improve with AI*; label definitions and help pages; compact sign-in layout | Live, 4 November 2026 <!-- confirm after the batch 4 deploy --> |
+| Pilot readiness | Real accounts and identity provider, real payment and messaging providers in test mode, owner-portal approval of agent proposals, AP inbox intake of portal invoices, natural-language list filters | Not built |
 
 ## Open questions
 
-- [ ] AppFolio and Buildium: one-time file import is built. Should we also build live two-way sync through their APIs? It needs partner access.
-- [ ] Which payment actions, if any, may the agent run without approval once its accuracy is proven?
-- [ ] Target portfolio for V1: small residential, or large multifamily and commercial (the CRREM audience)?
-- [ ] Pricing model: per door, per manager seat or per agent action?
-- [x] Market for V1 — decided: US properties only; vendor tax handling uses IRS 1099-NEC.
-- [x] Management fee for payment flows — decided: 8% of rent collected.
+- [ ] Which agent actions, if any, may run without approval beyond the current low-risk limits?
+- [ ] Should the broker desk also list scored applications still at Submitted?
+- [ ] Pricing model: per door, per seat or per agent action?
+- [x] Market: US only.
+- [x] Autonomy: two levels, Approve first and Auto within policy.
+- [x] Property NOI: the last closed month.

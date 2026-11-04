@@ -143,7 +143,7 @@ Rules for every lane:
 
 - **Static pages beat the generic page.** `src/app/(app)/app/[...path]/page.tsx` resolves any other `/app` path through `getEntityByRoute()`: `EntityDef.route` opens the list, and `route/<id>` opens the detail. Add a static folder only for custom pages (inbox, copilot, dashboards, settings sections). A static folder that shadows an entity route hides the generic page.
 - **Stubs exist for:** `/app` (dashboard), inbox, tasks, copilot, `ai/activity`, `ai/approvals`, automations, data-health, reports and settings.
-- **Scoped tokens.** All three layouts render `<div data-surface="app">` and `<SurfaceBody />`. App tokens in `globals.css` are scoped to `[data-surface="app"]`, so marketing (`/`, `/login`, `/docs`) keeps Instrument Serif, the beige palette and Tailwind's default `rounded-*` scale. Don't add app styles outside that scope.
+- **Scoped tokens.** All three layouts render `<div data-surface="app">` and `<SurfaceBody />`. App tokens in `globals.css` are scoped to `[data-surface="app"]`. The `/docs` layout also sets `data-surface="app"` so the docs use the app tokens and its light and dark themes; marketing (`/`, `/login`) uses its own `--mk-*` variables and Tailwind's default `rounded-*` scale. Don't add app styles outside that scope.
 - **Legacy code.** The v1 persona pages redirect to their v2 homes. The v1 `/api/*` routes, `DemoProvider` and the v1 money code are deleted.
 
 ### Theme (plan §6)

@@ -1,6 +1,7 @@
 import Link from "@/components/Link";
 import { Cpu, ShieldCheck, Sparkles } from "lucide-react";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
+import { Term } from "@/components/app/Term";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { agentCards, aiStatus } from "@/ai/views";
 import { autonomyLevel } from "@/ai/automations";
@@ -28,7 +29,7 @@ export default async function AiSettingsPage() {
             <div className="mt-1 text-[12px] text-muted-foreground">{status.live ? `Provider: ${status.provider}. Answers and drafts are generated live; every figure comes from your data, not the model.` : "No model is configured, so agents and the assistant run on deterministic rules. Every AI label in the app says “rules” while this is the case."}</div>
           </div>
           <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><ShieldCheck className="size-3.5" />Autonomy</div>
+            <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><ShieldCheck className="size-3.5" /><Term>Autonomy</Term></div>
             <div className="mt-1 text-[16px] font-semibold tabular-nums">{auto} of {agents.length} agents act alone within policy</div>
             <div className="mt-1 text-[12px] text-muted-foreground">Money, legal and safety actions over a limit always wait for a person. <Link href="/app/settings/approvals" className="text-primary hover:underline">Approval policies</Link></div>
           </div>
@@ -43,7 +44,7 @@ export default async function AiSettingsPage() {
           <div className="overflow-x-auto rounded-lg border bg-card">
             <table className="w-full text-[13px]">
               <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
-                <tr className="whitespace-nowrap"><th className="px-3 py-2 font-medium">Agent</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium">Autonomy</th><th className="px-3 py-2 text-right font-medium">Runs, 30 days</th><th className="px-3 py-2 text-right font-medium">Success</th><th className="px-3 py-2 text-right font-medium">Waiting</th><th className="px-3 py-2 font-medium">Last run</th></tr>
+                <tr className="whitespace-nowrap"><th className="px-3 py-2 font-medium">Agent</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 font-medium"><Term>Autonomy</Term></th><th className="px-3 py-2 text-right font-medium">Runs, 30 days</th><th className="px-3 py-2 text-right font-medium">Success</th><th className="px-3 py-2 text-right font-medium">Waiting</th><th className="px-3 py-2 font-medium">Last run</th></tr>
               </thead>
               <tbody>
                 {agents.map((a) => {

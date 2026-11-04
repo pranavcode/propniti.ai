@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     const passwordOk = await samePassword(f.password ?? "");
     if (persona && passwordOk) return signIn(persona);
     const field = persona ? "password" : "email";
-    const error = persona ? "Wrong password — the demo password is shown above." : "No demo account with that email — pick a person below.";
+    const error = persona ? "Wrong password — the demo password is shown above." : "No demo account with that email — pick a person from the list.";
     if (isJson) return Response.json({ field, error }, { status: 401, headers: noStore });
     const back = new URLSearchParams({ error: field, email: f.email.slice(0, 254) });
     if (next) back.set("next", next);

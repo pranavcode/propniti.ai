@@ -2,7 +2,7 @@
 
 import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
-import { Fragment, useMemo } from "react";
+import { Fragment, useEffect, useMemo } from "react";
 import { BookOpen, Check, ChevronRight, CircleHelp, Compass, House, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, RotateCcw, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -151,18 +151,39 @@ function ThemeToggle() {
 }
 
 function ProfileMenu() {
-  const { data, density, setDensity } = useShell();
+  const { data, density, setDensity, profileMenu, setProfileMenu } = useShell();
   const me = data.persona;
   const staff = data.personas.filter((p) => !p.portal);
   const portals = data.personas.filter((p) => p.portal);
+  const people = (
+    <>
+      <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Staff</DropdownMenuLabel>
+      <DropdownMenuGroup>
+        {staff.map((p) => <PersonaItem key={p.id} p={p} current={p.id === me.id} />)}
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Portals</DropdownMenuLabel>
+      <DropdownMenuGroup>
+        {portals.map((p) => <PersonaItem key={p.id} p={p} current={p.id === me.id} />)}
+      </DropdownMenuGroup>
+    </>
+  );
+  // Opened from the banner's Switch: show the people list directly, focused on the current person.
+  const switching = profileMenu === "switch";
+  // After Radix focuses the menu itself on open.
+  useEffect(() => {
+    if (!switching) return;
+    const f = requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-current]")?.focus());
+    return () => cancelAnimationFrame(f);
+  }, [switching]);
   return (
-    <DropdownMenu>
+    <DropdownMenu open={!!profileMenu} onOpenChange={(o) => setProfileMenu(o && "menu")}>
       <DropdownMenuTrigger asChild>
         <button data-tour="profile" className="ml-1 flex items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/60" aria-label="Profile and role">
           <PersonAvatar name={me.name} size={26} className="ring-2 ring-background" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="end" className={switching ? "w-80" : "w-72"}>
         <div className="flex items-center gap-2.5 px-2 py-2">
           <PersonAvatar name={me.name} size={32} />
           <div className="min-w-0 leading-tight">
@@ -171,20 +192,11 @@ function ProfileMenu() {
           </div>
         </div>
         <DropdownMenuSeparator />
+        {switching ? people : <>
         <DropdownMenuGroup>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger><UserRoundCog /> Switch role (demo)</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-h-[70vh] w-80 overflow-y-auto">
-            <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Staff</DropdownMenuLabel>
-            <DropdownMenuGroup>
-              {staff.map((p) => <PersonaItem key={p.id} p={p} current={p.id === me.id} />)}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">Portals</DropdownMenuLabel>
-            <DropdownMenuGroup>
-              {portals.map((p) => <PersonaItem key={p.id} p={p} current={p.id === me.id} />)}
-            </DropdownMenuGroup>
-          </DropdownMenuSubContent>
+          <DropdownMenuSubContent className="max-h-[70vh] w-80 overflow-y-auto">{people}</DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setDensity(density === "compact" ? "comfortable" : "compact"); }}>
           <Rows3 /> Compact tables {density === "compact" && <Check className="ml-auto" />}
@@ -197,6 +209,7 @@ function ProfileMenu() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup><DropdownMenuItem onSelect={exitPersona}><LogOut /> Sign out of demo</DropdownMenuItem></DropdownMenuGroup>
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -204,7 +217,7 @@ function ProfileMenu() {
 
 function PersonaItem({ p, current }: { p: { id: string; name: string; title: string; scopeLabel: string; home: string }; current: boolean }) {
   return (
-    <DropdownMenuItem onSelect={() => !current && switchPersona(p.id, p.home)} className="items-start gap-2.5 py-1.5">
+    <DropdownMenuItem onSelect={() => !current && switchPersona(p.id, p.home)} data-current={current || undefined} className="items-start gap-2.5 py-1.5">
       <PersonAvatar name={p.name} size={24} className="mt-0.5" />
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block truncate font-medium">{p.name}</span>

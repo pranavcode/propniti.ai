@@ -88,8 +88,8 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
 
   const tiles = [
     { label: "Needs you", value: needs + overdueTasks, sub: `${needs} approvals · ${overdueTasks} overdue tasks`, href: "/app/ai/approvals", icon: <AlertTriangle />, tone: needs + overdueTasks ? "text-tone-warning" : "text-muted-foreground" },
-    { label: "Handled by agents", value: autoNight, sub: "Since yesterday, within policy", href: "/app/ai/approvals?queue=auto_handled", icon: <CheckCircle2 />, tone: "text-tone-success" },
-    { label: "Waiting on others", value: waiting, sub: "Owner approvals and replies", href: "/app/ai/approvals?queue=waiting", icon: <Hourglass />, tone: "text-tone-info" },
+    { label: "Handled by agents", value: autoNight, sub: "Since yesterday, within policy", href: "/app/ai/approvals?tab=auto_handled", icon: <CheckCircle2 />, tone: "text-tone-success" },
+    { label: "Waiting on others", value: waiting, sub: "Owner approvals and replies", href: "/app/ai/approvals?tab=waiting", icon: <Hourglass />, tone: "text-tone-info" },
     { label: "Agent runs", value: runs.length, sub: failed ? `${failed} failed` : "Since yesterday, none failed", href: "/app/ai/activity", icon: <Bot />, tone: failed ? "text-tone-danger" : "text-tone-ai" },
   ];
 
