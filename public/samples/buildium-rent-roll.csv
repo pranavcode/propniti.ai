@@ -1,0 +1,13 @@
+Rental,Unit,Tenants,Lease type,Lease start date,Lease end date,Rent,Security deposit,Balance due
+Lakeview Townhomes,101,Hannah Mora,,2026-07-01,2027-06-30,1075.00,500.00,0.00
+Lakeview Townhomes,102,Ravi Ortiz,,2026-10-01,2027-09-30,1120.00,500.00,325.50
+Lakeview Townhomes,103,Lena Nair,,2026-02-01,2027-01-31,1145.00,500.00,0.00
+Lakeview Townhomes,201,Tomas Park,,2026-05-01,2027-04-30,1190.00,500.00,1210.00
+Lakeview Townhomes,202,VACANT,,,,1240.00,,
+Lakeview Townhomes,203,Kevin Khan,,2026-11-01,,1260.00,500.00,0.00
+Pine Hollow Flats,A1,Sofia Liu,,2026-03-01,2027-02-28,1225.00,500.00,0.00
+Pine Hollow Flats,A2,Jordan Diaz,,2026-06-01,2027-05-31,1270.00,500.00,325.50
+Pine Hollow Flats,A3,Mei Novak,,2026-09-01,2027-08-31,1295.00,500.00,0.00
+Pine Hollow Flats,A4,Andre Chen,,2026-01-01,2027-12-31,1340.00,500.00,1210.00
+Pine Hollow Flats,A5,VACANT,,,,1390.00,,
+Pine Hollow Flats,A6,Luis Okafor,,2026-07-01,,1410.00,500.00,0.00
