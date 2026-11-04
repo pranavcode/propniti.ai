@@ -126,12 +126,12 @@ for (const path of ["/app/today", "/app/copilot"]) {
 }
 
 // The Copilot chat fills the space under the page header: the composer stays fully on screen and
-// the message list scrolls on its own.
-for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 390, height: 844 }]) {
-  test(`copilot composer is fully visible at ${viewport.width}x${viewport.height}`, async ({ context, page }) => {
+// the message list scrolls on its own, also under a sample conversation's banner.
+for (const path of ["/app/copilot", "/app/copilot?thread=smp-thr-001"]) for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  test(`${path} composer is fully visible at ${viewport.width}x${viewport.height}`, async ({ context, page }) => {
     await page.setViewportSize(viewport);
     await as(context, "daniel");
-    await go(page, `${BASE}/app/copilot`);
+    await go(page, `${BASE}${path}`);
     const box = page.locator("main").getByRole("textbox").last();
     const send = page.locator("main").getByRole("button", { name: "Send", exact: true }).last();
     await expect(box).toBeInViewport({ ratio: 1 });
