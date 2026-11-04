@@ -9,6 +9,7 @@ import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./fac
 import { openRun, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
 import { amountsIn } from "./tools/write";
+import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
 import { errText, modelLoop, type AgentCtx } from "./runtime";
 import type { ToolKey } from "./types";
 import "./agents";
@@ -200,7 +201,13 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
     let out: RulesOut | null = null;
     let live = false;
     let note: string | undefined;
-    if (mode === "help") {
+    const screening = screensByProtectedClass(question);
+    if (screening.length) {
+      // Fair housing: refused before any lookup or model call, whatever the mode.
+      out = { answer: fairHousingRefusal(screening), citations: [{ help: "fair-housing-applicant-scoring", label: "How applicant scores stay fair-housing safe", href: "/app/help/fair-housing-applicant-scoring" }] };
+      await ctx.step({ kind: "message", output: { refused: "fair housing", phrases: screening.map((f) => f.phrase) }, ok: true });
+      note = "Refused: the request would treat people differently by a protected characteristic.";
+    } else if (mode === "help") {
       const h = await helpAnswer(ctx, question);
       out = h;
       if (ctx.model && h.articles.length) {

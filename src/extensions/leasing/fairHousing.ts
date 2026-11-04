@@ -33,3 +33,56 @@ export const NEVER_SCORED = [
   "Race", "Color", "Religion", "Sex, sexual orientation or gender identity", "National origin", "Familial status (children, pregnancy)", "Disability",
   "Age", "Marital status", "Source of income (vouchers)", "Military status",
 ];
+
+// Words that single out people by a protected characteristic. Used on notices that go to every
+// resident (announcement drafts) and on requests to screen or rank people (the assistant). An
+// offer of a reasonable accommodation names disability without singling anyone out, so it passes.
+const PEOPLE = "(residents?|tenants?|applicants?|people|persons?|families|households?|neighbou?rs?|renters?|prospects?|anyone|everyone|those|ones?)";
+const TARGETS = ([
+  { re: /\b(kids|children|child|babies|infants?|toddlers?|minors|teen(ager)?s|pregnan\w*|expecting mothers?|single (moms?|mothers?|dads?|fathers?|parents?)|famil(y|ies) with (kids|children|babies)|parents)\b/i, category: "Familial status" },
+  { re: /\b(seniors|elderly|retirees|old people|young people|older (residents?|tenants?|applicants?|people|adults))\b/i, category: "Age" },
+  { re: /\b((disabled|handicapped) PEOPLE|the (disabled|handicapped)|PEOPLE with (a )?disabilit(y|ies)|disabilit(y|ies)|wheelchair users?|mentally ill|in wheelchairs?)\b/i, category: "Disability" },
+  { re: /\b(immigrants?|foreigners?|non-?english|(don'?t|doesn'?t|do not|does not|can'?t|cannot) speak english|(english|non-?native) speakers?|hispanics?|latin[oa]s?|latinx|mexicans?|asians?|africans?|arabs?|(black|white|asian|hispanic) \w*\s?PEOPLE|(by|of|their) race|racial|ethnic\w*|national origin|nationalit\w*)\b/i, category: "Race or national origin" },
+  { re: /\b(christians?|muslims?|jews|hindus?|sikhs?|catholics?|religion|religious PEOPLE)\b/i, category: "Religion" },
+  { re: /\b((wo)?men only|(fe)?male (only|PEOPLE)|(wo)?men PEOPLE|gay|lesbian|lgbt\w*|transgender)\b/i, category: "Sex" },
+] as { re: RegExp; category: FairHousingCategory }[]).map((t) => ({ ...t, re: new RegExp(t.re.source.replace(/PEOPLE/g, PEOPLE), "gi") }));
+const ACCOMMODATION = /\b(reasonable )?accommodat\w*|accessib\w*|\bADA\b/i;
+
+export function protectedTargeting(text: string | null | undefined): { phrase: string; category: FairHousingCategory }[] {
+  if (!text) return [];
+  const out = checkFairHousing(text).map((f) => ({ phrase: f.phrase, category: f.category }));
+  for (const sentence of text.split(/(?<=[.!?;])\s+|\n+/)) {
+    for (const t of TARGETS) {
+      if (t.category === "Disability" && ACCOMMODATION.test(sentence)) continue;
+      for (const m of sentence.matchAll(t.re)) if (!out.some((o) => o.phrase.toLowerCase() === m[0].toLowerCase())) out.push({ phrase: m[0], category: t.category });
+    }
+  }
+  return out;
+}
+
+// The text with every clause that singles out a protected group left out, so a notice applies to
+// everyone. `removed` lists what was dropped, for the person to see.
+export function withoutTargeting(text: string): { text: string; removed: string[] } {
+  if (!protectedTargeting(text).length) return { text, removed: [] };
+  const removed: string[] = [];
+  const keep: string[] = [];
+  for (const clause of text.split(/[.;!?\n]+|,\s*|\s+[-–—]\s+|\s+(?:and|but|so|while)\s+(?=\w+\s+(?:with|who|should|must|need|are|have)\b)/i)) {
+    const c = clause.trim();
+    if (!c) continue;
+    if (protectedTargeting(c).length) removed.push(c);
+    else keep.push(c);
+  }
+  return { text: keep.join(", "), removed };
+}
+
+// Requests to rank, screen or pick people by a protected characteristic are refused outright.
+const SCREEN = /\b(rank\w*|scor\w*|screen\w*|skip\w*|exclud\w*|filter\w*|reject\w*|den(y|ied)|declin\w*|prefer\w*|avoid\w*|only|remov\w*|sort\w*|pick\w*|choos\w*|approv\w*|leave out|weed out|without|no|not? (rent|lease|show)|find|show|list)\b/i;
+export function screensByProtectedClass(q: string): { phrase: string; category: FairHousingCategory }[] {
+  if (ACCOMMODATION.test(q) || /\bfair[- ]housing\b/i.test(q) || !SCREEN.test(q)) return [];
+  return protectedTargeting(q);
+}
+
+export function fairHousingRefusal(flags: { category: FairHousingCategory }[]) {
+  const what = [...new Set(flags.map((f) => f.category.toLowerCase()))].join(" or ");
+  return `I can't do that. Ranking, screening or choosing people by ${what} is illegal under the Fair Housing Act, so Propniti never uses it. Every applicant and resident is treated on the same terms: applications are scored only on income to rent, credit band, rental history and income verification. I can rank this week's applications on those criteria for everyone.`;
+}
