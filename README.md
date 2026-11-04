@@ -142,12 +142,13 @@ The v1 helpers left in `server/repo.ts` are still in the coverage scope and most
 
 ### AI evals
 
-`evals/cases/` holds 15 files with 126 cases. Every grader is a fixed rule; no model grades another.
+`evals/cases/` holds 17 files with 138 cases. Every grader is a fixed rule; no model grades another.
 
 - `npm run eval` sends 86 cases in 11 areas to a running app (`BASE_URL`, default `https://propniti.ai`) and writes [`evals/results/latest.md`](evals/results/latest.md). It exits 1 below `MIN_PASS` (default 0.8). It is not part of CI; there is a manual **AI eval** workflow.
 - 43 more cases (triage, drafts, data fixes, applicant scoring, resident replies) run inside `npm test`, graded on the rules output with no model.
+- The 9 invoice-vs-PO cases read the v1 demo state and are skipped against a v2 server.
 
-**Latest live run:** 2026-11-03 21:11 UTC, Workers AI on a local server, **59/75 (79%)**, under the 0.8 bar. Invoice reading, invoice vs PO, column mapping and pasted notes passed every case. Agent runs passed 1 of 8; 6 fell back to rules. Fixes landed after this run and it has not been repeated. The report builder's 8 cases joined the live suite after it and have no live score yet.
+**Latest live run:** 2026-11-04 15:52 UTC, Workers AI on a local server, **74/86 (86%)**, above the 0.8 bar. Invoice reading, insurance declarations, the AI filter, record summaries, column mapping and pasted notes passed every case; agent runs passed 4 of 8, with 4 falling back to rules. Onboarding file detection scored 0/5 in that run; after the fix in batch 6 those 5 cases passed 5/5 on their own, and the full suite has not been re-run since.
 
 ## Deploy
 
