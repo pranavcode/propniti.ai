@@ -70,3 +70,39 @@ test("agent cards in a row are one height with Run now in line, and say when the
   await expect(page.locator("#main")).not.toContainText(/\d+ \d+ \* \* \*|payment\.failed|@cf\//);
   await expect(page.locator("#main")).not.toContainText(/Last sweep: in /);
 });
+
+// Scrolled to the bottom, no button or link in the page sits under the floating chat button.
+async function coveredByBubble(page: Page, bubble: string) {
+  await page.evaluate(() => {
+    const main = document.getElementById("main");
+    if (main && main.scrollHeight > main.clientHeight) main.scrollTop = main.scrollHeight;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  await page.waitForTimeout(300);
+  return page.evaluate((sel) => {
+    const b = document.querySelector(sel)!.getBoundingClientRect();
+    const root = document.getElementById("main") ?? document.querySelector("main")!;
+    return [...root.querySelectorAll("button, a[href]")].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.bottom > b.top && r.top < b.bottom && r.right > b.left && r.left < b.right;
+    }).map((el) => (el.textContent ?? "").trim().slice(0, 40));
+  }, bubble);
+}
+
+for (const [persona, url, viewport] of [["tom", "/app/maintenance", { width: 1440, height: 900 }], ["lena", "/app/leasing/today", { width: 1440, height: 900 }], ["daniel", "/app", { width: 1440, height: 900 }], ["tom", "/app/maintenance", { width: 390, height: 844 }]] as const) {
+  test(`the chat bubble covers no last-row action on ${url} at ${viewport.width}px`, async ({ page, context }) => {
+    await page.setViewportSize(viewport);
+    await as(context, persona);
+    await go(page, `${BASE}${url}`);
+    await expect(page.getByRole("button", { name: "Open Ask Propniti" })).toBeVisible();
+    expect(await coveredByBubble(page, 'button[aria-label="Open Ask Propniti"]')).toEqual([]);
+  });
+}
+
+test("the portal's Ask button covers nothing at the end of the owner portal on a phone", async ({ page, context }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await as(context, "owner");
+  await go(page, `${BASE}/portal/owner`);
+  await expect(page.locator('[data-tour="portal-ask"]')).toBeVisible();
+  expect(await coveredByBubble(page, '[data-tour="portal-ask"]')).toEqual([]);
+});
