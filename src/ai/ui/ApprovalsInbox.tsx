@@ -108,7 +108,8 @@ export function ApprovalsInbox({ initial, initialQueue, initialFilters, focusId,
   const decide = async (p: ProposalJson, decision: "approve" | "reject", payload?: unknown) => {
     try {
       const r = await api<{ message: string }>(`/api/ai/proposals/${p.id}`, "POST", { decision, payload });
-      toast.success(decision === "approve" ? r.message : "Rejected");
+      const view = p.href ? { action: { label: "View", onClick: () => router.push(p.href!) } } : undefined;
+      toast.success(decision === "approve" ? r.message : `Rejected: ${p.title}. Nothing was changed.`, view);
       setData((d) => ({ ...d, counts: { ...d.counts, needs_you: Math.max(0, (d.counts.needs_you ?? 1) - 1), decided: (d.counts.decided ?? 0) + 1 } }));
       // Re-render the server layout so the sidebar's Inbox count drops too.
       router.refresh();

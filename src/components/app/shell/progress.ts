@@ -33,6 +33,10 @@ function send(event: NavEvent) {
 }
 
 export const navStart = () => send("start");
+// Runs `fn` once the current navigation or refresh has committed (the bar's "done").
+export function afterNav(fn: () => void) {
+  const off = subscribeNav(() => { if (phase === "finishing" || phase === "idle") { off(); fn(); } });
+}
 export const navDone = () => send("done");
 export const navPhase = () => phase;
 export function subscribeNav(l: () => void) {
