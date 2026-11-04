@@ -221,7 +221,7 @@ function RightNow({ persona, nav, onAsk }: { persona: string; nav: string[]; onA
   useEffect(() => {
     let live = true;
     const day = demoDay();
-    if (hiddenToday(localStorage, persona, day)) return;
+    if (hiddenToday(persona, day)) return;
     void loadFacts(persona).then((f) => { if (live) { setItems(rightNowItems(f, navKey.split("|"))); setHidden(false); } });
     return () => { live = false; };
   }, [persona, navKey]);
@@ -230,7 +230,7 @@ function RightNow({ persona, nav, onAsk }: { persona: string; nav: string[]; onA
     <section aria-label="Right now" className="rounded-lg border bg-muted/30">
       <div className="flex items-center justify-between px-3 pt-2 text-[12px]">
         <span className="font-medium">Right now</span>
-        <button className="text-muted-foreground hover:text-foreground" onClick={() => { hideToday(localStorage, persona, demoDay()); setHidden(true); }}>Hide for today</button>
+        <button className="text-muted-foreground hover:text-foreground" onClick={() => { hideToday(persona, demoDay()); setHidden(true); }}>Hide for today</button>
       </div>
       <ul className="divide-y px-3 pb-1">
         {items.map((it) => (

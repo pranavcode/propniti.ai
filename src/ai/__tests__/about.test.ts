@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { getPersona } from "@/auth/personas";
-import { aboutCard, aboutQuestions } from "../about";
+import type { Actor } from "@/entities/types";
+import { aboutCard, aboutQuestions, recordBrief } from "../about";
 import { ask } from "../assistant";
 import { setModelForTests, type ChatModel } from "../providers";
 import type { Turn } from "../providers/types";
@@ -108,6 +109,30 @@ describe("asking about a record", () => {
     expect(r.answer).toMatch(/^The \$578\.00 estimate is above the most expensive of them: 2 finished plumbing jobs cost \$180\.00 to \$220\.00, \$200\.00 on average\./);
     expect(seen).toHaveLength(0);
     expect(r.citations[0]).toMatchObject({ href: "/app/maintenance/work-orders/WO-10001" });
+  });
+
+  it("never shows a portal persona what other jobs cost (vendor and resident)", async () => {
+    const { data, raw } = fixture();
+    raw.exec("UPDATE work_orders SET category = 'Plumbing' WHERE id = 'WO-10001'");
+    setModelForTests(null);
+    const vendor = getPersona("vendor")!;
+    const resident = getPersona("resident")!;
+    const actors: [ReturnType<typeof getPersona>, Actor][] = [
+      [vendor, { personaId: "vendor", name: vendor.name, role: "vendor", scope: vendor.scope, propertyIds: ["p01"] }],
+      [resident, { personaId: "resident", name: resident.name, role: "resident", scope: resident.scope, propertyIds: ["p01"] }],
+      // A portal role even without a "self" scope.
+      [vendor, { personaId: "vendor", name: vendor.name, role: "vendor", scope: { kind: "property", ids: ["p01"], label: "p01" }, propertyIds: ["p01"] }],
+    ];
+    for (const [persona, actor] of actors) {
+      const d = { ...data, actor };
+      const b = await recordBrief(d, "work_orders", "WO-10001");
+      expect(b?.compare, actor.role).toBeUndefined();
+      expect(JSON.stringify(b?.fields ?? {})).not.toMatch(/Finished/);
+      const r = await ask({ data: d, persona: persona!, question: "Is the $578 estimate normal for this job?", context: CONTEXT });
+      expect(r.answer, actor.role).not.toMatch(/\$180|\$220|\$200|finished/i);
+    }
+    // Staff still get the comparison.
+    expect((await recordBrief(data, "work_orders", "WO-10001"))?.compare).toMatchObject({ jobs: 2 });
   });
 
   it("replaces a field dump, a table or raw ids with the rules answer", async () => {

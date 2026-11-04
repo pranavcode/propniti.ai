@@ -74,6 +74,18 @@ describe("starting agents from the assistant", () => {
     expect(await runNow({ db, ws: WS, actor: MARCUS, persona: getPersona("marcus")! }, "nope")).toMatchObject({ ok: false, status: 404 });
   });
 
+  it("doesn't start an agent for a request that only mentions its area", async () => {
+    setModelForTests(null);
+    const { db, raw } = openFixture();
+    for (const question of ["Fix the typo in the Barton Creek address", "Check the insurance on Lone Star Plumbing", "Review the bills from last week"]) {
+      const r = await ask({ data: { db, ws: WS, actor: MARCUS }, persona: getPersona("marcus")!, question, mode: "actions" });
+      expect(r.run, question).toBeUndefined();
+    }
+    expect(raw.prepare("SELECT count(*) AS n FROM agent_runs WHERE workspace_id = ? AND trigger_kind = 'manual'").get(WS)).toMatchObject({ n: 0 });
+    const r = await ask({ data: { db, ws: WS, actor: MARCUS }, persona: getPersona("marcus")!, question: "Run the data health agent" });
+    expect(r.run).toMatchObject({ agent: "data_health" });
+  });
+
   it("still drafts reminders when asked to send them", async () => {
     setModelForTests(null);
     const { db } = openFixture();
