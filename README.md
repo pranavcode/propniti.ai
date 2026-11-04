@@ -118,7 +118,7 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 
 Measured on 2026-11-04 at commit `a5fc28d`.
 
-- **Vitest:** 581 tests in 68 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
+- **Vitest:** 588 tests in 70 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
 - **Playwright:** 44 browser tests in 10 flows in `tests/e2e/`, one per module plus portals and public listings. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches. `src/ai` and `src/extensions` are outside that scope.
 

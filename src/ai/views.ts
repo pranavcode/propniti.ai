@@ -178,13 +178,15 @@ export function healthScore(parts: { weighted: number; records: number }[], floo
 // and scope for a minute; the open-issue counts above stay live.
 type RecordCount = { entity: Table; total: number; byProp: Map<string, number>; scoped: boolean };
 const COUNTS_TTL_MS = 60_000;
-const countCache = new WeakMap<object, Map<string, { at: number; v: Promise<RecordCount[]> }>>();
-function recordCounts(data: DataCtx, entities: Table[]) {
+// Only finished counts are cached: a pending promise can outlive a cancelled request on Workers and
+// would hang every render that awaits it. Overlapping first renders each count; that's fine.
+const countCache = new WeakMap<object, Map<string, { at: number; v: RecordCount[] }>>();
+async function recordCounts(data: DataCtx, entities: Table[]) {
   const cache = countCache.get(data.db) ?? countCache.set(data.db, new Map()).get(data.db)!;
   const key = JSON.stringify([data.ws, data.actor.propertyIds, entities]);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < COUNTS_TTL_MS) return hit.v;
-  const v = Promise.all(entities.map(async (t) => {
+  const v = await Promise.all(entities.map(async (t) => {
     const col = TABLES[t];
     const total = (await sql<{ n: number }>(data, `SELECT count(*) AS n FROM {${t}}`))[0]?.n ?? 0;
     const byProp = col ? await sql<{ p: string; n: number }>(data, `SELECT ${col} AS p, count(*) AS n FROM {${t}} GROUP BY ${col}`) : [];
@@ -192,7 +194,6 @@ function recordCounts(data: DataCtx, entities: Table[]) {
   }));
   if (cache.size >= 200) cache.clear();
   cache.set(key, { at: Date.now(), v });
-  v.catch(() => cache.delete(key));
   return v;
 }
 

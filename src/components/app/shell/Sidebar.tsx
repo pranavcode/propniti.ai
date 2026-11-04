@@ -2,7 +2,7 @@
 
 import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -40,8 +40,14 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
   // The clicked item lights up at once; the pathname only changes once the next page arrives.
   const [clicked, setClicked] = useState<{ href: string; from: string } | null>(null);
   const active = clicked?.from === pathname ? clicked.href : activeHref(pathname, data.nav);
+  // A navigation that never lands (cancelled, failed) gives the highlight back to the current page.
+  useEffect(() => {
+    if (!clicked) return;
+    const t = setTimeout(() => setClicked(null), 15_000);
+    return () => clearTimeout(t);
+  }, [clicked]);
   const navigate = (e: React.MouseEvent, href: string) => {
-    if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) setClicked({ href, from: pathname });
+    if (href !== pathname && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) setClicked({ href, from: pathname });
     onNavigate?.();
   };
   const [closed, setClosed] = useLocalStorage<string[]>("pn_nav_closed", []);
