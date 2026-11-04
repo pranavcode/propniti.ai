@@ -81,20 +81,37 @@ export async function preview(s: ImproveSession, key: ImproveKey, property: stri
 }
 
 type PlanRun = { id: string; agent_key: string; started_at: string; input: string | null };
-
-async function planRuns(s: ImproveSession, key: ImproveKey, property: string | null): Promise<PlanRun[]> {
-  // Plan runs live only in the visitor's workspace (the shared base never gets runs).
-  if (s.ws === "base") return [];
+const RECENT_RUNS = 40;
+const range = (s: ImproveSession, key: ImproveKey, property: string | null) => {
   const prefix = planPrefix(key, s.actor, property);
+  return { prefix, binds: [s.ws, prefix, `${prefix}~`] };
+};
+
+// The newest plan runs for this card and scope, oldest first. Plan runs live only in the visitor's
+// workspace (the shared base never gets runs).
+async function planRuns(s: ImproveSession, key: ImproveKey, property: string | null): Promise<PlanRun[]> {
+  if (s.ws === "base") return [];
+  const { binds } = range(s, key, property);
   const { results } = await s.db
-    .prepare("SELECT r.id, r.agent_key, r.started_at, st.input FROM agent_runs r LEFT JOIN agent_steps st ON st.workspace_id = r.workspace_id AND st.id = r.id || '-s0' WHERE r.workspace_id = ? AND r.id > ? AND r.id < ? ORDER BY r.started_at LIMIT 40")
-    .bind(s.ws, prefix, `${prefix}~`)
+    .prepare(`SELECT r.id, r.agent_key, r.started_at, st.input FROM agent_runs r LEFT JOIN agent_steps st ON st.workspace_id = r.workspace_id AND st.id = r.id || '-s0' WHERE r.workspace_id = ? AND r.id > ? AND r.id < ? ORDER BY r.started_at DESC LIMIT ${RECENT_RUNS}`)
+    .bind(...binds)
     .all<PlanRun>();
-  return results;
+  return results.reverse();
 }
 
-// Every plan for this card and scope, rolled up: records, proposals by state, and what changed on
-// those records since the first plan started.
+// Every plan so far: how many, when the first started, and the highest number (ids have no ".<i>").
+async function planTotals(s: ImproveSession, key: ImproveKey, property: string | null) {
+  if (s.ws === "base") return { plans: 0, first: null as string | null, last: -1 };
+  const { prefix, binds } = range(s, key, property);
+  const r = await s.db
+    .prepare("SELECT count(*) AS plans, min(started_at) AS first, max(CAST(substr(id, ?) AS INTEGER)) AS last FROM agent_runs WHERE workspace_id = ? AND id > ? AND id < ? AND instr(id, '.') = 0")
+    .bind(prefix.length + 1, ...binds)
+    .first<{ plans: number; first: string | null; last: number | null }>();
+  return { plans: Number(r?.plans ?? 0), first: r?.first ?? null, last: r?.last == null ? -1 : Number(r.last) };
+}
+
+// The plans for this card and scope, rolled up: how many there have been, and for the newest runs'
+// records, proposals by state and what changed on them since the first plan started.
 export async function planSummary(s: ImproveSession, key: ImproveKey, property: string | null): Promise<PlanSummary | null> {
   const runs = await planRuns(s, key, property);
   if (!runs.length) return null;
@@ -109,11 +126,12 @@ export async function planSummary(s: ImproveSession, key: ImproveKey, property: 
     .bind(s.ws, JSON.stringify(runs.map((r) => r.id)))
     .all<{ queue_state: string; decision: string | null; n: number }>();
   const count = (f: (r: { queue_state: string; decision: string | null }) => boolean) => results.filter(f).reduce((a, r) => a + Number(r.n), 0);
-  const since = runs[0].started_at;
+  const totals = await planTotals(s, key, property);
+  const since = totals.first ?? runs[0].started_at;
   const today = await asOf(s.db);
   const outcome = await REGISTRY[key].outcome({ data: { db: s.db, ws: s.ws, actor: s.actor }, today, property }, since, ids);
   return {
-    id: runs.at(-1)!.id.replace(/\.\d+$/, ""), since, plans: new Set(runs.map((r) => r.id.replace(/\.\d+$/, ""))).size,
+    id: runs.at(-1)!.id.replace(/\.\d+$/, ""), since, plans: totals.plans,
     runs: runs.map((r) => ({ id: r.id, agent: r.agent_key })),
     records: new Set(Object.values(ids).flat()).size,
     proposals: {
@@ -136,9 +154,7 @@ export const planInput = (plan: string, improve: ImproveKey, property: string | 
 // run's id is the plan id; a second click racing the first collides on it and gets a 409.
 export async function executePlan(s: ImproveSession, key: ImproveKey, property: string | null): Promise<ExecuteResult> {
   // The plan number is read first, so two clicks racing each other pick the same id.
-  const existing = await planRuns(s, key, property);
-  const n = new Set(existing.map((r) => r.id.replace(/\.\d+$/, ""))).size;
-  const planId = `${planPrefix(key, s.actor, property)}${n}`;
+  const planId = `${planPrefix(key, s.actor, property)}${(await planTotals(s, key, property)).last + 1}`;
   const pv = await analyze(s, key, property);
   const steps = pv.steps.filter((st) => st.agent && st.action && st.ids.length);
   if (!steps.length) {

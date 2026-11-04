@@ -290,6 +290,20 @@ describe("improve: review fixes", () => {
     expect(f.raw.prepare("SELECT count(*) AS n FROM work_orders WHERE workspace_id = ? AND id = 'WO-20003'").get(WS)!.n).toBe(0);
   });
 
+  it("numbers a new plan after the highest one, and summarizes the newest, past 40 earlier runs", async () => {
+    const f = setup();
+    for (let i = 0; i < 45; i++) {
+      const id = `plan-delinquency-all-${i}`;
+      const at = `2026-11-03T${String(Math.floor(i / 4)).padStart(2, "0")}:${String((i % 4) * 10).padStart(2, "0")}:00Z`;
+      ins(f.raw, "agent_runs", [{ id, agent_key: "collections", trigger_kind: "manual", started_by: "daniel", status: "done", started_at: at }], WS);
+      ins(f.raw, "agent_steps", [{ id: `${id}-s0`, run_id: id, idx: 0, kind: "plan", input: JSON.stringify({ plan: id, improve: "delinquency", property: null, steps: [] }), at }], WS);
+    }
+    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    expect(r.planId).toBe("plan-delinquency-all-45");
+    const plan = await planSummary(s(f, DANIEL), "delinquency", null);
+    expect(plan).toMatchObject({ id: "plan-delinquency-all-45", plans: 46, since: "2026-11-03T00:00:00Z", records: 4 });
+  });
+
   it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {
     const f = setup();
     const r = await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "event", input: { plan: "x", improve: "delinquency", steps: [{ action: "leases.send_reminder", ids: ["l4"] }] } } })).done;
