@@ -9,6 +9,7 @@ import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./fac
 import { openRun, runNow, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
 import { amountsIn } from "./tools/write";
+import { REMINDER_LIMIT } from "./ui/rightNow";
 import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
 import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
 import { errText, modelLoop, type AgentCtx } from "./runtime";
@@ -173,7 +174,9 @@ async function planActions(ctx: AgentCtx, q: string, start: StartAgent): Promise
   const days = Number(q.match(/(\d+)\s*\+?\s*(?:days?|d\b)/i)?.[1] ?? 0);
   // "Run the collections agent", "triage new work orders": start the agent as Run now does.
   const agent = AGENT_WORDS.find(([, re]) => re.test(q))?.[0];
-  if (agent && !/\b(remind\w*|reminders?|nudge)\b/i.test(q) && /\b(agent|run|start|triage|review|check|fix)\b/i.test(q)) {
+  // Only an explicit request: "… agent", or a sentence that starts with run, start or triage.
+  // "Fix the typo in …" or "check the insurance on …" doesn't start an agent.
+  if (agent && !/\b(remind\w*|reminders?|nudge)\b/i.test(q) && (/\bagents?\b/i.test(q) || /^\s*(please\s+)?(run|start|triage)\b/i.test(q))) {
     const r = await start(agent);
     const name = r.ok ? r.name : r.name ?? agent.replace(/_/g, " ");
     if (!r.ok) return { answer: `I can't start the ${name} for you: ${r.error}. ${r.status === 403 ? "A property manager, regional manager or the principal can run it from Agents." : ""}`.trim(), citations: [] };
@@ -184,7 +187,7 @@ async function planActions(ctx: AgentCtx, q: string, start: StartAgent): Promise
     };
   }
   if (/\b(remind\w*|reminders?|nudge|collections?)\b/i.test(q) || (/\b(send|email|text)\b/i.test(q) && /\b(late|delinquen\w*|owe|overdue|rent)\b/i.test(q))) {
-    const r = await ctx.call<{ rows: Delinquent[]; total: number }>("ledger.delinquency", { min_days: days || 5, metro, limit: 25 });
+    const r = await ctx.call<{ rows: Delinquent[]; total: number }>("ledger.delinquency", { min_days: days || 5, metro, limit: REMINDER_LIMIT });
     const { reminder } = await import("./rules");
     for (const d of r.rows) {
       if (!d.resident_id) continue;

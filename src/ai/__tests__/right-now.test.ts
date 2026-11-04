@@ -17,6 +17,12 @@ describe("right now items", () => {
     ]);
   });
 
+  it("offer to draft only as many reminders as one request drafts", () => {
+    const [item] = rightNowItems({ approvals: null, pastDue: null, dataIssues: null, remind: { residents: 44 } }, NAV);
+    expect(item.text).toBe("44 residents are 30+ days late on rent");
+    expect(item.action.label).toBe("Draft reminders for 25 of 44");
+  });
+
   it("leave out zeros, areas the persona can't see and pages not in their nav", () => {
     expect(rightNowItems({ approvals: 0, pastDue: null, dataIssues: { critical: 0 }, remind: null }, NAV)).toEqual([]);
     expect(rightNowItems({ approvals: 3, pastDue: null, dataIssues: { critical: 1 }, remind: { residents: 2 } }, [])).toEqual([expect.objectContaining({ id: "remind" })]);
@@ -26,12 +32,16 @@ describe("right now items", () => {
   it("hide for today per persona, and come back the next day", () => {
     const store = new Map<string, string>();
     const ls = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
-    hideToday(ls, "marcus", "2026-11-04");
-    expect(hiddenToday(ls, "marcus", "2026-11-04")).toBe(true);
-    expect(hiddenToday(ls, "daniel", "2026-11-04")).toBe(false);
-    expect(hiddenToday(ls, "marcus", "2026-11-05")).toBe(false);
-    const broken = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
-    expect(() => hideToday(broken, "marcus", "2026-11-04")).not.toThrow();
-    expect(hiddenToday(broken, "marcus", "2026-11-04")).toBe(false);
+    hideToday("marcus", "2026-11-04", () => ls);
+    expect(hiddenToday("marcus", "2026-11-04", () => ls)).toBe(true);
+    expect(hiddenToday("daniel", "2026-11-04", () => ls)).toBe(false);
+    expect(hiddenToday("marcus", "2026-11-05", () => ls)).toBe(false);
+    // Blocked storage: reading window.localStorage itself throws.
+    const blocked = () => { throw new DOMException("denied", "SecurityError"); };
+    expect(() => hideToday("marcus", "2026-11-04", blocked)).not.toThrow();
+    expect(hiddenToday("marcus", "2026-11-04", blocked)).toBe(false);
+    // The default reads window.localStorage inside the guard (no window in this test).
+    expect(() => hideToday("marcus", "2026-11-04")).not.toThrow();
+    expect(hiddenToday("marcus", "2026-11-04")).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { getEntity } from "@/entities";
-import type { EntityDef, Facts, Row } from "@/entities/types";
+import { INTERNAL_ROLES, type EntityDef, type Facts, type Row } from "@/entities/types";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getRow } from "@/server/query";
 import { sql, type DataCtx } from "./data";
@@ -75,9 +75,12 @@ export async function recordBrief(data: DataCtx, entity: string, id: string): Pr
   const facts: Facts = Object.fromEntries(Object.entries(f?.facts ?? {}).filter(([, v]) => !(typeof v === "string" && hidden.includes(v))));
   for (const [k, v] of Object.entries(facts)) if (typeof v === "number" && /amount|balance|rent|estimate|cost|spend|price|deposit|total|income|noi/i.test(k)) cents.push(Math.round(v * 100));
   // Work orders: what finished jobs of the same trade cost, so "is this estimate normal?" is
-  // answered from figures in the data rather than a model's guess.
+  // answered from figures in the data rather than a model's guess. Staff only: the query is scoped
+  // by property, so for a resident or vendor it would include other households' jobs and other
+  // vendors' prices.
+  const staff = (INTERNAL_ROLES as readonly string[]).includes(data.actor.role) && data.actor.scope.kind !== "self";
   let compare: RecordBrief["compare"];
-  if (entity === "work_orders" && row.category) {
+  if (staff && entity === "work_orders" && row.category) {
     const [j] = await sql<{ jobs: number; low: number | null; high: number | null; avg: number | null }>(data, "SELECT count(*) AS jobs, min(cost_cents) AS low, max(cost_cents) AS high, CAST(round(avg(cost_cents)) AS INTEGER) AS avg FROM {work_orders} WHERE category = ? AND cost_cents > 0 AND id <> ?", [String(row.category), id]).catch(() => []);
     if (j?.jobs) {
       fields[`Finished ${String(row.category).toLowerCase()} jobs`] = `${j.jobs} cost ${formatMoney(j.low! / 100)} to ${formatMoney(j.high! / 100)}, ${formatMoney(j.avg! / 100)} on average`;
