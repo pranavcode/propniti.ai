@@ -71,6 +71,12 @@ function setup() {
 }
 
 const s = (f: ReturnType<typeof setup>, actor: Actor, ws = WS) => ({ db: f.db, ws, actor });
+// What the panel sends: the steps and records the person was shown.
+const shownOf = (p: Awaited<ReturnType<typeof preview>>) => p.steps.filter((x) => x.action && x.ids.length).map((x) => ({ action: x.action!, ids: x.ids }));
+async function run(f: ReturnType<typeof setup>, actor: Actor, key: ImproveKey, property: string | null = null) {
+  const p = await preview(s(f, actor), key, property, { fresh: true });
+  return executePlan(s(f, actor), key, property, shownOf(p));
+}
 const proposals = (raw: Raw, where = "1 = 1") => raw.prepare(`SELECT * FROM ai_proposals WHERE workspace_id = ? AND ${where} ORDER BY seq`).all(WS) as R[];
 
 beforeEach(() => {
@@ -172,12 +178,12 @@ describe("improve: past-due rent", () => {
 
   it("creates proposals through agent runs, money and legal to Approvals, and never twice", async () => {
     const f = setup();
-    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    const r = await run(f, DANIEL, "delinquency");
     expect(r.planId).toBe("plan-delinquency-all-0");
     expect(r.created).toBe(4);
     expect(r.waiting).toBe(4);
-    const run = f.raw.prepare("SELECT agent_key, trigger_kind, started_by, status FROM agent_runs WHERE workspace_id = ? AND id = ?").get(WS, r.planId);
-    expect(run).toMatchObject({ agent_key: "collections", trigger_kind: "manual", started_by: "daniel", status: "waiting_approval" });
+    const runRow = f.raw.prepare("SELECT agent_key, trigger_kind, started_by, status FROM agent_runs WHERE workspace_id = ? AND id = ?").get(WS, r.planId);
+    expect(runRow).toMatchObject({ agent_key: "collections", trigger_kind: "manual", started_by: "daniel", status: "waiting_approval" });
     const ps = proposals(f.raw);
     expect(ps.every((x) => x.run_id === r.planId)).toBe(true);
     expect(ps.map((x) => `${x.entity_id}:${x.action}:${x.queue_state}`).sort()).toEqual([
@@ -185,13 +191,13 @@ describe("improve: past-due rent", () => {
     ]);
     expect(ps.find((x) => x.entity_id === "l3")).toMatchObject({ risk: "High", assignee_role: "property_manager" });
     // A second click finds nothing new and makes no plan.
-    await expect(executePlan(s(f, DANIEL), "delinquency", null)).rejects.toThrow(PlanConflict);
+    await expect(run(f, DANIEL, "delinquency")).rejects.toThrow(PlanConflict);
     expect(proposals(f.raw)).toHaveLength(4);
   });
 
   it("two clicks at once: one plan, one proposal per record and action", async () => {
     const f = setup();
-    const out = await Promise.allSettled([executePlan(s(f, DANIEL), "delinquency", null), executePlan(s(f, DANIEL), "delinquency", null)]);
+    const out = await Promise.allSettled([run(f, DANIEL, "delinquency"), run(f, DANIEL, "delinquency")]);
     expect(out.map((o) => o.status).sort()).toEqual(["fulfilled", "rejected"]);
     expect((out.find((o) => o.status === "rejected") as PromiseRejectedResult).reason).toBeInstanceOf(PlanConflict);
     const keys = proposals(f.raw).map((x) => `${x.entity_id}|${x.action}`);
@@ -204,7 +210,7 @@ describe("improve: past-due rent", () => {
     ins(f.raw, "agent_definitions", [{ id: "collections", name: "Collections agent", owner_role: "property_manager", goal: "x", autonomy: "auto_within_policy" }], WS);
     const p = await preview(s(f, DANIEL), "delinquency", null);
     expect(p.steps.find((x) => x.key === "remind")!.routing).toBe("auto");
-    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    const r = await run(f, DANIEL, "delinquency");
     expect(r.auto).toBe(1);
     const q = Object.fromEntries(proposals(f.raw).map((x) => [String(x.action), x.queue_state]));
     expect(q).toEqual({ "leases.send_reminder": "auto_handled", "leases.offer_payment_plan": "needs_you", "leases.refer_to_legal": "needs_you" });
@@ -212,7 +218,7 @@ describe("improve: past-due rent", () => {
 
   it("tracks the outcome from payments on the plan's leases", async () => {
     const f = setup();
-    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    const r = await run(f, DANIEL, "delinquency");
     ins(f.raw, "payments", [{ id: "pay-new", lease_id: "l1", household_id: "h1", property_id: "p01", method: "ACH", received_on: TODAY, amount_cents: 140000 }], WS);
     const plan = await planSummary(s(f, DANIEL), "delinquency", null);
     expect(plan).toMatchObject({ id: r.planId, plans: 1, records: 4, proposals: { created: 4, waiting: 4, approved: 0 } });
@@ -237,7 +243,7 @@ describe("improve: occupancy", () => {
 
   it("runs the Leasing and Renewals agents for the plan's records only", async () => {
     const f = setup();
-    const r = await executePlan(s(f, MARCUS), "vacancy", null);
+    const r = await run(f, MARCUS, "vacancy");
     expect(r.runs.map((x) => x.agent)).toEqual(["leasing", "renewals"]);
     const ps = proposals(f.raw);
     expect(ps.map((x) => `${x.agent}:${x.entity_id}:${x.action}`).sort()).toEqual(["leasing:lst5:listings.publish", "leasing:pr1:prospects.send_follow_up", "renewals:l1:leases.send_renewal_offer"]);
@@ -253,7 +259,7 @@ describe("improve: work orders past SLA", () => {
     expect(p.drivers[0].text).toContain("1 open work order is past its SLA due day");
     expect(p.steps.find((x) => x.key === "reassign")!.ids).toEqual(["WO-20001"]);
     expect(p.steps.find((x) => x.key === "triage")!.routing).toBe("auto_some");
-    const r = await executePlan(s(f, MARCUS), "sla", null);
+    const r = await run(f, MARCUS, "sla");
     const ps = proposals(f.raw);
     expect(ps.find((x) => x.action === "work_orders.assign_vendor")).toMatchObject({ entity_id: "WO-20001", queue_state: "needs_you", risk: "Medium" });
     expect(JSON.parse(String(ps.find((x) => x.action === "work_orders.assign_vendor")!.payload)).effects[0].changes).toEqual({ vendor_id: "v03", status: "Assigned" });
@@ -272,7 +278,7 @@ describe("improve: review fixes", () => {
     expect(json.length).toBeLessThan(4000);
     expect(json.split("lease-0-0-").length - 1).toBe(1);
     const f = setup();
-    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    const r = await run(f, DANIEL, "delinquency");
     const stored = JSON.parse(String(f.raw.prepare("SELECT input FROM agent_steps WHERE workspace_id = ? AND id = ?").get(WS, `${r.planId}-s0`)!.input));
     expect(stored.ids).toBeUndefined();
     expect(stored.steps.flatMap((x: { ids: string[] }) => x.ids).sort()).toEqual(["l1", "l2", "l3", "l4"]);
@@ -284,7 +290,7 @@ describe("improve: review fixes", () => {
     const p = await preview(s(f, MARCUS), "sla", null);
     expect(p.steps.find((x) => x.key === "triage")!.ids).toEqual(["WO-10001"]);
     expect(p.steps.find((x) => x.key === "reassign")!.ids).toContain("WO-20003");
-    await executePlan(s(f, MARCUS), "sla", null);
+    await run(f, MARCUS, "sla");
     const mine = proposals(f.raw, "entity_id = 'WO-20003'");
     expect(mine.map((x) => `${x.action}:${x.queue_state}`)).toEqual(["work_orders.assign_vendor:needs_you"]);
     expect(f.raw.prepare("SELECT count(*) AS n FROM work_orders WHERE workspace_id = ? AND id = 'WO-20003'").get(WS)!.n).toBe(0);
@@ -298,7 +304,7 @@ describe("improve: review fixes", () => {
       ins(f.raw, "agent_runs", [{ id, agent_key: "collections", trigger_kind: "manual", started_by: "daniel", status: "done", started_at: at }], WS);
       ins(f.raw, "agent_steps", [{ id: `${id}-s0`, run_id: id, idx: 0, kind: "plan", input: JSON.stringify({ plan: id, improve: "delinquency", property: null, steps: [] }), at }], WS);
     }
-    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    const r = await run(f, DANIEL, "delinquency");
     expect(r.planId).toBe("plan-delinquency-all-45");
     const plan = await planSummary(s(f, DANIEL), "delinquency", null);
     expect(plan).toMatchObject({ id: "plan-delinquency-all-45", plans: 46, since: "2026-11-03T00:00:00Z", records: 4 });
@@ -308,12 +314,21 @@ describe("improve: review fixes", () => {
     const f = setup();
     const key = `improve-lock:${WS}:plan-delinquency-all-`;
     f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(key, String(Date.now()));
-    await expect(executePlan(s(f, DANIEL), "delinquency", null)).rejects.toThrow(/already running/);
+    await expect(run(f, DANIEL, "delinquency")).rejects.toThrow(/already running/);
     expect(proposals(f.raw)).toHaveLength(0);
     // A lock left by a crashed request expires.
     f.raw.prepare("UPDATE meta SET value = ? WHERE key = ?").run(String(Date.now() - 10 * 60_000), key);
-    await executePlan(s(f, DANIEL), "delinquency", null);
+    await run(f, DANIEL, "delinquency");
     expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
+  });
+
+  it("acts only on records the person was shown that still qualify, and says what it dropped", async () => {
+    const f = setup();
+    const r = await executePlan(s(f, DANIEL), "delinquency", null, [{ action: "leases.offer_payment_plan", ids: ["l1", "l9"] }]);
+    expect(proposals(f.raw).map((x) => `${x.entity_id}:${x.action}`)).toEqual(["l1:leases.offer_payment_plan"]);
+    expect(r).toMatchObject({ created: 1, dropped: 1 });
+    expect(r.message).toContain("1 no longer qualified");
+    await expect(executePlan(s(f, DANIEL), "delinquency", null, [{ action: "leases.offer_payment_plan", ids: ["l9"] }])).rejects.toThrow(PlanConflict);
   });
 
   it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {

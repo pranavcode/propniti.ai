@@ -2,7 +2,7 @@ import { z } from "zod";
 import { guarded, json, staffSession, writeSession } from "@/ai/http";
 import { rateLimit } from "@/lib/guard";
 import { canImprove, improveKeyFor, isImproveKey, type ImproveKey } from "@/ai/improve/meta";
-import { executePlan, PlanConflict, planSummary, preview } from "@/ai/improve";
+import { executePlan, PlanConflict, planSummary, preview, type Shown } from "@/ai/improve";
 import type { AiSession } from "@/ai/session";
 
 // "Improve with AI" on a red KPI.
@@ -12,7 +12,12 @@ import type { AiSession } from "@/ai/session";
 // Staff who can run agents and act on the metric's module; everything stays in their scope.
 
 const Property = z.string().regex(/^p\d{2}$/);
-const Body = z.object({ metric: z.string().max(60), property: Property.optional() });
+// The steps and records the panel showed; the server acts only on those the fresh plan still has.
+const Body = z.object({
+  metric: z.string().max(60),
+  property: Property.optional(),
+  steps: z.array(z.object({ action: z.string().max(80), ids: z.array(z.string().max(80)).max(50) })).max(10),
+});
 
 function resolve(s: AiSession, metric: string, property: string | undefined): { key: ImproveKey; property: string | null } | Response {
   const key = isImproveKey(metric) ? metric : improveKeyFor(metric);
@@ -48,7 +53,7 @@ export async function POST(request: Request) {
     const r = resolve(s, body.metric, body.property);
     if (r instanceof Response) return r;
     try {
-      return json(await executePlan(s, r.key, r.property), { setCookie: s.setCookie });
+      return json(await executePlan(s, r.key, r.property, body.steps as Shown), { setCookie: s.setCookie });
     } catch (err) {
       if (err instanceof PlanConflict) return json({ error: err.message }, { status: 409, setCookie: s.setCookie });
       throw err;

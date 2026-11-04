@@ -152,7 +152,10 @@ export const planInput = (plan: string, improve: ImproveKey, property: string | 
 // "Have agents do this": one run per agent, each limited to the plan's records, through the normal
 // runtime (policies, autonomy, one open proposal per record and action, the run trace). The first
 // run's id is the plan id; a second click racing the first collides on it and gets a 409.
-export async function executePlan(s: ImproveSession, key: ImproveKey, property: string | null): Promise<ExecuteResult> {
+// `shown` is what the panel showed the person: the plan only acts on those records, and only on the
+// ones the fresh plan still includes (balances get paid, prospects reply, someone else proposes).
+export type Shown = { action: ActionKey; ids: string[] }[];
+export async function executePlan(s: ImproveSession, key: ImproveKey, property: string | null, shown: Shown): Promise<ExecuteResult> {
   // One plan at a time per card and scope: a click in another tab while agents are still proposing
   // would otherwise race the open-proposal check. A lock older than LOCK_MS (a crashed request) expires.
   const lock = `improve-lock:${s.ws}:${planPrefix(key, s.actor, property)}`;
@@ -163,7 +166,7 @@ export async function executePlan(s: ImproveSession, key: ImproveKey, property: 
     .run();
   if (!claimed.meta.changes) throw new PlanConflict("Agents are already running a plan for this number; it will show here in a moment.");
   try {
-    return await runPlan(s, key, property);
+    return await runPlan(s, key, property, shown);
   } finally {
     await s.db.prepare("DELETE FROM meta WHERE key = ? AND value = ?").bind(lock, token).run();
   }
@@ -171,12 +174,17 @@ export async function executePlan(s: ImproveSession, key: ImproveKey, property: 
 
 const LOCK_MS = 2 * 60_000;
 
-async function runPlan(s: ImproveSession, key: ImproveKey, property: string | null): Promise<ExecuteResult> {
+async function runPlan(s: ImproveSession, key: ImproveKey, property: string | null, shown: Shown): Promise<ExecuteResult> {
   // The plan number is read first, so two clicks racing each other pick the same id.
   const planId = `${planPrefix(key, s.actor, property)}${(await planTotals(s, key, property)).last + 1}`;
   const pv = await analyze(s, key, property);
-  const steps = pv.steps.filter((st) => st.agent && st.action && st.ids.length);
+  const seen = new Set(shown.flatMap((st) => st.ids.map((id) => `${st.action}|${id}`)));
+  const steps = pv.steps
+    .map((st) => ({ ...st, ids: st.ids.filter((id) => seen.has(`${st.action}|${id}`)) }))
+    .filter((st) => st.agent && st.action && st.ids.length);
+  const dropped = seen.size - steps.reduce((a, st) => a + st.ids.length, 0);
   if (!steps.length) {
+    if (dropped) throw new PlanConflict(`The records shown changed: ${plural(dropped, "no longer qualifies", "no longer qualify")} or already ${dropped === 1 ? "has" : "have"} a proposal. Review the updated plan.`);
     const waiting = pv.steps.reduce((a, st) => a + st.waiting, 0);
     throw new PlanConflict(waiting ? `Nothing new for agents to do: ${plural(waiting, "proposal")} from earlier ${waiting === 1 ? "is" : "are"} already waiting in Approvals.` : "Nothing for agents to do in this scope right now.");
   }
@@ -213,7 +221,7 @@ async function runPlan(s: ImproveSession, key: ImproveKey, property: string | nu
   const already = Math.max(0, targeted - created);
   const agents = [...byAgent.keys()];
   const message = created
-    ? `Agents proposed ${plural(created, "action")}: ${waiting} waiting for approval${auto ? `, ${auto} done within policy` : ""}.${already ? ` ${already} skipped (changed or already proposed).` : ""}`
+    ? `Agents proposed ${plural(created, "action")}: ${waiting} waiting for approval${auto ? `, ${auto} done within policy` : ""}.${already ? ` ${already} skipped (changed or already proposed).` : ""}${dropped ? ` ${dropped} no longer qualified and ${dropped === 1 ? "was" : "were"} left out.` : ""}`
     : "Agents found nothing new to propose; the records changed since the plan was shown.";
-  return { planId, created, waiting, auto, already, runs, approvalsHref: `/app/ai/approvals${agents.length === 1 ? `?agent=${agents[0]}` : ""}`, runHref: `/app/ai/runs/${planId}`, message };
+  return { planId, created, waiting, auto, already, dropped, runs, approvalsHref: `/app/ai/approvals${agents.length === 1 ? `?agent=${agents[0]}` : ""}`, runHref: `/app/ai/runs/${planId}`, message };
 }
