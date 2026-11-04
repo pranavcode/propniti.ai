@@ -62,9 +62,7 @@ export const GLOSSARY: GlossaryEntry[] = [
 
   // Product terms
   { term: "Approval policy", aliases: ["Approval policies"], summary: "Rules that set which actions need a person's approval and the dollar limits each role can approve.", article: "approval-policies-limits" },
-  { term: "Autonomy", aliases: ["Autonomy level"], summary: "How much an agent may do on its own: Approve first (a person approves every action) or Auto within policy (it acts alone while inside the approval policy).", article: "approval-policies-limits" },
-  { term: "Approve first", summary: "The agent proposes each action and waits for a person to approve it.", article: "approval-policies-limits" },
-  { term: "Auto within policy", summary: "The agent acts on its own when an action is inside the approval policy limits, and asks a person otherwise. Money, legal and safety actions always need a person.", article: "approval-policies-limits" },
+  { term: "Autonomy", aliases: ["Autonomy level"], summary: "How much an agent may do on its own. Approve first: a person approves every action. Auto within policy: low-risk actions under the approval-policy limits apply on their own; the rest wait for a person.", article: "approval-policies-limits" },
   { term: "Data health", aliases: ["Data issues", "Critical data issues", "With data issues"], summary: "Checks that find bad records, such as duplicates, typos and miscoded bills, and suggest a fix you approve.", article: "data-health" },
   { term: "Proposal", aliases: ["Proposals"], summary: "An action an agent suggests, with its reasoning. Nothing happens until a person approves it or it falls inside policy.", article: "approvals-inbox-audit-log" },
   { term: "Agent run", aliases: ["Agent runs"], summary: "One pass of an AI agent over its work, with every step it took recorded so you can see why it did what it did.", article: "ai-agents-command-center" },

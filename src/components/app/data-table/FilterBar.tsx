@@ -3,7 +3,9 @@ import { demoNow } from "@/lib/clock";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CirclePlus, Loader2, Search, Sparkles, Undo2, X, XCircle } from "lucide-react";
+import Link from "@/components/Link";
 import { cn } from "@/lib/utils";
+import { helpHref } from "@/lib/glossary";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -72,13 +74,19 @@ export function FacetChip({ facet, params, set }: { facet: Facet; params: URLSea
         <PopoverTrigger asChild>
           <button className="inline-flex items-center gap-1.5 px-2 outline-none focus-visible:bg-muted">
             {!active && <CirclePlus className="size-3.5 text-muted-foreground" />}
-            <span className={cn(active ? "text-muted-foreground" : "text-foreground/80")}>{facet.label}</span>
+            <span className={cn(active ? "text-muted-foreground" : "text-foreground/80", facet.help && "underline decoration-muted-foreground/45 decoration-dotted underline-offset-[3px]")}>{facet.label}</span>
             {active && <><span className="h-3.5 w-px bg-primary/25" /><span className="max-w-48 truncate font-medium text-foreground">{summary}</span></>}
           </button>
         </PopoverTrigger>
         {active && <button onClick={clear} aria-label={`Clear ${facet.label}`} className="border-l border-primary/20 px-1.5 text-muted-foreground hover:bg-primary/10 hover:text-foreground"><X className="size-3" /></button>}
       </div>
       <PopoverContent align="start" className="w-64 p-0">
+        {facet.help && (
+          <p className="border-b px-3 py-2 text-[12px] leading-relaxed text-muted-foreground">
+            {facet.help.summary}
+            {facet.help.article && <> <Link href={helpHref(facet.help.article)} className="font-medium text-primary hover:underline">Learn more</Link></>}
+          </p>
+        )}
         {isRange
           ? <RangeEditor facet={facet} initial={range} onApply={(min, max) => { set({ [`f.${facet.key}.min`]: min || null, [`f.${facet.key}.max`]: max || null }); setOpen(false); }} />
           : <OptionList options={(facet as Extract<Facet, { kind: "enum" | "ref" }>).options} selected={values} onChange={(next) => set({ [`f.${facet.key}`]: next.length ? next.join(",") : null })} onClear={clear} />}

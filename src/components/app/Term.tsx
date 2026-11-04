@@ -39,7 +39,7 @@ export function Term({ children, term, help, iconOnly, className }: TermProps) {
         <button
           type="button"
           aria-label={iconOnly ? `What ${name} means` : undefined}
-          aria-describedby={`${id}-d`}
+          aria-describedby={open ? id : undefined}
           data-term={name}
           onPointerDown={(e) => { pointer.current = e.pointerType; }}
           onPointerEnter={(e) => { if (e.pointerType === "mouse") show(150); }}
@@ -54,10 +54,10 @@ export function Term({ children, term, help, iconOnly, className }: TermProps) {
           <Info aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
         </button>
       </PopoverPrimitive.Trigger>
-      <span id={`${id}-d`} hidden>{h.summary}</span>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           ref={content}
+          id={id}
           role="tooltip"
           side="top"
           align="start"

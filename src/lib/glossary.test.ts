@@ -36,19 +36,18 @@ describe("glossary lookup", () => {
 describe("<Term>", () => {
   const html = (props: Parameters<typeof Term>[0]) => renderToStaticMarkup(createElement(Term, props));
 
-  it("renders a focusable trigger described by the definition", () => {
+  it("renders a focusable, underlined trigger that opens the definition", () => {
     const out = html({ children: "Economic occupancy" });
     expect(out).toMatch(/<button[^>]*type="button"/);
     expect(out).toContain('data-term="Economic occupancy"');
-    const id = out.match(/aria-describedby="([^"]+)"/)?.[1];
-    expect(id).toBeTruthy();
-    expect(out).toContain(`id="${id}"`);
-    expect(out).toContain(lookupTerm("Economic occupancy")!.summary.replace(/'/g, "&#x27;"));
+    expect(out).toContain('aria-haspopup="dialog"');
     expect(out).toContain("decoration-dotted");
+    expect(out).toContain(">Economic occupancy</span>");
   });
 
-  it("uses explicit help over the glossary", () => {
-    expect(html({ children: "NOI", help: "Custom NOI help" })).toContain("Custom NOI help");
+  it("decorates a plain label when it has its own help", () => {
+    expect(html({ children: "Lease rent" })).toBe("Lease rent");
+    expect(html({ children: "Lease rent", help: "Rent on the signed lease" })).toContain('data-term="Lease rent"');
   });
 
   it("renders plain text when there is no definition", () => {

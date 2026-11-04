@@ -24,6 +24,7 @@ import { DocumentsPanel, type DocumentRow } from "./DocumentsPanel";
 import { NotesPanel, type NoteRow, type Person } from "./NotesPanel";
 import { ActivityPanel, RailCard, RelatedRail, type RelatedGroup } from "./RelatedRail";
 import { TasksPanel, type TaskRow } from "./TasksPanel";
+import { Term } from "../Term";
 
 export type RecordFact = { label: string; value: React.ReactNode; href?: string; hint?: string };
 export type RecordAction = { key: string; label: string; icon?: React.ReactNode; href?: string; onSelect?: () => void; tone?: "danger" };
@@ -148,7 +149,7 @@ export function RecordPage(p: RecordPageProps) {
           <dl className="mt-4 flex flex-wrap gap-x-0 gap-y-3">
             {p.facts.map((f) => (
               <div key={f.label} className="min-w-[112px] border-l px-4 first:border-l-0 first:pl-0" title={f.hint}>
-                <dt className="text-[11.5px] text-muted-foreground">{f.label}</dt>
+                <dt className="text-[11.5px] text-muted-foreground"><Term>{f.label}</Term></dt>
                 <dd className="mt-0.5 font-medium tabular-nums">{f.href ? <Link href={f.href} className="hover:text-primary hover:underline">{f.value}</Link> : f.value}</dd>
               </div>
             ))}

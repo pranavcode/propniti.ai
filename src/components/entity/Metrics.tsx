@@ -9,6 +9,7 @@ import { fillTemplate } from "@/components/app/data-table/params";
 import { formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useImprove } from "@/components/app/ai/ImproveWithAI";
+import { Term } from "@/components/app/Term";
 
 // KPI tiles and chart panels fed by metrics() (plain data). Every tile and chart point links to
 // the rows behind it (KpiDef.drill / ChartDef.drill templates).
@@ -55,7 +56,7 @@ function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
     <div className={cn("group/kpi relative flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors", k.drill && "hover:border-primary/40 has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring", improving && "rounded-b-none")}>
       {k.drill && <Link href={k.drill} aria-label={`${k.label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
       <div className="-mt-1 flex h-6 items-center gap-1.5">
-        <span className="truncate text-[12px] font-medium text-muted-foreground" title={k.help}>{k.label}</span>
+        <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground"><Term help={k.help} className="relative z-10">{k.label}</Term></span>
         {(k.asOf || k.drill) && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
@@ -145,7 +146,7 @@ export function ChartPanel({ c }: { c: ChartData }) {
   return (
     <section className="flex h-full flex-col rounded-lg border bg-card">
       <header className="flex items-baseline justify-between gap-2 px-4 pt-3">
-        <h3 className="text-[13px] font-semibold">{c.title}</h3>
+        <h3 className="text-[13px] font-semibold"><Term>{c.title}</Term></h3>
         {c.drill && <span className="text-[11px] text-muted-foreground">Click to drill in</span>}
       </header>
       {c.error || !c.points.length

@@ -2,11 +2,11 @@
 
 import Link from "@/components/Link";
 import { useId } from "react";
-import { ArrowUpRight, Info } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDelta } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Term } from "../Term";
 import { formatValue } from "./fmt";
 import type { ValueFormat } from "./types";
 
@@ -71,13 +71,7 @@ export function KpiCard({ label, value, format = "count", previous, deltaLabel =
     <div className={cn("group/kpi @container/kpi relative flex flex-col rounded-lg border bg-card p-4 transition-[border-color,box-shadow]", href && "hover:border-foreground/20 hover:shadow-[0_1px_3px_oklch(0_0_0/0.06)] has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/60", className)}>
       {href && <Link href={href} aria-label={`${label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
       <div className="-mt-1 flex h-6 items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-        <span className="truncate">{label}</span>
-        {help && (
-          <Tooltip>
-            <TooltipTrigger asChild><button type="button" aria-label={`About ${label}`} className="relative z-10 text-muted-foreground/60 hover:text-foreground"><Info className="size-3" /></button></TooltipTrigger>
-            <TooltipContent className="max-w-64">{help}</TooltipContent>
-          </Tooltip>
-        )}
+        <span className="min-w-0 truncate"><Term help={help} className="relative z-10">{label}</Term></span>
         {(actions || href) && (
           <span className="ml-auto flex shrink-0 items-center gap-1">
             {actions && <span className="relative z-10 flex items-center">{actions}</span>}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Tone, View } from "@/entities/types";
+import type { Help } from "@/lib/glossary";
 
 // DataTable contract. Everything is plain data (server pages build it from an EntityDef with
 // tableSpec() in ./spec.ts) except the optional render/callback props, which client pages may add.
@@ -28,12 +29,13 @@ export type DataColumn = {
   thumbnail?: boolean;
   moneyStyle?: "full" | "whole" | "compact";
   render?: (row: Row) => ReactNode;      // client-only escape hatch
+  help?: Help;                           // definition shown by the header's ⓘ
 };
 
 export type FacetOption = { value: string; label?: string; count?: number; tone?: Tone };
 export type Facet =
-  | { key: string; label: string; kind: "enum" | "ref"; options: FacetOption[] }
-  | { key: string; label: string; kind: "date" | "number" | "money" };
+  | { key: string; label: string; kind: "enum" | "ref"; options: FacetOption[]; help?: Help }
+  | { key: string; label: string; kind: "date" | "number" | "money"; help?: Help };
 
 export type StatusTabs = { field: string; options: EnumOption[]; allLabel?: string };
 

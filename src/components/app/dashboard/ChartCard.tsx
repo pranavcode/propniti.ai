@@ -2,10 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Term } from "../Term";
 import { fillTemplate } from "../data-table/params";
 import { EmptyState } from "../states";
 import { formatValue, seriesColor } from "./fmt";
@@ -67,13 +66,7 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
       <div className="flex items-start gap-2 px-4 pt-3.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h3 className="truncate text-[13px] font-semibold tracking-tight">{title}</h3>
-            {help && (
-              <Tooltip>
-                <TooltipTrigger asChild><button className="text-muted-foreground/60 hover:text-foreground" aria-label={`About ${title}`}><Info className="size-3" /></button></TooltipTrigger>
-                <TooltipContent className="max-w-64">{help}</TooltipContent>
-              </Tooltip>
-            )}
+            <h3 className="min-w-0 truncate text-[13px] font-semibold tracking-tight"><Term help={help}>{title}</Term></h3>
           </div>
           {description && <p className="truncate text-[12px] text-muted-foreground">{description}</p>}
         </div>
@@ -83,7 +76,7 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
         <ul className="flex flex-wrap gap-x-3 gap-y-1 px-4 pt-2 text-[11.5px] text-muted-foreground">
           {series.map((s, i) => (
             <li key={s.key} className="flex items-center gap-1.5">
-              <span className={cn("shrink-0 rounded-[2px]", s.dashed ? "h-0.5 w-3" : "size-2")} style={{ background: seriesColor(i, s.color) }} />{s.label}
+              <span className={cn("shrink-0 rounded-[2px]", s.dashed ? "h-0.5 w-3" : "size-2")} style={{ background: seriesColor(i, s.color) }} /><Term>{s.label}</Term>
             </li>
           ))}
         </ul>

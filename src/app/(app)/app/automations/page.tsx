@@ -1,6 +1,7 @@
 import Link from "@/components/Link";
 import { Workflow } from "lucide-react";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
+import { Term } from "@/components/app/Term";
 import { Money, RelativeDate, StatusBadge } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ export default async function AutomationsPage() {
           <div className="overflow-x-auto rounded-lg border bg-card">
             <table aria-label="Agents" className="w-full min-w-[1080px] text-[13px]">
               <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
-                <tr className="whitespace-nowrap"><th className={TH}>Automation</th><th className={TH}>Trigger</th><th className={TH}>Scope</th><th className={TH}>Autonomy</th><th className={TH}>Last run</th><th className={TH}>Next due</th><th className={`${TH} text-right`}>Runs, 30 days</th><th className={TH}>Status</th></tr>
+                <tr className="whitespace-nowrap"><th className={TH}>Automation</th><th className={TH}>Trigger</th><th className={TH}>Scope</th><th className={TH}><Term>Autonomy</Term></th><th className={TH}>Last run</th><th className={TH}>Next due</th><th className={`${TH} text-right`}>Runs, 30 days</th><th className={TH}>Status</th></tr>
               </thead>
               <tbody>
                 {v.agents.map((a) => (
