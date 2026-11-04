@@ -177,7 +177,32 @@ describe("sweep and events", () => {
     const now = Date.parse("2026-11-04T14:00:00Z");
     expect(await claimSweep(db, now)).toBe(true);
     expect(await claimSweep(db, now + 60_000)).toBe(false);
-    expect(await claimSweep(db, now + 15 * 60_000)).toBe(true);
+    // Visits leave a 2-minute head start to the cron after each full interval.
+    expect(await claimSweep(db, now + 15 * 60_000)).toBe(false);
+    expect(await claimSweep(db, now + 17 * 60_000)).toBe(true);
+  });
+
+  it("the cron tick runs even right after a visit swept, and visits back off after a tick", async () => {
+    setModelForTests(null);
+    const { db } = openFixture();
+    const visit = Date.parse("2026-11-04T02:37:00Z");
+    expect(await sweep(db, visit)).not.toBeNull();
+    const tick = Date.parse("2026-11-04T02:45:00Z");
+    expect(await sweep(db, tick, undefined, { cron: true })).not.toBeNull();
+    // A second invocation of the same tick doesn't run it again.
+    expect(await sweep(db, tick + 1_000, undefined, { cron: true })).toBeNull();
+    // A visit 15 minutes after the last visit still sees the tick's sweep and skips.
+    expect(await sweep(db, visit + 15 * 60_000)).toBeNull();
+    expect(await sweep(db, tick + 15 * 60_000, undefined, { cron: true })).not.toBeNull();
+  });
+
+  it("a visit at the moment a tick is due leaves the slot to the cron", async () => {
+    setModelForTests(null);
+    const { db } = openFixture();
+    const t = Date.parse("2026-11-04T02:45:00Z");
+    expect(await sweep(db, t, undefined, { cron: true })).not.toBeNull();
+    expect(await sweep(db, t + 15 * 60_000 + 1_000)).toBeNull();
+    expect(await sweep(db, t + 15 * 60_000 + 5_000, undefined, { cron: true })).not.toBeNull();
   });
 
   it("does one unit of work per sweep: due scheduled agents in rotation and the outbox, never base, reaping stuck runs", async () => {

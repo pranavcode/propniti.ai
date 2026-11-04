@@ -25,6 +25,8 @@ import { Cell, isRight } from "./cells";
 import { AiFilter, FacetChip, SearchBox } from "./FilterBar";
 import { fillTemplate, filterKeys, paramsToView, PAGE_SIZES, readSort, readValues, viewToParams } from "./params";
 import { serverViews, type SavedViewsAdapter } from "./views";
+import { PeekLink } from "../peek/PeekLink";
+import { usePeek, usePeekPageEntity } from "../peek/usePeek";
 import type { AiFilterFn, AiFilterResult, BulkAction, DataColumn, EmptyCopy, Facet, Row, SavedView, StatusTabs } from "./types";
 
 export type DataTableProps = {
@@ -39,7 +41,7 @@ export type DataTableProps = {
   footer?: Record<string, number | null>; // "sum:field" → value (list API footer)
   statusTabs?: StatusTabs;
   facets?: Facet[];
-  rowHref?: string;                       // "/app/units/{id}"
+  rowHref?: string;                       // "/app/units/{id}"; a row click opens the peek drawer
   bulkActions?: BulkAction[];
   onBulkAction?: (key: string, ids: string[]) => Promise<unknown> | void;
   exportHref?: string;                    // "/api/e/units/export.csv"; the current query is appended
@@ -65,6 +67,9 @@ export function DataTable(props: DataTableProps) {
   const { params, set, reset, pending } = useUrlState();
   const density = useShellMaybe()?.density ?? "comfortable";
   const scrollRef = useRef<HTMLDivElement>(null);
+  const peek = usePeek();
+  usePeekPageEntity(entity);
+  const peekedId = peek.target?.entity === entity ? peek.target.id : null;
 
   // ---- columns: URL cols= wins, then this browser's choice, then the defaults
   const [storedCols, setStoredCols] = useLocalStorage<string[] | null>(`pn_cols:${entity}`, null);
@@ -138,11 +143,13 @@ export function DataTable(props: DataTableProps) {
       else if (top + rowH > el.scrollTop + el.clientHeight - head) el.scrollTop = top + rowH - el.clientHeight + head + 4;
     }
   }, [tRows.length, rowH]);
+  // Plain click or Enter peeks; Cmd/Ctrl-click opens the full page in a new tab.
+  const { open: openPeek } = peek;
   const open = useCallback((r: Row, newTab?: boolean) => {
     if (!rowHref) return;
-    const href = fillTemplate(rowHref, r);
-    if (newTab) window.open(href, "_blank"); else router.push(href);
-  }, [rowHref, router]);
+    if (newTab) window.open(fillTemplate(rowHref, r), "_blank");
+    else openPeek({ entity, id: String(r.id) });
+  }, [rowHref, entity, openPeek]);
   useHotkeys({
     j: () => moveTo(cursor + 1),
     k: () => moveTo(cursor - 1),
@@ -154,7 +161,7 @@ export function DataTable(props: DataTableProps) {
     },
     x: () => { const r = tRows[cursor]; if (!r || !selectable) return false; r.toggleSelected(); },
     Escape: () => { if (selectedIds.length) setRowSelection({}); else if (cursor >= 0) setCursor(-1); else return false; },
-  }, keyboard);
+  }, keyboard && !peek.target);
 
   // ---- saved views
   const [views, setViews] = useState<SavedView[]>(builtIn);
@@ -290,20 +297,26 @@ export function DataTable(props: DataTableProps) {
                     aria-rowindex={(page - 1) * size + idx + 1}
                     aria-selected={selectable ? selected : undefined}
                     data-cursor={cursor === idx || undefined}
+                    data-peeked={peekedId === r.id || undefined}
                     onClick={(e) => { if ((e.target as HTMLElement).closest("a,button,[role=checkbox]")) return; setCursor(idx); open(r.original, e.metaKey || e.ctrlKey); }}
                     style={{ height: rowH }}
                     className={cn(
                       "group/row transition-colors [&>td]:border-b [&>td]:border-border/70",
                       rowHref && "cursor-pointer",
                       selected ? "bg-primary/[0.06]" : "hover:bg-muted/50",
-                      cursor === idx && "bg-muted/70 shadow-[inset_2px_0_0_var(--primary)]",
+                      (cursor === idx || peekedId === r.id) && "bg-muted/70 shadow-[inset_2px_0_0_var(--primary)]",
                     )}
                   >
                     {r.getVisibleCells().map((cell) => {
                       const meta = cell.column.columnDef.meta as DataColumn | undefined;
+                      const content = flexRender(cell.column.columnDef.cell, cell.getContext());
                       return (
                         <td key={cell.id} className={cn("max-w-[360px] px-3 align-middle", meta && isRight(meta) && "text-right", cell.column.id === "__select" && "w-9 pr-0")}>
-                          <div className={cn("flex min-w-0 items-center", meta && isRight(meta) && "justify-end")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                          <div className={cn("flex min-w-0 items-center", meta && isRight(meta) && "justify-end")}>
+                            {meta?.primary && rowHref && r.original.id != null
+                              ? <PeekLink entity={entity} id={String(r.original.id)} href={fillTemplate(rowHref, r.original)} className="min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{content}</PeekLink>
+                              : content}
+                          </div>
                         </td>
                       );
                     })}
@@ -350,7 +363,7 @@ export function DataTable(props: DataTableProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           </span>
-          {keyboard && rows.length > 0 && <span className="hidden text-[11.5px] lg:inline">J/K to move · Enter to open{selectable ? " · X to select" : ""}</span>}
+          {keyboard && rows.length > 0 && <span className="hidden text-[11.5px] lg:inline">J/K to move · Enter to preview{selectable ? " · X to select" : ""}</span>}
           <div className="ml-auto flex items-center gap-1">
             <span className="mr-1 tabular-nums">Page {formatNumber(page)} of {formatNumber(pages)}</span>
             <Button variant="outline" size="icon-sm" disabled={page <= 1 || pending} onClick={() => set({ page: page - 1 === 1 ? null : page - 1 })} aria-label="Previous page"><ChevronLeft /></Button>
