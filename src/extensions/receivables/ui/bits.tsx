@@ -29,7 +29,7 @@ export function Pager({ page, size, total, params, base }: { page: number; size:
   const to = Math.min(total, page * size);
   return (
     <div className="flex items-center justify-between gap-2 text-[12.5px] text-muted-foreground">
-      <span className="tabular-nums">{from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()}</span>
+      <span className="tabular-nums">{from.toLocaleString("en-US")}–{to.toLocaleString("en-US")} of {total.toLocaleString("en-US")}</span>
       <div className="flex items-center gap-1">
         <PagerLink href={href(page - 1)} disabled={page <= 1} label="Previous page"><ChevronLeft className="size-4" /></PagerLink>
         <span className="px-2 tabular-nums">Page {page} of {pages}</span>

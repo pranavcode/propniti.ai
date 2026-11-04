@@ -35,7 +35,7 @@ describe("reports on the generated base", () => {
     expect(r.compareTotal).toBeGreaterThan(0);
   }, 60_000);
 
-  it.each(["expense", "utilities", "noi", "income", "collections", "delinquency", "vacancy_loss", "bills_paid"])("runs %s by every allowed grouping", async (measure) => {
+  it.each(["expense", "utilities", "noi", "income", "collections", "delinquency", "delinquency_30", "vacancy_loss", "bills_paid"])("runs %s by every allowed grouping", async (measure) => {
     const scope = await scopeProperties(ctx);
     for (const groupBy of ["property", "metro", "gl", "month", "vendor"]) {
       for (const compareTo of ["none", "budget", "prior_year"]) {

@@ -109,15 +109,24 @@ export async function generateSummary(data: DataCtx, entity: string, id: string,
   return { entity_type: entity, entity_id: id, summary, facts: f.facts, model: info.model, generated_at, source: text ? "live" : "rules" };
 }
 
-export async function cachedBriefing(data: DataCtx, personaId: string): Promise<Summary | null> {
+// The stored briefing while it was written today (demo clock) from the same balances, approvals
+// and data issues; otherwise the rules sentence from current figures. Agent activity counts change
+// with every run, so they don't make a briefing stale. Never calls a model (GET on every home load).
+const ACTIVITY = new Set(["agent_runs_24h", "auto_applied_24h"]);
+const settled = (f: Facts) => JSON.stringify(Object.entries(f).filter(([k]) => !ACTIVITY.has(k)));
+export async function cachedBriefing(data: DataCtx, personaId: string): Promise<Summary> {
   const e = eff("ai_summaries", data.ws);
-  const r = await data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ?`).bind(...e.params, summaryId("briefing", personaId)).first<Row>();
-  return r ? { entity_type: "briefing", entity_id: personaId, summary: String(r.summary), facts: JSON.parse(String(r.facts || "{}")), model: String(r.model), generated_at: String(r.generated_at), source: r.model === "rules" ? "rules" : r.workspace_id === "base" ? "precomputed" : "live" } : null;
+  const [{ facts, today }, r] = await Promise.all([
+    briefingFacts(data),
+    data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ?`).bind(...e.params, summaryId("briefing", personaId)).first<Row>(),
+  ]);
+  if (r && r.model !== "rules" && String(r.generated_at).slice(0, 10) === today && settled(JSON.parse(String(r.facts || "{}"))) === settled(facts)) {
+    return { entity_type: "briefing", entity_id: personaId, summary: String(r.summary), facts: JSON.parse(String(r.facts)), model: String(r.model), generated_at: String(r.generated_at), source: r.workspace_id === "base" ? "precomputed" : "live" };
+  }
+  return { entity_type: "briefing", entity_id: personaId, summary: rulesBriefing(facts), facts, model: RULES.model, generated_at: demoNowIso(), source: "rules" };
 }
 
-// The home briefing ("Good morning, here's your portfolio") for a persona: computed counts in,
-// two or three sentences out. Stored as ai_summaries (entity_type "briefing", entity_id = persona).
-export async function generateBriefing(data: DataCtx, personaId: string, opts: { writeTo?: string } = {}): Promise<Summary> {
+async function briefingFacts(data: DataCtx): Promise<{ facts: Facts; today: string }> {
   const { delinquency } = await import("./facts");
   const { asOf, sql } = await import("./data");
   const today = await asOf(data.db);
@@ -131,6 +140,16 @@ export async function generateBriefing(data: DataCtx, personaId: string, opts: {
     residents_late: late.total, late_balance: Math.round(late.total_balance_cents / 100), approvals_waiting: needs[0]?.n ?? 0,
     data_issues_open: issues[0]?.n ?? 0, data_issues_critical: Number(issues[0]?.critical ?? 0), agent_runs_24h: runs[0]?.n ?? 0, auto_applied_24h: runs[0]?.auto ?? 0,
   };
+  return { facts, today };
+}
+
+const rulesBriefing = (f: Facts) =>
+  `In the last day the agents ran ${f.agent_runs_24h} times and handled ${f.auto_applied_24h} items on their own. ${f.approvals_waiting} proposals wait for you. ${f.residents_late} residents owe $${Number(f.late_balance).toLocaleString("en-US")} in rent, and ${f.data_issues_open} data issues are open (${f.data_issues_critical} critical).`;
+
+// The home briefing ("Good morning, here's your portfolio") for a persona: computed counts in,
+// two or three sentences out. Stored as ai_summaries (entity_type "briefing", entity_id = persona).
+export async function generateBriefing(data: DataCtx, personaId: string, opts: { writeTo?: string } = {}): Promise<Summary> {
+  const { facts } = await briefingFacts(data);
   const model = currentModel();
   let text: string | null = null;
   let info = RULES;
@@ -145,7 +164,7 @@ export async function generateBriefing(data: DataCtx, personaId: string, opts: {
       console.error("[ai] briefing model failed, using rules:", err instanceof Error ? err.message : err);
     }
   }
-  const summary = text ?? `In the last day the agents ran ${facts.agent_runs_24h} times and handled ${facts.auto_applied_24h} items on their own. ${facts.approvals_waiting} proposals wait for you. ${facts.residents_late} residents owe $${Number(facts.late_balance).toLocaleString()} in rent, and ${facts.data_issues_open} data issues are open (${facts.data_issues_critical} critical).`;
+  const summary = text ?? rulesBriefing(facts);
   const generated_at = demoNowIso();
   const ws = opts.writeTo ?? data.ws;
   if (ws !== "none" && (ws !== "base" || opts.writeTo === "base")) {
