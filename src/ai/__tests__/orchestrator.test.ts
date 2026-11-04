@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setModelForTests, type ChatModel, type Reply, type Turn } from "../providers";
 import { startRun, sweep, drainEvents, claimSweep } from "../orchestrator";
 import { executeProposal } from "../effects";
@@ -251,7 +251,11 @@ describe("sweep and events", () => {
       structured: () => new Promise(() => {}),
     });
     const { raw, db } = openFixture();
-    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 50 })).done;
+    // Date stands still, so the model call starts before the deadline however slow the machine is
+    // (otherwise the run can pass its 50 ms before the call and finish on the rules instead).
+    // The hard stop is a real timer and still fires.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 50 })).done.finally(() => vi.useRealTimers());
     expect(r.status).not.toBe("failed");
     const run = raw.prepare("SELECT status, summary FROM agent_runs WHERE id = ?").get(r.runId) as Record<string, string>;
     expect(run.status).not.toBe("running");
