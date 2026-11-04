@@ -89,7 +89,7 @@ Found by lane security reviews and cross-lane requests (`research/lane-requests.
 
 From the code and from the post-demo backlog in `research/gate-checklist.md`.
 
-- **No authentication.** Anyone can pick any persona. The persona cookie `pn_as` is not HttpOnly and is not a security boundary. Before real data: an identity provider, server-side sessions and role checks bound to the signed-in user.
+- **No authentication.** Anyone can pick any persona. The sign-in form's demo password is published on the page; `/api/session` checks it server-side in constant time (same-origin, write rate limit, `next` limited to `/app` and `/portal` paths), but it is a demo convenience, not an account system. The persona cookie `pn_as` is not HttpOnly and is not a security boundary. Before real data: an identity provider, server-side sessions and role checks bound to the signed-in user.
 - **The workspace cookie is the only key** to a visitor's changes.
 - **Six AI routes have no origin check:** `/api/ai/extract`, `validate`, `import-map`, `import-parse`, `nl-filter` and `report-spec`. They are rate limited and size capped.
 - **No per-org AI quota.** Limits are per IP and per run. `org_usage_monthly` holds seeded display data only.
