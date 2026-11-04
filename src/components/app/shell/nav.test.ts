@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAS, type Persona } from "@/auth/personas";
-import { REPORT_ROLES } from "@/extensions/accounting/reports/spec";
+import { canOpenReports } from "@/extensions/accounting/reports/spec";
 
 let persona: Persona;
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, has: () => false }) }));
@@ -17,7 +17,7 @@ describe("sidebar for every staff persona", () => {
   beforeEach(() => { persona = staff[0]!; });
 
   it.each(staff.map((p) => [p.id, p] as const))("%s: Reports shows only when the reports page opens for the role", async (_, p) => {
-    expect((await hrefs(p)).includes("/app/reports")).toBe(REPORT_ROLES.includes(p.role));
+    expect((await hrefs(p)).includes("/app/reports")).toBe(canOpenReports(p.role));
   });
 
   it.each(staff.map((p) => [p.id, p] as const))("%s: the home page is in the sidebar", async (_, p) => {

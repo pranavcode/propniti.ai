@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { askReport } from "@/extensions/accounting/reports/ask";
 import { scopeProperties, type Ctx } from "@/extensions/accounting/reports/run";
-import { addMonths, FIRST_MONTH, periodLabel, REPORT_ROLES } from "@/extensions/accounting/reports/spec";
+import { addMonths, canOpenReports, FIRST_MONTH, periodLabel } from "@/extensions/accounting/reports/spec";
 import { ArAgingReport, AskReport, CashForecastReport, NoiReport, PnlReport, RentRollReport } from "@/extensions/accounting/reports/views";
 
 export const metadata: Metadata = { title: "Reports · Propniti" };
@@ -30,7 +30,7 @@ type SP = { r?: string; ask?: string; from?: string; to?: string; property?: str
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const session = await currentSession();
-  if (!REPORT_ROLES.includes(session.actor.role)) {
+  if (!canOpenReports(session.actor.role)) {
     return <div className="p-6"><EmptyState kind="chart" title="Reports aren't part of your role" description="Switch role from your avatar menu to see reports as an accountant, manager or principal." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const sp = await searchParams;

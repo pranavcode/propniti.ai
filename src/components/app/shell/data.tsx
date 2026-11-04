@@ -18,7 +18,7 @@ registerPage({ key: "home.briefing", label: "Briefing", href: "/app/admin", icon
 registerPage({ key: "home.maintenance", label: "Maintenance desk", href: "/app/maintenance", icon: Wrench, section: "home", order: 0, roles: ["maintenance_supervisor"] });
 registerPage({ key: "home.inbox", label: "Inbox", href: "/app/inbox", icon: Inbox, section: "home", order: 2, roles: STAFF, ai: true });
 registerPage({ key: "home.tasks", label: "My tasks", href: "/app/tasks", icon: CheckSquare, section: "home", order: 3, roles: STAFF });
-registerPage({ key: "finance.reports", label: "Reports", href: "/app/reports", icon: LineChart, section: "finance", order: 90, roles: REPORT_ROLES });
+registerPage({ key: "finance.reports", label: "Reports", href: "/app/reports", icon: LineChart, section: "finance", order: 90, roles: [...REPORT_ROLES] });
 registerPage({ key: "ai.copilot", label: "Copilot", href: "/app/copilot", icon: Sparkles, section: "intelligence", order: 1, roles: withModule("intelligence"), ai: true });
 registerPage({ key: "ai.agents", label: "Agents", href: "/app/agents", icon: Bot, section: "intelligence", order: 2, roles: withModule("intelligence"), ai: true });
 registerPage({ key: "ai.approvals", label: "Approvals", href: "/app/ai/approvals", icon: ShieldCheck, section: "intelligence", order: 3, roles: withModule("intelligence"), ai: true });

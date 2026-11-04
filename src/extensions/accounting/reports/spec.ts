@@ -6,7 +6,8 @@ import type { Role } from "@/entities/types";
 // registry in run.ts, never from model text. Pure: no database, no server imports.
 
 // Roles that may open /app/reports. The page and its sidebar item both read this.
-export const REPORT_ROLES: Role[] = ["principal", "regional_manager", "property_manager", "accountant"];
+export const REPORT_ROLES = ["principal", "regional_manager", "property_manager", "accountant"] as const satisfies readonly Role[];
+export const canOpenReports = (role: Role) => (REPORT_ROLES as readonly Role[]).includes(role);
 export const FIRST_MONTH = "2025-05";
 export const METROS = ["Austin", "Dallas", "Atlanta", "Phoenix"] as const;
 
