@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Banknote, Bot, ClipboardCheck, FileSpreadsheet, HeartPulse, KeyRound, LineChart, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
 import { AgentCard, AIBadge, RunTrace } from "@/components/app/ai";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ScrollX } from "@/components/app/ScrollX";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,7 +106,7 @@ export function AgentsCenter({ agents, status, sweep, canManage, canRun, canEdit
             runs={a.runsText}
             enabled={a.enabled}
             href={`/app/ai/activity?agent=${a.key}`}
-            model={a.lastRun?.model ?? undefined}
+            model={a.lastRun?.model && a.lastRun.model !== status.model ? a.lastRun.model : undefined}
             onToggle={canManage ? (v) => void patch(a.key, { enabled: v }) : undefined}
             onRunNow={canRun ? () => runNow(a.key) : undefined}
           />
@@ -115,6 +116,20 @@ export function AgentsCenter({ agents, status, sweep, canManage, canRun, canEdit
       <PolicyEditor policies={status.policies} canEdit={canEditPolicies} onSaved={() => router.refresh()} />
       {live && <LiveRun runId={live.runId} agent={live.agent} onClose={() => { setLive(null); router.refresh(); }} />}
     </div>
+  );
+}
+
+// A dollar amount field: "$" in front, and "5,000" while not being edited. The value it holds and
+// saves is the plain number as typed ("5000"), so saving is unchanged.
+function DollarInput({ value, placeholder, onChange, label }: { value: string; placeholder: string; onChange: (v: string) => void; label: string }) {
+  const [editing, setEditing] = useState(false);
+  const shown = !editing && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value).toLocaleString("en-US", { maximumFractionDigits: 2 }) : value;
+  return (
+    <span className="relative inline-flex">
+      {value !== "" && <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted-foreground">$</span>}
+      <Input inputMode="decimal" className={cn("h-7 w-32 tabular-nums", value !== "" && "pl-5")} value={shown} placeholder={placeholder} aria-label={label}
+        onFocus={() => setEditing(true)} onBlur={() => setEditing(false)} onChange={(e) => onChange(e.target.value.replace(/[$,\s]/g, ""))} />
+    </span>
   );
 }
 
@@ -153,8 +168,8 @@ function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolic
             return (
               <tr key={p.category} className="border-b last:border-0">
                 <td className="px-4 py-2 font-medium">{p.category}</td>
-                <td className="px-4 py-2">{p.alwaysHuman ? <span className="text-muted-foreground">Always a person</span> : !canEdit ? <span className="tabular-nums">{d.limit ? `$${Number(d.limit).toLocaleString("en-US")}` : <span className="text-muted-foreground">Always a person</span>}</span> : <Input inputMode="decimal" className="h-7 w-32" disabled={!canEdit} value={d.limit} placeholder="Always a person" onChange={(e) => set("limit", e.target.value)} aria-label={`${p.category} auto-approve limit in dollars`} />}</td>
-                <td className="px-4 py-2">{!canEdit || p.alwaysHuman ? <span className="tabular-nums">{d.owner ? `$${Number(d.owner).toLocaleString("en-US")}` : <span className="text-muted-foreground">Never</span>}</span> : <Input inputMode="decimal" className="h-7 w-32" value={d.owner} placeholder="Never" onChange={(e) => set("owner", e.target.value)} aria-label={`${p.category} owner approval threshold in dollars`} />}</td>
+                <td className="px-4 py-2">{p.alwaysHuman ? <span className="text-muted-foreground">Always a person</span> : !canEdit ? <span className="tabular-nums">{d.limit ? `$${Number(d.limit).toLocaleString("en-US")}` : <span className="text-muted-foreground">Always a person</span>}</span> : <DollarInput value={d.limit} placeholder="Always a person" onChange={(v) => set("limit", v)} label={`${p.category} auto-approve limit in dollars`} />}</td>
+                <td className="px-4 py-2">{!canEdit || p.alwaysHuman ? <span className="tabular-nums">{d.owner ? `$${Number(d.owner).toLocaleString("en-US")}` : <span className="text-muted-foreground">Never</span>}</span> : <DollarInput value={d.owner} placeholder="Never" onChange={(v) => set("owner", v)} label={`${p.category} owner approval threshold in dollars`} />}</td>
                 <td className="px-4 py-2 capitalize text-muted-foreground">{p.approverRole.replace(/_/g, " ")}</td>
                 <td className="px-4 py-2 text-right">{canEdit && draft[p.category] && <Button size="sm" variant="outline" onClick={() => void save(p)}>Save</Button>}</td>
               </tr>
