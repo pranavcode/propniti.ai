@@ -154,3 +154,41 @@ describe("prepare all renewal drafts", () => {
     expect(await count("SELECT count(*) AS n FROM messages WHERE workspace_id = ? AND body = ? AND drafted_by_agent = 'renewals'", WS, JSON.parse(String(p.payload)).body)).toBe(1);
   });
 });
+
+describe("Renewals agent follows up on unanswered offers near the lease end", () => {
+  beforeAll(async () => {
+    const db = getPlatform().db;
+    // Fixture today is 2026-10-28. One lease ends in 2 days, one in 11, one in 23; all have a sent offer.
+    for (const [lease, unit, end, offer] of [["l-end2", "p02-u1", "2026-10-30", "ro-end2"], ["l-end11", "p02-u2", "2026-11-08", "ro-end11"], ["l-end23", "p03-u1", "2026-11-20", "ro-end23"]]) {
+      const prop = unit.slice(0, 3);
+      await db.prepare("INSERT INTO leases (workspace_id, id, property_id, unit_id, household_id, status, start_on, end_on, rent_cents) VALUES ('base', ?, ?, ?, ?, 'Active', '2025-11-01', ?, 145000)").bind(lease, prop, unit, `h-${unit}`, end).run();
+      await db.prepare("INSERT INTO renewal_offers (workspace_id, id, lease_id, property_id, version, term_months, rent_cents, current_rent_cents, status, sent_at, expires_on) VALUES ('base', ?, ?, ?, 1, 12, 149000, 145000, 'Sent', '2026-10-10T10:00:00Z', '2026-11-09')").bind(offer, lease, prop).run();
+    }
+  });
+
+  it("proposes a reminder, or a month-to-month notice when the lease ends within 3 days, for a person to approve", async () => {
+    const { startRun } = await import("@/ai/orchestrator");
+    await import("@/ai/agents");
+    const ctx = await ctxFor("marcus");
+    const r = await (await startRun({ db: ctx.db, ws: WS, actor: ctx.actor, agent: "renewals", trigger: { kind: "manual" } })).done;
+    const rows = (await ctx.db.prepare("SELECT entity_id, risk, queue_state, payload FROM ai_proposals WHERE workspace_id = ? AND run_id = ? AND action = 'renewal_offers.follow_up' ORDER BY entity_id").bind(WS, r.runId).all<Record<string, string>>()).results;
+    expect(rows.map((x) => x.entity_id)).toEqual(["ro-end11", "ro-end2"]);
+    const [soon, ending] = rows;
+    expect(soon).toMatchObject({ risk: "Low", queue_state: "needs_you" });
+    expect(JSON.parse(soon.payload).body).toMatch(/still open/);
+    expect(ending).toMatchObject({ risk: "Medium", queue_state: "needs_you" });
+    expect(JSON.parse(ending.payload).body).toMatch(/month to month/);
+    expect(JSON.parse(ending.payload).body).toContain("$1,490");
+  });
+
+  it("approving sends the follow-up once and a second send the same day is refused", async () => {
+    const { executeProposal } = await import("@/ai/effects");
+    const ctx = await ctxFor("marcus");
+    const p = await ctx.db.prepare("SELECT * FROM ai_proposals WHERE workspace_id = ? AND entity_id = 'ro-end11' AND action = 'renewal_offers.follow_up'").bind(WS).first<Record<string, unknown>>();
+    const r = await executeProposal({ db: ctx.db, ws: WS, actor: ctx.actor }, p!, { id: "marcus", name: "Marcus Bell", role: "property_manager" });
+    expect(r).toMatchObject({ ok: true });
+    expect(await count("SELECT count(*) AS n FROM message_threads WHERE workspace_id = ? AND entity_id = 'ro-end11'", WS)).toBe(1);
+    const again = await runAction(ctx, resolveAction("renewal_offers", "follow_up"), "ro-end11", {});
+    expect(again.status).toBe(409);
+  });
+});

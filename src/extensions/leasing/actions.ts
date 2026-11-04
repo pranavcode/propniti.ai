@@ -501,3 +501,42 @@ registerAction({
     return ok("Renewal offer sent", `/app/leasing/renewal-offers/${row.id}`);
   },
 });
+
+// A reminder on a sent offer nobody has answered. The Renewals agent proposes it (a plain reminder,
+// or a month-to-month notice when the lease is about to end); a person approves. Once a day per offer.
+registerAction({
+  key: "renewal_offers.follow_up",
+  label: "Send reminder",
+  entity: "renewal_offers",
+  roles: LEASING,
+  icon: Send,
+  when: (r) => r.status === "Sent",
+  input: FollowUp,
+  help: { summary: "Reminds the resident that their renewal offer is still open and logs the message.", article: "renewal-workflow" },
+  async handler(ctx, row, input) {
+    const { checkDraft, letterDates } = await import("@/ai/rules");
+    if (row.status !== "Sent") return fail(409, `This offer is ${String(row.status).toLowerCase()}; no reminder sent`);
+    const rent = cents(row, "rent");
+    const { effective } = await import("@/server/query");
+    const lease = await ctx.db.prepare(`SELECT l.end_on, p.name AS property, u.number AS unit, r.id AS resident_id, r.first_name FROM ${effective("leases", ctx.ws)} l JOIN ${effective("properties", ctx.ws)} p ON p.id = l.property_id JOIN ${effective("units", ctx.ws)} u ON u.id = l.unit_id LEFT JOIN ${effective("residents", ctx.ws)} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ? AND l.property_id = ?`).bind(row.lease_id, row.property_id).first<Row>();
+    if (!lease?.resident_id) return fail(409, "No primary resident on this lease to remind");
+    const subject = input.subject ?? `Your renewal offer at ${lease.property} is still open`;
+    const body = letterDates(input.body ?? `Hi ${lease.first_name},\n\nA reminder that your renewal offer of $${(rent / 100).toLocaleString("en-US")} a month for ${row.term_months} months is still open. Your lease at ${lease.property} #${lease.unit} ends on ${lease.end_on}. Reply to accept, or let us know if you'd like to talk about other terms.\n\nThank you,\n${ctx.actor.name}`);
+    const problems = [...checkDraft(body, { offer_rent_cents: rent, current_rent_cents: cents(row, "current_rent") }), ...checkFairHousing(body).map((f) => `"${f.phrase}" (${f.category})`)];
+    if (problems.length) return fail(409, `Check the message: ${problems[0]}`);
+    const at = now(ctx);
+    try {
+      const threadId = newId("thr");
+      await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "reminded", summary: `Reminder sent by ${ctx.actor.name}` }, [],
+        [
+          { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "resident", party_id: lease.resident_id, subject, entity_type: "renewal_offers", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
+          { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "renewals", sent_at: at } },
+        ], `offer-reminder-${row.id}-${at.slice(0, 10)}`);
+    } catch (e) {
+      if (e instanceof AlreadyDone) return fail(409, "A reminder already went out on this offer today");
+      throw e;
+    }
+    await closeProposals(ctx, "renewal_offers", String(row.id), "Edited", `Reminder sent by ${ctx.actor.name}`);
+    return ok("Reminder sent", `/app/leasing/renewal-offers/${row.id}`);
+  },
+});
