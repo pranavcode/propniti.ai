@@ -1,12 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="15" fill="#1C1917"/>
-  <g fill="none" stroke="#F6F2EA" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 49H52"/>
-    <path d="M15 49V34L25 25.5L35 34V49"/>
-    <path d="M35 49V14H49V49"/>
-    <path d="M22 49V41H28V49"/>
-  </g>
-  <rect x="39.5" y="20" width="5" height="5" rx="1.2" fill="#F6F2EA"/>
-  <rect x="39.5" y="29" width="5" height="5" rx="1.2" fill="#D6B88F"/>
-  <rect x="39.5" y="38" width="5" height="5" rx="1.2" fill="#F6F2EA"/>
+  <style>.t{fill:#00696A}.g{fill:#FFFFFF}@media (prefers-color-scheme:dark){.t{fill:#42B2AE}.g{fill:#051212}}</style>
+  <rect class="t" width="64" height="64" rx="14"/>
+  <path class="g" fill-rule="evenodd" transform="translate(32 32) scale(1.12) translate(-32 -32)" d="M15 11H27V53H15Z M30 11H40A10 10 0 0 1 50 21V40H30Z M35 20H45V30H35Z"/>
 </svg>
