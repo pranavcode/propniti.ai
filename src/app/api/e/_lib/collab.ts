@@ -1,3 +1,4 @@
+import { withActorNames } from "@/server/actors";
 import { addCollab, collab, noteSchema, taskSchema, type Collab } from "@/server/query";
 import { handle, json, readCtx, writeCtx } from "./http";
 
@@ -10,7 +11,9 @@ export const collabGet = (kind: Collab) => async (request: Request, { params }: 
   handle(async () => {
     const { entity, id } = await params;
     const sp = new URL(request.url).searchParams;
-    return json(await collab(await readCtx(request), kind, entity, id, Number(sp.get("page")) || 1, Number(sp.get("size")) || 50));
+    const ctx = await readCtx(request);
+    const res = await collab(ctx, kind, entity, id, Number(sp.get("page")) || 1, Number(sp.get("size")) || 50);
+    return json(kind === "activity" ? { ...res, rows: await withActorNames(ctx.db, ctx.ws, res.rows, "actor_id", "actor_name") } : kind === "notes" ? { ...res, rows: await withActorNames(ctx.db, ctx.ws, res.rows, "author_id", "author_name") } : res);
   });
 
 export const collabPost = (kind: "notes" | "tasks") => async (request: Request, { params }: Ctx) =>

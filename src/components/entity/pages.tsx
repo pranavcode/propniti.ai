@@ -20,6 +20,7 @@ import { ChartPanel, KpiTile, type ChartData, type KpiData } from "./Metrics";
 import { RecordActions } from "./RecordActions";
 import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
+import { withActorNames } from "@/server/actors";
 import { columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
 
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
@@ -198,7 +199,7 @@ function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "do
             {kind === "activity" && <p className="text-[13px]">{String(r.summary)}{r.actor_kind === "agent" && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-tone-ai"><Sparkles className="size-3" />AI</span>}</p>}
             {kind === "documents" && <a href={safeHref(r.url)} target="_blank" rel="noreferrer" className="text-[13px] font-medium hover:text-primary hover:underline">{String(r.name)}</a>}
             <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-              {kind === "notes" && <>{String(r.author_id)} · </>}
+              {kind === "notes" && <>{String(r.author_name ?? r.author_id)} · </>}
               {kind === "tasks" && r.due_on != null && <>Due {String(r.due_on)} · {String(r.priority)} · </>}
               {kind === "documents" && <>{String(r.doc_type ?? "Document")}{r.filed_to ? ` · ${String(r.filed_to)}` : ""} · </>}
               <span title={formatDateTime(String(r.created_at ?? r.at ?? r.uploaded_at))}>{formatRelative(String(r.created_at ?? r.at ?? r.uploaded_at))}</span>
@@ -242,6 +243,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
       return c.component({ entity: def.key, id, row, actor: session.actor });
     } else if (active) {
       const res = await collab(ctx, active.kind as "notes" | "tasks" | "activity" | "documents", def.key, id, Number(searchParams.get("page")) || 1, 50);
+      if (active.kind === "notes") res.rows = await withActorNames(ctx.db, ctx.ws, res.rows, "author_id", "author_name");
       return (
         <div className="space-y-3">
           {(active.kind === "notes" || active.kind === "tasks") && <Composer entity={def.key} id={id} kind={active.kind} />}
