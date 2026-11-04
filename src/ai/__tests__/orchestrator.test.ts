@@ -157,6 +157,19 @@ describe("orchestrator with a model", () => {
     expect(kinds).toContain("reasoning_summary");
   });
 
+  it("drops model reasons that repeat the rules' reasons", async () => {
+    setModelForTests(scripted([
+      () => ({ text: "", calls: [{ id: "a", name: "actions__propose", input: { entity: "leases", entity_id: "l1", action: "leases.offer_payment_plan", title: "Offer a plan", why: ["No payment plan on file.", "Two months behind, steady payer before"], confidence: 0.9 } }], usage: undefined! }),
+      () => ({ text: "Proposed a plan.", calls: [], usage: undefined! }),
+    ]));
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "manual" } })).done;
+    const why = JSON.parse(String(proposals(raw, r.runId)[0].why)) as string[];
+    expect(why).toContain("No payment plan on file");
+    expect(why).toContain("AI: Two months behind, steady payer before");
+    expect(why.filter((w) => /no payment plan on file/i.test(w))).toHaveLength(1);
+  });
+
   it("falls back to rules when the model fails", async () => {
     setModelForTests(scripted([() => {
       throw new Error("upstream 529");

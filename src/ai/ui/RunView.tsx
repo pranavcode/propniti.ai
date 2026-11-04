@@ -4,6 +4,8 @@ import Link from "@/components/Link";
 import { toast } from "sonner";
 import { ApprovalItem, RunTrace } from "@/components/app/ai";
 import { RelativeDate } from "@/components/app/display";
+import { PERSONAS } from "@/auth/personas";
+import type { TraceRefs } from "@/ai/trace";
 import { AGENT_LABEL, api, sourceOf, toTrace, useRunStream, type ProposalJson, type RunJson, type StepJson } from "./client";
 
 // One run, live while it runs: the step trace (tool calls, results, model turns, proposals) and
@@ -43,17 +45,17 @@ export function ProposalCard({ p, variant = "card", canApprove = true }: { p: Pr
   );
 }
 
-export function RunView({ runId, initial }: { runId: string; initial: { run: RunJson; steps: StepJson[]; proposals: ProposalJson[]; traceHidden?: boolean } }) {
-  const { run, steps, proposals, live, mode } = useRunStream(runId, initial);
+export function RunView({ runId, initial }: { runId: string; initial: { run: RunJson; steps: StepJson[]; proposals: ProposalJson[]; refs?: TraceRefs; traceHidden?: boolean } }) {
+  const { run, steps, proposals, refs, live, mode } = useRunStream(runId, initial);
   if (!run) return null;
   return (
     <div className="grid gap-4 px-4 pb-8 md:px-6 xl:grid-cols-[minmax(0,1fr)_400px]">
       <div className="min-w-0 space-y-3">
         {run.summary && !live && <div className="rounded-lg border bg-card p-3.5 text-[13px] whitespace-pre-line"><div className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Summary</div>{run.summary}</div>}
         {run.error && <div className="rounded-lg border border-tone-danger/30 bg-tone-danger/5 p-3 text-tone-danger">{run.error}</div>}
-        {initial.traceHidden ? <p className="rounded-lg border border-dashed p-4 text-muted-foreground">This run covered properties outside your scope, so its step trace is hidden. The proposals for your properties are on the right.</p> : <RunTrace steps={steps.map(toTrace)} agent={AGENT_LABEL[run.agent_key] ?? run.agent_key} status={run.status} model={run.model ?? (live ? "…" : "rules")} tokensIn={run.tokens_in} tokensOut={run.tokens_out} costCents={run.cost_cents} live={live} />}
+        {initial.traceHidden ? <p className="rounded-lg border border-dashed p-4 text-muted-foreground">This run covered properties outside your scope, so its step trace is hidden. The proposals for your properties are on the right.</p> : <RunTrace steps={steps.map(toTrace)} refs={refs} agent={AGENT_LABEL[run.agent_key] ?? run.agent_key} status={run.status} model={run.model ?? (live ? "…" : "rules")} tokensIn={run.tokens_in} tokensOut={run.tokens_out} costCents={run.cost_cents} live={live} />}
         <p className="text-[12px] text-muted-foreground">
-          {live ? (mode === "poll" ? "Live: checking for new steps every second." : "Live: steps stream in as the agent works.") : <>Started <RelativeDate value={run.started_at} /> by {run.trigger_kind === "manual" ? `a person (${run.started_by})` : run.trigger_kind === "schedule" ? "the 15-minute schedule" : run.trigger_kind === "event" ? "an event" : "the assistant"}{run.ended_at && <>; finished <RelativeDate value={run.ended_at} /></>}.</>}
+          {live ? (mode === "poll" ? "Live: checking for new steps every second." : "Live: steps stream in as the agent works.") : <>Started <RelativeDate value={run.started_at} /> by {run.trigger_kind === "manual" ? PERSONAS.find((p) => p.id === run.started_by)?.name ?? "a person" : run.trigger_kind === "schedule" ? "the 15-minute schedule" : run.trigger_kind === "event" ? "an event" : "the assistant"}{run.ended_at && <>; finished <RelativeDate value={run.ended_at} /></>}.</>}
         </p>
       </div>
       <aside className="space-y-2">

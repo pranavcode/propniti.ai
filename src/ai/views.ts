@@ -1,5 +1,7 @@
 import { demoIsoIn, demoNow } from "@/lib/clock";
-import { getEntity } from "@/entities";
+import { can, getEntity } from "@/entities";
+import { getAction } from "@/extensions/actions";
+import { effective, expand, readWs } from "@/server/query";
 import type { AgentKey, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
@@ -9,6 +11,7 @@ import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
 import { modelInfo } from "./providers";
+import { wantedRefs, type RecordRef, type TraceRefs, type TraceStepLike } from "./trace";
 
 // Read models for the AI pages (agents command center, runs, approvals inbox, data health). Server
 // components call these directly; the /api/ai routes return the same shapes.
@@ -94,13 +97,74 @@ export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
   if (!org && run.started_by !== data.actor.personaId) {
     const mine = await sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]);
     if (!mine.length) return null;
-    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map(proposalOut), traceHidden: true };
+    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map(proposalOut), refs: { records: {}, entities: {}, actions: {}, proposals: {} } as TraceRefs, traceHidden: true };
   }
-  const [steps, proposals] = await Promise.all([
+  const [steps, proposals, plans] = await Promise.all([
     sql<Row>(data, "SELECT * FROM {agent_steps} WHERE run_id = ? AND idx > ? ORDER BY idx LIMIT 400", [id, afterIdx], { unscoped: true }),
     sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]),
+    // Later polls return only new steps; the plan's candidate list still names their records' types.
+    afterIdx >= 0 ? sql<Row>(data, "SELECT * FROM {agent_steps} WHERE run_id = ? AND idx <= ? AND kind = 'plan' ORDER BY idx LIMIT 4", [id, afterIdx], { unscoped: true }) : Promise.resolve([]),
   ]);
-  return { run, steps: steps.map(stepOut), proposals: proposals.map(proposalOut) };
+  const out = steps.map(stepOut);
+  return { run, steps: out, proposals: proposals.map(proposalOut), refs: await traceRefs(data, out, plans.map(stepOut)) };
+}
+
+const asTraceStep = (s: StepRow): TraceStepLike => ({ idx: s.idx, kind: s.kind, toolKey: s.tool_key ?? undefined, input: s.input ?? undefined, output: s.output ?? undefined, ok: s.ok, at: s.at });
+
+// Names, links and properties for the records a trace mentions, so each step reads as a sentence.
+// One query per record type, limited to records the viewer may read in their scope; anything else
+// keeps only its type ("a prospect").
+export async function traceRefs(data: DataCtx, steps: StepRow[], context: StepRow[] = []): Promise<TraceRefs> {
+  const want = wantedRefs([...context, ...steps].map(asTraceStep));
+  const refs: TraceRefs = { records: {}, entities: {}, actions: {}, proposals: {} };
+  for (const a of want.actions) {
+    const label = getAction(a)?.label;
+    if (label) refs.actions[a] = label;
+  }
+  const byType = new Map<string, Set<string>>();
+  const add = (type: string, id: string) => byType.set(type, (byType.get(type) ?? new Set()).add(id));
+  for (const [type, id] of want.records) add(type, id);
+  if (want.proposals.length) {
+    const rows = await sql<{ id: string; entity_type: string; entity_id: string }>(data, "SELECT id, entity_type, entity_id FROM {ai_proposals} WHERE id IN (SELECT value FROM json_each(?))", [JSON.stringify(want.proposals)]);
+    for (const r of rows) {
+      refs.proposals[r.id] = `${r.entity_type}:${r.entity_id}`;
+      add(r.entity_type, r.entity_id);
+    }
+  }
+  for (const t of new Set([...want.entities, ...byType.keys()])) {
+    const d = getEntity(t);
+    if (d) refs.entities[t] = d.label;
+  }
+  const ws = await readWs(data);
+  const scoped = data.actor.propertyIds !== "all";
+  const queries = [...byType].flatMap(([type, ids]) => {
+    const def = getEntity(type);
+    for (const id of ids) refs.records[`${type}:${id}`] = { type: def?.label.one ?? type.replace(/_/g, " ") };
+    if (!def || !can(data.actor.role, "read", def.key)) return [];
+    const tf = def.fields[def.titleField];
+    const title = tf?.sql ? `(${expand(tf.sql, ws)})` : `${def.table}.${tf?.column ?? def.titleField}`;
+    const pid = def.scopePath ? `(${expand(def.scopePath, ws)})` : "NULL";
+    const text = `SELECT ${def.table}.id AS id, ${title} AS title, ${pid} AS pid FROM ${effective(def.table, ws)} AS ${def.table} WHERE ${def.table}.id IN (SELECT value FROM json_each(?))${scoped && def.scopePath ? ` AND ${pid} IN (SELECT value FROM json_each(?))` : ""}`;
+    return [{ def, stmt: data.db.prepare(text).bind(JSON.stringify([...ids]), ...(scoped && def.scopePath ? [JSON.stringify(data.actor.propertyIds)] : [])) }];
+  });
+  if (!queries.length) return refs;
+  const found: { key: string; pid: string | null }[] = [];
+  const results = await data.db.batch(queries.map((q) => q.stmt));
+  results.forEach((res, i) => {
+    const { def } = queries[i];
+    for (const r of res.results as Row[]) {
+      const key = `${def.key}:${String(r.id)}`;
+      refs.records[key] = { type: def.label.one, name: r.title == null ? String(r.id) : String(r.title), href: `${def.route}/${encodeURIComponent(String(r.id))}` } satisfies RecordRef;
+      if (def.key !== "properties" && r.pid != null) found.push({ key, pid: String(r.pid) });
+    }
+  });
+  const pids = [...new Set(found.map((f) => f.pid))];
+  if (pids.length) {
+    const names = await data.db.prepare(`SELECT id, name FROM ${effective("properties", ws)} AS properties WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(pids)).all<{ id: string; name: string }>();
+    const byId = new Map(names.results.map((p) => [String(p.id), String(p.name)]));
+    for (const f of found) if (byId.has(f.pid!)) refs.records[f.key].property = byId.get(f.pid!);
+  }
+  return refs;
 }
 
 export type ProposalOut = Row & { source: AiSource; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string };
