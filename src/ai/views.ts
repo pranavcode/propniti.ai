@@ -1,8 +1,9 @@
 import { demoIsoIn, demoNow } from "@/lib/clock";
 import { getEntity } from "@/entities";
-import type { AgentKey, Row } from "@/entities/types";
+import type { AgentKey, Role, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
+import { approverLabel, decidableSql, staffDecision } from "./decide";
 import { computeFix, proposalSource, type AiSource } from "./rules";
 import { fixProposal, queueReason } from "./tools/write";
 import { nextRun } from "./cron";
@@ -94,19 +95,24 @@ export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
   if (!org && run.started_by !== data.actor.personaId) {
     const mine = await sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]);
     if (!mine.length) return null;
-    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map(proposalOut), traceHidden: true };
+    return { run: { ...run, summary: null } as Row, steps: [] as StepRow[], proposals: mine.map((r) => proposalOut(r, data.actor.role)), traceHidden: true };
   }
   const [steps, proposals] = await Promise.all([
     sql<Row>(data, "SELECT * FROM {agent_steps} WHERE run_id = ? AND idx > ? ORDER BY idx LIMIT 400", [id, afterIdx], { unscoped: true }),
     sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]),
   ]);
-  return { run, steps: steps.map(stepOut), proposals: proposals.map(proposalOut) };
+  return { run, steps: steps.map(stepOut), proposals: proposals.map((r) => proposalOut(r, data.actor.role)) };
 }
 
-export type ProposalOut = Row & { source: AiSource; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string };
-export function proposalOut(p: Row): ProposalOut {
+export type ProposalOut = Row & { source: AiSource; why: string[]; evidence: { entity_type: string; entity_id: string; label: string; href?: string }[]; payload: Record<string, unknown>; href?: string; can_decide?: boolean; decide_reason?: string | null; approver?: string };
+// With the viewer's role, also says whether they may decide it (the rule canDecide enforces), why
+// not, and who may: the Approve button and its label read these.
+export function proposalOut(p: Row, role?: Role): ProposalOut {
   const evidence = parseJson<{ entity_type: string; entity_id: string; label: string }[]>(p.evidence, []).map((e) => ({ ...e, href: hrefOf(e.entity_type, e.entity_id) }));
-  return { ...p, source: proposalSource(p), why: parseJson<string[]>(p.why, []), evidence, payload: parseJson<Record<string, unknown>>(p.payload, {}), href: hrefOf(String(p.entity_type), String(p.entity_id)) };
+  const out: ProposalOut = { ...p, source: proposalSource(p), why: parseJson<string[]>(p.why, []), evidence, payload: parseJson<Record<string, unknown>>(p.payload, {}), href: hrefOf(String(p.entity_type), String(p.entity_id)) };
+  if (!role) return out;
+  const d = staffDecision(role, p);
+  return { ...out, can_decide: d.ok, decide_reason: d.ok ? null : d.error, approver: approverLabel(p) };
 }
 const hrefOf = (t: string, id: string) => {
   const d = getEntity(t);
@@ -124,22 +130,24 @@ export const QUEUE_SQL: Record<Queue, string> = {
 const RANK = "CASE p.risk WHEN 'High' THEN 2 WHEN 'Medium' THEN 1 ELSE 0 END";
 const QUEUE_OF = "CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' ELSE p.queue_state END";
 
+// "Needs you" holds only what this persona may decide (decide.ts); the rest stays with its approvers.
 export async function proposalsPage(data: DataCtx, f: { queue?: Queue; agent?: string; risk?: string; page?: number; size?: number }) {
   const queue = f.queue ?? "needs_you";
+  const mine = decidableSql(data.actor.role);
   const where = [QUEUE_SQL[queue]];
   const params: unknown[] = [];
+  if (queue === "needs_you") { where.push(mine.sql); params.push(...mine.params); }
   if (f.agent) { where.push("p.agent = ?"); params.push(f.agent); }
   if (f.risk) { where.push("p.risk = ?"); params.push(f.risk); }
-  // Approvals assigned to a role the persona doesn't hold still show (read-only) for leaders.
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
   const [rows, total, counts] = await Promise.all([
     sql<Row>(data, `SELECT p.*, d.decision, d.decided_by, d.decided_at, d.note AS decision_note ${from} WHERE ${where.join(" AND ")} ORDER BY ${RANK} DESC, p.created_at DESC, p.id LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n ${from} WHERE ${where.join(" AND ")}`, params),
-    sql<{ q: string; n: number }>(data, `SELECT ${QUEUE_OF} AS q, count(*) AS n ${from} GROUP BY q`),
+    sql<{ q: string; n: number }>(data, `SELECT ${QUEUE_OF} AS q, count(*) AS n ${from} WHERE NOT coalesce(${QUEUE_SQL.needs_you} AND NOT ${mine.sql}, 0) GROUP BY q`, mine.params),
   ]);
-  return { rows: rows.map(proposalOut), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number> };
+  return { rows: rows.map((r) => proposalOut(r, data.actor.role)), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number> };
 }
 
 // Where a deep link lands: the proposal (by id, or the newest one on a record such as
@@ -152,9 +160,10 @@ export async function proposalFocus(data: DataCtx, f: { proposal?: string; recor
     `SELECT p.id, ${QUEUE_OF} AS q, ${RANK} AS rank, p.created_at ${from} WHERE ${f.proposal ? "p.id = ?" : "p.entity_type = ? AND p.entity_id = ?"} ORDER BY p.created_at DESC LIMIT 1`,
     f.proposal ? [f.proposal] : [type, id]);
   if (!hit) return null;
+  const mine = hit.q === "needs_you" ? decidableSql(data.actor.role) : { sql: "1 = 1", params: [] };
   const [ahead] = await sql<{ n: number }>(data,
-    `SELECT count(*) AS n ${from} WHERE ${QUEUE_SQL[hit.q]} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
-    [hit.rank, hit.rank, hit.created_at, hit.created_at, hit.id]);
+    `SELECT count(*) AS n ${from} WHERE ${QUEUE_SQL[hit.q]} AND ${mine.sql} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
+    [...mine.params, hit.rank, hit.rank, hit.created_at, hit.created_at, hit.id]);
   return { id: hit.id, queue: hit.q, page: Math.floor((ahead?.n ?? 0) / size) + 1 };
 }
 

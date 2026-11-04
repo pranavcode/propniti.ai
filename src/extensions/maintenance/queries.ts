@@ -1,4 +1,5 @@
 import type { Actor, Row } from "@/entities/types";
+import { decidableSql } from "@/ai/decide";
 import type { Db } from "@/lib/platform/types";
 import { effective as wsEffective } from "@/server/effective";
 import { AS_OF } from "@/seed/constants";
@@ -134,10 +135,12 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
 export async function maintenanceProposals(db: Db, ws: string | null, actor: Actor, limit = 6) {
   // Org-level proposals (vendor COIs) have no property and show to everyone in the module.
   const s = actor.propertyIds === "all" ? { sql: "", binds: [] as unknown[] } : { sql: " AND (p.property_id IS NULL OR p.property_id IN (SELECT value FROM json_each(?)))", binds: [JSON.stringify(actor.propertyIds)] };
+  // Open items only where this role may decide them (decide.ts); waiting ones show as waiting.
+  const mine = decidableSql(actor.role);
   return all<Row>(db,
-    `SELECT p.* FROM ${effective("ai_proposals", ws)} p WHERE p.agent IN ('maintenance_triage', 'compliance', 'photo_check') AND p.queue_state IN ('needs_you', 'waiting')
+    `SELECT p.* FROM ${effective("ai_proposals", ws)} p WHERE p.agent IN ('maintenance_triage', 'compliance', 'photo_check') AND (p.queue_state = 'waiting' OR (p.queue_state = 'needs_you' AND ${mine.sql}))
        AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = p.id)${s.sql}
-     ORDER BY CASE p.risk WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, p.created_at DESC LIMIT ${limit}`, s.binds);
+     ORDER BY CASE p.risk WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, p.created_at DESC LIMIT ${limit}`, [...mine.params, ...s.binds]);
 }
 
 // ---------------------------------------------------------------------------------------------

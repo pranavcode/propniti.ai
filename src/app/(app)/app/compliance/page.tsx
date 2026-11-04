@@ -161,7 +161,6 @@ export default async function CompliancePage() {
     canTimeline ? expiries(ctx, 90).then((r) => ({ ...r, error: null }), () => ({ today: "", rows: [] as Expiry[], error: "The timeline couldn't load. Refresh to try again." })) : null,
     proposalsPage(data, { queue: "needs_you", agent: "compliance", size: 6 }).catch(() => null),
   ]);
-  const canApprove = ["principal", "regional_manager", "property_manager", "maintenance_supervisor"].includes(role);
   const props = proposals ? (JSON.parse(JSON.stringify(proposals.rows)) as ProposalJson[]) : null;
 
   return (
@@ -199,7 +198,7 @@ export default async function CompliancePage() {
               <div className="rounded-lg border bg-card"><EmptyState compact kind="table" title="Nothing waiting on you" description="The Compliance agent checks certificates and due dates daily. Its handled items are in AI activity." action={{ label: "Open agents", href: "/app/agents" }} /></div>
             ) : (
               <div className="flex flex-col gap-2">
-                {props.map((p) => <ProposalCard key={p.id} p={p} variant="card" canApprove={canApprove} />)}
+                {props.map((p) => <ProposalCard key={p.id} p={p} variant="card" />)}
                 {(proposals?.total ?? 0) > props.length && <Link href="/app/ai/approvals?agent=compliance" className="text-center text-[12px] text-primary hover:underline">{(proposals?.total ?? 0) - props.length} more waiting</Link>}
               </div>
             )}

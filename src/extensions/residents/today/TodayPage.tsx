@@ -1,4 +1,5 @@
 import Link from "@/components/Link";
+import { decidableSql } from "@/ai/decide";
 import { AlertTriangle, ArrowRight, Bot, CalendarClock, CircleDollarSign, HeartPulse, MessageSquare, ShieldAlert, Sparkles, Wrench, Zap } from "lucide-react";
 import { ApprovalsInbox } from "@/ai/ui/ApprovalsInbox";
 import { pageData } from "@/ai/ui/server";
@@ -48,7 +49,7 @@ export async function TodayPage() {
     settle(agingByProperty(ctx), []),
     settle(sql<{ agent_key: string; n: number }>(ctx, "SELECT agent_key, count(*) AS n FROM {agent_runs} WHERE started_at >= datetime(?, '-1 day') GROUP BY agent_key ORDER BY n DESC", [today]), []),
     settle(sql<{ n: number }>(ctx, `SELECT count(*) AS n FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= datetime(?, '-1 day') AND ${p("property_id").sql}`, [today, ...p("property_id").binds]), []),
-    settle(sql<{ n: number; high: number }>(ctx, `SELECT count(*) AS n, sum(risk = 'High') AS high FROM {ai_proposals} pr WHERE queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = pr.id) AND ${p("pr.property_id").sql}`, p("pr.property_id").binds), []),
+    settle(sql<{ n: number; high: number }>(ctx, `SELECT count(*) AS n, sum(risk = 'High') AS high FROM {ai_proposals} pr WHERE queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = pr.id) AND ${decidableSql(actor.role, "pr").sql} AND ${p("pr.property_id").sql}`, [...decidableSql(actor.role, "pr").params, ...p("pr.property_id").binds]), []),
     settle(sql(ctx, `SELECT l.id, l.end_on, l.rent_cents, u.number AS unit, h.name AS household, pr.name AS property
       FROM {leases} l LEFT JOIN {units} u ON u.id = l.unit_id LEFT JOIN {households} h ON h.id = l.household_id LEFT JOIN {properties} pr ON pr.id = l.property_id
       WHERE l.status = 'Active' AND l.end_on BETWEEN ? AND date(?, '+60 days') AND NOT EXISTS (SELECT 1 FROM {renewal_offers} o WHERE o.lease_id = l.id) AND l.id NOT IN (SELECT n.renewal_of FROM {leases} n WHERE n.renewal_of IS NOT NULL) AND ${p("l.property_id").sql}

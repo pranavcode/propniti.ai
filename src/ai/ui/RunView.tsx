@@ -30,13 +30,13 @@ export function ProposalCard({ p, variant = "card", canApprove = true }: { p: Pr
       why={p.why}
       evidence={p.evidence.map((e) => ({ label: e.label, href: e.href }))}
       confidence={p.confidence}
-      policy={p.queue_state === "waiting" ? "Over the owner's limit: the owner approves in their portal" : p.assignee_role ? `Approver: ${p.assignee_role.replace(/_/g, " ")}` : undefined}
+      policy={p.decide_reason ?? p.approver ?? (p.queue_state === "waiting" ? "Over the owner's limit: the owner approves in their portal" : undefined)}
       runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
       recordHref={p.href}
       createdAt={p.created_at}
       source={sourceOf(p)}
       model={p.model ?? undefined}
-      canApprove={canApprove}
+      canApprove={p.can_decide ?? canApprove}
       onApprove={decided ? undefined : () => decide("approve")}
       onReject={decided ? undefined : () => decide("reject")}
     />
