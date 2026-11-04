@@ -498,7 +498,7 @@ Good to know: policy changes are tracked with history — Settings → Policies 
     title: "See what runs automatically",
     body: `**Automations** lists everything that runs without someone pressing a button: the eight agents, the 15-minute sweep that starts them, the events that trigger them, and the approval rules they follow.
 
-1. Open **Automations** from the Intelligence menu.
+1. Open **Automations** from the AI agents section of the sidebar.
 2. Read each agent's **trigger**: its schedule (for example "Daily at 14:00") and the events it listens for (for example "Rent overdue").
 3. Check **Autonomy**. *Approve first* sends every action to the approvals inbox. *Auto within policy* lets low-risk actions under the approval-policy limits apply on their own.
 4. Open an agent's name to see its runs, and the last-run time to open that run's trace.

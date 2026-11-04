@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { request, type FullConfig } from "@playwright/test";
-import { STATE, TIPS_OFF, TOURS } from "./helpers";
+import { ASK_AUTO_DONE, FEATURES_SEEN, STATE, TIPS_OFF, TOURS, WELCOME_OFF } from "./helpers";
 
 // One demo workspace per run, shared by every test and persona. Each new browser context would
 // otherwise get its own workspace on its first write, and the app caps new workspaces per IP per
@@ -14,7 +14,7 @@ export default async function globalSetup(config: FullConfig) {
   const cookie = { domain: url.hostname, path: "/", expires: Math.floor(Date.now() / 1000) + 86_400, httpOnly: true, secure: url.protocol === "https:", sameSite: "Lax" as const };
   const state = {
     cookies: [{ name: "pn_ws", value: ws, ...cookie }],
-    origins: [{ origin: url.origin, localStorage: [{ name: "pn_tours", value: TOURS }, { name: "pn_guide", value: TIPS_OFF }] }],
+    origins: [{ origin: url.origin, localStorage: [{ name: "pn_tours", value: TOURS }, { name: "pn_guide", value: TIPS_OFF }, { name: "pn_welcome", value: WELCOME_OFF }, { name: "pn_whats_new", value: FEATURES_SEEN }, { name: "pn_ask_auto", value: ASK_AUTO_DONE }] }],
   };
 
   // A harmless write creates the workspace: an empty save of the admin's notification preferences.

@@ -10,6 +10,7 @@ import { readLocal, useLocalStorage } from "@/hooks/use-local-storage";
 import { useShell } from "../shell/context";
 import { localTourStore } from "../tour/TourEngine";
 import type { TourDef } from "../tour/types";
+import { splashDue } from "../welcome/rules";
 import { blockedBy, dismissNudge, EXPLAIN_SELECTOR, PEEK_ROW_SELECTOR, pickNudge, recordShown, type GuideFacts, type GuidePrefs, type GuideSession, type Nudge, type TourState } from "./nudges";
 
 // The "Ask Propniti" chat bubble, bottom right on every staff page. It toggles the same assistant
@@ -54,6 +55,7 @@ export function loadFacts(persona: string): Promise<GuideFacts | null> {
 }
 
 const dialogOpen = () => !!document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
+const toastShowing = () => !!document.querySelector("[data-feature-toast]");
 const typing = () => !!document.activeElement?.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select, [contenteditable="true"], [contenteditable=""]');
 
 function tourStates(tours: TourDef[]): TourState[] {
@@ -140,8 +142,10 @@ export function ChatBubble() {
   }, [setPrefs]);
 
   // One look per page view: after the page settles, if the rules allow a nudge, pick one.
+  const { id: personaId, home } = data.persona;
   useEffect(() => {
-    if (hiddenPage) return;
+    // The welcome splash already lists what's waiting; no nudge on the page view it opens on.
+    if (hiddenPage || splashDue(pathname, { id: personaId, home })) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     let tries = 0;
@@ -149,18 +153,17 @@ export function ChatBubble() {
       const session = readSession();
       const p = readLocal<GuidePrefs>(PREFS, NO_PREFS);
       const { nav, tours } = shell.current;
-      const first = tours[0];
       const why = blockedBy({
         now: Date.now(), prefs: p, session, shownThisView: false,
-        tourActive: live.current.tourActive, firstTourPending: !!first && !localTourStore.get(first.id),
-        typing: typing(), overlay: dialogOpen() || live.current.open,
+        tourActive: live.current.tourActive,
+        typing: typing(), overlay: dialogOpen() || live.current.open || toastShowing(),
       });
       const retry = () => { if (++tries < 6) timer = setTimeout(attempt, RETRY_MS); };
       if (why === "typing" || why === "overlay" || why === "tour") return retry();
       if (why) return;
-      const facts = await loadFacts(data.persona.id);
+      const facts = await loadFacts(personaId);
       if (cancelled) return;
-      if (typing() || dialogOpen() || live.current.open || live.current.tourActive) return retry();
+      if (typing() || dialogOpen() || live.current.open || live.current.tourActive || toastShowing()) return retry();
       const n = pickNudge({
         path: pathname, search: window.location.search, day: new Date().toLocaleDateString("en-CA"), nav: nav.flatMap((s) => s.items.map((i) => i.href)), facts, tours: tourStates(tours),
         page: { explain: !!document.querySelector(EXPLAIN_SELECTOR), peekRows: !!document.querySelector(PEEK_ROW_SELECTOR) }, prefs: p, session,
@@ -171,7 +174,7 @@ export function ChatBubble() {
     };
     timer = setTimeout(attempt, FIRST_LOOK_MS);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [pathname, hiddenPage, data.persona.id]);
+  }, [pathname, hiddenPage, personaId, home]);
 
   // A nudge never lingers: it leaves 30 s after it appears, or after the pointer or focus leaves it.
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -217,7 +220,7 @@ export function ChatBubble() {
 
   if (hiddenPage) return null;
   const open = assistant.open;
-  const hidden = overlay || tourActive;
+  const hidden = overlay;
   const style = { "--pn-panel": `${open ? assistant.width : 0}px`, "--pn-lift": `${lift}px` } as React.CSSProperties;
 
   return (
@@ -231,8 +234,8 @@ export function ChatBubble() {
           open && "max-sm:hidden",
         )}
       >
-        <div aria-live="polite" className="sr-only">{nudge && !hidden && !open ? `Suggestion: ${nudge.text}` : ""}</div>
-        {nudge && !open && (
+        <div aria-live="polite" className="sr-only">{nudge && !hidden && !open && !tourActive ? `Suggestion: ${nudge.text}` : ""}</div>
+        {nudge && !open && !tourActive && (
           <div
             data-guide-nudge={nudge.id}
             role="group"
