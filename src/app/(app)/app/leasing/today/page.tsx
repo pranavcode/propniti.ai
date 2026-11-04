@@ -2,6 +2,7 @@ import Link from "@/components/Link";
 import { ArrowRight, ArrowUpRight, CalendarDays, Cpu, KanbanSquare, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
+import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
 import { AGENT_NAME, followUps, kpis, localTime, sourceOf, leasingCtx, leasingProposals, overnight, todaysTours } from "@/extensions/leasing/data";
 import { AskPanel, FollowUpList, ProposalQueue, TourList, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
@@ -62,12 +63,15 @@ export default async function LeasingToday() {
       />
       <PageBody>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <section className={`${card} relative overflow-hidden`} aria-labelledby="brief-h">
-            <div className="flex items-center gap-2 border-b px-4 py-2.5">
+          <Collapsible id="briefing" label="Briefing" className={`${card} relative overflow-hidden`} aria-labelledby="brief-h">
+            <div className="flex items-center gap-2 border-b px-4 py-2.5 group-data-collapsed/collapse:border-b-0">
               <Sparkles className="size-3.5 text-tone-ai" />
-              <h2 id="brief-h" className="text-[13px] font-semibold">Briefing</h2>
-              <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground"><Cpu className="size-3" />Computed from your records</span>
+              <h2 id="brief-h" className="shrink-0 text-[13px] font-semibold">Briefing</h2>
+              <WhenExpanded><span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground"><Cpu className="size-3" />Computed from your records</span></WhenExpanded>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${needs.reduce((a, x) => a + x.n, 0).toLocaleString("en-US")} need you · ${night.leads} new ${night.leads === 1 ? "lead" : "leads"}`}</span></WhenCollapsed>
+              <CollapseButton className="-mr-1.5 ml-auto" />
             </div>
+            <CollapseBody>
             <div className="grid gap-4 p-4 md:grid-cols-2">
               <div>
                 <h3 className="mb-1.5 text-[12px] font-medium text-muted-foreground">Since yesterday</h3>
@@ -93,7 +97,8 @@ export default async function LeasingToday() {
             <div className="border-t px-4 py-3">
               <AskPanel suggestions={c.persona.assistantPrompts} placeholder="Ask about your leads, tours, units or listings…" />
             </div>
-          </section>
+            </CollapseBody>
+          </Collapsible>
 
           <div className="grid grid-cols-2 gap-3 self-start">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>

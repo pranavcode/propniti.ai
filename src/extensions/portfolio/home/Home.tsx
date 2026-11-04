@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
+import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import type { ProposalJson } from "@/ai/ui/client";
 import { getAgent } from "@/extensions/agents";
 import { ExplainableKpi, ExplainLink } from "../ui/Explain";
@@ -32,13 +33,17 @@ function Briefing({ b, m, rows, scope }: { b: Awaited<ReturnType<typeof briefing
   const agentsRan = b.overnight.reduce((s, r) => s + Number(r.n), 0);
   const highRisk = b.queue.rows.filter((p) => p.risk === "High").length;
   return (
-    <section data-tour="briefing" className="flex h-full flex-col rounded-xl border bg-card">
-      <header className="flex items-center gap-2 border-b px-4 py-3">
+    <Collapsible id="briefing" label="Briefing" data-tour="briefing" className="flex h-full flex-col rounded-xl border bg-card">
+      <header className="flex items-center gap-2 border-b px-4 py-3 group-data-collapsed/collapse:border-b-0">
         <span className="flex size-6 items-center justify-center rounded-md bg-tone-ai/10 text-tone-ai"><Sparkles className="size-3.5" /></span>
         <h2 className="text-[13.5px] font-semibold">Briefing</h2>
-        <span className="text-[12px] text-muted-foreground">{scope} · {monthLong(LAST_CLOSED)} close and the last 48 hours</span>
-        <Link href="/app/ai/activity" className="ml-auto text-[12px] text-muted-foreground hover:text-foreground">Agent activity <ChevronRight className="inline size-3" /></Link>
+        <WhenExpanded><span className="text-[12px] text-muted-foreground">{scope} · {monthLong(LAST_CLOSED)} close and the last 48 hours</span></WhenExpanded>
+        <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{b.queue.total.toLocaleString("en-US")} need you · {b.risks.length} to watch</span></WhenCollapsed>
+        <Link href="/app/ai/activity" className="ml-auto shrink-0 text-[12px] text-muted-foreground hover:text-foreground max-sm:group-data-collapsed/collapse:hidden">Agent activity <ChevronRight className="inline size-3" /></Link>
+        <CollapseButton className="-mr-1.5 max-sm:group-data-collapsed/collapse:ml-auto" />
       </header>
+      <CollapseBody className="flex-1">
+      <div className="flex h-full flex-col">
       <div className="grid flex-1 gap-0 md:grid-cols-3 md:divide-x">
         <div className="flex flex-col gap-2 px-4 py-3">
           <h3 className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">What happened</h3>
@@ -70,7 +75,9 @@ function Briefing({ b, m, rows, scope }: { b: Awaited<ReturnType<typeof briefing
         </div>
       </div>
       <footer className="border-t px-4 py-2 text-[11.5px] text-muted-foreground">Figures are computed from the ledger and monthly metrics; agent activity comes from logged runs. Use Explain on any number for the AI&rsquo;s reading of it.</footer>
-    </section>
+      </div>
+      </CollapseBody>
+    </Collapsible>
   );
 }
 
@@ -146,6 +153,7 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
               actions={<ExplainLink metric="portfolio.noi" label="Regional NOI" />} id="compare">
               <div data-tour="compare"><CompareTable rows={rows} /></div>
             </Section>
+            <CollapsibleSection id="charts" title="Charts" summary="6 charts" description="Select a bar or point for the records behind it.">
             <DashboardGrid>
               <GridItem span={6}><ChartCard title="NOI vs budget by property" description={monthLong(LAST_CLOSED)} kind="hbar" data={noiByProp} x="name" series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money" }]} drill="/app/properties/{property_id}?tab=financials" height={Math.max(260, noiByProp.length * 30)} /></GridItem>
               <GridItem span={6}><ChartCard title="Occupancy by property" description="Physical vs economic, lowest first" kind="hbar" data={occByProp} x="name" series={[{ key: "physical", label: "Physical", format: "pct" }, { key: "economic", label: "Economic", format: "pct" }]} drill="/app/units?f.property_id={property_id}&f.status=Vacant" height={Math.max(260, occByProp.length * 30)} /></GridItem>
@@ -154,8 +162,10 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
               <GridItem span={7}><ChartCard title="Maintenance SLA by property" description={`Work orders due in ${monthLong(LAST_CLOSED)}, met and missed`} kind="stacked" data={slaByProp} x="name" series={[{ key: "met", label: "Met SLA", format: "count" }, { key: "missed", label: "Missed SLA", format: "count", color: "var(--tone-danger)" }]} drill="/app/maintenance/work-orders?f.property_id={property_id}" height={280} actions={<ExplainLink metric="maintenance.sla" label="SLA" />} /></GridItem>
               <GridItem span={5}><ChartCard title="Work orders due vs missed SLA" description="Trailing 12 closed months" kind="line" data={pts(m.series.wo)} x="label" series={[{ key: "due", label: "Due", format: "count" }, { key: "missed", label: "Missed SLA", format: "count" }]} drill="/app/maintenance/work-orders" height={280} /></GridItem>
             </DashboardGrid>
+            </CollapsibleSection>
           </>
         ) : (
+          <CollapsibleSection id="charts" title="Charts" summary="6 charts and the below-budget list" description="Select a bar, slice or point for the records behind it.">
           <DashboardGrid>
             <GridItem span={8}><ChartCard title="Portfolio NOI vs budget" description="Trailing 12 closed months" kind="line" data={pts(m.series.noi)} x="label" series={[{ key: "noi", label: "NOI", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]} drill="/app/properties?sort=-noi_month" height={260} actions={<ExplainLink metric="portfolio.noi" label="NOI" />} /></GridItem>
             <GridItem span={4}><ChartCard title="NOI by region" description={monthLong(LAST_CLOSED)} kind="donut" data={m.byRegion as ChartPoint[]} x="name" series={[{ key: "noi", label: "NOI", format: "money" }]} drill="/app/properties?f.region_id={region_id}" height={260} /></GridItem>
@@ -169,6 +179,7 @@ export async function PortfolioHome({ session, variant }: { session: Session; va
             <GridItem span={7}><ChartCard title="AI hours saved" description={`${Math.round(aiTotal).toLocaleString("en-US")} staff hours over 12 months, from approved and in-policy agent actions`} kind="bar" data={aiTotal > 0 ? pts(m.series.ai) : []} empty="Hours appear here once agents start acting on approved or in-policy work." x="label" series={[{ key: "hours", label: "Hours saved", format: "count" }]} drill="/app/ai/activity" height={240} actions={<ExplainLink metric="intelligence.ai_minutes_saved" label="AI hours saved" />} /></GridItem>
             <GridItem span={5}><Watchlist rows={rows} /></GridItem>
           </DashboardGrid>
+          </CollapsibleSection>
         )}
 
         <Section title="Waiting for your decision" description="Agent proposals in your scope. Approving runs the action once and records who approved it." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">Open inbox <ArrowRight /></Link></Button>}>
