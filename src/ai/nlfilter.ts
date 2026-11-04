@@ -111,7 +111,7 @@ async function rulesSpec(data: DataCtx, def: EntityDef, role: Role, text: string
     const v = Number(money[2].replace(/,/g, "")) * (money[3] ? 1000 : 1);
     const op = /over|above|more|least/i.test(money[1]) ? "min" : "max";
     filters.push({ field: moneyField, op, value: String(v) });
-    notes.push(`${def.fields[moneyField].label} ${op === "min" ? "≥" : "≤"} $${v.toLocaleString()}`);
+    notes.push(`${def.fields[moneyField].label} ${op === "min" ? "≥" : "≤"} $${v.toLocaleString("en-US")}`);
   }
   const dateField = fieldsOf(def, role).find(([k, f]) => f.type === "date" && /(end|due|expires|scheduled|available)/.test(k))?.[0] ?? fieldsOf(def, role).find(([, f]) => f.type === "date")?.[0];
   const next = text.match(/\b(?:next|within|in the next)\s+(\d+)\s+days?\b/i);

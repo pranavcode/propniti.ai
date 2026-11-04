@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight } from "lucide-react";
 import { KpiCard } from "@/components/app/dashboard";
 import { EmptyState } from "@/components/app/states";

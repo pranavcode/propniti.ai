@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { Banknote, Building2, CalendarCheck, ClipboardList, CreditCard, FileCheck2, FileText, Home, Inbox, MessageSquare, Receipt, ShieldCheck, Wrench, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";

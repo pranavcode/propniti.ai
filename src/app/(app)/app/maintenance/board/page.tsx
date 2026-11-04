@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { PeekLink } from "@/components/app/peek/PeekLink";
 import { CalendarDays, ChevronLeft, ChevronRight, ClipboardPlus, KanbanSquare, TriangleAlert } from "lucide-react";
 import { can } from "@/entities";

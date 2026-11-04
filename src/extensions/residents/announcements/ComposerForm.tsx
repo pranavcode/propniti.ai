@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarClock, Loader2, Send, Sparkles } from "lucide-react";

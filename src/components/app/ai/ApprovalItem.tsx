@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useState } from "react";
 import { Check, ChevronDown, CornerDownRight, ExternalLink, Lock, Pencil, ShieldAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
