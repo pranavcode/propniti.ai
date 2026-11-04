@@ -7,6 +7,7 @@ import { openRun, runWithContext } from "@/ai/orchestrator";
 import { rejectProposal } from "@/ai/effects";
 import { checkDraft, letterDates } from "@/ai/rules";
 import type { AgentCtx } from "@/ai/runtime";
+import { protectedTargeting, withoutTargeting } from "@/extensions/leasing/fairHousing";
 import { abstractByRules, ABSTRACT_FIELDS, compareAbstract, fillTemplate, leaseDocument, type AbstractKey, type Comparison, type Extracted } from "./lib";
 import { insertRow, leaseRecord, one, overlayWrite, sql } from "./server";
 
@@ -274,7 +275,15 @@ export function rulesAnnouncement(topic: string, property: string, templates: Ro
   return { title: short.charAt(0).toUpperCase() + short.slice(1), body: `Residents of ${property}: ${t}. If you have questions, reply to this message or contact the leasing office.\n\nThank you,\n${property} management`, template: null };
 }
 
-export async function draftAnnouncement(data: Data, id: string, topic: string) {
+// Announcements go to every resident, so a notice never singles out a protected group (children,
+// age, disability, origin…): those clauses are left out before drafting, and a draft that still
+// names one falls back to rules, or is refused.
+export async function draftAnnouncement(data: Data, id: string, rawTopic: string) {
+  const { text: topic, removed } = withoutTargeting(rawTopic);
+  const groups = [...new Set(protectedTargeting(rawTopic).map((f) => f.category.toLowerCase()))].join(" or ");
+  const RULE = "announcements need to apply to all residents under fair housing law";
+  const refusal = `I can't draft a notice aimed at ${groups ? `residents by ${groups}` : "one group of residents"}: ${RULE}. Reword the topic so it covers everyone and I'll draft it.`;
+  if (removed.length && topic.split(/\s+/).filter(Boolean).length < 3) return { ok: false as const, error: refusal };
   const a = await one(data, "SELECT * FROM {announcements} WHERE id = ?", [id]);
   if (!a) return { ok: false as const, error: "Announcement not found" };
   const pid = JSON.parse(String(a.audience ?? "{}")).property_ids?.[0];
@@ -283,13 +292,18 @@ export async function draftAnnouncement(data: Data, id: string, topic: string) {
   const templates = await sql(data, "SELECT id, name, subject, body FROM {templates} WHERE category = 'Notices' AND language = 'en'");
   const run = await asRun(data, "copilot", { announcement: id, topic }, async (ctx) => {
     const model = await structured(ctx, AnnouncementSchema,
-      `You write announcements from a property manager to every resident of one US apartment community. ${SAFETY} Plain, specific and short (under 120 words). Keep dates and times exactly as the request gives them; if one is missing, write [date] or [time] for the manager to fill in. No marketing tone.`,
+      `You write announcements from a property manager to every resident of one US apartment community. ${SAFETY} Plain, specific and short (under 120 words). Every instruction applies to all residents alike: never single out residents by children or family, age, disability, race, national origin, language, religion or sex. Keep dates and times exactly as the request gives them; if one is missing, write [date] or [time] for the manager to fill in. No marketing tone.`,
       `Property: ${property}\n<data>\n${topic}\n</data>`, "draft_announcement");
-    const out = model ? { ...model, template: null } : rulesAnnouncement(topic, property, templates);
-    if (!model) ctx.modelUsed = { provider: "rules", model: "rules", label: "Rules (no model)", native: false };
-    return { summary: `Drafted announcement "${out.title}" for ${property}${out.template ? ` from template ${out.template}` : ""}.`, result: { ...out, source: model ? "live" : "rules" } };
+    const targets = (d: { title: string; body: string }) => protectedTargeting(`${d.title}\n${d.body}`);
+    const flagged = model ? targets(model) : [];
+    if (flagged.length) await ctx.step({ kind: "message", output: { rejected: model, reason: `singles out residents (${flagged.map((f) => f.phrase).join(", ")}); using the rules draft` }, ok: false });
+    const live = !!model && !flagged.length;
+    const out = live ? { ...model!, template: null } : rulesAnnouncement(topic, property, templates);
+    if (!live) ctx.modelUsed = { provider: "rules", model: "rules", label: "Rules (no model)", native: false };
+    if (targets(out).length) return { summary: "The draft singled out residents by a protected characteristic, so it was not saved.", result: null };
+    return { summary: `Drafted announcement "${out.title}" for ${property}${out.template ? ` from template ${out.template}` : ""}${removed.length ? `; left out "${removed.join("; ")}"` : ""}.`, result: { ...out, source: live ? "live" : "rules" } };
   });
-  if (!run.result) return { ok: false as const, error: run.summary, runId: run.runId };
+  if (!run.result) return { ok: false as const, error: run.summary.startsWith("The draft singled out") ? refusal : run.summary, runId: run.runId };
   await overlayWrite(data.db, data.ws, "announcements", id, { title: run.result.title, body: run.result.body });
-  return { ok: true as const, runId: run.runId, source: run.result.source };
+  return { ok: true as const, runId: run.runId, source: run.result.source, removed, note: removed.length ? `I left out the part that singles out residents by ${groups} ("${removed.join("; ")}"): ${RULE}. Here's a version for everyone.` : undefined };
 }

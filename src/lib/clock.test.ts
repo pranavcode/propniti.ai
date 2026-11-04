@@ -31,6 +31,7 @@ const REAL_CLOCK_OK = new Set([
   "src/lib/clock.ts", // the demo clock itself reads the real time of day
   "src/lib/format.ts", // greetings: time of day only
   "src/lib/guard.ts", // rate limiting
+  "src/extensions/inbox/counts.ts", // badge cache expiry
   "src/app/(app)/app/leasing/today/page.tsx", // greeting: time of day only
   "src/app/(portal)/portal/resident/page.tsx", // greeting: time of day only
   "src/app/api/ai/sweep/route.ts", // cron trigger

@@ -203,7 +203,7 @@ registerAction({
   when: (r) => r.status === "Draft",
   handler: async (ctx, row, input) => {
     const r = await draftAnnouncement(ctx, String(row.id), input.topic);
-    return r.ok ? ok(`Draft written (${r.source === "live" ? "AI" : "rules"})`, `/app/communications/announcements/new?id=${encodeURIComponent(String(row.id))}&run=${r.runId}&src=${r.source}`) : fail(400, r.error);
+    return r.ok ? ok(`Draft written (${r.source === "live" ? "AI" : "rules"})${r.note ? `. ${r.note}` : ""}`, `/app/communications/announcements/new?id=${encodeURIComponent(String(row.id))}&run=${r.runId}&src=${r.source}`) : fail(400, r.error);
   },
 });
 

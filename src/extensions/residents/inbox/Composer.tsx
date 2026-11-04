@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Archive, CornerDownRight, FileText, Loader2, MailCheck, RotateCcw, Send, Sparkles, Undo2 } from "lucide-react";
@@ -48,7 +48,10 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
     if (!pathname.endsWith("/communications/inbox") || search.get("t") === threadId) return router.refresh();
     const sp = new URLSearchParams(search.toString());
     sp.set("t", threadId);
-    router.replace(`${pathname}?${sp}`, { scroll: false });
+    // Write ?t= through the history API (the router syncs it) and re-render once: refresh also
+    // updates the layout's Inbox count, which a search-param navigation would leave alone.
+    window.history.replaceState(null, "", `${pathname}?${sp}`);
+    router.refresh();
   };
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<string>(CHANNELS.includes(initialChannel as (typeof CHANNELS)[number]) ? initialChannel : "Email");

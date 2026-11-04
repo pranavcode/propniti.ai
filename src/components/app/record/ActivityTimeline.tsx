@@ -41,7 +41,20 @@ export function changesOf(e: ActivityEvent): Change[] {
   return Object.keys(after).filter((k) => !["updated_at", "workspace_id", "seq", "deleted"].includes(k) && JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after[k] ?? null)).slice(0, 4).map((k) => ({ field: k, from: before?.[k] ?? null, to: after[k] ?? null }));
 }
 
-const fmt = (v: unknown) => (v == null || v === "" ? "empty" : typeof v === "number" ? v.toLocaleString("en-US") : String(v));
+// A change value as short text. Agent events carry nested payloads (a message, a list of effects):
+// show the message's subject or body, or how many items, rather than "[object Object]".
+const clip = (s: string) => (s.length > 80 ? `${s.slice(0, 79)}…` : s);
+export function formatChange(v: unknown): string {
+  if (v == null || v === "") return "empty";
+  if (typeof v === "number") return v.toLocaleString("en-US");
+  if (Array.isArray(v)) return `${v.length} item${v.length === 1 ? "" : "s"}`;
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const text = [o.subject, o.body, o.text, o.label, o.name].find((x) => typeof x === "string" && x.trim());
+    return text ? clip(String(text)) : `${Object.keys(o).length} fields`;
+  }
+  return String(v);
+}
 const isAuto = (e: ActivityEvent) => e.actor_kind === "agent" || e.actor_kind === "system";
 
 function bucket(at: string, now: Date) {
@@ -80,9 +93,9 @@ function Item({ e, people }: { e: ActivityEvent; people?: Record<string, string>
             {changes.map((c) => (
               <li key={c.field} className="flex flex-wrap items-center gap-1.5 text-[12.5px]">
                 <span className="text-muted-foreground">{humanize(c.field)}</span>
-                <span className="rounded bg-muted px-1.5 py-px text-muted-foreground line-through decoration-muted-foreground/40">{fmt(c.from)}</span>
+                <span className="rounded bg-muted px-1.5 py-px text-muted-foreground line-through decoration-muted-foreground/40">{formatChange(c.from)}</span>
                 <ArrowRight className="size-3 text-muted-foreground" />
-                <span className="rounded bg-primary/[0.07] px-1.5 py-px font-medium">{fmt(c.to)}</span>
+                <span className="rounded bg-primary/[0.07] px-1.5 py-px font-medium">{formatChange(c.to)}</span>
               </li>
             ))}
           </ul>

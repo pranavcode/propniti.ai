@@ -34,7 +34,7 @@ export const PILLARS: Pillar[] = [
     slug: "explained",
     name: "Every number explained",
     title: "Click any number to see the rows behind it.",
-    body: "Each KPI and chart opens the filtered list it was computed from. Ask why NOI fell in Atlanta and the answer is built from computed drivers: rent collected, vacancy, concessions and individual expense lines. The model writes the sentence, but every figure in it comes from your ledger.",
+    body: "Each KPI and chart opens the filtered list it was computed from. Ask why NOI fell in Atlanta and the answer is built from computed drivers: income, vacancy, concessions and individual expense lines. The model writes the sentence, but every figure in it comes from your ledger.",
     points: [
       "Drill from portfolio NOI to property, month and GL line",
       "Variance notes the Owner Reporting agent offers to owners",

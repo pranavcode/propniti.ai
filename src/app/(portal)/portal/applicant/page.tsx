@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, BedDouble, CalendarDays, CircleDollarSign, FileCheck2, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Money, StatusBadge } from "@/components/app/display";

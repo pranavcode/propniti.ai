@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, BadgeCheck, Check, ShieldAlert, Sparkles, X } from "lucide-react";

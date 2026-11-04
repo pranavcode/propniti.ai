@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 /* eslint-disable @next/next/no-img-element -- every photo ships pre-sized (400 px thumbnail + full WebP), so plain lazy <img> with fixed dimensions is enough and works the same on the Workers build */
 import { BadgePercent, PawPrint, TrendingDown } from "lucide-react";
 import { bathLabel, bedLabel, homeKind } from "./catalog";

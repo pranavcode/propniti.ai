@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ChevronLeft, ChevronRight, FileUp, Inbox, ScanLine } from "lucide-react";
 import { currentSession } from "@/auth/session";
 import type { Role } from "@/entities/types";

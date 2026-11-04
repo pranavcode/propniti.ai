@@ -5,7 +5,7 @@ import type { AiSession } from "@/ai/session";
 import type { AgentCtx } from "@/ai/runtime";
 import { openRun, runWithContext } from "@/ai/orchestrator";
 import { unknownNumbers } from "@/ai/summaries";
-import { cleanNarrative, hasTokens } from "./narrative";
+import { cleanNarrative, hasTokens, wrongDirections } from "./narrative";
 
 // Portfolio AI narration ("explain this number", what-if narrative). Every call is a traced run of
 // the Owner Reporting agent: the facts are computed in code (tool calls show in the run), the model
@@ -37,11 +37,15 @@ export async function narrate<D>(s: AiSession, o: {
         const cleaned = { headline: cleanNarrative(value.headline), bullets: value.bullets.map(cleanNarrative) };
         const text = [cleaned.headline, ...cleaned.bullets].join(" ");
         const bad = unknownNumbers(text, facts);
+        const wrong = wrongDirections(text, facts);
         if (hasTokens(text)) {
           note = "The model's wording had unfilled placeholders, so this is the rule-based explanation.";
           await ctx.step({ kind: "message", output: { rejected: value, reason: note }, ok: false });
         } else if (bad.length) {
           note = `The model wrote figures the data doesn't contain (${bad.slice(0, 3).join(", ")}), so this is the rule-based explanation.`;
+          await ctx.step({ kind: "message", output: { rejected: value, reason: note }, ok: false });
+        } else if (wrong.length) {
+          note = `The model described a change the wrong way round (${wrong.slice(0, 2).join("; ")}), so this is the rule-based explanation.`;
           await ctx.step({ kind: "message", output: { rejected: value, reason: note }, ok: false });
         } else {
           out = cleaned;

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -38,6 +38,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
       setDone((d) => ({ ...d, [id]: r.queued ? "sent for approval" : action === "apply" ? "applied" : "dismissed" }));
       if (r.queued) toast.info(r.message, { action: { label: "Open approvals", onClick: () => router.push(`/app/ai/approvals?proposal=${r.proposalId}`) } });
       else toast.success(r.message);
+      return r;
     } catch (e) {
       toast.error((e as Error).message);
       throw e;
@@ -63,7 +64,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           <div className={cn("mt-1 text-[34px] leading-none font-semibold tabular-nums", TEXT[tone(health.score)])}>{health.score}</div>
           <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" />
           <p className="mt-2 text-[12px] text-muted-foreground">
-            {health.open.toLocaleString()} open issues.{" "}
+            {health.open.toLocaleString("en-US")} open issues.{" "}
             <Tooltip>
               <TooltipTrigger asChild><button className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 hover:text-foreground"><Info className="size-3" /> How is this scored?</button></TooltipTrigger>
               <TooltipContent className="max-w-xs">{health.formula}</TooltipContent>

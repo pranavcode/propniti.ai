@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, Calculator, ExternalLink, RotateCcw, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";

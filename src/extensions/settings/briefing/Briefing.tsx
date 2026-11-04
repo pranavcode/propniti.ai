@@ -1,5 +1,5 @@
 import "server-only";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertTriangle, ArrowRight, Bot, CheckCircle2, Clock, Hourglass, Sparkles } from "lucide-react";
 import { can, getEntity, type EntityKey, type Role } from "@/entities";
 import { PERMISSIONS } from "@/auth/personas";

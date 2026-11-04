@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, CornerDownRight, Loader2, Minus, Pencil, Plus, Send, Sparkles } from "lucide-react";
