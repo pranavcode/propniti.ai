@@ -210,11 +210,11 @@ function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "do
   );
 }
 
-export async function RecordView({ def, id, searchParams, session }: { def: EntityDef; id: string; searchParams: URLSearchParams; session: Session }) {
+export async function RecordView({ def, id, row: loaded, searchParams, session }: { def: EntityDef; id: string; row?: Row; searchParams: URLSearchParams; session: Session }) {
   const ctx = ctxOf(session);
   const role = session.actor.role;
   if (!can(role, "read", def.key)) return <Denied def={def} />;
-  const row = await getRow(ctx, def.key, id);
+  const row = loaded ?? await getRow(ctx, def.key, id);
   if (!row) notFound();
   const tabs = tabsFor(def, role);
   const active = tabs.find((t) => t.key === searchParams.get("tab")) ?? tabs[0];
