@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { notifyDone } from "./notify";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { FormField } from "./spec";
 
@@ -116,8 +117,9 @@ export function RecordSheet({ entity, label, mode, fields, initial, id, open, on
     onOpenChange(false);
     if (mode === "create") {
       const rid = String((out.row as Row).id);
-      toast.success(`${label.one} created`, { action: { label: "View", onClick: () => router.push(`${routeBase}/${encodeURIComponent(rid)}`) } });
-      router.push(`${routeBase}/${encodeURIComponent(rid)}`);
+      const href = `${routeBase}/${encodeURIComponent(rid)}`;
+      notifyDone(`${label.one} created`, { href, go: router.push });
+      router.push(href);
     } else {
       toast.success(`${label.one} updated`);
       router.refresh();

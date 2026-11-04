@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBreadcrumbTitle, useShellMaybe } from "@/components/app/shell/context";
 import { useUrlState } from "@/hooks/use-url-state";
+import { notifyDone } from "./notify";
 import { RecordSheet } from "./RecordSheet";
 import type { FormField } from "./spec";
 
@@ -62,7 +63,8 @@ export function ActionBar({ entity, id, title, label, routeBase, actions, edit, 
       if (onChanged) { onChanged(true); return router.refresh(); }
       return router.push(routeBase);
     }
-    toast.success(out.message ?? `${a.label} done`);
+    // In the peek drawer the record page is one click away; on the record page it's already open.
+    notifyDone(out.message ?? `${a.label} done`, onChanged && !out.href ? { href: `${routeBase}/${encodeURIComponent(id)}`, go: router.push } : undefined);
     if (out.href) router.push(out.href);
     else { router.refresh(); onChanged?.(false); }
   };
