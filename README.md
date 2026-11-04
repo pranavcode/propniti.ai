@@ -120,10 +120,10 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 
 ## Tests, evals and coverage
 
-Measured on 2026-11-04 on `batch/four` (batch 4).
+Measured on 2026-11-04 on `batch/six` (batch 6).
 
-- **Vitest:** 1170 tests in 124 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
-- **Playwright:** 120 browser tests in 28 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import, the chat bubble, assistant history, the welcome screen and bulk actions. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
+- **Vitest:** 1270 tests in 140 files: 1269 pass and 1 is skipped. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
+- **Playwright:** 190 browser tests in 34 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import, the chat bubble, assistant history, the welcome screen and bulk actions. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches. `src/ai` and `src/extensions` are outside that scope.
 
 | Area | Lines | Branches |
@@ -144,7 +144,7 @@ The v1 helpers left in `server/repo.ts` are still in the coverage scope and most
 
 `evals/cases/` holds 15 files with 126 cases. Every grader is a fixed rule; no model grades another.
 
-- `npm run eval` sends 83 cases in 10 areas to a running app (`BASE_URL`, default `https://propniti.ai`) and writes [`evals/results/latest.md`](evals/results/latest.md). It exits 1 below `MIN_PASS` (default 0.8). It is not part of CI; there is a manual **AI eval** workflow.
+- `npm run eval` sends 86 cases in 11 areas to a running app (`BASE_URL`, default `https://propniti.ai`) and writes [`evals/results/latest.md`](evals/results/latest.md). It exits 1 below `MIN_PASS` (default 0.8). It is not part of CI; there is a manual **AI eval** workflow.
 - 43 more cases (triage, drafts, data fixes, applicant scoring, resident replies) run inside `npm test`, graded on the rules output with no model.
 
 **Latest live run:** 2026-11-03 21:11 UTC, Workers AI on a local server, **59/75 (79%)**, under the 0.8 bar. Invoice reading, invoice vs PO, column mapping and pasted notes passed every case. Agent runs passed 1 of 8; 6 fell back to rules. Fixes landed after this run and it has not been repeated. The report builder's 8 cases joined the live suite after it and have no live score yet.
