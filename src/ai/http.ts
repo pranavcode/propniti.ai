@@ -47,12 +47,18 @@ export async function writeSession<S extends z.ZodType>(request: Request, schema
   return { s, body };
 }
 
+// Database errors (D1 overload, SQLite internals) never reach the browser; the log keeps the detail.
+const DB_ERROR = /D1_|D1 DB|SQLITE_|overloaded|no such (table|column)/i;
+export const isDbError = (message: string) => DB_ERROR.test(message);
+export const DB_BUSY = "The database is busy; try again in a moment";
+
 export async function guarded(fn: () => Promise<Response>) {
   try {
     return await fn();
   } catch (err) {
     console.error("[ai] route failed:", err);
-    return json({ error: err instanceof Error ? err.message : "Something went wrong" }, { status: 400 });
+    const message = err instanceof Error ? err.message : "Something went wrong";
+    return isDbError(message) ? json({ error: DB_BUSY }, { status: 503 }) : json({ error: message }, { status: 400 });
   }
 }
 

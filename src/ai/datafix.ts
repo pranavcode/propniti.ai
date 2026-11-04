@@ -4,6 +4,7 @@ import type { Row } from "@/entities/types";
 import { computeFix } from "./rules";
 import { get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
+import { canDecide } from "./http";
 import { openRun, runWithContext } from "./orchestrator";
 import { fixProposal } from "./tools/write";
 import "./agents";
@@ -14,7 +15,7 @@ import "./agents";
 export async function applyFixes(data: DataCtx, persona: Persona, issueIds: string[], opts: { safeOnly: boolean }) {
   const start = { db: data.db, ws: data.ws, actor: data.actor, agent: "data_health" as const, trigger: { kind: "manual" as const, input: { issues: issueIds } } };
   const runId = await openRun(start);
-  const results: { id: string; ok: boolean; message: string }[] = [];
+  const results: { id: string; ok: boolean; message: string; queued?: boolean; proposalId?: string }[] = [];
   await runWithContext(runId, start, Date.now(), "data_health", "act_with_approval", ["data_issues.apply_fix"], async (ctx) => {
     ctx.autonomy = "act_with_approval";
     for (const id of issueIds) {
@@ -32,13 +33,23 @@ export async function applyFixes(data: DataCtx, persona: Persona, issueIds: stri
       if (opts.safeOnly && (p.alwaysHuman || p.risk !== "Low")) { results.push({ id, ok: false, message: "Needs an individual review (money, fraud or legal)" }); continue; }
       const made = await ctx.proposeFull(p);
       const row = await data.db.prepare("SELECT * FROM ai_proposals WHERE workspace_id = ? AND id = ?").bind(data.ws, made.id).first<Row>();
-      const r = row ? await executeProposal(data, row, { id: persona.id, name: persona.name, role: data.actor.role }, undefined, "Applied from Data Health") : { ok: false, message: "Proposal missing" };
+      if (!row) { results.push({ id, ok: false, message: "Proposal missing" }); continue; }
+      // Money, fraud and legal fixes are never applied from this page, whoever clicks: they wait in the
+      // approvals inbox. Low-risk ones apply only for someone the inbox would let decide them.
+      const allowed = p.alwaysHuman || row.risk !== "Low" ? null : await canDecide({ ...data, persona }, row);
+      if (!allowed?.ok) {
+        const message = allowed ? `${allowed.error} Sent to the approvals inbox.` : "Sent to the approvals inbox: a person with approval rights reviews money, fraud and legal fixes.";
+        await ctx.step({ kind: "message", output: { issue: id, applied: false, queued: made.id, result: message }, ok: true });
+        results.push({ id, ok: false, message, queued: true, proposalId: made.id });
+        continue;
+      }
+      const r = await executeProposal(data, row, { id: persona.id, name: persona.name, role: data.actor.role }, undefined, "Applied from Data Health");
       await ctx.step({ kind: "message", output: { issue: id, applied: r.ok, result: r.message }, ok: r.ok });
       results.push({ id, ok: r.ok, message: r.message });
     }
     return { summary: `${persona.name} applied ${results.filter((r) => r.ok).length} of ${issueIds.length} fixes from Data Health.`, result: null };
   });
-  return { runId, applied: results.filter((r) => r.ok).length, results };
+  return { runId, applied: results.filter((r) => r.ok).length, queued: results.filter((r) => r.queued).length, results };
 }
 
 export async function dismissIssue(data: DataCtx, persona: Persona, id: string, note: string) {
