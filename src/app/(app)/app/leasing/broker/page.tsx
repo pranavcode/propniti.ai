@@ -2,6 +2,7 @@ import Link from "@/components/Link";
 import { AlertTriangle, ArrowUpRight, Cpu, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
+import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { EmptyState } from "@/components/app/states";
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
 import { AGENT_NAME, fairHousingFlags, kpis, leasingCtx, leasingProposals, sourceOf, waitingApplications } from "@/extensions/leasing/data";
@@ -48,12 +49,15 @@ export default async function BrokerDesk() {
       />
       <PageBody>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <section className="relative overflow-hidden rounded-lg border bg-card" aria-labelledby="brief-h">
-            <div className="flex items-center gap-2 border-b px-4 py-2.5">
+          <Collapsible id="briefing" label="Briefing" className="peer/brief xl:data-collapsed:col-span-full relative overflow-hidden rounded-lg border bg-card" aria-labelledby="brief-h">
+            <div className="flex items-center gap-2 border-b px-4 py-2.5 group-data-collapsed/collapse:border-b-0">
               <Sparkles className="size-3.5 text-tone-ai" />
-              <h2 id="brief-h" className="text-[13px] font-semibold">Briefing</h2>
-              <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground"><Cpu className="size-3" />Computed from your records</span>
+              <h2 id="brief-h" className="shrink-0 text-[13px] font-semibold">Briefing</h2>
+              <WhenExpanded><span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-px text-[11px] text-muted-foreground"><Cpu className="size-3" />Computed from your records</span></WhenExpanded>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${apps.total.toLocaleString("en-US")} need you · ${flags.length} to fix`}</span></WhenCollapsed>
+              <CollapseButton className="-mr-1.5 ml-auto" />
             </div>
+            <CollapseBody>
             <ul className="flex flex-col gap-1.5 p-4 text-[13px]">
               <li><Link href="#approvals" className="hover:text-primary"><span className="font-semibold tabular-nums">{apps.total}</span> application{apps.total === 1 ? "" : "s"} waiting on you{oldest ? <>, the oldest for <span className="font-semibold tabular-nums">{Number(oldest.waiting)}</span> days ({String(oldest.applicant)})</> : null}.</Link></li>
               {unscored > 0 && <li className="text-muted-foreground"><span className="font-semibold text-foreground tabular-nums">{unscored}</span> of the ones shown have no AI score yet; open one and choose “Score with AI”.</li>}
@@ -63,8 +67,9 @@ export default async function BrokerDesk() {
             <div className="border-t px-4 py-3">
               <AskPanel suggestions={c.persona.assistantPrompts} placeholder="Ask about applications, agents or listings…" />
             </div>
-          </section>
-          <div className="grid grid-cols-2 gap-3 self-start">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
+            </CollapseBody>
+          </Collapsible>
+          <div className="grid grid-cols-2 gap-3 self-start xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid-cols-4">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>
 
         <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
@@ -110,12 +115,12 @@ export default async function BrokerDesk() {
               {flags.length ? (
                 <ul className="divide-y">
                   {flags.slice(0, 8).map((f) => (
-                    <li key={f.id} className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/app/leasing/listings/${f.id}`} className="min-w-0 flex-1 truncate font-medium hover:text-primary hover:underline">{f.property}{f.unit ? ` #${f.unit}` : ""} · {f.headline}</Link>
-                        <Button asChild size="sm" variant="outline"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
+                    <li key={f.id} className="flex items-center gap-2 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/app/leasing/listings/${f.id}`} className="block truncate font-medium hover:text-primary hover:underline">{f.property}{f.unit ? ` #${f.unit}` : ""} · {f.headline}</Link>
+                        <p className="mt-1 text-[12.5px]">{f.flags.map((x) => <span key={x.phrase + x.index} className="mr-2 inline-block"><span className="rounded bg-tone-danger/10 px-1 text-tone-danger">“{x.phrase}”</span> <span className="text-muted-foreground">{x.category}</span></span>)}</p>
                       </div>
-                      <p className="mt-1 text-[12.5px]">{f.flags.map((x) => <span key={x.phrase + x.index} className="mr-2 inline-block"><span className="rounded bg-tone-danger/10 px-1 text-tone-danger">“{x.phrase}”</span> <span className="text-muted-foreground">{x.category}</span></span>)}</p>
+                      <Button asChild size="sm" variant="outline" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
                     </li>
                   ))}
                 </ul>

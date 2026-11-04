@@ -2,9 +2,9 @@
 
 import Link from "@/components/Link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatNumber, formatRelative } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ActionBar } from "@/components/entity/RecordActions";
+import { RecordSummary } from "@/components/entity/RecordSummary";
 import type { PeekData } from "@/components/entity/peek";
 import { IssueFix } from "@/ai/ui/IssueFix";
 import { DataHealthBadge } from "../ai/DataHealthBadge";
@@ -161,15 +162,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
         )}
 
         {p.summary !== false && (
-          <section className="rounded-lg border border-tone-ai/25 bg-tone-ai/[0.04] p-3">
-            <h3 className="flex items-center gap-1.5 text-[12.5px] font-semibold"><Sparkles className="size-3.5 text-tone-ai" />AI summary</h3>
-            {p.summary
-              ? <>
-                  <p className="mt-1.5 text-[13px] leading-relaxed">{p.summary.summary}</p>
-                  <p className="mt-2 text-[11px] text-muted-foreground">{p.summary.source === "rules" ? "Rules · from this record's current figures" : `${p.summary.source === "live" ? "Generated" : "Precomputed"} · ${p.summary.model} · ${formatRelative(p.summary.generated_at)}`}</p>
-                </>
-              : <p className="mt-1.5 text-[12.5px] text-muted-foreground">No summary yet for this {p.label.one.toLowerCase()}. Ask the assistant about it instead.</p>}
-          </section>
+          <RecordSummary key={id} entity={p.entity} id={id} title={p.title} label={p.label.one} initial={p.summary} heading="h3" onAsk={onAsk} />
         )}
 
         {p.health && p.health.length > 0 && (

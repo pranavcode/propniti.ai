@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { AIBadge } from "@/components/app/ai";
+import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { AGENT_LABEL, type ProposalJson } from "@/ai/ui/client";
 import { ApprovalQueue, HomeAsk } from "@/extensions/portfolio/home/client";
 import { financeHome, type BriefingItem } from "./data";
@@ -55,13 +56,17 @@ export async function FinanceHome({ session }: { session: Session }) {
       />
       <PageBody>
         <div className="grid gap-3 xl:grid-cols-12">
-          <section data-tour="briefing" className="flex flex-col rounded-xl border bg-card xl:col-span-8">
-            <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+          <Collapsible id="briefing" label="Briefing" data-tour="briefing" className="peer/brief flex flex-col rounded-xl border bg-card xl:col-span-8 xl:data-collapsed:col-span-full">
+            <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3 group-data-collapsed/collapse:flex-nowrap group-data-collapsed/collapse:border-b-0">
               <span className="flex size-6 items-center justify-center rounded-md bg-tone-ai/10 text-tone-ai"><Sparkles className="size-3.5" /></span>
-              <h2 className="text-[13.5px] font-semibold">Briefing</h2>
-              <span className="text-[12px] text-muted-foreground">Payables, banking and budget as of {h.today}</span>
-              <AIBadge source="rules" className="ml-auto" />
+              <h2 className="shrink-0 text-[13.5px] font-semibold">Briefing</h2>
+              <WhenExpanded><span className="text-[12px] text-muted-foreground">Payables, banking and budget as of {h.today}</span></WhenExpanded>
+              <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${h.briefing.needs.length} need you · ${h.briefing.watch.length} to watch`}</span></WhenCollapsed>
+              <AIBadge source="rules" className="ml-auto max-sm:group-data-collapsed/collapse:hidden" />
+              <CollapseButton className="-mr-1.5 max-sm:group-data-collapsed/collapse:ml-auto" />
             </header>
+            <CollapseBody className="flex-1">
+            <div className="flex h-full flex-col">
             <div className="grid flex-1 md:grid-cols-3 md:divide-x">
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">What happened</h3>
@@ -85,8 +90,10 @@ export async function FinanceHome({ session }: { session: Session }) {
               </div>
             </div>
             <footer className="border-t px-4 py-2 text-[11.5px] text-muted-foreground">Every figure comes from bills, bank lines, the journal and budgets. Rules pick what to show; click any line for the records behind it.</footer>
-          </section>
-          <div className="flex flex-col gap-3 xl:col-span-4" data-tour="ask-home">
+            </div>
+            </CollapseBody>
+          </Collapsible>
+          <div className="flex flex-col gap-3 xl:col-span-4 xl:peer-data-collapsed/brief:col-span-full" data-tour="ask-home">
             <HomeAsk suggestions={persona.assistantPrompts} />
             <div className="flex flex-wrap gap-1.5">
               <Button asChild size="sm" variant="outline"><Link href="/app/ai/approvals?agent=ap"><Inbox />Approvals{h.queue.total ? ` (${h.queue.total})` : ""}</Link></Button>

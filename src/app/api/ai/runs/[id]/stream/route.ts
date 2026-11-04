@@ -1,7 +1,7 @@
 import { dataOf, staffSession } from "@/ai/http";
 import { runDetail } from "@/ai/views";
 
-// Live run trace as server-sent events: "step" for each new agent_steps row, "run" when the run's
+// Live run trace as server-sent events: "refs" then "step" for each batch of new agent_steps rows, "run" when the run's
 // status changes, "end" when it finishes. Steps are read from the database every 400 ms, so the
 // stream works whichever isolate runs the agent. Clients fall back to polling /api/ai/runs/<id>.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +20,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const deadline = Date.now() + 90_000;
       try {
         for (let r = first; ; ) {
+          // Names and links for the records the new steps mention, ahead of the steps themselves.
+          if (r.steps.length) send("refs", r.refs);
           for (const step of r.steps) {
             send("step", step);
             last = Math.max(last, step.idx);
