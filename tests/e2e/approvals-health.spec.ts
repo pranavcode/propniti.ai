@@ -1,0 +1,64 @@
+import { expect as baseExpect, test } from "@playwright/test";
+import { as, BASE, go, watch } from "./helpers";
+
+// Approvals inbox filters that survive paging and URL links, "approve all matching" with a count,
+// and Data Health honouring the record and rule
+// links other pages send, with removable filter pills and bulk actions across pages.
+
+test.describe.configure({ timeout: 240_000 });
+const expect = baseExpect.configure({ timeout: 60_000 });
+
+test("Daniel's High-risk link keeps its filter on page 2 and in the URL", async ({ page, context }) => {
+  await as(context, "daniel");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/ai/approvals?f.risk=High`);
+  await expect(page.getByRole("button", { name: /^High risk/ })).toHaveAttribute("aria-pressed", "true");
+  const items = page.locator("article[id^=proposal-]");
+  await expect(items.first()).toBeVisible();
+  for (const risk of await items.locator("text=/^(Low|Medium|High) risk$/").allInnerTexts()) expect(risk).toBe("High risk");
+  const next = page.getByRole("button", { name: "Next" });
+  if (await next.isVisible() && await next.isEnabled()) {
+    await next.click();
+    await expect(page.getByText(/^Page 2 of/)).toBeVisible();
+    for (const risk of await items.locator("text=/^(Low|Medium|High) risk$/").allInnerTexts()) expect(risk).toBe("High risk");
+  }
+  // Another filter joins the risk one in the URL; clearing drops both.
+  await page.getByRole("button", { name: /^Agent/ }).click();
+  await page.getByRole("menuitemradio").nth(1).click();
+  await expect(page).toHaveURL(/[?&]risk=High/);
+  await expect(page).toHaveURL(/[?&]agent=/);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page).not.toHaveURL(/risk=|agent=/);
+  expect(errors).toEqual([]);
+});
+
+test("Marcus sees how many low-risk items match on every page before approving them", async ({ page, context }) => {
+  await as(context, "marcus");
+  await go(page, `${BASE}/app/ai/approvals?risk=Low`);
+  await page.getByRole("button", { name: "Approve all low-risk matching" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: /^(Approve \d+ low-risk items?\?|Nothing to approve in bulk)$/ })).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+});
+
+test("Data Health honours rule and record links, shows removable pills and bulk counts", async ({ page, context }) => {
+  await as(context, "marcus");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/data-health?f.rule_id=bill_lines.gl_miscoded`);
+  await expect(page.getByText(/^Rule: /)).toBeVisible();
+  await expect(page.locator("code", { hasText: /^bill_lines\.gl_miscoded$/ }).first()).toBeVisible();
+  await expect(page.locator("code").filter({ hasNotText: /^bill_lines\.gl_miscoded$/ })).toHaveCount(0);
+  // GL recodes move money: the rule's fixes go to the approvals inbox in one click, after a confirm.
+  await page.getByRole("button", { name: /^Send all \d+\+? for approval$/ }).click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: /^Send \d+ fixes for approval\?$/ })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("link", { name: "Remove rule filter" }).click();
+  await expect(page).not.toHaveURL(/rule/);
+
+  // A record link (as the record page and drawer send it): only that lease's issues, as a pill.
+  await go(page, `${BASE}/app/data-health?f.entity_id=L-10094`);
+  await expect(page.getByText("Record: L-10094")).toBeVisible();
+  await expect(page.getByText(/^1 issues · page 1 of 1$/)).toBeVisible();
+  expect(errors).toEqual([]);
+});

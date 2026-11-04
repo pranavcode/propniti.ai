@@ -1,6 +1,6 @@
-// URL filters for the Data Health page. Links across the app use the list pages' `f.<column>`
-// form (?f.entity_id=l1, ?f.rule_id=…); the page also takes the short names it writes itself.
-// Unknown values are dropped, long ones refused.
+// URL filters for the approvals inbox and the Data Health page. Links across the app use the list
+// pages' `f.<column>` form (?f.risk=High, ?f.entity_id=l1, ?f.rule_id=…); both pages also take the
+// short names they write themselves. Unknown values are dropped, long ones refused.
 
 type Params = Record<string, string | string[] | undefined> | URLSearchParams;
 
@@ -11,6 +11,20 @@ const read = (sp: Params, ...keys: string[]) => {
   }
   return undefined;
 };
+
+export const RISKS = ["High", "Medium", "Low"] as const;
+export type ProposalFilters = { agent?: string; risk?: string; property?: string; entity?: string };
+
+export function approvalFilters(sp: Params): ProposalFilters {
+  const risk = read(sp, "risk", "f.risk");
+  const f: ProposalFilters = {
+    agent: read(sp, "agent", "f.agent"),
+    risk: RISKS.find((r) => r.toLowerCase() === risk?.toLowerCase()),
+    property: read(sp, "property", "f.property_id"),
+    entity: read(sp, "entity", "f.entity_type"),
+  };
+  return Object.fromEntries(Object.entries(f).filter(([, v]) => v)) as ProposalFilters;
+}
 
 export type IssueFilters = { severity?: string; rule?: string; property?: string; entity?: string; entity_id?: string; issue?: string };
 
