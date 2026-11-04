@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { AlarmClock, Loader2, Mail, MoreHorizontal, UserRoundPen } from "lucide-react";
+import { AlarmClock, Cpu, Loader2, Mail, MoreHorizontal, UserRoundPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AIBadge } from "@/components/app/ai";
 import { apiJson } from "@/components/app/forms/api";
 import type { Row } from "@/components/app/data-table/types";
 
@@ -193,7 +192,7 @@ function NoticeDialog({ row, onClose, onDone }: { row: Row | null; onClose: () =
         {loadError && <p role="alert" className="rounded-md border border-tone-danger/25 bg-tone-danger/5 px-3 py-2 text-[12.5px] text-tone-danger">{loadError}</p>}
         {draft && (
           <form id={`${uid}-f`} onSubmit={send} className="space-y-3">
-            <p className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground"><AIBadge source="rules" size="xs" />Drafted from the notice template and the unit&apos;s current lease, then checked by the message rules. Nothing is sent until you press Send.</p>
+            <p className="text-[12px] text-muted-foreground"><span className="mr-1.5 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] text-foreground"><Cpu className="size-3" />Template draft</span>Drafted from the notice template and the unit&apos;s current lease, then checked by the message rules. Nothing is sent until you press Send.</p>
             <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2">
               <div className="space-y-1.5">
                 <label htmlFor={`${uid}-to`} className="block text-[12.5px] font-medium">To</label>
