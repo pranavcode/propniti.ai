@@ -79,7 +79,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
         <div className="rounded-lg border bg-card p-4">
           <div className="text-[12px] text-muted-foreground">Portfolio data health</div>
           <div className={cn("mt-1 text-[34px] leading-none font-semibold tabular-nums", TEXT[tone(health.score)])}>{health.score}</div>
-          <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" />
+          <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" bare />
           <p className="mt-2 text-[12px] text-muted-foreground">
             {health.open.toLocaleString("en-US")} open issues.{" "}
             <Tooltip>
@@ -92,8 +92,8 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           {health.modules.slice(0, 8).map((m) => (
             <Link key={m.module} href={qs({ entity: m.entities[0], page: undefined })} className="rounded-lg border bg-card p-3 hover:bg-muted/40">
               <div className="flex items-center justify-between text-[12px]"><span className="font-medium capitalize">{m.module.replace(/_/g, " ")}</span><span className={cn("font-semibold tabular-nums", TEXT[tone(m.score)])}>{m.score}</span></div>
-              <Meter value={m.score / 100} tone={tone(m.score)} className="mt-2" />
-              <div className="mt-1.5 text-[11.5px] text-muted-foreground">{m.open} open · {m.entities.map((e) => e.replace(/_/g, " ")).join(", ")}</div>
+              <Meter value={m.score / 100} tone={tone(m.score)} className="mt-2" bare />
+              <div className="mt-1.5 text-[11.5px] text-muted-foreground">{m.open.toLocaleString("en-US")} open · {m.entities.map((e) => e.replace(/_/g, " ")).join(", ")}</div>
             </Link>
           ))}
         </div>
@@ -131,7 +131,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             <h2 className="border-b px-3 py-2 text-[13px] font-semibold">By property</h2>
             <ul className="max-h-[420px] overflow-y-auto">
               {[...health.properties].sort((a, b) => a.score - b.score).map((p) => (
-                <li key={p.id}><Link href={qs({ property: p.id, page: undefined })} className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40"><span className="min-w-0 flex-1 truncate">{p.name}</span><span className="text-[11px] text-muted-foreground">{p.open}</span><span className={cn("w-8 text-right font-semibold tabular-nums", TEXT[tone(p.score)])}>{p.score}</span></Link></li>
+                <li key={p.id}><Link href={qs({ property: p.id, page: undefined })} className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40"><span className="min-w-0 flex-1 truncate">{p.name}</span><span className="text-[11px] text-muted-foreground">{p.open.toLocaleString("en-US")}</span><span className={cn("w-8 text-right font-semibold tabular-nums", TEXT[tone(p.score)])}>{p.score}</span></Link></li>
               ))}
             </ul>
           </div>
@@ -139,7 +139,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             <h2 className="border-b px-3 py-2 text-[13px] font-semibold">Rules</h2>
             <ul>
               {health.rules.map((r) => (
-                <li key={r.id}><Link href={qs({ rule: r.id, page: undefined })} className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40"><span className="min-w-0 flex-1 truncate">{r.name}</span><span className="text-[11px] text-muted-foreground">{r.fixed} fixed</span><span className="w-6 text-right font-medium tabular-nums">{r.open}</span></Link></li>
+                <li key={r.id}><Link href={qs({ rule: r.id, page: undefined })} className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40"><span className="min-w-0 flex-1 truncate">{r.name}</span><span className="text-[11px] text-muted-foreground">{r.fixed.toLocaleString("en-US")} fixed</span><span className="min-w-6 text-right font-medium tabular-nums">{r.open.toLocaleString("en-US")}</span></Link></li>
               ))}
             </ul>
           </div>

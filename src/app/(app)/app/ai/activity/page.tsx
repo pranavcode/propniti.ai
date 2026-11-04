@@ -5,6 +5,7 @@ import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { AIBadge } from "@/components/app/ai";
 import { cn } from "@/lib/utils";
+import { formatNumber } from "@/lib/format";
 import { sql } from "@/ai/data";
 import { AGENT_LABEL, agentName, runStatusLabel } from "@/ai/ui/labels";
 import { PERMISSIONS } from "@/auth/personas";
@@ -57,10 +58,10 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                         <td className="px-3"><StatusBadge value={String(r.status)} label={runStatusLabel(String(r.status))} tone={TONE[r.status as keyof typeof TONE] ?? "neutral"} /></td>
                         <td className="px-3 text-muted-foreground">{TRIGGER[String(r.trigger_kind)] ?? String(r.trigger_kind)}</td>
                         <td className="px-3 whitespace-nowrap"><RelativeDate value={String(r.started_at)} /></td>
-                        <td className="px-3 tabular-nums">{Number(r.steps)}</td>
-                        <td className="px-3 tabular-nums">{Number(r.proposals)}</td>
+                        <td className="px-3 tabular-nums">{formatNumber(Number(r.steps))}</td>
+                        <td className="px-3 tabular-nums">{formatNumber(Number(r.proposals))}</td>
                         <td className="px-3"><AIBadge size="xs" source={!r.model || r.model === "rules" ? "rules" : "precomputed"} model={String(r.model ?? "rules")} /></td>
-                        <td className="px-3 text-muted-foreground tabular-nums">{Number(r.tokens_in) + Number(r.tokens_out) || "—"}</td>
+                        <td className="px-3 text-muted-foreground tabular-nums">{formatNumber(Number(r.tokens_in) + Number(r.tokens_out) || null)}</td>
                         <td className="max-w-md truncate px-3 text-muted-foreground" title={String(r.summary ?? r.error ?? "")}>{String(r.summary ?? r.error ?? "")}</td>
                       </tr>
                     ))}

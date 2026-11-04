@@ -5,7 +5,7 @@ import "@/entities";
 import { can } from "@/entities";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatPct } from "@/lib/format";
+import { formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { list, metrics } from "@/server/query";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ export default async function PortfolioDashboard() {
                       </div>
                       <div className="px-3 py-2.5">
                         <div className="truncate text-[13.5px] font-semibold group-hover:text-primary">{String(p.name)}</div>
-                        <div className="truncate text-[12px] text-muted-foreground">{String(p.type)}{p.class ? ` · Class ${p.class}` : ""} · {Number(p.units ?? 0)} units</div>
+                        <div className="truncate text-[12px] text-muted-foreground">{String(p.type)}{p.class ? ` · Class ${p.class}` : ""} · {formatNumber(Number(p.units ?? 0))} units</div>
                         <dl className="mt-2 grid grid-cols-3 gap-2 border-t pt-2 text-[12px] tabular-nums">
                           <div><dt className="text-[11px] text-muted-foreground">Occupancy</dt><dd className={cn("font-medium", occupancy != null && occupancy < 0.9 && "text-tone-warning")}>{occupancy == null ? "—" : formatPct(occupancy, 1)}</dd></div>
                           <div><dt className="text-[11px] text-muted-foreground">NOI</dt><dd className="font-medium">{p.noi_month == null ? "—" : formatMoney(Number(p.noi_month), "compact")}</dd></div>

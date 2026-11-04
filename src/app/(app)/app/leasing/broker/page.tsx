@@ -8,7 +8,7 @@ import { KpiTile, type KpiData } from "@/components/entity/Metrics";
 import { AGENT_NAME, fairHousingFlags, kpis, leasingAgents, leasingCtx, leasingProposals, sourceOf, staleLeadsByAgent, waitingApplications } from "@/extensions/leasing/data";
 import { ReassignLeads, SendFollowUps } from "@/extensions/leasing/ui/BulkLeads";
 import { AskPanel, ProposalQueue, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
-import { formatMoney, formatPct } from "@/lib/format";
+import { formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -62,7 +62,7 @@ export default async function BrokerDesk() {
             </div>
             <CollapseBody>
             <ul className="flex flex-col gap-1.5 p-4 text-[13px]">
-              <li><Link href="#approvals" className="hover:text-primary"><span className="font-semibold tabular-nums">{apps.total}</span> application{apps.total === 1 ? "" : "s"} waiting on you{oldest ? <>, the oldest for <span className="font-semibold tabular-nums">{Number(oldest.waiting)}</span> days ({String(oldest.applicant)})</> : null}.</Link></li>
+              <li><Link href="#approvals" className="hover:text-primary"><span className="font-semibold tabular-nums">{formatNumber(apps.total)}</span> application{apps.total === 1 ? "" : "s"} waiting on you{oldest ? <>, the oldest for <span className="font-semibold tabular-nums">{Number(oldest.waiting)}</span> days ({String(oldest.applicant)})</> : null}.</Link></li>
               {unscored > 0 && <li className="text-muted-foreground"><span className="font-semibold text-foreground tabular-nums">{unscored}</span> of the ones shown have no AI score yet; open one and choose “Score with AI”.</li>}
               <li><Link href="#compliance" className={cn("hover:text-primary", flags.length && "text-tone-danger")}><span className="font-semibold tabular-nums">{flags.length}</span> listing{flags.length === 1 ? "" : "s"} with fair-housing wording to fix.</Link></li>
               {agents.filter((a) => a.stale > 0).sort((a, b) => b.stale - a.stale).slice(0, 1).map((a) => (

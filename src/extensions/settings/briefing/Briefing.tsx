@@ -15,7 +15,7 @@ import { CollapsibleSection } from "@/components/app/collapsible/Collapsible";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
-import { personaGreeting } from "@/lib/format";
+import { formatNumber, personaGreeting } from "@/lib/format";
 import { metrics, type QueryCtx } from "@/server/query";
 import { asOf, count, rows } from "../data";
 import { BriefingAsk, RecentlyViewed } from "./client";
@@ -81,16 +81,16 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
   // Danger before warning, then the largest count.
   const top = riskList.reduce<Risk | null>((a, r) => (!a || (r.tone === "danger" && a.tone !== "danger") || (r.tone === a.tone && r.n > a.n) ? r : a), null);
   const sentence = [
-    runs.length ? `Since yesterday ${byAgent.size} ${byAgent.size === 1 ? "agent" : "agents"} ran ${runs.length} ${runs.length === 1 ? "time" : "times"} and handled ${autoNight} ${autoNight === 1 ? "item" : "items"} within policy.` : "No agent runs since yesterday.",
-    needs ? `${needs} ${needs === 1 ? "decision needs" : "decisions need"} you${high ? `, ${high} high risk` : ""}.` : "Nothing is waiting on your approval.",
+    runs.length ? `Since yesterday ${byAgent.size} ${byAgent.size === 1 ? "agent" : "agents"} ran ${formatNumber(runs.length)} ${runs.length === 1 ? "time" : "times"} and handled ${formatNumber(autoNight)} ${autoNight === 1 ? "item" : "items"} within policy.` : "No agent runs since yesterday.",
+    needs ? `${formatNumber(needs)} ${needs === 1 ? "decision needs" : "decisions need"} you${high ? `, ${formatNumber(high)} high risk` : ""}.` : "Nothing is waiting on your approval.",
     top ? `Biggest risk: ${top.n.toLocaleString("en-US")} ${top.label.charAt(0).toLowerCase()}${top.label.slice(1)}.` : "",
   ].filter(Boolean).join(" ");
 
   const tiles = [
-    { label: "Needs you", value: needs + overdueTasks, sub: `${needs} approvals · ${overdueTasks} overdue tasks`, href: "/app/ai/approvals", icon: <AlertTriangle />, tone: needs + overdueTasks ? "text-tone-warning" : "text-muted-foreground" },
+    { label: "Needs you", value: needs + overdueTasks, sub: `${formatNumber(needs)} approvals · ${formatNumber(overdueTasks)} overdue tasks`, href: "/app/ai/approvals", icon: <AlertTriangle />, tone: needs + overdueTasks ? "text-tone-warning" : "text-muted-foreground" },
     { label: "Handled by agents", value: autoNight, sub: "Since yesterday, within policy", href: "/app/ai/approvals?tab=auto_handled", icon: <CheckCircle2 />, tone: "text-tone-success" },
     { label: "Waiting on others", value: waiting, sub: "Owner approvals and replies", href: "/app/ai/approvals?tab=waiting", icon: <Hourglass />, tone: "text-tone-info" },
-    { label: "Agent runs", value: runs.length, sub: failed ? `${failed} failed` : "Since yesterday, none failed", href: "/app/ai/activity", icon: <Bot />, tone: failed ? "text-tone-danger" : "text-tone-ai" },
+    { label: "Agent runs", value: runs.length, sub: failed ? `${formatNumber(failed)} failed` : "Since yesterday, none failed", href: "/app/ai/activity", icon: <Bot />, tone: failed ? "text-tone-danger" : "text-tone-ai" },
   ];
 
   return (
@@ -120,7 +120,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           {canAi && (
-            <CollapsibleSection id="needs-you" title="What needs you" summary={`${needs.toLocaleString("en-US")} waiting${high ? `, ${high} high risk` : ""}`} description="Agent proposals over a policy limit, highest risk first. Approving runs the action and logs it." actions={needs > queue.rows.length ? <Link href="/app/ai/approvals" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline">All {needs} <ArrowRight className="size-3" /></Link> : undefined}>
+            <CollapsibleSection id="needs-you" title="What needs you" summary={`${needs.toLocaleString("en-US")} waiting${high ? `, ${formatNumber(high)} high risk` : ""}`} description="Agent proposals over a policy limit, highest risk first. Approving runs the action and logs it." actions={needs > queue.rows.length ? <Link href="/app/ai/approvals" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline">All {needs} <ArrowRight className="size-3" /></Link> : undefined}>
               {!queue.rows.length ? (
                 <EmptyState compact kind="table" title="Nothing waiting on you" description="When an agent proposes something over your approval limit, it shows up here with its reasons and evidence." />
               ) : (
