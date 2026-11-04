@@ -13,7 +13,7 @@ describe("bulk actions on lists", () => {
 
   it("include any one-click action marked bulk, and never money or input actions", () => {
     const keys = (k: string, role: Parameters<typeof bulkActions>[1]) => bulkActions(def(k), role).map((a) => a.key);
-    expect(keys("listings", "property_manager")).toEqual(expect.arrayContaining(["listings.publish", "listings.pause"]));
+    expect(keys("renters_insurance", "property_manager")).toContain("renters_insurance.send_reminder");
     expect(keys("late_fee_policies", "property_manager")).not.toContain("late_fee_policies.post_late_fees");
     expect(keys("bank_transactions", "accountant")).not.toContain("bank_transactions.match");
   });
