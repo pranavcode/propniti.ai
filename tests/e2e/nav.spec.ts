@@ -38,3 +38,13 @@ for (const persona of [...STAFF, ...PORTALS]) {
     expect(dead, `dead ends for ${persona}`).toEqual([]);
   });
 }
+
+// The persona's home is in the sidebar and highlighted.
+const HOMES: Record<string, string> = { daniel: "/app", priya: "/app", marcus: "/app/today", lena: "/app/leasing/today", rachel: "/app/leasing/broker", grace: "/app/finance", tom: "/app/maintenance", sam: "/app/admin", nadia: "/app/admin" };
+for (const [persona, home] of Object.entries(HOMES)) {
+  test(`${persona}: home ${home} is in the sidebar and highlighted`, async ({ page, context }) => {
+    await as(context, persona);
+    await go(page, home);
+    await expect(page.locator(`nav[aria-label="Main"] a[href="${home}"][aria-current="page"]`)).toBeVisible();
+  });
+}

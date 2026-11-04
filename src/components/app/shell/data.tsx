@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { Activity, Bot, CheckSquare, HeartPulse, Inbox, LayoutDashboard, LineChart, Settings, ShieldCheck, Sparkles, Workflow } from "lucide-react";
+import { Activity, Bot, CheckSquare, HeartPulse, Inbox, LayoutDashboard, LineChart, Newspaper, Settings, ShieldCheck, Sparkles, Workflow, Wrench } from "lucide-react";
 import { allEntities, can, getEntity, navTree, registerPage, INTERNAL_ROLES, type Role } from "@/entities";
 import { PERMISSIONS, PERSONAS, PN_AS, type Persona } from "@/auth/personas";
 import { currentPersona } from "@/auth/session";
@@ -13,6 +13,8 @@ import { SECTION_LABEL, type Density, type ShellData, type ShellPersona, type Th
 const STAFF = [...INTERNAL_ROLES] as Role[];
 const withModule = (m: keyof (typeof PERMISSIONS)["admin"]) => STAFF.filter((r) => (PERMISSIONS[r][m] ?? "none") !== "none");
 registerPage({ key: "home.dashboard", label: "Dashboard", href: "/app", icon: LayoutDashboard, section: "home", order: 1, roles: STAFF });
+registerPage({ key: "home.briefing", label: "Briefing", href: "/app/admin", icon: Newspaper, section: "home", order: 0, roles: ["admin", "platform_admin"] });
+registerPage({ key: "home.maintenance", label: "Maintenance desk", href: "/app/maintenance", icon: Wrench, section: "home", order: 0, roles: ["maintenance_supervisor"] });
 registerPage({ key: "home.inbox", label: "Inbox", href: "/app/inbox", icon: Inbox, section: "home", order: 2, roles: STAFF, ai: true });
 registerPage({ key: "home.tasks", label: "My tasks", href: "/app/tasks", icon: CheckSquare, section: "home", order: 3, roles: STAFF });
 registerPage({ key: "finance.reports", label: "Reports", href: "/app/reports", icon: LineChart, section: "finance", order: 90, roles: REPORT_ROLES });
