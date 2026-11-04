@@ -1,5 +1,6 @@
 import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
+import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { effective } from "@/server/query";
 import { handle, json, writeCtx } from "../../e/_lib/http";
 import { recipientIds } from "../shared";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
        WHERE user_id IN (SELECT value FROM json_each(?3)) AND read_at IS NULL${filter.replace("?", "?4")}
        ON CONFLICT (workspace_id, id) DO UPDATE SET read_at = coalesce(notifications.read_at, excluded.read_at)`,
     ).bind(...binds).run();
+    forgetInboxCounts(ctx.ws);
     return json({ marked: res.meta?.changes ?? 0 }, 200, setCookie);
   });
 }

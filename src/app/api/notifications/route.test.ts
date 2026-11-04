@@ -28,6 +28,9 @@ beforeAll(async () => {
     ["n3", "marcus", "Bad link", "javascript:alert(1)", "2026-10-26T09:00:00Z"],
     ["n4", "grace", "Reconciliation ready", "/app/banking", "2026-10-28T08:00:00Z"],
     ["n5", "res-p01-0001", "Rent receipt", "/portal/resident", "2026-10-28T08:00:00Z"],
+    ["n6", "lena", "Backslash host", "/\\evil.com", "2026-10-28T08:00:00Z"],
+    ["n7", "lena", "Protocol-relative host", "//evil.com", "2026-10-28T07:00:00Z"],
+    ["n8", "lena", "Tour booked", "/app/leasing/showings", "2026-10-28T06:00:00Z"],
   ];
   for (const [id, user, title, href, at] of rows) {
     await db.prepare("INSERT INTO notifications (workspace_id, id, user_id, title, href, at) VALUES ('base', ?, ?, ?, ?, ?)").bind(id, user, title, href, at).run();
@@ -40,6 +43,11 @@ describe("notifications", () => {
     expect(body.unread).toBe(3);
     expect(body.rows.map((r: { id: string }) => r.id)).toEqual(["n2", "n1", "n3"]);
     expect(body.rows[2].href).toBeNull();
+  });
+
+  it("drops links that browsers read as another site", async () => {
+    const body = await (await feed.GET(req("/api/notifications", { persona: "lena" }))).json();
+    expect(body.rows.map((r: { id: string; href: string | null }) => [r.id, r.href])).toEqual([["n6", null], ["n7", null], ["n8", "/app/leasing/showings"]]);
   });
 
   it("includes a portal user's record id", async () => {

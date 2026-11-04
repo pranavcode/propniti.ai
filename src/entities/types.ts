@@ -269,7 +269,7 @@ export type Actor = { personaId: string; name: string; role: Role; scope: Scope;
 export type ActionContext = { db: Db; ws: string; actor: Actor; nowMs: number };
 
 // Matches money.ts Outcome so money actions can return it unchanged.
-export type ActionResult = { status: 200; message?: string; href?: string } | { status: 400 | 403 | 404 | 409; error: string };
+export type ActionResult = { status: 200; message?: string; href?: string } | { status: 202; message: string; proposalId: string } | { status: 400 | 403 | 404 | 409; error: string };
 
 export type ActionDef<I = unknown> = {
   key: ActionKey;
