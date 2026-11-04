@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { fillTemplate } from "@/components/app/data-table/params";
-import { formatMoney, formatNumber, formatPct } from "@/lib/format";
+import { formatCountDelta, formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // KPI tiles and chart panels fed by metrics() (plain data). Every tile and chart point links to
@@ -39,8 +39,10 @@ export type KpiData = { key: string; label: string; format: Fmt; value: number |
 export function KpiTile({ k }: { k: KpiData }) {
   const delta = k.value != null && k.previous != null && k.previous !== 0 ? (k.value - k.previous) / Math.abs(k.previous) : null;
   const pctPoints = k.format === "pct" && k.value != null && k.previous != null ? (k.value - k.previous) * 100 : null;
-  const up = (pctPoints ?? delta ?? 0) > 0;
-  const flat = (pctPoints ?? delta ?? 0) === 0;
+  // Counts move by how many: a percentage of a small base ("380%") says little.
+  const countChange = k.format === "count" && k.value != null && k.previous != null ? formatCountDelta(k.value, k.previous) : null;
+  const up = (pctPoints ?? delta ?? 0) > 0 || (countChange != null && k.value! > k.previous!);
+  const flat = countChange != null ? k.value === k.previous : (pctPoints ?? delta ?? 0) === 0;
   const good = flat || !k.goodWhen ? null : (up && k.goodWhen === "up") || (!up && k.goodWhen === "down");
   const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
   const body = (
@@ -53,10 +55,10 @@ export function KpiTile({ k }: { k: KpiData }) {
         <div className="flex items-end justify-between gap-2">
           <div>
             <div className="text-[22px] font-semibold leading-none tracking-tight tabular-nums">{fmt(k.value, k.format, true)}</div>
-            {(delta != null || pctPoints != null) && (
+            {(delta != null || pctPoints != null || countChange != null) && (
               <div className={cn("mt-1.5 inline-flex items-center gap-0.5 text-[11.5px] font-medium tabular-nums", good == null ? "text-muted-foreground" : good ? "text-tone-success" : "text-tone-danger")}>
                 <Icon className="size-3.5" />
-                {pctPoints != null ? `${Math.abs(pctPoints).toFixed(1)} pts` : `${Math.abs(delta! * 100).toFixed(1)}%`}
+                {pctPoints != null ? `${Math.abs(pctPoints).toFixed(1)} pts` : countChange != null ? countChange.replace(/^[+−]/, "") : `${Math.abs(delta! * 100).toFixed(1)}%`}
                 <span className="font-normal text-muted-foreground">vs last month</span>
               </div>
             )}

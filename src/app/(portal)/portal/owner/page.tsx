@@ -60,7 +60,7 @@ export default async function OwnerHome() {
         <KpiCard label={`Distributed, ${last ? monthLabel(last.month) : "last month"}`} value={last?.amount ?? null} previous={prev?.amount} format="money" spark={distPoints.map((p) => p.amount)} href="/portal/owner/statements" />
         <KpiCard label="Net operating income" value={m?.noi ?? null} previous={pm?.noi} format="money" spark={months.map((x) => x.noi)} footnote={m?.budget != null ? <span>Budget <Money value={m.budget} style="whole" /></span> : undefined} href="/portal/owner/properties" />
         <KpiCard label="Occupancy" value={m?.occupancy ?? null} previous={pm?.occupancy} format="pct" spark={months.flatMap((x) => (x.occupancy == null ? [] : [x.occupancy]))} href="/portal/owner/properties" />
-        <KpiCard label="Rent collected" value={m?.collections ?? null} previous={pm?.collections} format="pct" spark={months.flatMap((x) => (x.collections == null ? [] : [x.collections]))} help="Rent collected as a share of rent charged in the month." />
+        <KpiCard label="Rent collected" value={m?.collections ?? null} previous={pm?.collections} format="pct" spark={months.flatMap((x) => (x.collections == null ? [] : [x.collections]))} help="Share of the month's rent and fees paid so far. A late payment counts for the month it pays, not the month it arrives." />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">

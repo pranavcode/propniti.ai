@@ -31,13 +31,13 @@ function scopeSql(ctx: MetricCtx, params: MetricParams, col = "property_id") {
 }
 
 // Live changes the visitor made this month that the precomputed base doesn't know about:
-// payments recorded and work orders opened in their overlay.
+// payments recorded toward this month's charges and work orders opened in their overlay.
 async function liveDelta(ctx: MetricCtx, params: MetricParams, month: string): Promise<Partial<MonthSums>> {
   if (!ctx.ws) return {};
   const s = scopeSql(ctx, params);
   const newRows = (t: string) => `workspace_id = ? AND deleted = 0 AND id NOT IN (SELECT id FROM ${t} WHERE workspace_id = 'base')`;
   const [pay, wo] = await Promise.all([
-    ctx.db.prepare(`SELECT coalesce(sum(amount_cents), 0) AS c FROM payments WHERE ${newRows("payments")} AND nsf = 0 AND substr(received_on, 1, 7) = ?${s.sql}`).bind(ctx.ws, month, ...s.binds).first<{ c: number }>(),
+    ctx.db.prepare(`SELECT coalesce(sum(amount_cents), 0) AS c FROM payments WHERE ${newRows("payments")} AND nsf = 0 AND charge_id IN (SELECT id FROM charges WHERE workspace_id IN ('base', ?) AND deleted = 0 AND period = ?)${s.sql}`).bind(ctx.ws, ctx.ws, month, ...s.binds).first<{ c: number }>(),
     ctx.db.prepare(`SELECT count(*) AS n, sum(substr(opened_at, 1, 7) = ?) AS opened FROM work_orders WHERE ${newRows("work_orders")} AND status NOT IN ('Completed', 'Paid', 'Cancelled')${s.sql}`).bind(month, ctx.ws, ...s.binds).first<{ n: number; opened: number | null }>(),
   ]);
   return { collected_cents: Number(pay?.c ?? 0), wo_open: Number(wo?.n ?? 0), wo_opened: Number(wo?.opened ?? 0) };
@@ -58,6 +58,10 @@ export async function monthSeries(ctx: MetricCtx, params: MetricParams): Promise
 }
 
 const ratio = (a: number, b: number) => (b ? a / b : null);
+// Collections rate: the month's charges paid so far ÷ the month's charges. collected_cents is the
+// ledger allocation to that month's charges (oldest charge first), so paying down an older
+// balance never counts here; the cap only guards a live payment larger than its charge.
+const collectionsRate = (m: MonthSums) => (m.charged_cents ? Math.min(1, m.collected_cents / m.charged_cents) : null);
 
 // A metric whose value is one number per month: KPI value = latest month, previous = the month
 // before, spark and points = the trailing window. Flows (NOI, income) end at the last closed
@@ -113,12 +117,13 @@ monthly("portfolio.noi", "Net operating income", (m) => dollars(m.noi_cents), {
   noi: (m) => dollars(m.noi_cents),
   budget: (m) => (m.budget_noi_cents ? dollars(m.budget_noi_cents) : null),
 }, "flow");
-monthly("portfolio.income_expense", "Income vs expenses", (m) => dollars(m.collected_cents - m.opex_cents), {
+// Income here is what each month's charges were paid (collected_cents), not cash received.
+monthly("portfolio.income_expense", "Charges paid vs expenses", (m) => dollars(m.collected_cents - m.opex_cents), {
   income: (m) => dollars(m.collected_cents),
   expenses: (m) => dollars(m.opex_cents),
 }, "flow");
 monthly("portfolio.units", "Units", (m) => m.units);
-monthly("receivables.collections_rate", "Collections rate", (m) => ratio(m.collected_cents, m.charged_cents), {
+monthly("receivables.collections_rate", "Collections rate", collectionsRate, {
   charged: (m) => dollars(m.charged_cents),
   collected: (m) => dollars(m.collected_cents),
 }, "flow");
@@ -183,7 +188,7 @@ byProperty("portfolio.by_property", "Property comparison", {
   economic_occupancy: (m) => ratio(m.econ_weighted, m.gpr_cents),
   noi: (m) => dollars(m.noi_cents),
   budget_noi: (m) => (m.budget_noi_cents ? dollars(m.budget_noi_cents) : null),
-  collections_rate: (m) => ratio(m.collected_cents, m.charged_cents),
+  collections_rate: collectionsRate,
   delinquent: (m) => dollars(aging(m)),
   wo_open: (m) => m.wo_open,
 }, "noi");

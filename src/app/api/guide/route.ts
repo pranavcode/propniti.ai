@@ -4,6 +4,7 @@ import { dataOf, guarded, json, staffSession } from "@/ai/http";
 import { asOf, sql } from "@/ai/data";
 import { delinquency } from "@/ai/facts";
 import { QUEUE_SQL } from "@/ai/views";
+import { decidableSql } from "@/ai/decide";
 import { agingByProperty } from "@/extensions/receivables/queries";
 import type { GuideFacts } from "@/components/app/guide/nudges";
 
@@ -19,9 +20,10 @@ export async function GET(request: Request) {
     const role = s.actor.role;
     const readsCharges = can(role, "read", "charges");
     const [approvals, aging, issues, remind] = await Promise.all([
-      // Same rule as the Approvals nav item: the role has the intelligence module.
+      // Same rule as the Approvals nav item (the role has the intelligence module) and the same
+      // count as Approvals › Needs you: only proposals this role may decide.
       (PERMISSIONS[role].intelligence ?? "none") !== "none"
-        ? sql<{ n: number }>(data, `SELECT count(*) AS n FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE ${QUEUE_SQL.needs_you}`).then((r) => Number(r[0]?.n ?? 0)).catch(() => null)
+        ? sql<{ n: number }>(data, `SELECT count(*) AS n FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE ${QUEUE_SQL.needs_you} AND ${decidableSql(role).sql}`, decidableSql(role).params).then((r) => Number(r[0]?.n ?? 0)).catch(() => null)
         : null,
       readsCharges ? agingByProperty({ db: s.db, ws: s.ws === "base" ? null : s.ws, actor: s.actor }).catch(() => null) : null,
       sql<{ n: number }>(data, "SELECT count(*) AS n FROM {data_issues} WHERE status = 'open' AND severity = 'critical'").then((r) => Number(r[0]?.n ?? 0)).catch(() => null),
