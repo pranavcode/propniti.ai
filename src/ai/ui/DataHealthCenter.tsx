@@ -10,6 +10,7 @@ import { FixPreview } from "@/components/app/ai";
 import { Meter } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { pickFilter, ResultsSummary } from "@/components/app/ResultsSummary";
+import { UpdatedStamp } from "@/components/app/UpdatedStamp";
 import { resultsSummary } from "@/components/app/results";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -99,8 +100,9 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
   return (
     <div className="space-y-5 px-4 pb-10 md:px-6">
       <section className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
-        <div className="rounded-lg border bg-card p-4">
+        <div className="relative rounded-lg border bg-card p-4">
           <div className="text-[12px] text-muted-foreground">Portfolio data health</div>
+          <div className="absolute right-3 bottom-3"><UpdatedStamp value={`${health.score}:${health.open}`} /></div>
           <div className={cn("mt-1 text-[34px] leading-none font-semibold tabular-nums", TEXT[tone(health.score)])}>{health.score}</div>
           <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" />
           <p className="mt-2 text-[12px] text-muted-foreground">
