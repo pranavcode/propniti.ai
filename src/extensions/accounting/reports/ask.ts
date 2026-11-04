@@ -1,6 +1,6 @@
 import "server-only";
 import { currentModel } from "@/ai/providers";
-import { COMPARE_LABEL, FIRST_MONTH, GROUP_LABEL, MEASURES, METROS, RawSpecSchema, rulesSpec, validateSpec, type QuerySpec, type RawSpec, type ScopeProperty } from "./spec";
+import { COMPARE_LABEL, GROUP_LABEL, MEASURES, METROS, RawSpecSchema, rulesSpec, validateSpec, type QuerySpec, type RawSpec, type ScopeProperty } from "./spec";
 
 // Question → QuerySpec. The model fills the spec when one is configured; the rules parser does
 // otherwise (or when the model fails). Either way validateSpec() has the last word.
@@ -30,6 +30,6 @@ export async function askReport(text: string, scope: ScopeProperty[], lastClosed
     }
   }
   const live = !!raw;
-  const { spec, dropped } = validateSpec(raw ?? rulesSpec(question, scope, lastClosed), scope, lastClosed);
+  const { spec, dropped } = validateSpec(raw ?? rulesSpec(question, scope), scope, lastClosed);
   return { spec, dropped, live, model: live ? model!.info.model : "rules", source: live ? model!.info.label : "Rules (no model)" };
 }

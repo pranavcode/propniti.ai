@@ -28,7 +28,7 @@ describe("reports on the generated base", () => {
 
   it("answers the example question with utilities by property vs budget", async () => {
     const scope = await scopeProperties(ctx);
-    const { spec } = validateSpec(rulesSpec("show me utilities by property for Q3 vs budget", scope, "2026-10"), scope, "2026-10");
+    const { spec } = validateSpec(rulesSpec("show me utilities by property for Q3 vs budget", scope), scope, "2026-10");
     const r = await runSpec(ctx, spec);
     expect(r.rows.length).toBe(30);
     expect(r.total).toBeGreaterThan(0);

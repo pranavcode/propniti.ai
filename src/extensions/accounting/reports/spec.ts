@@ -169,7 +169,7 @@ export function validateSpec(raw: RawSpec, scope: ScopeProperty[], lastClosed: s
 }
 
 // Rules fallback: keywords for the measure, grouping, period, comparison, metros and property names.
-export function rulesSpec(text: string, scope: ScopeProperty[], lastClosed: string): RawSpec {
+export function rulesSpec(text: string, scope: ScopeProperty[]): RawSpec {
   const t = text.toLowerCase();
   const measure = MEASURES.find((m) => m.keywords.test(text))?.key ?? "expense";
   const groupBy: GroupBy | null =

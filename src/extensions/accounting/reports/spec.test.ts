@@ -5,26 +5,26 @@ const SCOPE = [
   { id: "p01", name: "The Lofts at Riverside", metro: "Austin" },
   { id: "p12", name: "Camelback Terrace", metro: "Phoenix" },
 ];
-const months = (text: string) => resolvePeriod(rulesSpec(text, SCOPE, "2026-10").period ?? NO_PERIOD, "2026-10");
+const months = (text: string) => resolvePeriod(rulesSpec(text, SCOPE).period ?? NO_PERIOD, "2026-10");
 const raw = (r: Partial<RawSpec>): RawSpec => ({ measure: "expense", groupBy: null, period: null, compareTo: null, properties: null, metros: null, chart: null, title: null, ...r });
 
 describe("rules parser", () => {
   it("reads the example question", () => {
-    const r = rulesSpec("show me utilities by property for Q3 vs budget", SCOPE, "2026-10");
+    const r = rulesSpec("show me utilities by property for Q3 vs budget", SCOPE);
     expect(r).toMatchObject({ measure: "utilities", groupBy: "property", compareTo: "budget" });
     expect(months("show me utilities by property for Q3 vs budget")).toEqual({ from: "2026-07", to: "2026-09" });
   });
   it("reads a named year, metros and property names", () => {
-    const r = rulesSpec("repairs at the lofts at riverside in Q1 2026 vs last year", SCOPE, "2026-10");
+    const r = rulesSpec("repairs at the lofts at riverside in Q1 2026 vs last year", SCOPE);
     expect(r).toMatchObject({ measure: "repairs", compareTo: "prior_year", properties: ["p01"] });
     expect(months("repairs at the lofts at riverside in Q1 2026 vs last year")).toEqual({ from: "2026-01", to: "2026-03" });
-    expect(rulesSpec("delinquency in Phoenix and DFW", SCOPE, "2026-10").metros).toEqual(["Dallas", "Phoenix"]);
+    expect(rulesSpec("delinquency in Phoenix and DFW", SCOPE).metros).toEqual(["Dallas", "Phoenix"]);
   });
   it("handles last month, YTD and trailing twelve", () => {
     expect(months("NOI last month")).toEqual({ from: "2026-10", to: "2026-10" });
     expect(months("income YTD")).toEqual({ from: "2026-01", to: "2026-10" });
     expect(months("expense T12 by month")).toEqual({ from: "2025-11", to: "2026-10" });
-    expect(rulesSpec("expense T12 by month", SCOPE, "2026-10").groupBy).toBe("month");
+    expect(rulesSpec("expense T12 by month", SCOPE).groupBy).toBe("month");
   });
 });
 
