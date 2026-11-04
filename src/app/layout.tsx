@@ -19,8 +19,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geist.variable} ${serif.variable} h-full antialiased`}>
-      <body className="min-h-full bg-[#F6F2EA] font-sans text-[#1C1917]">
+    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${serif.variable} h-full antialiased`}>
+      <body suppressHydrationWarning className="min-h-full bg-[#F6F2EA] font-sans text-[#1C1917]">
         {children}
       </body>
     </html>

@@ -6,8 +6,9 @@ import { PERMISSIONS, PERSONAS, PN_AS, type Persona } from "@/auth/personas";
 import { currentPersona } from "@/auth/session";
 import { LAYOUT_COOKIE, parseCollapsed } from "../collapsible/prefs";
 import { REPORT_ROLES } from "@/extensions/accounting/reports/spec";
+import { themeMode } from "@/lib/theme";
 import { toursFor } from "../tour/registry";
-import { SECTION_LABEL, type Density, type ShellData, type ShellPersona, type Theme } from "./types";
+import { SECTION_LABEL, type Density, type ShellData, type ShellPersona } from "./types";
 
 // Custom pages (not entity lists) in the sidebar. Entity lists come from EntityDef.nav.
 const STAFF = [...INTERNAL_ROLES] as Role[];
@@ -50,7 +51,6 @@ export async function shellData(counts: Record<string, number> = {}): Promise<Sh
   }));
 
   const readable = allEntities().filter((d) => can(role, "read", d.key));
-  const theme = (jar.get("pn_theme")?.value ?? "light") as Theme;
   const density = (jar.get("pn_density")?.value ?? "comfortable") as Density;
 
   return {
@@ -63,7 +63,7 @@ export async function shellData(counts: Record<string, number> = {}): Promise<Sh
     quickActions: persona.quickActions.map((q, i) => ({ key: `quick.${i}`, label: q.label, href: q.href })),
     assistantPrompts: persona.assistantPrompts,
     tours: toursFor(role),
-    theme: ["light", "dark", "system"].includes(theme) ? theme : "light",
+    theme: themeMode(jar.get("pn_theme")?.value),
     density: density === "compact" ? "compact" : "comfortable",
     sidebarOpen: jar.get("sidebar_state")?.value !== "false",
     collapsed: parseCollapsed(jar.get(LAYOUT_COOKIE)?.value),
