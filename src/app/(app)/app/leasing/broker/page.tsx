@@ -21,7 +21,7 @@ const KPIS: Omit<KpiData, "value" | "previous" | "spark">[] = [
 ];
 const REC: Record<string, string> = { Approve: "text-tone-success", Conditional: "text-tone-warning", Deny: "text-tone-danger" };
 
-// The broker's AI-first home: applications waiting on a decision with the Leasing agent's score,
+// The broker's AI-first home: applications waiting on a decision with the Leasing Agent's score,
 // what the agents proposed, how each leasing agent is doing, and fair-housing flags to clear.
 export default async function BrokerDesk() {
   const c = await leasingCtx();
@@ -72,7 +72,7 @@ export default async function BrokerDesk() {
           <div className="grid grid-cols-2 gap-3 self-start xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid-cols-4">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>
 
-        <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
+        <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing Agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
           <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-approvals">
             {apps.rows.length ? (
               <Table className="text-[13px]">
@@ -151,8 +151,8 @@ export default async function BrokerDesk() {
           </Section>
         </div>
 
-        <Section title="Leasing agent recommendations" description="Approve to accept the agent's recommendation as your decision; it is logged with your name. Open the application to decide differently.">
-          <ProposalQueue items={items} empty="When the Leasing agent scores an application, its recommendation waits here for you." />
+        <Section title="Leasing Agent recommendations" description="Approve to accept the agent's recommendation as your decision; it is logged with your name. Open the application to decide differently.">
+          <ProposalQueue items={items} empty="When the Leasing Agent scores an application, its recommendation waits here for you." />
         </Section>
       </PageBody>
     </>

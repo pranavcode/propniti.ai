@@ -73,7 +73,7 @@ export async function financeHome(db: Db, ws: string | null, actor: Actor) {
   if (pending?.n) needs.push({ tone: "warning", text: `${pending.n} bills (${usd(pending.c / 100)}) wait for approval`, href: "/app/payables/bills?view=to-approve" });
   for (const h of holds.results.slice(0, 2)) needs.push({ tone: "danger", text: `${h.company} changed bank details on ${formatDate(h.bank_changed_at)}. Payments are on hold until someone verifies by phone`, href: `/app/payables/bills?f.vendor_id=${h.id}&f.status=Pending%20approval,Approved` });
   if (unmatched) needs.push({ tone: "warning", text: `${unmatched} bank deposits have no matching ledger entry`, href: "/app/banking/transactions?view=unexplained-deposits" });
-  if (miscoded?.n) needs.push({ tone: "info", text: `${miscoded.n} bills look miscoded. The Payables agent suggests a recode`, href: "/app/payables/bills?view=data-issues" });
+  if (miscoded?.n) needs.push({ tone: "info", text: `${miscoded.n} bills look miscoded. The Payables Agent suggests a recode`, href: "/app/payables/bills?view=data-issues" });
   if (dueSoon?.n) needs.push({ tone: "info", text: `${dueSoon.n} approved bills (${usd(dueSoon.c / 100)}) are due within 7 days and not yet paid`, href: "/app/payables/bills?view=ready-to-pay" });
 
   const watch: BriefingItem[] = [];

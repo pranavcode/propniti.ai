@@ -13,6 +13,7 @@ import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasin
 import { errText, modelLoop, type AgentCtx } from "./runtime";
 import type { ToolKey } from "./types";
 import "./agents";
+import { agentName } from "@/ai/ui/labels";
 
 // The assistant (⌘J and /app/copilot). Three modes over the same tools the agents use:
 //   chat    answers about your data; the model plans the lookups, figures come from tool results
@@ -147,7 +148,7 @@ async function rulesChat(ctx: AgentCtx, q: string, context?: AskContext): Promis
   if (/\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
     const runs = await sql<{ agent_key: string; n: number; proposals: number }>(ctx.data, "SELECT r.agent_key, count(*) AS n, (SELECT count(*) FROM {ai_proposals} p WHERE p.agent = r.agent_key) AS proposals FROM {agent_runs} r GROUP BY r.agent_key ORDER BY n DESC", [], { unscoped: true });
     const saved = (await monthly(ctx.data, { months: 1 })).reduce((s, r) => s + Number(r.ai_minutes_saved ?? 0), 0);
-    return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${r.agent_key.replace(/_/g, " ")} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
+    return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${agentName(r.agent_key)} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
   }
   if (context?.entity && context.id && /\b(this|it|here)\b/i.test(q)) {
     const row = await ctx.call<Row>("records.get", { entity: context.entity, id: context.id }).catch(() => null);
@@ -183,7 +184,7 @@ async function planActions(ctx: AgentCtx, q: string): Promise<RulesOut> {
     return { answer: r.rows.length ? `I drafted ${r.rows.length} reminder${r.rows.length === 1 ? "" : "s"} for residents ${days || 5}+ days late${metro ? ` in ${metro}` : ""}. Review and confirm below; nothing is sent until you do.` : `Nobody${metro ? ` in ${metro}` : ""} is ${days || 5}+ days late, so there's nothing to send.`, table: lateTable(r.rows), citations: [], proposals: true };
   }
   const agent = [["collections", /collections?/], ["maintenance_triage", /triage|work orders?/], ["ap", /bills?|payables?|invoices?/], ["renewals", /renewals?/], ["leasing", /applica\w+|prospects?|leasing/], ["data_health", /data (health|issues?)|fix/], ["compliance", /coi|insurance|complian\w+/], ["owner_reporting", /owner|noi|variance/]].find(([, re]) => (re as RegExp).test(q))?.[0];
-  if (agent && /\b(run|start|triage|review|check|fix)\b/i.test(q)) return { answer: `That's the ${String(agent).replace(/_/g, " ")} agent's job. Open it in the command center and press Run now to watch it work.`, citations: [{ label: "Agents", href: `/app/agents?agent=${agent}` }] };
+  if (agent && /\b(run|start|triage|review|check|fix)\b/i.test(q)) return { answer: `That's the ${agentName(String(agent))}'s job. Open it in the command center and press Run now to watch it work.`, citations: [{ label: "Agents", href: `/app/agents?agent=${agent}` }] };
   return { answer: "I can turn these into actions you confirm: send rent reminders (\"remind everyone 30+ days late in Austin\"), or run an agent (\"triage new work orders\"). Anything that moves money goes to the approvals inbox.", citations: [] };
 }
 

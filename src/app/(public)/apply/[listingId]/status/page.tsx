@@ -23,7 +23,7 @@ export default async function Page({ params, searchParams }: Props) {
   const queued = !scored && !!a.run && a.run.status !== "running" && a.run.status !== "queued";
   const steps = [
     { title: "Application received", detail: `Submitted for ${l.property} unit ${l.unit}. The leasing team will contact you at ${a.email}.`, done: true },
-    { title: "Screening summary", detail: scored ? "The Leasing agent checked income, rental history and credit against the written criteria and drafted a summary with reasons for and against." : queued ? "Queued for the Leasing agent's next scoring run (every 4 hours); it checks income, rental history and credit against the written criteria." : "The Leasing agent is checking income, rental history and credit against the written criteria.", done: scored, busy: !scored && !queued },
+    { title: "Screening summary", detail: scored ? "The Leasing Agent checked income, rental history and credit against the written criteria and drafted a summary with reasons for and against." : queued ? "Queued for the Leasing Agent's next scoring run (every 4 hours); it checks income, rental history and credit against the written criteria." : "The Leasing Agent is checking income, rental history and credit against the written criteria.", done: scored, busy: !scored && !queued },
     { title: "A person decides", detail: "The managing broker reviews the summary and your documents and makes the decision.", done: false },
     { title: "Sign your lease", detail: "Once approved, you'll get the lease to sign online and pay the deposit and first month's rent before move-in.", done: false },
   ];
@@ -73,7 +73,7 @@ export default async function Page({ params, searchParams }: Props) {
               <p className="text-[12.5px] text-muted-foreground">Confidence {Math.round(a.proposal.confidence * 100)}% · {a.proposal.model ? `model ${a.proposal.model}` : "rules"} · waiting for the broker&apos;s decision. The applicant never sees this panel in a real deployment.</p>
             </div>
           ) : (
-            <p className="mt-3 text-muted-foreground">{queued ? "The Leasing agent's last run scored applications that have waited longer; this one gets scored in a later run. The broker can also run the agent now from the agents page." : "The Leasing agent is scoring this application now. This page updates by itself."}</p>
+            <p className="mt-3 text-muted-foreground">{queued ? "The Leasing Agent's last run scored applications that have waited longer; this one gets scored in a later run. The broker can also run the agent now from the agents page." : "The Leasing Agent is scoring this application now. This page updates by itself."}</p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
             <form action="/api/session" method="post">

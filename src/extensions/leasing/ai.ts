@@ -7,6 +7,7 @@ import type { AgentCtx } from "@/ai/runtime";
 import { effective } from "@/server/query";
 import { checkFairHousing } from "./fairHousing";
 import { dollars, proposeRenewal, type Reason } from "./pricing";
+import { agentName } from "@/ai/ui/labels";
 
 // The leasing module's AI steps. Each one is a real agent run (agent_runs + agent_steps), so the
 // page can link to the trace: the rules compute every figure, a model (when configured) only
@@ -20,7 +21,7 @@ async function run<T>(actx: ActionContext, agent: "leasing" | "renewals", input:
   const o = { db: actx.db, ws: actx.ws, actor: actx.actor, agent, trigger: { kind: "manual" as const, input } };
   const runId = await openRun(o, actx.nowMs);
   const r = await runWithContext(runId, o, actx.nowMs, agent, "suggest", agent === "leasing" ? ["applications.decide"] : ["renewal_offers.send"], body);
-  if (r.result == null) throw new Error(`The ${agent} agent run failed: ${r.summary}`);
+  if (r.result == null) throw new Error(`The ${agentName(agent)} run failed: ${r.summary}`);
   const model = r.ctx?.modelUsed.model ?? "rules";
   return { runId, model, source: model === "rules" ? "rules" : "live", result: r.result };
 }
@@ -58,7 +59,7 @@ const textChecks = (text: string, facts: Record<string, string | number | boolea
 ];
 
 // ---------------------------------------------------------------------------------------------
-// Applicant scoring (Leasing agent): rules score, plain-English reasons, a proposal for the broker.
+// Applicant scoring (Leasing Agent): rules score, plain-English reasons, a proposal for the broker.
 // ---------------------------------------------------------------------------------------------
 
 export type Scoring = { score: number; recommendation: string; review: boolean; factors: Factor[]; ratio: number; summary: string; confidence: number; proposalId: string | null };
@@ -106,7 +107,7 @@ export async function scoreApplication(actx: ActionContext, app: Row): Promise<R
 }
 
 // ---------------------------------------------------------------------------------------------
-// Listing description (Leasing agent): draft from unit, property and amenity facts only.
+// Listing description (Leasing Agent): draft from unit, property and amenity facts only.
 // ---------------------------------------------------------------------------------------------
 
 export type ListingDraft = { headline: string; description: string };

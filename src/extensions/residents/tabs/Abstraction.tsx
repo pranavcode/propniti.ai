@@ -10,6 +10,7 @@ import { leaseDocument, type Comparison } from "../lib";
 import { leaseRecord, pageCtx, sql } from "../server";
 import { AbstractControls } from "../ui/abstract";
 import { IssueFix } from "../ui/client";
+import { agentName } from "@/ai/ui/labels";
 
 // Lease abstraction: the document on the left with page numbers, the extracted terms on the right
 // with their page and quote, compared with the lease record. Each difference is a data-health
@@ -119,7 +120,7 @@ export async function Abstraction({ id, actor }: TabProps) {
             return (
               <IssueFix key={String(i.id)} issueId={String(i.id)} rule={String(i.rule_id)}
                 title={i.rule_id === "leases.abstract_mismatch" ? `AI: fix ${String(ev.label ?? "term").toLowerCase()} from the signed lease` : String(i.rule_id).replace("leases.", "").replace(/_/g, " ")}
-                changes={changes} why={fix.why ?? []} confidence={Number(fix.confidence ?? 0.8)} source={fix.source === "rule" ? "rule" : `${fix.source ?? "rule"} agent`} />
+                changes={changes} why={fix.why ?? []} confidence={Number(fix.confidence ?? 0.8)} source={fix.source === "rule" ? "rule" : agentName(fix.source)} />
             );
           })}
         </section>

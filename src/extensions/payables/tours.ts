@@ -5,8 +5,8 @@ import { registerTour } from "@/components/app/tour/registry";
 registerTour({
   id: "finance-month-end", title: "Month-end close walkthrough", roles: ["accountant", "principal"],
   steps: [
-    { href: "/app/finance", title: "Your finance briefing", body: "What needs you in payables and banking, what to watch in cash and budget, and the approvals the Payables agent has queued." },
-    { href: "/app/finance/ap-inbox", title: "Enter bills from invoices", body: "Drop an invoice: the Payables agent reads it, proposes GL coding and checks amount, duplicates and vendor bank changes. A bank change nobody has verified stops payment." },
+    { href: "/app/finance", title: "Your finance briefing", body: "What needs you in payables and banking, what to watch in cash and budget, and the approvals the Payables Agent has queued." },
+    { href: "/app/finance/ap-inbox", title: "Enter bills from invoices", body: "Drop an invoice: the Payables Agent reads it, proposes GL coding and checks amount, duplicates and vendor bank changes. A bank change nobody has verified stops payment." },
     { href: "/app/payables/bills?view=to-approve", title: "Approve and pay", body: "Approve one bill or many. Paying goes out of the property's trust account by ACH, and each bill can only be paid once." },
     { href: "/app/banking/reconciliations?f.status=Open", title: "Reconcile the trust accounts", body: "Bank lines against ledger transfers, with suggested matches and a confidence. Unexplained deposits become Data Health issues." },
     { href: "/app/finance/budget-vs-actual", title: "Budget vs actual", body: "Property × GL × month with variance shading. Select Explain for the reasons behind a variance, built from the bills that drove it." },

@@ -70,9 +70,9 @@ registerAction({
       }),
       eventStmt(db, ws, at, "invoice.received", "bills", id, String(row.property_id), { amount_cents: total, vendor_id: row.vendor_id }),
     ]);
-    return { status: 200, message: `${id} (${dollars(total)}) is waiting for approval. The Payables agent will review it.`, href: `/app/payables/bills/${encodeURIComponent(id)}` };
+    return { status: 200, message: `${id} (${dollars(total)}) is waiting for approval. The Payables Agent will review it.`, href: `/app/payables/bills/${encodeURIComponent(id)}` };
   },
-  help: { summary: "Saves the coded lines and sends the bill for approval. The Payables agent reviews it for anomalies.", article: "ap-inbox" },
+  help: { summary: "Saves the coded lines and sends the bill for approval. The Payables Agent reviews it for anomalies.", article: "ap-inbox" },
 });
 
 async function approve(ctx: ActionContext, row: Row): Promise<ActionResult> {
@@ -145,7 +145,7 @@ registerAction({
   help: { summary: "Cancels a bill that hasn't been approved, for example a duplicate invoice.", article: "approve-a-bill" },
 });
 
-// Moves one line to another GL account. Usually accepted from the Payables agent's or Data
+// Moves one line to another GL account. Usually accepted from the Payables Agent's or Data
 // Health's suggestion; closes the matching gl_miscoded issue and logs the before/after.
 registerAction({
   key: "bills.recode",
@@ -183,7 +183,7 @@ registerAction({
 
 // Vendor bank changes (fraud control). A change is entered by an accountant, recorded as an open
 // vendors.unverified_bank_change issue (which money.ts and bankHold() treat as a payment hold) and
-// a vendor.bank_changed event for the Payables agent. Lifting the hold needs a callback on the
+// a vendor.bank_changed event for the Payables Agent. Lifting the hold needs a callback on the
 // phone number already on file, recorded by a different person than the one who made the change.
 
 const ConfirmInput = z.strictObject({ spoke_with: z.string().trim().min(2).max(120), phone_on_file: z.literal(true) });
@@ -208,7 +208,7 @@ async function confirmBankChange(ctx: ActionContext, vendor: string, input: z.in
         .bind(ws, issueId, vendor, at, JSON.stringify({ bank_changed_at: v.bank_changed_at }), ctx.actor.personaId, at)];
   await db.batch([
     ...fix,
-    // The Payables agent's hold proposal sets a vendor Inactive; verification reactivates it.
+    // The Payables Agent's hold proposal sets a vendor Inactive; verification reactivates it.
     db.prepare(overlayUpsertSql("vendors", VENDOR_COLS, { status: "?3" })).bind(ws, vendor, v.status === "Inactive" ? "Active" : v.status),
     eventStmt(db, ws, at, "vendor.bank_change_verified", "vendors", vendor, null, { spoke_with: input.spoke_with, by: ctx.actor.personaId }),
     auditStmt(db, ws, at, ctx.actor, { action: "Vendor bank change verified", entityType: "vendors", entityId: vendor, detail: `${v.company}: verified by callback with ${input.spoke_with} on the number on file`, before: { hold: true }, after: { hold: false } }),

@@ -31,7 +31,7 @@ export type ScoringData = {
   source: AISource;
   model: string | null;
   runId: string | null;
-  proposalId: string | null;            // the undecided Leasing agent proposal, for the approvals link
+  proposalId: string | null;            // the undecided Leasing Agent proposal, for the approvals link
   scoredAt: string | null;
   decidedBy: string | null;
   decidedAt: string | null;
@@ -140,7 +140,7 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
         <section className="relative overflow-hidden rounded-lg border border-tone-ai/25 bg-tone-ai/[0.03]" aria-labelledby="ai-score">
           <header className="flex flex-wrap items-center gap-2 border-b border-tone-ai/15 px-4 py-2.5">
             <Sparkles className="size-3.5 text-tone-ai" />
-            <h3 id="ai-score" className="text-[13px] font-semibold">Leasing agent score</h3>
+            <h3 id="ai-score" className="text-[13px] font-semibold">Leasing Agent score</h3>
             {d.score != null && <AIBadge source={d.source} model={d.model ?? undefined} size="xs" />}
             <div className="ml-auto flex items-center gap-2 text-[11.5px] text-muted-foreground">
               {d.scoredAt && <span>Scored <RelativeDate value={d.scoredAt} /></span>}
@@ -156,7 +156,7 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
           {d.score == null ? (
             <div className="flex flex-col items-start gap-1 px-4 py-6" role="status">
               <p className="font-medium">{busy === "score" ? "Reading the application and screening summary…" : "Not scored yet"}</p>
-              <p className="max-w-xl text-[12.5px] text-muted-foreground">The Leasing agent scores from income to rent, credit band, rental history and income verification, then sends a recommendation to the broker. Every step is recorded in its run.</p>
+              <p className="max-w-xl text-[12.5px] text-muted-foreground">The Leasing Agent scores from income to rent, credit band, rental history and income verification, then sends a recommendation to the broker. Every step is recorded in its run.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4 p-4">

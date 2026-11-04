@@ -46,7 +46,7 @@ export type ToolDef<I = unknown, O = unknown> = {
 
 export type AgentDef = {
   key: AgentKey;
-  name: string;                           // "Collections agent"
+  name: string;                           // "Collections Agent"
   ownerRole: Role;
   goal: string;
   tools: ToolKey[];                       // allow-list

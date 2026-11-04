@@ -183,7 +183,7 @@ export default async function Home() {
           <div className="mt-14 grid gap-6 lg:grid-cols-3">
             {[
               { icon: SlidersHorizontal, t: "Approvals with your limits", b: "Approval policies set who can approve what, by amount and risk. Above a limit, an agent can only propose.", rows: [["Bill over $1,500", "Accountant or principal"], ["Repair over owner limit", "Owner"], ["Late fee", "Within the state cap"]] },
-              { icon: FileClock, t: "A complete audit trail", b: "Who did what, when and why, for people and agents alike. Each agent run keeps its step-by-step trace: what it looked up and what it proposed.", rows: [["10:12", "Grace Kim approved bill INV-88213"], ["10:09", "Payables agent held vendor payment"], ["09:58", "Data Health fixed rent on L-p01-0412"]] },
+              { icon: FileClock, t: "A complete audit trail", b: "Who did what, when and why, for people and agents alike. Each agent run keeps its step-by-step trace: what it looked up and what it proposed.", rows: [["10:12", "Grace Kim approved bill INV-88213"], ["10:09", "Payables Agent held vendor payment"], ["09:58", "Data Health fixed rent on L-p01-0412"]] },
               { icon: ShieldCheck, t: "Data controls", b: "Roles and scopes limit each person to their properties and modules. Ledger tables change only through guarded actions, never by direct edit.", rows: [["Regional manager", "Texas, 14 properties"], ["Owner", "Own entities only"], ["Ledger", "Actions only"]] },
             ].map(({ icon: Icon, t, b, rows }, i) => (
               <Rise key={t} delay={i * 80} className="flex flex-col rounded-2xl bg-white p-7 ring-1 ring-(--mk-line)">

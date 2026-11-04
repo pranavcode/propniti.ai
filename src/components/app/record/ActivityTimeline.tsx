@@ -10,6 +10,7 @@ import { useMounted } from "@/hooks/use-mounted";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PersonAvatar, RelativeDate } from "../display";
 import { humanize } from "../status";
+import { agentName } from "@/ai/ui/labels";
 
 // Record activity (activity_events + audit). Grouped by day bucket; field changes show as
 // "Status: Open → Paid"; runs of agent/system events fold into "N automation events" (Attio).
@@ -58,13 +59,11 @@ export function formatChange(v: unknown): string {
 }
 const isAuto = (e: ActivityEvent) => e.actor_kind === "agent" || e.actor_kind === "system";
 
-// Audit rows carry the agent's display name ("Maintenance Triage agent") as the actor; agent keys
-// ("collections") get " agent" added.
+// Agents show their Title Case name (agentName) whatever name was stored with the event, so a
+// stored "Maintenance Triage agent" or key "collections" both read as the agent's label.
 export function actorLabel(e: ActivityEvent, people?: Record<string, string>): string {
-  if (e.actor_name ?? people?.[e.actor_id]) return (e.actor_name ?? people?.[e.actor_id])!;
-  if (!isAuto(e)) return e.actor_id;
-  const name = humanize(e.actor_id);
-  return /\bagent$/i.test(name) ? name : `${name} agent`;
+  if (e.actor_kind === "agent") return agentName(e.actor_id);
+  return e.actor_name ?? people?.[e.actor_id] ?? (isAuto(e) ? agentName(e.actor_id) : e.actor_id);
 }
 
 // What an agent's applied proposal did, in words. Ids, timestamps and "$by" placeholders aren't

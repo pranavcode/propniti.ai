@@ -12,7 +12,7 @@ import type { Evidence } from "./AISuggestion";
 export type Risk = "Low" | "Medium" | "High";
 
 export type ApprovalItemProps = {
-  agent: string;                         // "Payables agent"
+  agent: string;                         // "Payables Agent"
   title: string;                         // "Approve bill from ABC HVAC"
   amount?: number | null;                // dollars
   risk: Risk;

@@ -21,7 +21,7 @@ export default async function DataHealthPage({ searchParams }: { searchParams: P
         icon={<HeartPulse />}
         title="Data health"
         description="Know your portfolio is right. Rules check the records money decisions depend on; each problem comes with a fix, its reasons and a confidence, and every fix is logged with before and after."
-        actions={<Button asChild size="sm" variant="outline"><Link href="/app/ai/activity?agent=data_health">Data Health agent runs</Link></Button>}
+        actions={<Button asChild size="sm" variant="outline"><Link href="/app/ai/activity?agent=data_health">Data Health Agent runs</Link></Button>}
       />
       <div className="mt-5">
         <DataHealthCenter health={JSON.parse(JSON.stringify(health))} issues={JSON.parse(JSON.stringify(issues))} filters={filters} />

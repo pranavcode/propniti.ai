@@ -64,7 +64,7 @@ registerMetric({
 });
 
 // Vendors whose current certificate is expired or missing while they still hold open work orders
-// in scope: the uninsured-work exposure the Compliance agent escalates to a person.
+// in scope: the uninsured-work exposure the Compliance Agent escalates to a person.
 registerMetric({
   key: "risk.exposed_vendors",
   label: "Vendors working without valid insurance",

@@ -23,8 +23,9 @@ const ev = (over: Partial<ActivityEvent>): ActivityEvent => ({ id: "e1", at: "20
 
 describe("agent activity", () => {
   it("names the agent once", () => {
-    expect(actorLabel(ev({ actor_id: "Maintenance Triage agent" }))).toBe("Maintenance Triage agent");
-    expect(actorLabel(ev({ actor_id: "collections" }))).toBe("Collections agent");
+    expect(actorLabel(ev({ actor_id: "Maintenance Triage agent" }))).toBe("Maintenance Triage Agent");
+    expect(actorLabel(ev({ actor_id: "maintenance_triage", actor_name: "maintenance triage agent" }))).toBe("Maintenance Triage Agent");
+    expect(actorLabel(ev({ actor_id: "collections" }))).toBe("Collections Agent");
     expect(actorLabel(ev({ actor_kind: "staff", actor_id: "tom", actor_name: "Tom Alvarez" }))).toBe("Tom Alvarez");
   });
 

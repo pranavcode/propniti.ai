@@ -28,7 +28,7 @@ export function PillarVignette({ slug }: { slug: string }) {
           changes={[{ field: "rent", label: "Monthly rent", before: "$18,950.00", after: "$1,895.00" }]}
           why={["Market rent for the unit is $1,880", "The last 3 charges posted at $1,895.00"]}
           confidence={0.97}
-          source="Data Health agent"
+          source="Data Health Agent"
           onApply={noop}
           onDismiss={noop}
         />
@@ -51,7 +51,7 @@ export function PillarVignette({ slug }: { slug: string }) {
       <Surface>
         <ApprovalItem
           className="shadow-lg"
-          agent="Renewals agent"
+          agent="Renewals Agent"
           title="Renewal offer for unit 208"
           amount={1945}
           risk="Low"

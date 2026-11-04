@@ -10,7 +10,7 @@ export { scoreApplicant, type Factor } from "../rules";
 
 export default defineAgent({
   key: "leasing",
-  name: "Leasing agent",
+  name: "Leasing Agent",
   ownerRole: "leasing_agent",
   goal: "Score every application waiting on a decision with plain-English reasons for and against, recommend approve, conditional or deny for the broker, and follow up with prospects nobody has contacted in three days.",
   tools: ["records.search", "records.get", "records.related", "messages.draft", "actions.propose"],

@@ -99,12 +99,12 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
               changes={Object.entries(i.after ?? {}).map(([field, after]) => ({ field, label: field.replace(/_/g, " "), before: i.before?.[field] ?? i.evidence?.[field] ?? null, after }))}
               why={i.suggested_fix?.why ?? [i.rule_description ?? "Flagged by a data rule"]}
               confidence={i.suggested_fix?.confidence ?? 0.7}
-              source={i.suggested_fix?.source === "rule" || !i.suggested_fix?.source ? "rule" : "Data Health agent"}
+              source={i.suggested_fix?.source === "rule" || !i.suggested_fix?.source ? "rule" : "Data Health Agent"}
               needsPerson={noFix(i) ? "No automatic fix: open the record to correct it" : i.needsPerson}
               onApply={noFix(i) ? undefined : () => act(i.id, "apply")}
               onDismiss={() => act(i.id, "dismiss")}
             />
-          )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health agent re-checks the rules every morning." />}
+          )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health Agent re-checks the rules every morning." />}
           <div className="flex items-center justify-end gap-3 text-[12px] text-muted-foreground">
             <span>{issues.total} issues · page {issues.page} of {Math.max(1, Math.ceil(issues.total / issues.size))}</span>
             {issues.page > 1 && <Link className="text-primary hover:underline" href={qs({ page: String(issues.page - 1) })}>Previous</Link>}

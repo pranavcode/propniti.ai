@@ -833,7 +833,7 @@ export async function movePayment(ctx: ActionContext, paymentId: string, toCharg
 // money back out of trust (a Returned payment transfer, key return:<payment>, so once per payment),
 // the management fee taken on it goes back to trust, the payment is marked NSF so the lease owes the
 // amount again (re-allocated oldest first), and a returned-payment fee is charged at the policy
-// amount capped by the state rule. Emits payment.failed for the Collections agent.
+// amount capped by the state rule. Emits payment.failed for the Collections Agent.
 export const RETURNED_PAYMENT_FEE_CENTS = 3_500;
 export async function markPaymentReturned(ctx: ActionContext, paymentId: string, reason: string): Promise<Outcome> {
   const { db, ws, nowMs, actor } = ctx;

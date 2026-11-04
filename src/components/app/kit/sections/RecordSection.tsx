@@ -38,8 +38,8 @@ const VALUES = { name: "The Lofts at Riverside", status: "Active", manager_id: "
 
 const ACTIVITY: ActivityEvent[] = [
   { id: "a1", at: day(0, 9), actor_kind: "staff", actor_id: "marcus", actor_name: "Marcus Bell", verb: "updated", summary: "updated the property", data: { before: { market_rent: 1810 }, after: { market_rent: 1845 } } },
-  { id: "a2", at: day(0, 7), actor_kind: "agent", actor_id: "collections", actor_name: "Collections agent", verb: "proposed", summary: "proposed 6 late-rent reminders", data: { model: "llama-3.3-70b" } },
-  { id: "a3", at: day(0, 6), actor_kind: "agent", actor_id: "data_health", actor_name: "Data Health agent", verb: "detected", summary: "flagged a ZIP code missing on the property address" },
+  { id: "a2", at: day(0, 7), actor_kind: "agent", actor_id: "collections", actor_name: "Collections Agent", verb: "proposed", summary: "proposed 6 late-rent reminders", data: { model: "llama-3.3-70b" } },
+  { id: "a3", at: day(0, 6), actor_kind: "agent", actor_id: "data_health", actor_name: "Data Health Agent", verb: "detected", summary: "flagged a ZIP code missing on the property address" },
   { id: "a4", at: day(0, 6), actor_kind: "agent", actor_id: "maintenance_triage", actor_name: "Maintenance Triage", verb: "assigned", summary: "routed WO-2291 (water heater) to Lone Star Plumbing" },
   { id: "a5", at: day(0, 5), actor_kind: "system", actor_id: "late_fees", actor_name: "Late-fee rule", verb: "posted", summary: "posted 4 late fees under the Texas cap" },
   { id: "a6", at: day(1, 15), actor_kind: "resident", actor_id: "res-p01-0001", actor_name: "Jordan Lee", verb: "paid", summary: "paid November rent", data: { before: { status: "Open" }, after: { status: "Paid", amount: 1795 } } },
@@ -53,7 +53,7 @@ const NOTES: NoteRow[] = [
 ];
 
 const TASKS: TaskRow[] = [
-  { id: "t1", title: "Review 6 late-rent reminders proposed by the Collections agent", status: "Open", priority: "High", due_on: ymd(0), assignee_id: "marcus", source: "Agent", created_at: day(0) },
+  { id: "t1", title: "Review 6 late-rent reminders proposed by the Collections Agent", status: "Open", priority: "High", due_on: ymd(0), assignee_id: "marcus", source: "Agent", created_at: day(0) },
   { id: "t2", title: "Walk Unit 304 before move-in", status: "Open", priority: "Normal", due_on: ymd(2), assignee_id: "lena", created_at: day(1) },
   { id: "t3", title: "Renew boiler inspection certificate", status: "Open", priority: "Normal", due_on: ymd(-3), assignee_id: "tom", created_at: day(9) },
   { id: "t4", title: "Send October owner statement", status: "Done", priority: "Normal", due_on: ymd(-4), assignee_id: "grace", created_at: day(12) },
