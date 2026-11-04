@@ -3,7 +3,7 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { INTERNAL_ROLES } from "@/entities/types";
 import { sql } from "../data";
-import { approverLabel, decidableSql, staffDecision } from "../decide";
+import { approverLabel, approverRoles, decidableSql, routeTo, staffDecision } from "../decide";
 import { executeProposal } from "../effects";
 import { canDecide } from "../http";
 import { startRun } from "../orchestrator";
@@ -78,14 +78,19 @@ function seedQueue() {
 }
 
 describe("the approve button, its label, the Needs you count and the server agree", () => {
-  it("a property manager can't approve a high-risk compliance item; the label names who can", () => {
+  it("life-safety (high-risk compliance) items: only the regional manager and the principal decide", () => {
     const high = { ...OPEN[0], queue_state: "needs_you" };
-    expect(staffDecision("property_manager", high)).toMatchObject({ ok: false });
-    // Routed to the maintenance supervisor, who has write (not approve) access to risk: they can't either.
-    expect(staffDecision("maintenance_supervisor", high)).toMatchObject({ ok: false });
-    expect(staffDecision("admin", high)).toEqual({ ok: true });
-    expect(approverLabel(high)).toBe("Approver: principal, regional manager, accountant or admin");
-    expect(staffDecision("property_manager", { ...OPEN[1], queue_state: "needs_you" })).toEqual({ ok: true });
+    for (const role of INTERNAL_ROLES) expect(staffDecision(role, high).ok, role).toBe(role === "principal" || role === "regional_manager");
+    expect(approverRoles(high)).toEqual(["principal", "regional_manager"]);
+    expect(approverLabel(high)).toBe("Approver: principal or regional manager");
+    expect(routeTo({ entity_type: "compliance_items", risk: "High", property_id: "p01" })).toBe("regional_manager");
+    expect(routeTo({ entity_type: "compliance_items", risk: "High", property_id: null })).toBe("principal");
+    expect(routeTo({ entity_type: "compliance_items", risk: "Low", property_id: "p01" })).toBeNull();
+    // Low-risk compliance items stay as they were: write access to risk decides them.
+    const low = { ...OPEN[1], queue_state: "needs_you" };
+    expect(staffDecision("property_manager", low)).toEqual({ ok: true });
+    expect(staffDecision("maintenance_supervisor", low)).toEqual({ ok: true });
+    expect(staffDecision("admin", low)).toEqual({ ok: true });
   });
 
   it("for every staff role, the SQL count, the listed rows, the flags and canDecide match", async () => {
@@ -107,10 +112,12 @@ describe("the approve button, its label, the Needs you count and the server agre
     }
   });
 
-  it("Sam (admin) decides the compliance items; Marcus (property manager) the low-risk ones in his module", async () => {
+  it("Sam (admin) decides only the low-risk compliance item; Marcus (property manager) the low-risk ones in his module", async () => {
     const db = seedQueue();
     const ids = async (actor: Actor) => (await proposalsPage({ db, ws: WS, actor }, { queue: "needs_you", size: 50 })).rows.map((r) => r.id).sort();
-    expect(await ids(actorAs("admin"))).toEqual(["pr-comp-high", "pr-comp-low"]);
+    expect(await ids(actorAs("admin"))).toEqual(["pr-comp-low"]);
+    expect(await ids(actorAs("regional_manager"))).toContain("pr-comp-high");
+    expect(await ids(actorAs("accountant"))).not.toContain("pr-comp-high");
     expect(await ids(MARCUS)).toEqual(["pr-comp-low", "pr-fix", "pr-lead", "pr-odd"].sort());
   });
 });
