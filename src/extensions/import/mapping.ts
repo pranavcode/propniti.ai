@@ -62,7 +62,7 @@ export function missingRequired(kind: Kind, mapping: Mapping, hasDefaultProperty
 const HINTS: Partial<Record<Kind, RegExp>> = {
   vendors: /vendor|trade|1099|categor|service pro/,
   owners: /owner|management fee|ownership/,
-  balances: /0 ?- ?30|31 ?- ?60|30 ?- ?60|over 90|90\+|aging|past due/,
+  balances: /0 ?- ?30|31 ?- ?60|30 ?- ?60|over 90|90\+|aging/,
   recurring: /charge|frequency/,
 };
 

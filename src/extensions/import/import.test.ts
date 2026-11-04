@@ -155,6 +155,7 @@ describe("presets", () => {
     expect(detect(["Property", "Unit", "Sq Ft", "Market Rent", "Status"]).kind).toBe("units");
     expect(detect(["Property", "Street", "City", "State", "Zip"]).kind).toBe("properties");
     expect(detect(["Property", "Unit", "Tenant", "Rent", "Lease Start", "Lease End"]).kind).toBe("rent_roll");
+    expect(detect(["Property", "Unit", "Tenant", "Rent", "Lease From", "Lease To", "Past Due"]).kind).toBe("rent_roll");
   });
 });
 
@@ -259,6 +260,16 @@ Sonoran Flats,103,t0002,Omar Haddad,1500,rent,1475,500,03/01/2026,02/28/2027,220
     expect(a.payload.vendors).toEqual([expect.objectContaining({ company: "Desert Air HVAC", trade: "General", is1099: true, status: "Active" })]);
     expect(a.payload.balances.map((b) => [b.unit, b.buckets])).toEqual([["1", [100, 200, 0, 0]]]);
     expect(a.issues.map((i) => i.message)).toEqual(["Credit balance (-50.00) isn't imported; record it as a credit on the lease"]);
+  });
+});
+
+describe("balances across files", () => {
+  it("an aging report replaces the rent roll's undated past-due figure for the same unit", () => {
+    const roll = file("r", "Property,Unit,Tenant,Rent,Lease From,Lease To,Past Due\nA,1,Ana Lee,900,2026-01-01,2026-12-31,300\nA,2,Bo Kim,950,2026-01-01,2026-12-31,80");
+    const aging = file("b", "Property,Unit,Tenant,Total,0-30,31-60,61-90,90+\nA,1,Ana Lee,300,100,200,0,0\nA,1,Ana Lee,300,100,200,0,0", "rent_manager");
+    const a = assemble([aging, roll], [], TODAY);
+    expect(a.payload.balances.map((b) => [b.unit, b.buckets, b.src.file])).toEqual([["1", [100, 200, 0, 0], "b"], ["2", [80, 0, 0, 0], "r"]]);
+    expect(a.issues.map((i) => `${i.file}:${i.line} ${i.message}`)).toEqual(["b:3 Unit 1 already has a balance on row 2; skipped"]);
   });
 });
 

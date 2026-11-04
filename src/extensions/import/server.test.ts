@@ -81,7 +81,7 @@ describe("commit", () => {
     expect(await db.prepare("SELECT description, due_on, amount_cents, paid_cents FROM charges WHERE workspace_id = ? AND lease_id = ?").bind(WS, lease!.id).first()).toEqual({ description: "Opening balance · 0–30 days (imported)", due_on: "2026-10-20", amount_cents: 25000, paid_cents: 0 });
     expect(await db.prepare("SELECT bank_account_id, amount_cents, status FROM deposits WHERE workspace_id = ?").bind(WS).first()).toEqual({ bank_account_id: "ba-oe01-dep", amount_cents: 60000, status: "Held" });
     const audit = await db.prepare("SELECT actor, role, action, detail FROM audit WHERE workspace_id = ? AND entity_id = ?").bind(WS, r.batch).first();
-    expect(audit).toEqual({ actor: "Daniel Reyes", role: "principal", action: "import.completed", detail: "Imported from AppFolio (Rent Roll): 1 property, 4 units, 3 households, 4 residents, 3 leases, 1 deposit, 1 opening balance" });
+    expect(audit).toEqual({ actor: "Daniel Reyes", role: "principal", action: "import.completed", detail: "Imported from AppFolio (Rent Roll): 1 property, 4 units, 3 households, 4 residents, 3 leases, 1 deposit, 1 opening-balance charge" });
     expect(await count("SELECT count(*) AS n FROM events WHERE workspace_id = ? AND type = 'import.completed'", WS)).toBe(1);
   });
 

@@ -255,7 +255,12 @@ export function assemble(files: ImportFile[], edits: Edit[], today: string): Ass
         if (sum < 0) { issue(r, "warning", `Credit balance (${sum.toFixed(2)}) isn't imported; record it as a credit on the lease`, "balance"); continue; }
         if (sum === 0) continue;
         if (buckets.some((x) => x < 0)) { issue(r, "error", "An aging column is negative; enter credits separately", "balance"); continue; }
-        balances.push({ property: p.key, unit: number, tenant: raw(r, "tenant") || undefined, buckets, src: { file: f.id, line: r.line } });
+        const prior = balances.findIndex((b) => b.property === p.key && b.unit === number);
+        const rec = { property: p.key, unit: number, tenant: raw(r, "tenant") || undefined, buckets, src: { file: f.id, line: r.line } };
+        // An aging report's buckets replace a rent roll's undated past-due figure for the same unit.
+        if (prior < 0) balances.push(rec);
+        else if (files.find((x) => x.id === balances[prior]!.src.file)?.kind === "rent_roll") balances[prior] = rec;
+        else issue(r, "warning", `Unit ${number} already has a balance on row ${balances[prior]!.src.line}; skipped`);
         continue;
       }
 

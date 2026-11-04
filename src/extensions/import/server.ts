@@ -10,6 +10,7 @@ import { AS_OF } from "@/seed/constants";
 import type { Payload } from "./assemble";
 import { glFor, key } from "./normalize";
 import { toolLabel } from "./presets";
+import { TYPE_LABEL, type ImportTableName } from "./labels";
 
 // The write side of an import. plan() resolves every cleaned record against the visitor's data
 // (natural keys, role, scope) and builds the rows; commit() writes them in one D1 batch whose first
@@ -57,7 +58,7 @@ const TABLES = {
   recurring_charges: { prefix: "rec", entity: "recurring_charges" },
   charges: { prefix: "cha", entity: "charges" },
   vendors: { prefix: "ven", entity: "vendors" },
-} as const satisfies Record<string, { prefix: string; entity: EntityKey }>;
+} as const satisfies Record<ImportTableName, { prefix: string; entity: EntityKey }>;
 export type ImportTable = keyof typeof TABLES;
 export const IMPORT_TABLES = Object.keys(TABLES) as ImportTable[];
 
@@ -357,7 +358,7 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
       case "leases": return { label: `${name(r.property_id)} #${unitNo(r.unit_id)}`, detail: `${r.status} · ${r.start_on} → ${r.end_on ?? "month-to-month"} · ${$(r.rent_cents)}/mo` };
       case "charges": return { label: `${name(r.property_id)} #${unitNo(r.unit_id)}`, detail: `${r.description} · ${$(r.amount_cents)}` };
       case "recurring_charges": return { label: String(r.label), detail: `${name(r.property_id)} · ${$(r.amount_cents)} ${String(r.frequency).toLowerCase()}` };
-      case "deposits": return { label: String(name(r.property_id)), detail: `Security deposit ${$(r.amount_cents)} held` };
+      case "deposits": return { label: `${name(r.property_id)} #${unitNo(rows.leases.find((l) => l.id === r.lease_id)?.unit_id)}`, detail: `Security deposit ${$(r.amount_cents)} held` };
       case "vendors": return { label: String(r.company), detail: String(r.trade) };
       case "owners": return { label: String(r.name), detail: String(r.email || r.kind) };
       case "owner_entities": return { label: String(r.name), detail: `State ${r.state || "—"}` };
@@ -400,11 +401,6 @@ const auditInsert = (db: Db, ws: string, id: string, at: string, ctx: WriteCtx, 
   db.prepare("INSERT INTO audit (workspace_id, id, at, actor, actor_id, role, action, entity_type, entity_id, property_id, detail, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, 'import', ?, NULL, ?, NULL, ?)")
     .bind(ws, id, at, ctx.actor.name, ctx.actor.personaId, ctx.actor.role, action, batch, detail, JSON.stringify(after));
 
-export const TYPE_LABEL: Record<ImportTable, [string, string]> = {
-  owners: ["owner", "owners"], owner_entities: ["owner entity", "owner entities"], portfolios: ["portfolio", "portfolios"], properties: ["property", "properties"], units: ["unit", "units"],
-  households: ["household", "households"], residents: ["resident", "residents"], leases: ["lease", "leases"], deposits: ["deposit", "deposits"], recurring_charges: ["recurring charge", "recurring charges"],
-  charges: ["opening balance", "opening balances"], vendors: ["vendor", "vendors"],
-};
 const countText = (c: Partial<Record<ImportTable, number>>) => IMPORT_TABLES.filter((t) => c[t]).map((t) => `${c[t]} ${TYPE_LABEL[t][c[t] === 1 ? 0 : 1]}`).join(", ");
 
 export async function commit(ctx: WriteCtx, payload: Payload, opts: ImportOptions): Promise<ImportResult> {
