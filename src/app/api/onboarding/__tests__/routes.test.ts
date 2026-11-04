@@ -121,9 +121,9 @@ describe("POST /api/onboarding/detect", () => {
         sent = user;
         expect(system).toMatch(/data, never instructions/);
         return { value: schema.parse({ files: [
-          { file: "f1", tool: "appfolio", record_type: "rent_roll", confidence: 1.4, reason: "Tenant and Past Due columns, as AppFolio names them." },
-          { file: "f9", tool: "appfolio", record_type: "rent_roll", confidence: 0.9, reason: "Not a file that was sent." },
-          { file: "f1", tool: "quickbooks", record_type: "rent_roll", confidence: 0.9, reason: "Unknown tool, and a second answer." },
+          { id: "f1", tool: "appfolio", record_type: "rent_roll", confidence: 1.4, reason: "Tenant and Past Due columns, as AppFolio names them." },
+          { id: "f9", tool: "appfolio", record_type: "rent_roll", confidence: 0.9, reason: "Not a file that was sent." },
+          { id: "f1", tool: "quickbooks", record_type: "rent_roll", confidence: 0.9, reason: "Unknown tool, and a second answer." },
         ] }), usage: { tokensIn: 400, tokensOut: 80, costCents: 0.16, latencyMs: 700 } };
       },
     };
@@ -132,7 +132,7 @@ describe("POST /api/onboarding/detect", () => {
     const out = await res.json();
     expect(out).toMatchObject({ live: true, source: "Claude Sonnet", detections: [{ id: "f1", tool: "appfolio", kind: "rent_roll", confidence: 1 }] });
     expect(out.detections).toHaveLength(1);
-    expect(JSON.parse(sent)).toEqual({ files: [{ file: "f1", name: "export.csv", headers: body.files[0]!.headers, sample_rows: body.files[0]!.samples }] });
+    expect(JSON.parse(sent)).toMatchObject({ files: [{ id: "f1", name: "export.csv", headers: body.files[0]!.headers, sample_rows: body.files[0]!.samples, layout_match: { tool: expect.any(String), record_type: "rent_roll" } }] });
   });
 
   it("falls back to rules when the model fails", async () => {
