@@ -4,7 +4,7 @@
 //   EVAL_ONLY=extract npm run eval                 # only cases whose id contains "extract"
 // Exits 1 when the pass rate is below MIN_PASS (default 0.8). Fallbacks to mock count as not passed.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { gradeAgentRun, gradeExtract, gradeReport, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
+import { gradeAgentRun, gradeExtract, gradeInsurance, gradeReport, gradeMap, gradeNlFilter, gradeParse, gradePlan, gradeSummary, gradeValidate, isFallback, overriddenByRules } from "./graders.mjs";
 
 const BASE_URL = (process.env.BASE_URL || "https://propniti.ai").replace(/\/$/, "");
 const MIN_PASS = Number(process.env.MIN_PASS ?? 0.8);
@@ -93,6 +93,12 @@ async function main() {
       form.append("file", new Blob([read(c.file)], { type: "image/png" }), c.file.split("/").pop());
       return call("/api/ai/extract", { method: "POST", body: form });
     }, gradeExtract],
+    ["Insurance declarations", "insurance", (c) => {
+      const form = new FormData();
+      form.append("file", new Blob([read(c.file)], { type: "image/png" }), c.file.split("/").pop());
+      form.append("kind", "insurance");
+      return call("/api/ai/extract", { method: "POST", body: form });
+    }, gradeInsurance],
     // Action plans are built by rules on purpose (nothing runs before a person confirms), so they aren't fallbacks.
     ["Assistant plans", "copilot-plan", (c) => postJson("/api/ai/assistant", { question: c.question }, c.persona).then((r) => ({ ...r, source: r.live ? r.model : r.mode === "actions" ? "rules (by design)" : "mock" })), gradePlan],
     ["AI filter", "nl-filter", (c) => postJson("/api/ai/nl-filter", { entity: c.entity, text: c.text }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeNlFilter],

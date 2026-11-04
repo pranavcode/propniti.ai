@@ -96,7 +96,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
     const out = await post("/api/ai/agents/collections/run", {});
     setBusy(null);
     if (!out.ok || !out.runId) return toast.error(out.error ?? "The agent didn't start");
-    toast.success("Collections agent started", { action: { label: "Watch the run", onClick: () => router.push(out.href ?? `/app/ai/runs/${out.runId}`) } });
+    toast.success("Collections Agent started", { action: { label: "Watch the run", onClick: () => router.push(out.href ?? `/app/ai/runs/${out.runId}`) } });
     refreshTimer.current = setTimeout(() => router.refresh(), 4000);
   };
 
@@ -112,7 +112,7 @@ export function Workbench({ rows, canRun }: { rows: WorkbenchRow[]; canRun: bool
         <span className="text-[12.5px] text-muted-foreground">{selected.length ? `${selected.length} selected` : `${bulkable.length} reminder${bulkable.length === 1 ? "" : "s"} on this page can be approved together`}</span>
         <Button size="sm" disabled={!selected.length || busy !== null} onClick={bulk}>{busy === "bulk" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Send data-icon="inline-start" />}Approve {selected.length || ""} low-risk reminder{selected.length === 1 ? "" : "s"}</Button>
         <span className="hidden text-[11.5px] text-muted-foreground lg:inline">Payment plans and legal referrals are decided one at a time.</span>
-        <div className="ml-auto">{canRun && <Button size="sm" variant="outline" disabled={busy !== null} onClick={run}>{busy === "run" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Play data-icon="inline-start" />}Run Collections agent</Button>}</div>
+        <div className="ml-auto">{canRun && <Button size="sm" variant="outline" disabled={busy !== null} onClick={run}>{busy === "run" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Play data-icon="inline-start" />}Run Collections Agent</Button>}</div>
       </div>
 
       {rows.length === 0 ? <EmptyState kind="table" title="No delinquent residents here" description="Everyone in this view is paid up. Change the filters to see more." /> : (

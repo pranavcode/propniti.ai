@@ -108,7 +108,7 @@ export function upcoming(from: string, frequency: string, n: number) {
   return out;
 }
 
-// Same scoring the Maintenance Triage agent uses (rating × 20 − 5 per open job), so the ranked
+// Same scoring the Maintenance Triage Agent uses (rating × 20 − 5 per open job), so the ranked
 // list and the agent's pick agree. Vendors without a valid COI are never dispatchable.
 export const vendorScore = (rating: number | null, openJobs: number) => Number(rating ?? 3) * 20 - openJobs * 5;
 

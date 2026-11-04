@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ActionBar } from "@/components/entity/RecordActions";
 import { RecordSummary } from "@/components/entity/RecordSummary";
 import type { PeekData } from "@/components/entity/peek";
+import { IssueFix } from "@/ai/ui/IssueFix";
 import { DataHealthBadge } from "../ai/DataHealthBadge";
 import { Cell } from "../data-table/cells";
 import type { Row } from "../data-table/types";
@@ -98,6 +99,8 @@ export function PeekDrawer() {
         aria-describedby={undefined}
         style={mobile ? undefined : { width: `min(${width}px, 100vw)` }}
         className={cn("gap-0 p-0", mobile ? "data-[side=bottom]:h-[85dvh] rounded-t-xl" : "max-w-none data-[side=right]:sm:max-w-none")}
+        // A toast (its View or Undo button) sits outside the drawer; clicking it isn't a dismiss.
+        onInteractOutside={(e) => { if ((e.target as Element | null)?.closest?.("[data-sonner-toaster]")) e.preventDefault(); }}
         onCloseAutoFocus={(e) => {
           // Back to the row the drawer was showing last (it may have moved with J/K).
           const el = last.current && peekRowElement(last.current);
@@ -150,7 +153,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
 
       <div className="flex flex-col gap-5 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {p.facts.length > 0 && (
-          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border">
+          <dl className="grid shrink-0 grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border">
             {p.facts.map((f) => (
               <div key={f.key} className="min-w-0 bg-card px-3 py-2 odd:last:col-span-2">
                 <dt className="truncate text-[11px] text-muted-foreground">{f.label}</dt>
@@ -161,13 +164,14 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
         )}
 
         {p.summary !== false && (
-          <RecordSummary key={id} entity={p.entity} id={id} title={p.title} label={p.label.one} initial={p.summary} heading="h3" onAsk={onAsk} />
+          <RecordSummary key={id} entity={p.entity} id={id} label={p.label.one} initial={p.summary} heading="h3" />
         )}
 
         {p.health && p.health.length > 0 && (
           <section className="rounded-lg border border-tone-warning/30 bg-tone-warning/[0.05] p-3">
             <h3 className="text-[12.5px] font-semibold">Data health</h3>
             <ul className="mt-1.5 flex flex-col gap-1 text-[12.5px]">{p.health.map((i) => <li key={i.id}><Link href={`/app/data-health?f.entity_id=${encodeURIComponent(id)}`} className="hover:underline">{i.summary}</Link></li>)}</ul>
+            {p.health.length === 1 && <IssueFix key={p.health[0].id} id={p.health[0].id} onDone={() => onChanged(false)} />}
           </section>
         )}
 

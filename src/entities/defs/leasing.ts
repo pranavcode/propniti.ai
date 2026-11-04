@@ -5,6 +5,7 @@ import { AS_OF, LEADERS, OPS, STAFF, thumb } from "../common";
 import { z } from "zod";
 import { registerEntity } from "../registry";
 import type { Role } from "../types";
+import { prospectSentence } from "@/ai/rules-sentences";
 
 // Who works leads and listings, and who decides applications and concessions.
 const LEASING: Role[] = [...OPS, "leasing_agent", "broker"];
@@ -155,7 +156,7 @@ registerEntity({
       { key: "new", label: "New inquiries", filters: { stage: "Inquiry" } },
       { key: "touring", label: "Touring this week", filters: { stage: "Tour scheduled" } },
     ],
-    bulkActions: ["prospects.mark_lost"],
+    bulkActions: ["prospects.follow_up", "prospects.mark_lost"],
   },
   detail: {
     facts: ["stage", "property_id", "source", "desired_beds", "budget", "desired_move_in", "last_contact_at", "assigned_to"],
@@ -176,12 +177,13 @@ registerEntity({
   ],
   ai: {
     facts: (r) => ({ prospect: String(r.name), stage: String(r.stage), source: (r.source as string) ?? null, budget: r.budget == null ? null : Number(r.budget), desired_beds: r.desired_beds == null ? null : Number(r.desired_beds), days_since_contact: r.days_since_contact == null ? null : Number(r.days_since_contact) }),
+    rulesSummary: prospectSentence,
     summaryPrompt: "Summarise this lead for the leasing agent in 2 sentences: what they want, where they are in the funnel and the next step. Use only the facts.",
     agents: ["leasing"],
   },
   permissions: { read: [...STAFF], create: [...LEASING], update: [...LEASING], delete: [...LEADERS, "broker"] },
   writes: "generic",
-  actions: ["prospects.move_stage", "prospects.mark_lost"],
+  actions: ["prospects.move_stage", "prospects.follow_up", "prospects.mark_lost"],
   help: { summary: "Everyone who asked about a home, from first inquiry to a signed lease or a lost lead.", article: "leasing-pipeline-board" },
 });
 

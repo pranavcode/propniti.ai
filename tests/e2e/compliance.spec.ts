@@ -18,7 +18,7 @@ test("compliance dashboard drills into lists and records", async ({ page }) => {
   await go(page, `${BASE}/app/compliance`);
   await expect(page.getByRole("heading", { name: "Compliance", level: 1 })).toBeVisible();
   await expect(page.getByText("Expiries timeline")).toBeVisible();
-  await expect(page.getByText("Compliance agent proposals")).toBeVisible();
+  await expect(page.getByText("Compliance Agent proposals")).toBeVisible();
   await expect(page.getByText("Upcoming expiries, next 12 months")).toBeVisible();
 
   // KPI drill-down opens the filtered list.
@@ -51,4 +51,18 @@ test("compliance dashboard drills into lists and records", async ({ page }) => {
 test("legal cases are hidden from roles without access", async ({ page }) => {
   await go(page, `${BASE}/app/compliance`);
   await expect(page.getByRole("link", { name: "Legal and evictions" })).toHaveCount(0);
+});
+
+test("a lapsed vendor certificate is requested from the timeline, once", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await go(page, `${BASE}/app/compliance`);
+  await expect(page.getByText("Lapsed, needs action")).toBeVisible();
+  const request = page.getByRole("button", { name: "Request certificate" }).first();
+  await expect(request).toBeVisible();
+  await request.click();
+  await expect(page.getByText("Asked the vendor for a current certificate")).toBeVisible();
+  // The row now says when the vendor was asked instead of offering the button again.
+  await expect(page.getByText(/^Asked /).first()).toBeVisible();
+  expect(errors).toEqual([]);
 });

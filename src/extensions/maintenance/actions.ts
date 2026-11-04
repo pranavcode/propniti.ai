@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CheckCircle2, ClipboardCheck, Clock, DollarSign, ImagePlus, KeyRound, PlayCircle, ScanSearch, Send, Sparkles, Truck, Wrench } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Clock, DollarSign, ImagePlus, KeyRound, PlayCircle, ScanSearch, Send, Siren, Sparkles, Truck, Wrench } from "lucide-react";
 import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
 import { startRun } from "@/ai/orchestrator";
 import { effective as effectiveSql } from "@/server/effective";
@@ -7,10 +7,11 @@ import { approveAndPayWorkOrder } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { AS_OF } from "@/seed/constants";
 import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
+import { routeTo, staffDecision } from "@/ai/decide";
 import { registerAction } from "../actions";
 import { checkPhoto, nextDue, PHOTO_TAGS, policyCheck, usd, validateInvoice } from "./rules";
 import { insertStmt, newId, OPEN_STATUSES, parse, row as readRow, update, updateStmt } from "./store";
-import { invoiceInputs, policyFor, techCovers } from "./queries";
+import { invoiceInputs, latestTriage, policyFor, techCovers } from "./queries";
 
 // Named actions for the maintenance module. Each runs inside the generic action route, which has
 // already checked the role, module access, the record's scope and `when`, and audits success.
@@ -33,7 +34,7 @@ async function woEvent(c: ActionContext, wo: Row, kind: string, detail: object, 
 }
 
 // ---------------------------------------------------------------------------------------------
-// Intake: triage with the Maintenance Triage agent, then dispatch
+// Intake: triage with the Maintenance Triage Agent, then dispatch
 // ---------------------------------------------------------------------------------------------
 
 registerAction({
@@ -44,7 +45,7 @@ registerAction({
   roles: SUP,
   icon: Sparkles,
   when: (r) => ["New", "Triaged"].includes(String(r.status)),
-  help: { summary: "Runs the Maintenance Triage agent on this request: trade, urgency, estimate, ranked vendors and the owner approval limit.", article: "maintenance-triage-agent" },
+  help: { summary: "Runs the Maintenance Triage Agent on this request: trade, urgency, estimate, ranked vendors and the owner approval limit.", article: "maintenance-triage-agent" },
   handler: async (c, r) => {
     const { runId, done } = await startRun({ db: c.db, ws: c.ws, actor: c.actor, agent: "maintenance_triage", trigger: { kind: "manual", input: { work_order_id: r.id } }, deadlineMs: 20_000 });
     const res = await done;
@@ -66,7 +67,7 @@ const Dispatch = z.strictObject({
   proposal_id: z.string().max(80).optional(),
 });
 
-registerAction({
+const dispatch = registerAction({
   key: "work_orders.dispatch",
   label: "Dispatch",
   entity: "work_orders",
@@ -115,6 +116,44 @@ registerAction({
     await c.db.batch(stmts);
     const who = vendorName || "the in-house technician";
     return ok(pol.level === "owner" ? `${r.id} is on hold until the owner approves ${usd(estimateCents)}. ${who} is lined up.` : `${r.id} dispatched to ${who}.`);
+  },
+});
+
+// "Dispatch as suggested" from the triage queue, one at a time or in bulk ("Accept N"): dispatches
+// the Maintenance Triage agent's open suggestion through work_orders.dispatch, so the insurance,
+// status and double-click guards are the same. Whether this person may accept the suggestion is
+// the approvals rule (staffDecision): a suggestion with an amount needs approve access to
+// maintenance. Without it the suggestion stays in Approvals, routed as the rule says. Estimates
+// over the owner's limit put the job on hold for the owner, as a manual dispatch does. "Accept N"
+// sends high_confidence_only, and the threshold is checked here, not only in the browser.
+export const HIGH_CONFIDENCE = 0.8;
+
+registerAction({
+  key: "work_orders.dispatch_suggested",
+  label: "Dispatch as suggested",
+  entity: "work_orders",
+  roles: SUP,
+  icon: Sparkles,
+  bulk: true,
+  input: z.strictObject({ high_confidence_only: z.boolean().optional() }),
+  when: (r) => ["New", "Triaged"].includes(String(r.status)),
+  help: { summary: "Dispatches the vendor the Maintenance Triage agent suggested, if your role may approve it. Otherwise it stays in Approvals; over the owner's limit, the job waits for the owner.", article: "maintenance-triage-agent" },
+  handler: async (c, r, opts) => {
+    const p = await latestTriage(c.db, c.ws, String(r.id));
+    if (!p || p.decision || p.queue_state === "auto_handled") return conflict(`${r.id} has no open AI suggestion. Open it to dispatch.`);
+    if (opts?.high_confidence_only && !(p.confidence >= HIGH_CONFIDENCE)) return conflict(`The suggestion for ${r.id} is below ${Math.round(HIGH_CONFIDENCE * 100)}% confidence. Open it to review.`);
+    const vendor = typeof p.changes.vendor_id === "string" ? p.changes.vendor_id : null;
+    if (!vendor) return conflict(`The suggestion for ${r.id} is an in-house technician. Open it to pick one.`);
+    const decision = staffDecision(c.actor.role, { entity_type: "work_orders", property_id: r.property_id, amount_cents: p.amount_cents, risk: p.risk, queue_state: "needs_you" });
+    if (!decision.ok) {
+      const role = routeTo({ entity_type: "work_orders", property_id: r.property_id, risk: p.risk });
+      if (role) await c.db.batch([await updateStmt(c.db, c.ws, "ai_proposals", p.id, { assignee_role: role })]);
+      return { status: 202, message: `${r.id} stays in Approvals. ${decision.error}`, proposalId: p.id };
+    }
+    const estimateCents = p.amount_cents ?? Math.round(Number(r.estimate ?? 0) * 100);
+    const input = Dispatch.safeParse({ vendor_id: vendor, priority: p.changes.priority ?? r.priority, category: p.changes.category ?? r.category, ...(estimateCents ? { estimate: estimateCents / 100 } : {}), proposal_id: p.id });
+    if (!input.success) return { status: 400, error: `The suggestion for ${r.id} is incomplete. Open it to dispatch.` };
+    return dispatch.handler(c, r, input.data);
   },
 });
 
@@ -373,6 +412,39 @@ registerAction({
   handler: async (c, r) => {
     const okWrite = await update(c.db, c.ws, "turnovers", String(r.id), { status: "Ready", ready_on: AS_OF }, "NOT EXISTS (SELECT 1 FROM json_each(e.checklist) j WHERE json_extract(j.value, '$.done') = 0) AND e.status IN ('Not started', 'In progress')");
     return okWrite ? ok(`${r.title} is rent-ready. Leasing can list it.`) : conflict("Finish every checklist step first.");
+  },
+});
+
+// Late make-ready: the turn vendor gets a portal notification asking for a new ready date, and the
+// turnover's activity records who escalated. At most once every ESCALATE_DAYS days per make-ready:
+// the notification insert is the guard and the activity row runs only if it landed.
+export const ESCALATE_DAYS = 3;
+
+registerAction({
+  key: "turnovers.escalate",
+  label: "Escalate",
+  entity: "turnovers",
+  roles: SUP,
+  icon: Siren,
+  bulk: true,
+  when: (r) => ["Not started", "In progress"].includes(String(r.status)) && String(r.target_ready_on) < AS_OF,
+  help: { summary: "Asks the turn vendor for a new ready date on a make-ready past its target. Each make-ready is escalated at most once every 3 days.", article: "make-ready-turnovers" },
+  handler: async (c, r) => {
+    if (!r.vendor_id) return conflict(`${r.title} has no turn vendor. Set one on the record, then escalate.`);
+    const at = nowIso(c.nowMs);
+    const since = new Date(Date.parse(at) - ESCALATE_DAYS * 86_400_000).toISOString();
+    const gate = newId("ntf");
+    const days = Math.round((Date.parse(AS_OF) - Date.parse(String(r.target_ready_on))) / 86_400_000);
+    const vendor = String(r.vendor_id__label ?? r.vendor_id);
+    const [res] = await c.db.batch([
+      c.db.prepare(`INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, href, entity_type, entity_id, at) SELECT ?1, ?2, ?3, 'In-app', ?4, ?5, '/portal/vendor/jobs', 'turnovers', ?6, ?7
+        WHERE NOT EXISTS (SELECT 1 FROM ${effectiveSql("notifications")} n WHERE n.entity_type = 'turnovers' AND n.entity_id = ?6 AND n.at >= ?8)`)
+        .bind(c.ws, gate, r.vendor_id, `Make-ready past its target: ${String(r.title).replace(/^Make-ready · /, "")}`, `This make-ready was due ${r.target_ready_on} and is ${days} day${days === 1 ? "" : "s"} late. Reply with a new ready date, or tell us what's blocking it.`, r.id, at, since),
+      c.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) SELECT ?1, ?2, 'turnovers', ?3, ?4, ?5, 'staff', ?6, 'escalated', ?7, '{}' WHERE EXISTS (SELECT 1 FROM notifications WHERE workspace_id = ?1 AND id = ?8)")
+        .bind(c.ws, newId("act"), r.id, r.property_id, at, c.actor.personaId, `${c.actor.name} escalated to ${vendor}: ${days} day${days === 1 ? "" : "s"} past target`, gate),
+    ]);
+    if (!res.meta.changes) return conflict(`${r.title} was escalated in the last ${ESCALATE_DAYS} days. Give ${vendor} time to answer.`);
+    return ok(`Escalated to ${vendor}: asked for a new ready date.`);
   },
 });
 

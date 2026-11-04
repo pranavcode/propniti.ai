@@ -124,7 +124,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
               {!queue.rows.length ? (
                 <EmptyState compact kind="table" title="Nothing waiting on you" description="When an agent proposes something over your approval limit, it shows up here with its reasons and evidence." />
               ) : (
-                <div className="flex flex-col gap-2">{queue.rows.map((p) => <ProposalCard key={String(p.id)} p={p as unknown as ProposalJson} canApprove={PERMISSIONS[role].intelligence === "approve"} />)}</div>
+                <div className="flex flex-col gap-2">{queue.rows.map((p) => <ProposalCard key={String(p.id)} p={p as unknown as ProposalJson} />)}</div>
               )}
             </CollapsibleSection>
           )}

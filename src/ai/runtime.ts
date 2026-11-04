@@ -1,4 +1,5 @@
 import { demoNowIso } from "@/lib/clock";
+import { routeTo } from "./decide";
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { asOf, eff, getRaw, insert, isTable, newId, retryBusy, type DataCtx } from "./data";
@@ -8,6 +9,7 @@ import { getTool } from "./tools/registry";
 import { getAction } from "@/extensions/actions";
 import type { ApprovalPolicy, Autonomy, RunContext, Step, ToolDef, ToolKey } from "./types";
 import { z } from "zod";
+import { agentName } from "@/ai/ui/labels";
 
 // The live side of a run: every tool call, model turn and proposal is written to agent_steps as it
 // happens, so the run viewer (and its SSE stream) shows the trace while the run is still going.
@@ -152,7 +154,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   // Auto-run only inside a visitor's workspace: the shared base is never changed by a schedule.
   const auto = ctx.autonomy === "auto_within_policy" && ws !== "base" && !human && !overLimit && risk === "Low";
   const queueState = auto ? "auto_handled" : ownerNeeded ? "waiting" : "needs_you";
-  const assignee = ownerNeeded ? "owner" : policy?.approverRole ?? p.assignee ?? null;
+  const assignee = ownerNeeded ? "owner" : routeTo({ entity_type: p.entity, risk, property_id: p.propertyId ?? null }) ?? policy?.approverRole ?? p.assignee ?? null;
 
   const id = newId("prop");
   // What the agent saw, so approval can refuse a proposal whose record has since changed.
@@ -173,7 +175,7 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   await (await insert(db, ws, "ai_proposals", row)).run();
   if (!auto || ctx.aborted) return { id, queueState, duplicate: false };
 
-  const result = await execute(ctx.data, row, { id: ctx.agent, name: `${ctx.agent} agent`, agent: ctx.agent });
+  const result = await execute(ctx.data, row, { id: ctx.agent, name: agentName(ctx.agent), agent: ctx.agent });
   await ctx.step({ kind: "message", output: { auto_applied: id, ...result }, ok: result.ok });
   return { id, queueState, duplicate: false, executed: result };
 }

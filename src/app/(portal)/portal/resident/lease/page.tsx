@@ -4,6 +4,10 @@ import { portalCtx } from "@/extensions/owners/portal/context";
 import { currentLease, daysUntil, documents, insurance, me, offers, parsePhotos } from "@/extensions/owners/portal/resident-data";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { RenewalOffers } from "@/extensions/owners/portal/ui/resident/RenewalOffers";
+import { InsuranceUpload } from "@/extensions/owners/portal/ui/resident/InsuranceUpload";
+import { AskRenewal } from "@/extensions/owners/portal/ui/resident/AskRenewal";
+import { askedThisWeek } from "@/extensions/residents/renewalAsk";
+import { AS_OF } from "@/seed/constants";
 import { Card, fmtDay } from "@/extensions/owners/portal/ui/resident/bits";
 
 // Same-site paths and https links only (documents can be imported from elsewhere).
@@ -23,7 +27,7 @@ export default async function ResidentLease() {
       </>
     );
   }
-  const [offerList, policy, docs] = await Promise.all([offers(c, lease.id), insurance(c, lease.id), documents(c, lease.id)]);
+  const [offerList, policy, docs, asked] = await Promise.all([offers(c, lease.id), insurance(c, lease.id), documents(c, lease.id), askedThisWeek(c.db, c.ws, lease.id).catch(() => false)]);
   const unitPhotos = parsePhotos(lease.unit_photos);
   const photos = (unitPhotos.length ? unitPhotos : parsePhotos(lease.photos)).slice(0, 4);
   const left = lease.end_on ? daysUntil(lease.end_on) : null;
@@ -49,7 +53,10 @@ export default async function ResidentLease() {
           <div id="renewal" className="scroll-mt-20">
             <Card title="Renewal">
               {offerList.length ? <RenewalOffers me={c.me} offers={offerList} /> : (
-                <p className="text-[13px] text-muted-foreground">No renewal offer yet. The office usually sends one 60 to 90 days before your lease ends{lease.end_on ? ` (${fmtDay(lease.end_on, true)})` : ""}. You&apos;ll see it here and get a message.</p>
+                <div className="space-y-3">
+                  <p className="text-[13px] text-muted-foreground">No renewal offer yet. The office usually sends one 60 to 90 days before your lease ends{lease.end_on ? ` (${fmtDay(lease.end_on, true)})` : ""}. You&apos;ll see it here and get a message.</p>
+                  {lease.status !== "Future" && <AskRenewal me={c.me} asked={asked} />}
+                </div>
               )}
             </Card>
           </div>
@@ -79,7 +86,7 @@ export default async function ResidentLease() {
             </div>
           )}
           <div id="insurance" className="scroll-mt-20">
-            <Card title="Renters insurance" action={policy ? <StatusBadge value={policy.status} tone={policy.status === "Active" ? "success" : policy.status === "Lapsed" ? "danger" : "warning"} /> : <StatusBadge value="Missing" tone="warning" label="None on file" />}>
+            <Card title="Renters insurance" action={policy ? <StatusBadge value={policy.status} tone={policy.status === "Active" ? "success" : policy.status === "Lapsed" ? "danger" : policy.status === "Pending verification" ? "info" : "warning"} /> : <StatusBadge value="Missing" tone="warning" label="None on file" />}>
               {policy ? (
                 <div className="space-y-3 text-[13px]">
                   <div className="flex items-start gap-2">
@@ -90,9 +97,21 @@ export default async function ResidentLease() {
                     <div><dt className="text-[11.5px] text-muted-foreground">Liability</dt><dd className="font-medium"><Money value={policy.liability_cents} cents style="whole" tone="none" /></dd></div>
                     <div><dt className="text-[11.5px] text-muted-foreground">Expires</dt><dd className="font-medium tabular-nums">{fmtDay(policy.expires_on, true)}</dd></div>
                   </dl>
-                  {daysUntil(policy.expires_on) <= 30 && <p className="rounded-lg bg-tone-warning/10 px-3 py-2 text-[12.5px]">{daysUntil(policy.expires_on) < 0 ? "This policy has expired." : `Expires in ${daysUntil(policy.expires_on)} days.`} Message the office to find out how to send your renewal declarations page.</p>}
+                  {policy.status === "Pending verification" ? <p className="rounded-lg bg-tone-info/10 px-3 py-2 text-[12.5px]">You sent this policy. The office checks it against your declarations page; until then it shows as pending.</p>
+                    : (policy.status === "Lapsed" || daysUntil(policy.expires_on) <= 30) && (
+                    <div className="space-y-2 rounded-lg bg-tone-warning/10 px-3 py-2 text-[12.5px]">
+                      <p>{policy.status === "Lapsed" || daysUntil(policy.expires_on) < 0 ? "This policy has lapsed." : `Expires in ${daysUntil(policy.expires_on)} days.`} Upload your new declarations page and the office will verify it.</p>
+                      <InsuranceUpload me={c.me} today={AS_OF} />
+                    </div>
+                  )}
+                  {policy.status === "Active" && daysUntil(policy.expires_on) > 30 && <InsuranceUpload me={c.me} today={AS_OF} variant="outline" label="Upload a new declarations page" />}
                 </div>
-              ) : <p className="text-[13px] text-muted-foreground">Your lease requires renters insurance. Message the office and they&apos;ll tell you how to send your declarations page.</p>}
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-[13px] text-muted-foreground">Your lease requires renters insurance. Upload the declarations page from your insurer and the office will verify it.</p>
+                  <InsuranceUpload me={c.me} today={AS_OF} />
+                </div>
+              )}
             </Card>
           </div>
         </div>

@@ -11,7 +11,7 @@ import { addMonths, apAging, scoped } from "../metrics";
 // Facts for the accountant home: the briefing, approvals and dashboard. Every figure is computed
 // here from the ledger; nothing on the page is written by a model.
 
-export type BriefingItem = { tone: "danger" | "warning" | "info" | "success"; text: string; href: string };
+export type BriefingItem = { tone: "danger" | "warning" | "info" | "success"; text: string; href: string; action?: { label: string; href: string } };
 
 const safe = <T,>(p: Promise<T>, fallback: T) => p.catch((e) => {
   console.error("[finance home]", e instanceof Error ? e.message : e);
@@ -73,13 +73,13 @@ export async function financeHome(db: Db, ws: string | null, actor: Actor) {
   if (pending?.n) needs.push({ tone: "warning", text: `${pending.n} bills (${usd(pending.c / 100)}) wait for approval`, href: "/app/payables/bills?view=to-approve" });
   for (const h of holds.results.slice(0, 2)) needs.push({ tone: "danger", text: `${h.company} changed bank details on ${formatDate(h.bank_changed_at)}. Payments are on hold until someone verifies by phone`, href: `/app/payables/bills?f.vendor_id=${h.id}&f.status=Pending%20approval,Approved` });
   if (unmatched) needs.push({ tone: "warning", text: `${unmatched} bank deposits have no matching ledger entry`, href: "/app/banking/transactions?view=unexplained-deposits" });
-  if (miscoded?.n) needs.push({ tone: "info", text: `${miscoded.n} bills look miscoded. The Payables agent suggests a recode`, href: "/app/payables/bills?view=data-issues" });
+  if (miscoded?.n) needs.push({ tone: "info", text: `${miscoded.n} bills look miscoded. The Payables Agent suggests a recode`, href: "/app/payables/bills?view=data-issues" });
   if (dueSoon?.n) needs.push({ tone: "info", text: `${dueSoon.n} approved bills (${usd(dueSoon.c / 100)}) are due within 7 days and not yet paid`, href: "/app/payables/bills?view=ready-to-pay" });
 
   const watch: BriefingItem[] = [];
   if (forecast?.low && forecast.low.balance < forecast.opening * 0.6) watch.push({ tone: "warning", text: `Trust cash dips to ${usd(forecast.low.balance)} in the week of ${forecast.low.week}`, href: "/app/reports?r=cash_forecast" });
   if (overrun && overrun.actual > overrun.budget * 1.05) watch.push({ tone: "warning", text: `${overrun.name} spent ${Math.round(((overrun.actual - overrun.budget) / overrun.budget) * 100)}% over its ${monthName(lastClosed)} expense budget`, href: `/app/finance/budget-vs-actual?property=${overrun.property_id}` });
-  if (pastDue > 0) watch.push({ tone: "danger", text: `${usd(pastDue)} of payables are past due`, href: "/app/payables/bills?view=past-due" });
+  if (pastDue > 0) watch.push({ tone: "danger", text: `${usd(pastDue)} of payables are past due`, href: "/app/payables/bills?view=past-due", action: { label: "Build payment run", href: "/app/finance/payment-run" } });
   if (ytdBudget && ytdActual > ytdBudget) watch.push({ tone: "warning", text: `Operating expense is ${Math.round(((ytdActual - ytdBudget) / ytdBudget) * 100)}% over budget year to date`, href: "/app/finance/budget-vs-actual" });
 
   const queueRows = [...ap.rows, ...recon.rows];

@@ -7,7 +7,7 @@ import { addDays, defineAgent, type Candidate } from "./framework";
 
 export default defineAgent({
   key: "compliance",
-  name: "Compliance agent",
+  name: "Compliance Agent",
   ownerRole: "maintenance_supervisor",
   goal: "Keep vendor insurance and property compliance current: request renewals for certificates expiring within 30 days, flag vendors working with expired insurance, and schedule permits, inspections and certificates before they lapse.",
   tools: ["records.search", "records.get", "records.related", "messages.draft", "actions.propose"],

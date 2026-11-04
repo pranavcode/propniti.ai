@@ -147,3 +147,92 @@ describe("new task", () => {
     expect(await mineIds(await actor("grace"))).toContain(`task-${key}`);
   });
 });
+
+describe("snooze, reassign and bulk", () => {
+  const run = async (key: string, id: string, input: unknown = {}, persona = "marcus") => runAction(await wctx(persona), getAction(key)!, id, getAction(key)!.input ? getAction(key)!.input!.parse(input) : input).catch((e) => ({ status: e.status as number }));
+  const taskRow = (id: string) => db.prepare("SELECT status, due_on, assignee_id, assignee_role FROM tasks WHERE workspace_id = ? AND id = ?").bind(WS, id).first();
+
+  it("snoozes to a later date once on a double click, with activity on the task and its record", async () => {
+    const statuses = (await Promise.all([run("tasks.snooze", "t-overdue", { due_on: "2026-11-10" }), run("tasks.snooze", "t-overdue", { due_on: "2026-11-10" })])).map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 409]);
+    expect(await taskRow("t-overdue")).toMatchObject({ status: "Open", due_on: "2026-11-10" });
+    expect((await db.prepare("SELECT count(*) AS n FROM activity_events WHERE workspace_id = ? AND verb = 'task_snoozed'").bind(WS).first<{ n: number }>())?.n).toBe(2);
+    // Today or earlier isn't a snooze; done tasks can't be snoozed.
+    expect((await run("tasks.snooze", "t-today", { due_on: "2026-11-04" })).status).toBe(400);
+    expect((await run("tasks.snooze", "t-done", { due_on: "2026-11-10" })).status).toBe(409);
+  });
+
+  it("reassigns only to active staff who work at the task's property", async () => {
+    await db.batch([
+      db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 's-ann', 'org1', 'Ann Lee', 'Assistant manager', 'a@x.example'), ('base', 's-bob', 'org1', 'Bob Diaz', 'Property manager', 'b@x.example')"),
+      db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-ann', 's-ann', 'property_manager', 'region', 'r-tx'), ('base', 'ra-bob', 's-bob', 'property_manager', 'property', 'p05')"),
+    ]);
+    expect(await run("tasks.reassign", "t-overdue", { assignee_id: "s-bob" })).toMatchObject({ status: 400 });
+    expect((await Promise.all([run("tasks.reassign", "t-role", { assignee_id: "s-ann" }), run("tasks.reassign", "t-role", { assignee_id: "s-ann" })])).map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await taskRow("t-role")).toMatchObject({ assignee_id: "s-ann", assignee_role: null });
+    // Ids are bound, not spliced into SQL: a quote in one is just part of the id.
+    await db.batch([
+      db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 's-o''neil', 'org1', 'Pat O''Neil', 'Leasing', 'p@x.example')"),
+      db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-pat', 's-o''neil', 'leasing_agent', 'org', NULL)"),
+    ]);
+    expect((await run("tasks.reassign", "t-today", { assignee_id: "s-o'neil" })).status).toBe(200);
+    expect(await taskRow("t-today")).toMatchObject({ assignee_id: "s-o'neil" });
+    // It leaves my list.
+    expect(await mineIds(await actor("marcus"))).not.toContain("t-role");
+  });
+
+  it("offers done and snooze in bulk, each task keeping its own guard", async () => {
+    expect(getAction("tasks.complete")!.bulk).toBe(true);
+    expect(getAction("tasks.snooze")!.bulk).toBe(true);
+    // The bulk route runs the action once per id, as here.
+    const out = await Promise.all(["t-overdue", "t-today", "t-done"].map((id) => run("tasks.complete", id)));
+    expect(out.map((r) => r.status)).toEqual([200, 200, 409]);
+  });
+});
+
+describe("notice of entry", () => {
+  beforeEach(async () => {
+    await db.batch([
+      task("t-notice", { title: "Send notice of entry: pest treatment, 101", entity: ["units", "p01-u1"], due: "2026-11-05" }),
+      task("t-notice-vacant", { title: "Send notice of entry: pest treatment, 103", entity: ["units", "p01-u3"], due: "2026-11-05" }),
+    ]);
+  });
+
+  it("drafts a notice through the message checks, without a model", async () => {
+    const { draftNotice } = await import("./notice-draft");
+    const r = await draftNotice(await wctx("marcus"), "t-notice");
+    expect(r.status).toBe(200);
+    if (r.status !== 200) return;
+    expect(r.draft).toMatchObject({ resident_id: "res-p01-u1", channel: "Email", entry_on: "2026-11-07", source: "rules", subject: "Notice of entry, The Lofts at Riverside #101" });
+    // Letter-style date from the tool, never the stored form.
+    expect(r.draft.body).toContain("Nov 7, 2026");
+    expect(r.draft.body).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(r.draft.body).toContain("pest treatment");
+    expect(await draftNotice(await wctx("marcus"), "t-notice-vacant")).toMatchObject({ status: 409 });
+    expect(await draftNotice(await wctx("marcus"), "t-overdue")).toMatchObject({ status: 400 });
+    expect(await draftNotice(await wctx("marcus"), "t-atlanta")).toMatchObject({ status: 404 });
+  });
+
+  it("sends once: the message is recorded and the task is done", async () => {
+    const input = { resident_id: "res-p01-u1", channel: "Email", subject: "Notice of entry", body: "Hi Res, we will enter #101 on Nov 7, 2026 for pest treatment." };
+    const send = async () => runAction(await wctx("marcus"), getAction("tasks.send_notice")!, "t-notice", input).catch((e) => ({ status: e.status as number }));
+    expect((await Promise.all([send(), send()])).map((r) => r.status).sort()).toEqual([200, 409]);
+    expect((await db.prepare("SELECT count(*) AS n FROM messages WHERE workspace_id = ? AND template_id = 'tpl-entry-notice'").bind(WS).first<{ n: number }>())?.n).toBe(1);
+    expect((await db.prepare("SELECT count(*) AS n FROM message_threads WHERE workspace_id = ?").bind(WS).first<{ n: number }>())?.n).toBe(1);
+    expect(await db.prepare("SELECT party_id, entity_id FROM message_threads WHERE workspace_id = ?").bind(WS).first()).toEqual({ party_id: "res-p01-u1", entity_id: "p01-u1" });
+    expect(await db.prepare("SELECT status FROM tasks WHERE workspace_id = ? AND id = 't-notice'").bind(WS).first()).toEqual({ status: "Done" });
+    // Only to a resident of that unit.
+    expect((await runAction(await wctx("marcus"), getAction("tasks.send_notice")!, "t-notice-vacant", { ...input, resident_id: "res-p01-u1" })).status).toBe(400);
+  });
+});
+
+describe("reassign options", () => {
+  it("lists active staff who work at my properties", async () => {
+    await db.batch([
+      db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email, active) VALUES ('base', 's-ann', 'org1', 'Ann Lee', 'Assistant manager', 'a@x.example', 1), ('base', 's-bob', 'org1', 'Bob Diaz', 'Property manager', 'b@x.example', 1), ('base', 's-cy', 'org1', 'Cy Old', 'Former', 'c@x.example', 0)"),
+      db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-ann', 's-ann', 'property_manager', 'region', 'r-tx'), ('base', 'ra-bob', 's-bob', 'property_manager', 'property', 'p05'), ('base', 'ra-cy', 's-cy', 'property_manager', 'property', 'p01')"),
+    ]);
+    const { staffOptions } = await import("./my-tasks");
+    expect((await staffOptions({ db, ws: WS, actor: await actor("marcus") })).map((s) => s.id)).toEqual(["s-ann"]);
+  });
+});

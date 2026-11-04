@@ -86,30 +86,97 @@ registerAction({
   },
 });
 
-// Approving a Leasing agent follow-up sends the drafted note (or the standard one) and logs the contact.
+// The broker (or a manager) moves leads to another leasing agent, e.g. stale leads off a full desk.
+// The new agent must hold a leasing-agent assignment that covers the lead's property.
+registerAction({
+  key: "prospects.reassign",
+  label: "Reassign",
+  entity: "prospects",
+  roles: [...OPS, "broker"],
+  icon: MoveRight,
+  bulk: true,
+  when: (r) => !["Leased", "Lost"].includes(String(r.stage)),
+  input: z.object({ to: z.string().trim().min(1).max(80) }),
+  help: { summary: "Gives the lead to another leasing agent who covers its property. The change is logged on the lead.", article: "leasing-pipeline-board" },
+  async handler(ctx, row, input) {
+    if (row.assigned_to === input.to) return fail(409, `${row.name} is already with that agent`);
+    const { effective } = await import("@/server/query");
+    const agent = await ctx.db.prepare(`SELECT s.name FROM ${effective("staff", ctx.ws)} s WHERE s.id = ? AND s.active = 1 AND EXISTS (SELECT 1 FROM ${effective("role_assignments", ctx.ws)} ra WHERE ra.staff_id = s.id AND ra.role = 'leasing_agent' AND (ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id = ?) OR (ra.scope_kind = 'region' AND ra.scope_id = (SELECT p.region_id FROM ${effective("properties", ctx.ws)} p WHERE p.id = ?))))`).bind(input.to, row.property_id, row.property_id).first<{ name: string }>();
+    if (!agent) return fail(409, `That agent doesn't cover ${row.property_id__label ?? "this lead's property"}`);
+    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "reassigned", summary: `Reassigned to ${agent.name} by ${ctx.actor.name}`, data: { from: row.assigned_to ?? null, to: input.to } },
+      [{ table: "prospects", id: String(row.id), changes: { assigned_to: input.to } }]);
+    return ok(`${row.name} reassigned to ${agent.name}`);
+  },
+});
+
+// One follow-up per lead per day: the header button, the bulk bar, "Send all", an edited draft and
+// an approved Leasing Agent proposal all share the key, so a double click or a second sender is a 409.
+const FOLLOW_UP_STAGES = ["Inquiry", "Contacted", "Toured", "Tour scheduled"];
+const FollowUp = z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough();
+
+async function sendFollowUp(ctx: ActionContext, row: Row, input: z.infer<typeof FollowUp>): Promise<ActionResult> {
+  if (!FOLLOW_UP_STAGES.includes(String(row.stage))) return fail(409, `${row.name ?? "This lead"} is ${String(row.stage ?? "closed").toLowerCase()}; no follow-up sent`);
+  const first = String(row.name ?? "there").split(" ")[0];
+  const body = input.body ?? `Hi ${first}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${ctx.actor.name}`;
+  const flags = checkFairHousing(body);
+  if (flags.length) return fail(409, `Check the message: "${flags[0].phrase}" (${flags[0].category})`);
+  const at = now(ctx);
+  const threadId = newId("thr");
+  try {
+    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "contacted", summary: `Follow-up sent by ${ctx.actor.name}` },
+      [{ table: "prospects", id: String(row.id), changes: { last_contact_at: at, ...(row.stage === "Inquiry" ? { stage: "Contacted" } : {}) } }],
+      [
+        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "prospect", party_id: row.id, subject: input.subject ?? "Still looking for a new home?", entity_type: "prospects", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
+        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "leasing", sent_at: at } },
+      ], `follow-up-${row.id}-${at.slice(0, 10)}`);
+  } catch (e) {
+    if (e instanceof AlreadyDone) return fail(409, `${row.name ?? "This lead"} already got a follow-up today`);
+    throw e;
+  }
+  await closeProposals(ctx, "prospects", String(row.id), "Edited", `Followed up by ${ctx.actor.name}`);
+  return ok(`Follow-up sent to ${row.name}`);
+}
+
+// With a subject and body: an edited draft, or an approved Leasing Agent proposal (its payload carries them).
 registerAction({
   key: "prospects.send_follow_up",
   label: "Send follow-up",
   entity: "prospects",
   roles: LEASING,
   icon: Send,
-  when: (r) => ["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(r.stage)),
-  input: z.object({ subject: z.string().trim().min(3).max(200).optional(), body: z.string().trim().min(10).max(2000).optional() }).passthrough(),
-  async handler(ctx, row, input) {
-    if (!["Inquiry", "Contacted", "Toured", "Tour scheduled"].includes(String(row.stage))) return fail(409, `${row.name ?? "This lead"} is ${String(row.stage ?? "closed").toLowerCase()}; no follow-up sent`);
-    const first = String(row.name ?? "there").split(" ")[0];
-    const body = input.body ?? `Hi ${first}, thanks again for your interest. We still have homes that fit what you told us. Would you like to book a tour this week? Reply with a time that works and I'll set it up.\n\n${ctx.actor.name}`;
-    const flags = checkFairHousing(body);
-    if (flags.length) return fail(409, `Check the message: "${flags[0].phrase}" (${flags[0].category})`);
-    const at = now(ctx);
-    const threadId = newId("thr");
-    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "contacted", summary: `Follow-up sent by ${ctx.actor.name}` },
-      [{ table: "prospects", id: String(row.id), changes: { last_contact_at: at, ...(row.stage === "Inquiry" ? { stage: "Contacted" } : {}) } }],
-      [
-        { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "prospect", party_id: row.id, subject: input.subject ?? "Still looking for a new home?", entity_type: "prospects", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
-        { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "leasing", sent_at: at } },
-      ]);
-    return ok(`Follow-up sent to ${row.name}`);
+  when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
+  input: FollowUp,
+  handler: sendFollowUp,
+});
+
+// The one-click version for the record header, the drawer and bulk sends: the standard note.
+registerAction({
+  key: "prospects.follow_up",
+  label: "Send follow-up",
+  entity: "prospects",
+  roles: LEASING,
+  icon: Send,
+  bulk: true,
+  when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
+  confirm: { title: "Send a follow-up?", body: "Sends the standard follow-up email from you and logs the contact. To edit the wording first, use Draft under Follow-ups due on My leasing day." },
+  help: { summary: "Emails the lead a short follow-up offering a tour and logs the contact. Each lead gets at most one follow-up a day.", article: "leasing-pipeline-board" },
+  handler: (ctx, row) => sendFollowUp(ctx, row, {}),
+});
+
+registerAction({
+  key: "prospects.draft_follow_up",
+  ai: true,
+  label: "Draft follow-up with AI",
+  entity: "prospects",
+  roles: LEASING,
+  icon: Sparkles,
+  when: (r) => FOLLOW_UP_STAGES.includes(String(r.stage)),
+  help: { summary: "The Leasing Agent drafts a short follow-up from the lead's stage, budget and beds wanted. You edit it before sending.", article: "leasing-pipeline-board" },
+  input: NO_INPUT,
+  async handler(ctx, row) {
+    const { draftFollowUp } = await ai();
+    const r = await draftFollowUp(ctx, row);
+    return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
 });
 
@@ -164,19 +231,19 @@ registerAction({
   roles: [...LEASING],
   icon: Sparkles,
   when: (r) => OPEN_APP.includes(String(r.stage)),
-  help: { summary: "The Leasing agent scores the application from income, credit band, rental history and verification only, and sends a recommendation to the broker.", article: "fair-housing-applicant-scoring" },
+  help: { summary: "The Leasing Agent scores the application from income, credit band, rental history and verification only, and sends a recommendation to the broker.", article: "fair-housing-applicant-scoring" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { scoreApplication } = await ai();
     const r = await scoreApplication(ctx, row);
     const s = r.result;
-    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "scored", summary: `Leasing agent scored ${s.score} and recommends ${s.recommendation.toLowerCase()}`, data: { run_id: r.runId } },
+    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "scored", summary: `Leasing Agent scored ${s.score} and recommends ${s.recommendation.toLowerCase()}`, data: { run_id: r.runId } },
       [{ table: "applications", id: String(row.id), changes: { score: s.score, scoring_factors: JSON.stringify(s.factors), recommendation: s.recommendation, income_to_rent: Number(s.ratio.toFixed(2)), ...(row.stage === "Submitted" || row.stage === "Screening" ? { stage: "Review" } : {}) } }]);
     return aiResult({ ...s, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
 });
 
-// Used by the broker's buttons and by approving a Leasing agent proposal in the inbox (whose payload
+// Used by the broker's buttons and by approving a Leasing Agent proposal in the inbox (whose payload
 // carries the recommendation). The decision, the person and the AI recommendation are all audited.
 const Decide = z.object({
   decision: z.enum(["Approved", "Conditional", "Denied"]).optional(),
@@ -217,7 +284,7 @@ async function decideApplication(ctx: ActionContext, row: Row, decision: "Approv
   return ok(`Application ${decision.toLowerCase()}`);
 }
 
-// The same decision under the keys the seeded Leasing agent proposals use: approving one of those
+// The same decision under the keys the seeded Leasing Agent proposals use: approving one of those
 // in the inbox accepts the agent's recommendation as the broker's decision.
 for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as const) {
   registerAction({
@@ -229,7 +296,7 @@ for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as 
     when: (r) => OPEN_APP.includes(String(r.stage)),
     input: z.object({ note: z.string().trim().max(500).optional() }).passthrough(),
     confirm: { title: verb === "approve" ? "Approve this application?" : "Deny this application?", body: "Your decision is logged with the AI recommendation. Use the AI scoring tab to add conditions or a reason." },
-    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing agent's recommendation" : undefined)),
+    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing Agent's recommendation" : undefined)),
   });
 }
 
@@ -244,7 +311,7 @@ registerAction({
   entity: "listings",
   roles: LEASING,
   icon: Sparkles,
-  help: { summary: "The Leasing agent drafts the headline and description from the unit and property facts. You edit it before saving.", article: "listing-editor-ai-description" },
+  help: { summary: "The Leasing Agent drafts the headline and description from the unit and property facts. You edit it before saving.", article: "listing-editor-ai-description" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { draftListing } = await ai();
@@ -347,7 +414,7 @@ registerAction({
 });
 
 // ---------------------------------------------------------------------------------------------
-// Renewal offers: the Renewals agent prices it, a person accepts or edits, AI drafts, a person sends
+// Renewal offers: the Renewals Agent prices it, a person accepts or edits, AI drafts, a person sends
 // ---------------------------------------------------------------------------------------------
 
 registerAction({
@@ -357,12 +424,12 @@ registerAction({
   roles: LEASING,
   icon: Sparkles,
   when: (r) => r.status === "Draft",
-  help: { summary: "The Renewals agent prices the offer from the unit type's market rent, tenure and payment history.", article: "renewal-workflow" },
+  help: { summary: "The Renewals Agent prices the offer from the unit type's market rent, tenure and payment history.", article: "renewal-workflow" },
   input: NO_INPUT,
   async handler(ctx, row) {
     const { proposeOffer } = await ai();
     const r = await proposeOffer(ctx, row);
-    await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals agent proposed $${r.result.rentCents / 100} (${r.result.changePct}%)`, data: { run_id: r.runId } },
+    await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals Agent proposed $${r.result.rentCents / 100} (${r.result.changePct}%)`, data: { run_id: r.runId } },
       [{ table: "renewal_offers", id: String(row.id), changes: { rent_cents: r.result.rentCents, market_rent_cents: r.result.facts.market_rent_cents } }]);
     return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
@@ -380,6 +447,36 @@ registerAction({
   async handler(ctx, row) {
     const { draftOfferMessage } = await ai();
     const r = await draftOfferMessage(ctx, { ...row, rent_cents: cents(row, "rent") });
+    return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
+  },
+});
+
+// Bulk "Prepare all drafts" on the renewals page. Skips a draft that already has a prepared
+// proposal waiting, so a re-run or a double click doesn't stack proposals.
+registerAction({
+  key: "renewal_offers.prepare",
+  ai: true,
+  bulk: true,
+  label: "Prepare with AI",
+  entity: "renewal_offers",
+  roles: LEASING,
+  icon: Sparkles,
+  when: (r) => r.status === "Draft",
+  help: { summary: "The Renewals Agent prices the draft and writes its message, then leaves it as a proposal. A person approves before anything is sent.", article: "renewal-workflow" },
+  input: NO_INPUT,
+  async handler(ctx, row) {
+    const { effective } = await import("@/server/query");
+    const open = await ctx.db.prepare(`SELECT p.id, p.payload FROM ${effective("ai_proposals", ctx.ws)} p WHERE p.agent = 'renewals' AND p.entity_type = 'renewal_offers' AND p.entity_id = ? AND p.action = 'renewal_offers.send' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ctx.ws)} d WHERE d.proposal_id = p.id) ORDER BY p.created_at DESC LIMIT 1`).bind(row.id).first<{ id: string; payload: string }>();
+    if (open && JSON.parse(open.payload || "{}").body) return ok(JSON.stringify({ skipped: true, proposalId: open.id }));
+    // An older price-only proposal carries no message; this one replaces it.
+    if (open) await closeProposals(ctx, "renewal_offers", String(row.id), "Edited", `Replaced by a prepared offer (${ctx.actor.name})`);
+    const { prepareOffer } = await ai();
+    // The suggested rent is written to the draft now, before anyone approves. That is safe: a draft
+    // is never sent, and sending (approving the proposal) re-checks the message against this rent.
+    // It must land before the proposal is made, or the proposal's snapshot would be stale on approval.
+    const r = await prepareOffer(ctx, { ...row, rent_cents: cents(row, "rent") }, (rentCents, runId) =>
+      commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals Agent prepared $${rentCents / 100} with a message, waiting for approval`, data: { run_id: runId } },
+        [{ table: "renewal_offers", id: String(row.id), changes: { rent_cents: rentCents } }]));
     return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
   },
 });
@@ -428,5 +525,44 @@ registerAction({
     await closeProposals(ctx, "renewal_offers", String(row.id), "Approved", `Sent at $${rent / 100} by ${ctx.actor.name}`);
     await closeProposals(ctx, "leases", String(row.lease_id), "Edited", `Handled on the renewals page by ${ctx.actor.name}`);
     return ok("Renewal offer sent", `/app/leasing/renewal-offers/${row.id}`);
+  },
+});
+
+// A reminder on a sent offer nobody has answered. The Renewals Agent proposes it (a plain reminder,
+// or a month-to-month notice when the lease is about to end); a person approves. Once a day per offer.
+registerAction({
+  key: "renewal_offers.follow_up",
+  label: "Send reminder",
+  entity: "renewal_offers",
+  roles: LEASING,
+  icon: Send,
+  when: (r) => r.status === "Sent",
+  input: FollowUp,
+  help: { summary: "Reminds the resident that their renewal offer is still open and logs the message.", article: "renewal-workflow" },
+  async handler(ctx, row, input) {
+    const { checkDraft, letterDates } = await import("@/ai/rules");
+    if (row.status !== "Sent") return fail(409, `This offer is ${String(row.status).toLowerCase()}; no reminder sent`);
+    const rent = cents(row, "rent");
+    const { effective } = await import("@/server/query");
+    const lease = await ctx.db.prepare(`SELECT l.end_on, p.name AS property, u.number AS unit, r.id AS resident_id, r.first_name FROM ${effective("leases", ctx.ws)} l JOIN ${effective("properties", ctx.ws)} p ON p.id = l.property_id JOIN ${effective("units", ctx.ws)} u ON u.id = l.unit_id LEFT JOIN ${effective("residents", ctx.ws)} r ON r.household_id = l.household_id AND r.is_primary = 1 WHERE l.id = ? AND l.property_id = ?`).bind(row.lease_id, row.property_id).first<Row>();
+    if (!lease?.resident_id) return fail(409, "No primary resident on this lease to remind");
+    const subject = input.subject ?? `Your renewal offer at ${lease.property} is still open`;
+    const body = letterDates(input.body ?? `Hi ${lease.first_name},\n\nA reminder that your renewal offer of $${(rent / 100).toLocaleString("en-US")} a month for ${row.term_months} months is still open. Your lease at ${lease.property} #${lease.unit} ends on ${lease.end_on}. Reply to accept, or let us know if you'd like to talk about other terms.\n\nThank you,\n${ctx.actor.name}`);
+    const problems = [...checkDraft(body, { offer_rent_cents: rent, current_rent_cents: cents(row, "current_rent") }), ...checkFairHousing(body).map((f) => `"${f.phrase}" (${f.category})`)];
+    if (problems.length) return fail(409, `Check the message: ${problems[0]}`);
+    const at = now(ctx);
+    try {
+      const threadId = newId("thr");
+      await commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "reminded", summary: `Reminder sent by ${ctx.actor.name}` }, [],
+        [
+          { table: "message_threads", row: { id: threadId, property_id: row.property_id, party_kind: "resident", party_id: lease.resident_id, subject, entity_type: "renewal_offers", entity_id: row.id, assigned_to: ctx.actor.personaId, status: "Waiting", last_message_at: at, unread: 0 } },
+          { table: "messages", row: { id: newId("msg"), thread_id: threadId, channel: "Email", direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body, drafted_by_agent: "renewals", sent_at: at } },
+        ], `offer-reminder-${row.id}-${at.slice(0, 10)}`);
+    } catch (e) {
+      if (e instanceof AlreadyDone) return fail(409, "A reminder already went out on this offer today");
+      throw e;
+    }
+    await closeProposals(ctx, "renewal_offers", String(row.id), "Edited", `Reminder sent by ${ctx.actor.name}`);
+    return ok("Reminder sent", `/app/leasing/renewal-offers/${row.id}`);
   },
 });

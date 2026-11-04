@@ -27,6 +27,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const r = body.decision === "approve" ? await executeProposal(data, p, by, body.payload, body.note) : await rejectProposal(data, p, by, body.note, body.decision === "snooze" ? "Snoozed" : "Rejected");
     forgetInboxCounts(s.ws);
     if (!r.ok) return json({ error: r.message }, { status: r.status ?? 400, setCookie: s.setCookie });
-    return json({ ok: true, message: r.message, href: r.href, proposal: proposalOut(p) }, { setCookie: s.setCookie });
+    return json({ ok: true, message: r.message, href: r.href, proposal: proposalOut(p, s.actor.role) }, { setCookie: s.setCookie });
   });
 }

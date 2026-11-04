@@ -4,7 +4,7 @@ import { getPersona } from "@/auth/personas";
 import type { Db } from "@/lib/platform/types";
 import { actorFor, permissionMatrix } from "./permissions";
 import { emptyDb, OTHER, seed, WS } from "./query.fixture";
-import { createRecord, deleteRecord, effective, exportCsv, getRow, list, metrics, parseListQuery, QueryError, relations, updateRecord, writeSchema, type QueryCtx, type WriteCtx } from "./query";
+import { createRecord, deleteRecord, effective, exportCsv, getRow, list, matchingIds, metrics, parseListQuery, QueryError, relations, updateRecord, withView, writeSchema, type QueryCtx, type WriteCtx } from "./query";
 
 let db: Db;
 const actor = async (personaId: string, ws: string | null = null) => actorFor(db, ws, getPersona(personaId)!);
@@ -215,6 +215,41 @@ describe("pagination", () => {
     expect((await list(c, "properties", { filters: { metro: ["Austin", "Dallas"] } })).total).toBe(4);
     expect((await list(c, "properties", { filters: { "occupancy.max": "0.7" } })).total).toBe(6);
     expect((await list(c, "charges", { filters: { status: "Overdue" } })).total).toBe(6);
+  });
+});
+
+describe("select all matching", () => {
+  it("resolves every id under the list's filters, in list order", async () => {
+    const c = await ctx("daniel");
+    const q = parseListQuery(new URLSearchParams("f.status=Vacant&sort=number"));
+    const listed = (await list(c, "units", { ...q, size: 100 })).rows.map((r) => r.id);
+    expect(await matchingIds(c, "units", q)).toEqual({ ids: listed, capped: false });
+    expect(listed).toHaveLength(6);
+  });
+
+  it("stays inside the persona's scope", async () => {
+    const out = await matchingIds(await ctx("marcus"), "units", {});
+    expect(out.ids).toHaveLength(9);
+    expect(out.ids.every((id) => /^p0[123]-/.test(id))).toBe(true);
+  });
+
+  it("stops at the cap and says so", async () => {
+    const c = await ctx("daniel");
+    expect(await matchingIds(c, "units", {}, 5)).toMatchObject({ capped: true });
+    expect((await matchingIds(c, "units", {}, 5)).ids).toHaveLength(5);
+    expect((await matchingIds(c, "units", {}, 18)).capped).toBe(false);
+    // Pages past the 100-row page cap with keyset cursors.
+    expect((await matchingIds(c, "units", { size: 7 } as never, 13)).ids).toHaveLength(13);
+  });
+
+  it("applies a built-in view named in the URL unless the URL has its own filters", () => {
+    const wo = getEntity("work_orders")!;
+    expect(withView(wo, new URLSearchParams("view=awaiting-approval")).get("f.status")).toBe("Submitted");
+    expect(withView(wo, new URLSearchParams("view=awaiting-approval&f.priority=Low")).get("f.status")).toBeNull();
+  });
+
+  it("refuses an entity the role can't read", async () => {
+    await expect(matchingIds(await ctx("vendor"), "owners", {})).rejects.toMatchObject({ status: 403 });
   });
 });
 
@@ -513,6 +548,19 @@ describe("metrics", () => {
     const before = await metrics(await ctx("marcus", null), "receivables.collections_rate", { month: "2026-10" });
     const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate", { month: "2026-10" });
     expect(after.points.at(-1)!.collected).toBe(Number(before.points.at(-1)!.collected) + 1450);
+  });
+
+  it("counts a live payment toward the month of the charge it pays, and never reads above 100%", async () => {
+    // Paying down a September charge in October is not October collection.
+    await db.batch([
+      db.prepare(`INSERT INTO charges (workspace_id, id, lease_id, household_id, property_id, unit_id, gl_account_id, description, period, due_on, amount_cents, paid_cents) VALUES ('${WS}', 'c-old', 'l-p01-u2', 'h-p01-u2', 'p01', 'p01-u2', 'gl-4000', 'Rent', '2026-09', '2026-09-01', 900000, 900000)`),
+      db.prepare(`INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, charge_id, method, received_on, amount_cents) VALUES ('${WS}', 'pay-old', 'l-p01-u2', 'h-p01-u2', 'p01', 'c-old', 'ACH', '2026-10-29', 900000)`),
+    ]);
+    const before = await metrics(await ctx("marcus", null), "receivables.collections_rate", { month: "2026-10" });
+    const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate", { month: "2026-10" });
+    expect(after.points.at(-1)!.collected).toBe(before.points.at(-1)!.collected);
+    expect(after.value).toBe(before.value);
+    expect(after.value).toBeLessThanOrEqual(1);
   });
 });
 

@@ -15,7 +15,7 @@ const SEVERITY: Record<string, number> = { critical: 3, warn: 2, info: 1 };
 
 export default defineAgent({
   key: "data_health",
-  name: "Data Health agent",
+  name: "Data Health Agent",
   ownerRole: "admin",
   goal: "Find bad data before owners or auditors do: re-check the data rules, then propose a fix for each open issue with before/after, a reason and a confidence. Merge duplicates, recode miscoded bills and normalize contact details and addresses.",
   tools: ["data.issues", "records.get", "records.search", "data.propose_fix"],

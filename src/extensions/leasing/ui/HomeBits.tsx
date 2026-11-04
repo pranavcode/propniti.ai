@@ -3,16 +3,18 @@
 import Link from "@/components/Link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, CalendarX, Clock3, MessageSquareText } from "lucide-react";
+import { ArrowUpRight, CalendarCheck, CalendarX, Clock3, Loader2, MessageSquareText, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ApprovalItem, AskBox, type AISource } from "@/components/app/ai";
+import { Textarea } from "@/components/ui/textarea";
+import { AIBadge, ApprovalItem, AskBox, type AISource } from "@/components/app/ai";
 import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { useShellMaybe } from "@/components/app/shell/context";
 import { cn } from "@/lib/utils";
-import { callAction, runHref } from "./client";
+import { checkFairHousing } from "../fairHousing";
+import { callAction, callAi, runHref } from "./client";
 
 // Client pieces shared by the leasing persona homes.
 
@@ -108,19 +110,77 @@ export function TourList({ tours, canAct }: { tours: TourView[]; canAct: boolean
 
 export type FollowUpView = { id: string; name: string; stage: string; property: string; days: number; beds: number | null; budget: number | null; source: string };
 
+type FollowUpDraft = { subject: string; body: string; runId: string; source: AISource; model: string };
+
+// Each due lead: Draft asks the Leasing agent for a note from the lead's facts, the person edits it
+// here and sends it (prospects.send_follow_up, once a day per lead). Nothing goes out without Send.
 export function FollowUpList({ rows }: { rows: FollowUpView[] }) {
-  const shell = useShellMaybe();
+  const router = useRouter();
+  const [open, setOpen] = useState<string | null>(null);
+  const [draft, setDraft] = useState<FollowUpDraft | null>(null);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState<"draft" | "send" | null>(null);
+  const flags = checkFairHousing(body);
+  const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : String(e));
+
+  const startDraft = async (r: FollowUpView) => {
+    setOpen(r.id);
+    setDraft(null);
+    setBusy("draft");
+    try {
+      const d = await callAi<{ subject: string; body: string }>("prospects", r.id, "draft_follow_up");
+      setDraft({ subject: d.subject, body: d.body, runId: d.runId, source: d.source === "rules" ? "rules" : "live", model: d.model });
+      setSubject(d.subject);
+      setBody(d.body);
+    } catch (e) { fail(e); setOpen(null); } finally { setBusy(null); }
+  };
+  const send = async (r: FollowUpView) => {
+    setBusy("send");
+    try {
+      const out = await callAction("prospects", r.id, "send_follow_up", { subject, body });
+      toast.success(out.message);
+      setOpen(null);
+      router.refresh();
+    } catch (e) { fail(e); } finally { setBusy(null); }
+  };
+
   if (!rows.length) return <EmptyState compact kind="inbox" title="Everyone has heard from you" description="Leads with no contact in 3 days appear here." />;
   return (
     <ul className="divide-y">
       {rows.map((r) => (
-        <li key={r.id} className="flex items-center gap-3 px-3 py-2">
-          <span className={cn("flex w-12 shrink-0 items-center gap-1 text-[12px] tabular-nums", r.days >= 7 ? "text-tone-danger" : "text-tone-warning")}><Clock3 className="size-3.5" />{r.days}d</span>
-          <div className="min-w-0 flex-1">
-            <Link href={`/app/leasing/prospects/${r.id}`} className="font-medium hover:text-primary hover:underline">{r.name}</Link>
-            <p className="truncate text-[12px] text-muted-foreground">{r.stage} · {r.property} · {r.source}{r.beds != null ? ` · ${r.beds === 0 ? "studio" : `${r.beds} bed`}` : ""}</p>
+        <li key={r.id} className="px-3 py-2">
+          <div className="flex items-center gap-3">
+            <span className={cn("flex w-12 shrink-0 items-center gap-1 text-[12px] tabular-nums", r.days >= 7 ? "text-tone-danger" : "text-tone-warning")}><Clock3 className="size-3.5" />{r.days}d</span>
+            <div className="min-w-0 flex-1">
+              <Link href={`/app/leasing/prospects/${r.id}`} className="font-medium hover:text-primary hover:underline">{r.name}</Link>
+              <p className="truncate text-[12px] text-muted-foreground">{r.stage} · {r.property} · {r.source}{r.beds != null ? ` · ${r.beds === 0 ? "studio" : `${r.beds} bed`}` : ""}</p>
+            </div>
+            <Button size="sm" variant="ghost" disabled={!!busy} aria-expanded={open === r.id} aria-controls={`fu-${r.id}`} aria-label={`Draft a follow-up to ${r.name}`} onClick={() => (open === r.id ? setOpen(null) : void startDraft(r))}>
+              {busy === "draft" && open === r.id ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <MessageSquareText className="text-tone-ai" data-icon="inline-start" />}Draft
+            </Button>
           </div>
-          {shell && <Button size="sm" variant="ghost" aria-label={`Draft a follow-up to ${r.name}`} onClick={() => shell.assistant.ask(`Draft a short follow-up message to ${r.name}, a ${r.stage.toLowerCase()} lead at ${r.property}`, { entity: "prospects", id: r.id, title: r.name })}><MessageSquareText className="text-tone-ai" data-icon="inline-start" />Draft</Button>}
+          {open === r.id && (
+            <div id={`fu-${r.id}`} className="mt-2 flex flex-col gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.03] p-2.5 sm:ml-15">
+              {!draft ? <p role="status" className="text-[12.5px] text-muted-foreground">Leasing agent is drafting from {r.name.split(" ")[0]}&rsquo;s stage, budget and beds wanted…</p> : (
+                <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); void send(r); }}>
+                  <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                    <Sparkles className="size-3.5 text-tone-ai" /><span className="font-semibold">AI draft</span>
+                    <AIBadge source={draft.source} model={draft.source === "live" ? draft.model : undefined} size="xs" />
+                    <Link href={runHref(draft.runId)!} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>
+                  </div>
+                  <Input name="subject" autoComplete="off" value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject" maxLength={200} className="h-8 text-[13px]" />
+                  <Textarea name="message" value={body} onChange={(e) => setBody(e.target.value)} aria-label="Message" maxLength={2000} className="min-h-28 text-[13px] leading-relaxed" />
+                  {flags.length > 0 && <p role="status" className="text-[12px] text-tone-danger">Fair-housing: &ldquo;{flags[0].phrase}&rdquo; ({flags[0].category}). {flags[0].suggestion}.</p>}
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" type="submit" disabled={!!busy || subject.trim().length < 3 || body.trim().length < 10 || flags.length > 0}>{busy === "send" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Send data-icon="inline-start" />}Send</Button>
+                    <Button size="sm" type="button" variant="ghost" disabled={!!busy} onClick={() => setOpen(null)}>Cancel</Button>
+                    <span className="text-[11.5px] text-muted-foreground">Sent as email from you; logged on the lead.</span>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </li>
       ))}
     </ul>

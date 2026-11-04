@@ -63,6 +63,19 @@ export async function propertyOptions(ctx: QueryCtx): Promise<{ id: string; name
   return res.results.map((r) => ({ id: String(r.id), name: String(r.name) }));
 }
 
+// People a task can be reassigned to: active staff whose role assignment covers at least one of
+// this person's properties (or anyone with an assignment, for org-wide roles). tasks.reassign checks
+// the task's own property again on the server.
+export async function staffOptions(ctx: QueryCtx): Promise<{ id: string; name: string; title: string }[]> {
+  const ws = await readWs(ctx);
+  const ids = ctx.actor.propertyIds;
+  const covers = ids === "all" ? "1 = 1" : `(ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id IN (SELECT value FROM json_each(?1)))
+    OR (ra.scope_kind = 'region' AND ra.scope_id IN (SELECT p.region_id FROM ${effective("properties", ws)} p WHERE p.id IN (SELECT value FROM json_each(?1)))))`;
+  const res = await ctx.db.prepare(`SELECT st.id, st.name, st.title FROM ${effective("staff", ws)} st WHERE st.active = 1 AND EXISTS (SELECT 1 FROM ${effective("role_assignments", ws)} ra WHERE ra.staff_id = st.id AND ${covers}) ORDER BY st.name LIMIT 200`)
+    .bind(...(ids === "all" ? [] : [JSON.stringify(ids)])).all<{ id: string; name: string; title: string }>();
+  return res.results.map((r) => ({ id: String(r.id), name: String(r.name), title: String(r.title) }));
+}
+
 // `key` is made by the browser once per form, so a double submit or a retry adds the task once.
 export const newTaskSchema = z.strictObject({
   key: z.uuid(),

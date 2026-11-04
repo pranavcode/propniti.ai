@@ -116,10 +116,10 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 
 ## Tests, evals and coverage
 
-Measured on 2026-11-04 on `main` after #30 (`afae6a6`).
+Measured on 2026-11-04 at commit `67cc99f`.
 
-- **Vitest:** 922 tests in 98 files, all passing (two seed-generator tests can hit their 5-second timeout on a heavily loaded machine; they pass on their own). They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
-- **Playwright:** 85 browser tests in 20 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import and the chat bubble. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
+- **Vitest:** 1104 tests in 118 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
+- **Playwright:** 110 browser tests in 26 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import, the chat bubble and the newer flows. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches. `src/ai` and `src/extensions` are outside that scope.
 
 | Area | Lines | Branches |

@@ -169,7 +169,7 @@ export default async function AutomationsPage() {
               <tbody>
                 <tr className="border-t">
                   <th scope="row" className={`${TD} text-left font-medium whitespace-nowrap`}><Link href="/app/data-health" className={link}>Data health checks</Link></th>
-                  <td className={TD}>Each Data Health agent run</td>
+                  <td className={TD}>Each Data Health Agent run</td>
                   <td className={TD}>{v.dataRules} checks look for duplicates, miscoded bills, unverified bank changes and other bad records. Each finding becomes an issue with a suggested fix.</td>
                 </tr>
                 <tr className="border-t">
@@ -180,7 +180,7 @@ export default async function AutomationsPage() {
                 <tr className="border-t">
                   <th scope="row" className={`${TD} text-left font-medium whitespace-nowrap`}>{v.can.settings ? <Link href="/app/settings/state-rules" className={link}>Returned payment fee cap</Link> : "Returned payment fee cap"}</th>
                   <td className={TD}>When someone marks a payment returned</td>
-                  <td className={TD}>Charges a {dollars(RETURNED_PAYMENT_FEE_CENTS)} fee{nsfCents.length ? <>, capped by state: {nsfCents.map((c) => `${c.state} ${dollars(c.value)}`).join(", ")}</> : null}, reopens the charges it paid, and raises Payment returned for the Collections agent.</td>
+                  <td className={TD}>Charges a {dollars(RETURNED_PAYMENT_FEE_CENTS)} fee{nsfCents.length ? <>, capped by state: {nsfCents.map((c) => `${c.state} ${dollars(c.value)}`).join(", ")}</> : null}, reopens the charges it paid, and raises Payment returned for the Collections Agent.</td>
                 </tr>
                 <tr className="border-t">
                   <th scope="row" className={`${TD} text-left font-medium whitespace-nowrap`}>Payment clearing</th>

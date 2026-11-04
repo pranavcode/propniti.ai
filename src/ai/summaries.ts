@@ -1,4 +1,6 @@
 import { demoIsoIn, demoNowIso } from "@/lib/clock";
+import { decidableSql } from "./decide";
+import { formatDate } from "@/lib/format";
 import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { Facts, Row } from "@/entities/types";
@@ -62,12 +64,17 @@ export async function factsFor(data: DataCtx, entity: string, id: string, known?
   return { facts, title };
 }
 
+// Fallback for entities without a template (rules-sentences.ts): the state, then a few facts as
+// "key value" with humanized keys, e.g. "Rent 2025-05 is paid: amount 1,385, due on May 1, 2025."
 export function rulesSummary(title: string, facts: Facts): string {
+  const state = facts.status ?? facts.stage;
+  const text = (v: Facts[string]) =>
+    typeof v === "boolean" ? (v ? "yes" : "no") : typeof v === "number" ? v.toLocaleString("en-US") : /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? formatDate(String(v)) : String(v);
   const parts = Object.entries(facts)
-    .filter(([k, v]) => v != null && v !== "" && v !== title && k !== "resident" && k !== "name")
-    .slice(0, 6)
-    .map(([k, v]) => `${k.replace(/_/g, " ")}: ${typeof v === "boolean" ? (v ? "yes" : "no") : v}`);
-  return parts.length ? `${title}. ${parts.join("; ")}.` : `${title}.`;
+    .filter(([k, v]) => v != null && v !== "" && v !== title && v !== state && k !== "resident" && k !== "name")
+    .slice(0, 5)
+    .map(([k, v]) => `${k.replace(/_/g, " ")} ${text(v)}`);
+  return `${title}${state ? ` is ${String(state).toLowerCase()}` : ""}${parts.length ? `: ${parts.join(", ")}` : ""}.`;
 }
 
 const Out = z.object({ summary: z.string() });
@@ -132,7 +139,7 @@ async function briefingFacts(data: DataCtx): Promise<{ facts: Facts; today: stri
   const today = await asOf(data.db);
   const [late, needs, issues, runs] = await Promise.all([
     delinquency(data, today, { minDays: 1, limit: 1 }),
-    sql<{ n: number }>(data, "SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id)"),
+    sql<{ n: number }>(data, `SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id) AND ${decidableSql(data.actor.role).sql}`, decidableSql(data.actor.role).params),
     sql<{ n: number; critical: number }>(data, "SELECT count(*) AS n, sum(severity = 'critical') AS critical FROM {data_issues} WHERE status = 'open'"),
     sql<{ n: number; auto: number }>(data, "SELECT count(*) AS n, (SELECT count(*) FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= ?) AS auto FROM {agent_runs} WHERE started_at >= ?", [demoIsoIn(-86_400_000), demoIsoIn(-86_400_000)], { unscoped: true }),
   ]);

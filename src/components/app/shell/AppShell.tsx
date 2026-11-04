@@ -14,6 +14,9 @@ import { ChatBubble, showsBubble } from "../guide/ChatBubble";
 import { pageGuide } from "../guide/pages";
 import { SetupChecklist } from "../onboarding/SetupChecklist";
 import { TourOverlay, useTour } from "../tour/TourEngine";
+import { AskAutoOpen } from "../welcome/AskAutoOpen";
+import { WelcomeSplash } from "../welcome/WelcomeSplash";
+import { WhatsNew } from "../welcome/WhatsNew";
 import { AI_MAX_W, AI_MIN_W, AssistantPanel } from "./AssistantPanel";
 import { CommandPalette } from "./CommandPalette";
 import { ShellCtx, useShell, type AssistantContext, type ShellContext } from "./context";
@@ -40,7 +43,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   const [crumbTitle, setCrumbTitle] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useLocalStorage<boolean>("pn_ai_open", false);
   const [aiWidth, setAiWidth] = useLocalStorage<number>("pn_ai_w", 400);
-  const [pending, setPending] = useState<{ query: string; context?: AssistantContext; id: number } | null>(null);
+  const [pending, setPending] = useState<{ query: string | null; context?: AssistantContext; id: number } | null>(null);
   const [aiFrom, setAiFrom] = useState<"bubble" | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -69,9 +72,10 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   const assistant = useMemo(() => ({
     open: aiOpen,
     setOpen: (open: boolean, from?: "bubble") => { setAiFrom(open ? from ?? null : null); setAiOpen(open); },
+    show: (opts?: { reason?: "auto" | "bubble" | "tip" | "shortcut" }) => { setAiFrom(opts?.reason === "bubble" ? "bubble" : null); setAiOpen(true); },
     openedFrom: aiOpen ? aiFrom : null,
     toggle: () => { setAiFrom(null); setAiOpen((o) => !o); },
-    ask: (query: string, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); if (!aiOpen) setAiFrom(null); setAiOpen(true); },
+    ask: (query: string | null, context?: AssistantContext) => { setPending({ query, context, id: Date.now() }); if (!aiOpen) setAiFrom(null); setAiOpen(true); },
     pending,
     take: () => setPending(null),
     width: Math.min(AI_MAX_W, Math.max(AI_MIN_W, aiWidth)),
@@ -149,6 +153,9 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
         </Dialog>
         <TourOverlay active={tour.active} go={tour.go} dismiss={tour.dismiss} />
         <ChatBubble />
+        <WelcomeSplash />
+        <WhatsNew />
+        <AskAutoOpen />
         {/* Toasts sit above the chat bubble. */}
         <Toaster theme={theme} position="bottom-right" closeButton {...(showsBubble(pathname) && { offset: { bottom: 76 }, mobileOffset: { bottom: 76 } })} />
       </TooltipProvider>

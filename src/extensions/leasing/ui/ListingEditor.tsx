@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "@/components/Link";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Check, ImagePlus, Loader2, Save, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export type EditorData = {
   syndication: Record<string, string>; rent: number; property: string; unit: string; typeName: string; canEdit: boolean; flags: FairHousingFlag[];
 };
 
-type Draft = { headline: string; description: string; runId: string; source: "live" | "rules"; model: string };
+type Draft = { headline: string; description: string; runId: string; source: "live" | "rules"; model: string; flags: FairHousingFlag[] };
 const thumb = (p: string) => p.replace(/(-400)?\.webp$/, "-400.webp");
 const SYN_TONE: Record<string, "success" | "warning" | "danger" | "neutral" | "info"> = { Live: "success", Pending: "warning", Error: "danger", Paused: "warning", Off: "neutral", Removed: "neutral" };
 
@@ -48,14 +48,23 @@ export function ListingEditor({ data }: { data: EditorData }) {
   const runDraft = async () => {
     setBusy("draft");
     try {
-      const r = await callAi<{ headline: string; description: string }>("listings", data.id, "draft_description");
-      setDraft({ headline: r.headline, description: r.description, runId: r.runId, source: r.source, model: r.model });
+      const r = await callAi<{ headline: string; description: string; flags: FairHousingFlag[] }>("listings", data.id, "draft_description");
+      setDraft({ headline: r.headline, description: r.description, runId: r.runId, source: r.source, model: r.model, flags: r.flags ?? [] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
   };
+
+  // The broker desk's "Rewrite with AI" opens the editor with ?rewrite=1 and starts the draft once.
+  const params = useSearchParams();
+  const rewriteOnOpen = useRef(data.canEdit && params.get("rewrite") === "1");
+  useEffect(() => {
+    if (!rewriteOnOpen.current) return;
+    rewriteOnOpen.current = false;
+    void runDraft();
+  });
 
   const save = async () => {
     if (!headline.trim()) return setHeadlineError(true);
@@ -149,7 +158,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
             )}
           </header>
           <div className="flex flex-col gap-3 p-4">
-            {busy === "draft" && <p role="status" className="flex items-center gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.04] px-3 py-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Leasing agent is reading the unit, building and amenities…</p>}
+            {busy === "draft" && <p role="status" className="flex items-center gap-2 rounded-md border border-tone-ai/25 bg-tone-ai/[0.04] px-3 py-2 text-[12.5px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin text-tone-ai" />Leasing Agent is reading the unit, building and amenities…</p>}
             {draft && (
               <div role="status" className="relative overflow-hidden rounded-md border border-tone-ai/30 bg-tone-ai/[0.04] p-3">
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">
@@ -160,6 +169,11 @@ export function ListingEditor({ data }: { data: EditorData }) {
                 <p className="text-[13px] font-medium">{draft.headline}</p>
                 <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap text-muted-foreground">{draft.description}</p>
                 <p className="mt-2 text-[11.5px] text-muted-foreground">Written from the unit, building and amenity facts only. Review it before saving.</p>
+                {draft.flags.length ? (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-tone-danger"><AlertTriangle className="size-3.5" />Fair-housing check on this draft: &ldquo;{draft.flags[0].phrase}&rdquo; ({draft.flags[0].category}). Draft again, or edit it after using it.</p>
+                ) : (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-tone-success"><ShieldCheck className="size-3.5" />Fair-housing check on this draft: no issues</p>
+                )}
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" onClick={() => { setHeadline(draft.headline); setDescription(draft.description); setFromAi(draft); setDraft(null); }}><Check data-icon="inline-start" />Use draft, then edit</Button>
                   <Button size="sm" variant="ghost" onClick={() => setDraft(null)}><X />Discard</Button>
@@ -202,6 +216,7 @@ export function ListingEditor({ data }: { data: EditorData }) {
                 <li key={f.phrase + f.index}>
                   <p><span className="rounded bg-tone-danger/10 px-1 font-medium text-tone-danger">“{f.phrase}”</span> <span className="text-muted-foreground">· {f.category}</span></p>
                   <p className="mt-0.5 text-muted-foreground">{f.suggestion}</p>
+                  {data.canEdit && <Button size="xs" variant="outline" className="mt-1.5" disabled={!!busy} onClick={() => void runDraft()} aria-label={`Rewrite with AI to remove "${f.phrase}"`}>{busy === "draft" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles className="text-tone-ai" data-icon="inline-start" />}Rewrite with AI</Button>}
                 </li>
               ))}
             </ul>

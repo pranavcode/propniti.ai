@@ -115,3 +115,73 @@ describe("invoice photo requirement", () => {
     expect(await act("work_orders.approve_and_pay", "WO-2", { expected_cents: 30000 })).toMatchObject({ status: 200 });
   });
 });
+
+describe("dispatch as suggested", () => {
+  const suggest = (id: string, wo: string, vendor: string | null, amount: number, conf = 0.86) =>
+    db.prepare("INSERT INTO ai_proposals (workspace_id, id, agent, entity_type, entity_id, property_id, action, title, payload, confidence, amount_cents, queue_state, assignee_role, run_id, created_at) VALUES ('base', ?, 'maintenance_triage', 'work_orders', ?, 'p01', 'work_orders.assign_vendor', ?, ?, ?, ?, 'needs_you', 'maintenance_supervisor', 'run-1', '2026-10-28T09:05:00Z')")
+      .bind(id, wo, `Assign ${vendor ?? "in-house tech"} to ${wo}`, JSON.stringify({ effects: [{ kind: "update", table: "work_orders", id: wo, changes: vendor ? { status: "Assigned", vendor_id: vendor } : { status: "Assigned" } }] }), conf, amount);
+  const wo = (id: string, title = "Leak") => db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', ?, 'p01', ?, 'Plumbing', 'Urgent', 'New', '2026-10-28T09:00:00Z')").bind(id, title);
+  const decisions = async (pid: string) => (await db.prepare("SELECT count(*) AS n FROM ai_decisions WHERE workspace_id = ? AND proposal_id = ?").bind(WS, pid).first<{ n: number }>())?.n;
+
+  it("dispatches the suggested vendor once and records the decision", async () => {
+    await db.batch([wo("WO-10"), suggest("prop-10", "WO-10", "v01", 30000)]);
+    expect(await twice(() => act("work_orders.dispatch_suggested", "WO-10"))).toEqual([200, 409]);
+    expect(await db.prepare("SELECT status, vendor_id FROM work_orders WHERE workspace_id = ? AND id = 'WO-10'").bind(WS).first()).toEqual({ status: "Assigned", vendor_id: "v01" });
+    expect(await decisions("prop-10")).toBe(1);
+  });
+
+  it("follows the approvals rule: approve access dispatches, write access leaves it in Approvals", async () => {
+    await db.batch([wo("WO-11"), suggest("prop-11", "WO-11", "v01", 120000)]);
+    // Marcus (property manager) has write access to maintenance, not approve: nothing is dispatched
+    // and the proposal isn't re-addressed to him or anyone else.
+    const r = await act("work_orders.dispatch_suggested", "WO-11", {}, "marcus");
+    expect(r).toMatchObject({ status: 202, message: expect.stringContaining("stays in Approvals") });
+    expect(await db.prepare("SELECT status FROM work_orders WHERE workspace_id = ? AND id = 'WO-11'").bind(WS).first()).toBeNull();
+    expect(await db.prepare("SELECT assignee_role FROM ai_proposals WHERE workspace_id = ? AND id = 'prop-11'").bind(WS).first()).toBeNull();
+    expect(await decisions("prop-11")).toBe(0);
+    // Tom (maintenance supervisor) has approve access: his click dispatches.
+    expect((await act("work_orders.dispatch_suggested", "WO-11")).status).toBe(200);
+  });
+
+  it("holds a job over the owner's limit for the owner", async () => {
+    await db.batch([wo("WO-12"), suggest("prop-12", "WO-12", "v01", 300000)]);
+    expect(await act("work_orders.dispatch_suggested", "WO-12")).toMatchObject({ status: 200, message: expect.stringContaining("on hold until the owner approves") });
+  });
+
+  it("checks the confidence threshold on the server for Accept N", async () => {
+    await db.batch([wo("WO-17"), suggest("prop-17", "WO-17", "v01", 30000, 0.6)]);
+    expect(await act("work_orders.dispatch_suggested", "WO-17", { high_confidence_only: true })).toMatchObject({ status: 409, error: expect.stringContaining("below 80% confidence") });
+    // One at a time, a person may still accept a lower-confidence suggestion.
+    expect((await act("work_orders.dispatch_suggested", "WO-17")).status).toBe(200);
+  });
+
+  it("won't dispatch an uninsured vendor, an in-house suggestion, or a decided one", async () => {
+    await db.batch([wo("WO-13"), suggest("prop-13", "WO-13", "v02", 30000), wo("WO-14"), suggest("prop-14", "WO-14", null, 30000), wo("WO-15")]);
+    expect(await act("work_orders.dispatch_suggested", "WO-13")).toMatchObject({ status: 409, error: expect.stringContaining("insurance") });
+    expect(await act("work_orders.dispatch_suggested", "WO-14")).toMatchObject({ status: 409, error: expect.stringContaining("in-house") });
+    expect(await act("work_orders.dispatch_suggested", "WO-15")).toMatchObject({ status: 409, error: expect.stringContaining("no open AI suggestion") });
+  });
+
+  it("stays inside the supervisor's scope", async () => {
+    await db.batch([db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', 'WO-16', 'p05', 'Leak', 'Plumbing', 'Urgent', 'New', '2026-10-28T09:00:00Z')"), suggest("prop-16", "WO-16", "v01", 30000)]);
+    expect((await act("work_orders.dispatch_suggested", "WO-16")).status).toBe(404);
+  });
+});
+
+describe("escalate a late make-ready", () => {
+  const turn = (id: string, vendor: string | null, target = "2026-10-20") =>
+    db.prepare("INSERT INTO turnovers (workspace_id, id, property_id, unit_id, move_out_on, target_ready_on, status, vendor_id) VALUES ('base', ?, 'p01', 'p01-u1', '2026-10-10', ?, 'In progress', ?)").bind(id, target, vendor);
+
+  it("notifies the turn vendor once on a double click, with activity", async () => {
+    await db.batch([turn("to-1", "v01")]);
+    expect(await twice(() => act("turnovers.escalate", "to-1"))).toEqual([200, 409]);
+    expect(await db.prepare("SELECT user_id, href FROM notifications WHERE workspace_id = ? AND entity_type = 'turnovers' AND entity_id = 'to-1'").bind(WS).all().then((r) => r.results)).toEqual([{ user_id: "v01", href: "/portal/vendor/jobs" }]);
+    expect((await db.prepare("SELECT count(*) AS n FROM activity_events WHERE workspace_id = ? AND entity_id = 'to-1' AND verb = 'escalated'").bind(WS).first<{ n: number }>())?.n).toBe(1);
+  });
+
+  it("needs a turn vendor and a make-ready past its target", async () => {
+    await db.batch([turn("to-2", null), turn("to-3", "v01", "2026-12-01")]);
+    expect(await act("turnovers.escalate", "to-2")).toMatchObject({ status: 409, error: expect.stringContaining("no turn vendor") });
+    expect((await act("turnovers.escalate", "to-3")).status).toBe(409);
+  });
+});

@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { demoIsoIn, demoNow, demoNowIso } from "./clock";
 import { formatDue, formatRelative } from "./format";
+import { TODAY_CAP } from "@/seed/generate";
 
 describe("demo clock", () => {
   afterEach(() => vi.useRealTimers());
@@ -22,6 +23,18 @@ describe("demo clock", () => {
     expect(formatDue("2026-11-03")).toEqual({ text: "Late by 1 day", late: true, soon: false });
     expect(formatDue("2026-11-05").text).toBe("Due in 1 day");
     expect(formatRelative("2026-11-04T12:00:00Z")).toBe("2h ago");
+  });
+
+  it("never reads earlier than the seeded events of the demo day, even just after midnight Pacific", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-06T08:10:00Z")); // Nov 6, 12:10 AM Pacific
+    expect(demoNowIso() > TODAY_CAP).toBe(true);
+    expect(demoNowIso()).toBe("2026-11-04T01:00:00Z");
+    // The last seeded event of the day reads as past, not "in 49m".
+    expect(formatRelative(TODAY_CAP)).toBe("just now");
+    expect(formatRelative("2026-11-04T00:19:00Z")).toBe("41m ago");
+    vi.setSystemTime(new Date("2026-11-06T09:30:00Z")); // 1:30 AM Pacific: the clock runs again
+    expect(demoNowIso()).toBe("2026-11-04T01:30:00Z");
   });
 });
 
@@ -68,6 +81,8 @@ const REAL_CLOCK_OK = new Set([
   "src/ai/providers/workers.ts", // latency
   "src/ai/__tests__/fixture.ts", // test fixture
   "src/components/app/guide/ChatBubble.tsx", // nudge cooldown, cache age and the visitor's own day (elapsed real time)
+  "src/components/app/welcome/rules.ts", // the day the welcome splash was dismissed: the real day demo workspaces reset on
+  "src/ai/ui/rightNow.ts", // the day Right now was hidden: the real day demo workspaces reset on
 ]);
 
 function* sources(dir: string): Generator<string> {

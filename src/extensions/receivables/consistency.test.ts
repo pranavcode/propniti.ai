@@ -18,7 +18,7 @@ beforeAll(() => {
 
 const actor = (propertyIds: string[] | "all"): Actor => ({ personaId: "grace", name: "Grace Kim", role: "accountant", scope: propertyIds === "all" ? { kind: "org", label: "All" } : { kind: "property", ids: propertyIds, label: "" }, propertyIds });
 
-describe.each([["one Austin property", ["p02"]], ["org-wide", "all"]] as const)("receivables pages and the Collections agent agree: %s", (_label, scope) => {
+describe.each([["one Austin property", ["p02"]], ["org-wide", "all"]] as const)("receivables pages and the Collections Agent agree: %s", (_label, scope) => {
   it("on total past due, aging buckets and the leases owing", { timeout: 120_000 }, async () => {
     const a = actor(scope === "all" ? "all" : [...scope]);
     const ctx = { db, ws: null, actor: a };

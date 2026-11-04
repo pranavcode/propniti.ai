@@ -68,7 +68,8 @@ export const MODULE_KEYS = [
 export type ModuleKey = (typeof MODULE_KEYS)[number];
 
 // Sidebar sections, in display order (brief §1.3).
-export const NAV_SECTIONS = ["home", "portfolio", "operations", "finance", "intelligence", "settings"] as const;
+// Sidebar order. AI agents sit right under Home so pending decisions stay in view.
+export const NAV_SECTIONS = ["home", "intelligence", "portfolio", "operations", "finance", "settings"] as const;
 export type NavSection = (typeof NAV_SECTIONS)[number];
 
 // Named AI agents. Each produces ai_proposals rows; a person approves anything that moves money.

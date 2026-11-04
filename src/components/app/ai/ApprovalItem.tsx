@@ -2,7 +2,7 @@
 
 import Link from "@/components/Link";
 import { useState } from "react";
-import { Check, ChevronDown, CornerDownRight, ExternalLink, Lock, Pencil, ShieldAlert, X } from "lucide-react";
+import { BellRing, Check, ChevronDown, CornerDownRight, ExternalLink, Lock, Pencil, ShieldAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Money, RelativeDate } from "../display";
@@ -12,14 +12,14 @@ import type { Evidence } from "./AISuggestion";
 export type Risk = "Low" | "Medium" | "High";
 
 export type ApprovalItemProps = {
-  agent: string;                         // "Payables agent"
+  agent: string;                         // "Payables Agent"
   title: string;                         // "Approve bill from ABC HVAC"
   amount?: number | null;                // dollars
   risk: Risk;
   why: string[];
   evidence?: Evidence[];
   confidence?: number;
-  policy?: string;                       // "Over the $500 owner limit · needs a principal"
+  policy?: string;                       // "Over the $500 owner limit · needs a principal"; shown when this person can't approve
   runHref?: string;                      // the agent run that proposed it
   recordHref?: string;
   createdAt?: string;
@@ -29,8 +29,10 @@ export type ApprovalItemProps = {
   onApprove?: () => void | Promise<unknown>;
   onEdit?: () => void;
   onReject?: () => void | Promise<unknown>;
+  onNotify?: () => void | Promise<unknown>; // shown beside the lock when canApprove is false
   variant?: "card" | "row";
   defaultOpen?: boolean;
+  decided?: "approved" | "rejected" | "snoozed"; // already decided (a reopened conversation)
   className?: string;
   id?: string;
 };
@@ -47,9 +49,9 @@ export function RiskBadge({ risk }: { risk: Risk }) {
 
 // One proposed action in the approvals queue. People approve; agents only propose.
 export function ApprovalItem(p: ApprovalItemProps) {
-  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, variant = "card", defaultOpen, className, id } = p;
+  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, onNotify, variant = "card", defaultOpen, decided, className, id } = p;
   const [open, setOpen] = useState(defaultOpen ?? variant === "card");
-  const [state, setState] = useState<"open" | "approved" | "rejected">("open");
+  const [state, setState] = useState<"open" | "approved" | "rejected" | "snoozed">(decided ?? "open");
   const [busy, setBusy] = useState(false);
   const act = async (kind: "approved" | "rejected") => {
     setBusy(true);
@@ -57,17 +59,22 @@ export function ApprovalItem(p: ApprovalItemProps) {
     finally { setBusy(false); }
   };
 
+  // The policy explains why Approve is locked; for someone who may approve it would only mislead.
+  const shownPolicy = onApprove && canApprove ? undefined : policy;
   const actions = state === "open" ? (
     <div className="flex shrink-0 items-center gap-1">
       {onReject && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act("rejected")} aria-label={`Reject: ${title}`}><X /><span className={cn(variant === "row" && "sr-only")}>Reject</span></Button>}
       {onEdit && variant === "card" && <Button size="sm" variant="outline" disabled={busy} onClick={onEdit}><Pencil /> Edit</Button>}
-      {onApprove && (canApprove
+      {onApprove && canApprove
         ? <Button size="sm" disabled={busy} onClick={() => void act("approved")}><Check /> Approve</Button>
-        : <Button size="sm" variant="outline" disabled title={policy}><Lock /> Needs approver</Button>)}
+        : (onApprove || onNotify) && <>
+            {onNotify && <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setBusy(true); void Promise.resolve(onNotify()).finally(() => setBusy(false)); }}><BellRing /> Notify approver</Button>}
+            <Button size="sm" variant="outline" disabled title={policy}><Lock /> Needs approver</Button>
+          </>}
     </div>
   ) : (
     <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", state === "approved" ? "text-tone-success" : "text-muted-foreground")}>
-      {state === "approved" ? <><Check className="size-3.5" /> Approved · logged to audit</> : <><X className="size-3.5" /> Rejected</>}
+      {state === "approved" ? <><Check className="size-3.5" /> Approved · logged to audit</> : state === "snoozed" ? "Snoozed" : <><X className="size-3.5" /> Rejected</>}
     </span>
   );
 
@@ -94,7 +101,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
           {amount != null && <Money value={amount} className="w-24 text-right font-medium" />}
           {actions}
         </div>
-        {open && <Details why={why} evidence={evidence} confidence={confidence} policy={policy} runHref={runHref} recordHref={recordHref} className="px-3 pb-3 pl-9" />}
+        {open && <Details why={why} evidence={evidence} confidence={confidence} policy={shownPolicy} runHref={runHref} recordHref={recordHref} className="px-3 pb-3 pl-9" />}
       </div>
     );
   }
@@ -108,7 +115,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
         </div>
         {amount != null && <div className="text-right"><Money value={amount} className="text-[15px] font-semibold" /><div className="text-[11px] text-muted-foreground">amount</div></div>}
       </div>
-      {open && <Details why={why} evidence={evidence} confidence={confidence} policy={policy} runHref={runHref} recordHref={recordHref} className="px-3.5 pb-3" />}
+      {open && <Details why={why} evidence={evidence} confidence={confidence} policy={shownPolicy} runHref={runHref} recordHref={recordHref} className="px-3.5 pb-3" />}
       <div className="flex items-center gap-2 border-t px-3.5 py-2">
         <button onClick={() => setOpen((o) => !o)} className="text-[12px] text-muted-foreground hover:text-foreground">{open ? "Hide details" : "Why?"}</button>
         <div className="ml-auto">{actions}</div>

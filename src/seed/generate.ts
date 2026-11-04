@@ -208,9 +208,14 @@ function storeBalances(c: Ctx) {
       }
     }
   }
+  // Collected for a month = what that month's charges have been paid so far under the same
+  // allocation, so the collections rate (collected ÷ charged) stays within 100%: a payment toward
+  // an older balance counts for the older month, not the one it arrived in.
+  const paid = new Map<string, number>();
+  for (const x of c.t.charges) bump(paid, `${x.property_id}|${x.period}`, x.paid_cents as number);
   for (const m of c.t.metrics_monthly) {
     const a = aging.get(`${m.property_id}|${m.month}`) ?? [0, 0, 0, 0];
-    Object.assign(m, { aging_0_30_cents: a[0], aging_31_60_cents: a[1], aging_61_90_cents: a[2], aging_90p_cents: a[3] });
+    Object.assign(m, { collected_cents: paid.get(`${m.property_id}|${m.month}`) ?? 0, aging_0_30_cents: a[0], aging_31_60_cents: a[1], aging_61_90_cents: a[2], aging_90p_cents: a[3] });
   }
   for (const l of c.t.leases) Object.assign(l, { balance_cents: lease.get(l.id as string) ?? 0, last_payment_at: lastL.get(l.id as string) ?? null });
   for (const h of c.t.households) Object.assign(h, { balance_cents: hh.get(h.id as string) ?? 0, last_payment_at: lastH.get(h.id as string) ?? null });
@@ -1330,7 +1335,7 @@ function budgetsAndMetrics(c: Ctx, jeMap: Map<string, [number, number]>) {
     }
   }
 
-  const charges = c.t.charges, payments = c.t.payments, credits = c.t.credits ?? [];
+  const charges = c.t.charges, credits = c.t.credits ?? [];
   const sumBy = (rows: R[], key: (r: R) => string | null, val: (r: R) => number) => {
     const m = new Map<string, number>();
     for (const r of rows) {
@@ -1340,7 +1345,6 @@ function budgetsAndMetrics(c: Ctx, jeMap: Map<string, [number, number]>) {
     return m;
   };
   const charged = sumBy(charges, (r) => `${r.property_id}|${r.period}`, (r) => r.amount_cents as number);
-  const collected = sumBy(payments, (r) => (r.nsf ? null : `${r.property_id}|${(r.received_on as string).slice(0, 7)}`), (r) => r.amount_cents as number);
   const conc = sumBy(credits, (r) => (r.kind === "Concession" ? `${r.property_id}|${(r.on_date as string).slice(0, 7)}` : null), (r) => r.amount_cents as number);
   const woOpened = sumBy(c.workOrders, (r) => `${r.property_id}|${(r.opened_at as string).slice(0, 7)}`, () => 1);
   const slaBreach = sumBy(c.workOrders, (r) => ((r.completed_at ?? `${AS_OF}T23:59:00Z`) > (r.sla_due_at as string) && r.status !== "Cancelled" ? `${r.property_id}|${(r.opened_at as string).slice(0, 7)}` : null), () => 1);
@@ -1369,7 +1373,7 @@ function budgetsAndMetrics(c: Ctx, jeMap: Map<string, [number, number]>) {
       }
       const woOpen = c.workOrders.filter((w) => w.property_id === p.id && (w.opened_at as string) <= ts(cut, 1439) && (!w.completed_at || (w.completed_at as string) > ts(cut, 1439)) && w.status !== "Cancelled").length;
       add("metrics_monthly", {
-        property_id: p.id, month: period, units: p.units.length, occupied, gpr_cents: gpr, charged_cents: charged.get(k) ?? 0, collected_cents: collected.get(k) ?? 0,
+        property_id: p.id, month: period, units: p.units.length, occupied, gpr_cents: gpr, charged_cents: charged.get(k) ?? 0, collected_cents: 0, // set by storeBalances from the ledger allocation
         vacancy_loss_cents: vacancyLoss, concessions_cents: conc.get(k) ?? 0, occupancy_phys: Math.round((occupied / p.units.length) * 10000) / 10000,
         occupancy_econ: Math.round(Math.max(0, Math.min(1, (actual(p.id, "4000", period) + actual(p.id, "4010", period) + actual(p.id, "4900", period)) / gpr)) * 10000) / 10000,
         aging_0_30_cents: 0, aging_31_60_cents: 0, aging_61_90_cents: 0, aging_90p_cents: 0, opex_cents: opex, noi_cents: income - opex,

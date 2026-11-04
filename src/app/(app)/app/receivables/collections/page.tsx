@@ -43,7 +43,7 @@ export default async function CollectionsPage({ searchParams }: Props) {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <PageHeader
         title="Collections"
-        description={<>Delinquent residents ranked by risk, with the reasons and the Collections agent&apos;s next step. Approve low-risk reminders together; payment plans and legal referrals are decided one at a time. {session.actor.scope.label}.</>}
+        description={<>Delinquent residents ranked by risk, with the reasons and the Collections Agent&apos;s next step. Approve low-risk reminders together; payment plans and legal referrals are decided one at a time. {session.actor.scope.label}.</>}
       />
       {!data ? <ErrorBanner title="Collections couldn't load" message="Refresh the page to try again." /> : (
         <>

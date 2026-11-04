@@ -17,12 +17,13 @@ import { pageData } from "@/ai/ui/server";
 import { proposalsPage } from "@/ai/views";
 import type { ProposalJson } from "@/ai/ui/client";
 import { expiries, LAPSED, type Expiry, type ExpiryKind } from "@/extensions/risk/timeline";
+import { RequestCoiButton } from "@/extensions/risk/ui/RequestCoi";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Compliance · Propniti" };
 
 // Compliance dashboard: what lapses next across vendor certificates, property insurance and
-// compliance items, the legal docket, and what the Compliance agent proposes. Lists and records
+// compliance items, the legal docket, and what the Compliance Agent proposes. Lists and records
 // are the generic pages under /app/compliance/*.
 
 const KPIS: (KpiDef & { needs: EntityKey })[] = [
@@ -104,7 +105,10 @@ function groupByWeek(rows: Expiry[], today: string) {
   return { lapsed, weeks: [...weeks.entries()].sort((a, b) => a[0] - b[0]) };
 }
 
-function TimelineRow({ r, lapsed }: { r: Expiry; lapsed?: boolean }) {
+// Lapsed certificates can be chased from here: the vendor gets a portal request, at most once a week.
+const canChase = (r: Expiry) => r.kind === "coi" && ["Expired", "Missing", "Rejected"].includes(r.status);
+
+function TimelineRow({ r, lapsed, chase }: { r: Expiry; lapsed?: boolean; chase?: boolean }) {
   return (
     <li className="grid grid-cols-[88px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
       <span className={cn("w-fit rounded px-1.5 py-0.5 text-[11px] font-medium", r.kind === "item" ? "bg-tone-info/10 text-tone-info" : r.kind === "coi" ? "bg-tone-warning/10 text-tone-warning" : "bg-tone-neutral/10 text-foreground")}>{KIND[r.kind].label}</span>
@@ -113,6 +117,9 @@ function TimelineRow({ r, lapsed }: { r: Expiry; lapsed?: boolean }) {
         {r.where && <div className="truncate text-[12px] text-muted-foreground">{r.where}</div>}
       </div>
       <div className="flex items-center gap-2 text-right">
+        {chase && canChase(r) && (r.requested
+          ? <span className="text-[11.5px] text-muted-foreground">Asked <RelativeDate value={r.requested} /></span>
+          : <RequestCoiButton ids={[r.id]} />)}
         <StatusBadge value={r.status} tone={lapsed ? "danger" : r.status === "Due soon" || r.status === "Expiring" ? "warning" : "neutral"} />
         <RelativeDate value={r.date} mode="due" className={cn("w-24 text-[12px] tabular-nums", lapsed ? "text-tone-danger" : "text-muted-foreground")} />
       </div>
@@ -120,17 +127,19 @@ function TimelineRow({ r, lapsed }: { r: Expiry; lapsed?: boolean }) {
   );
 }
 
-function Timeline({ rows, today }: { rows: Expiry[]; today: string }) {
+function Timeline({ rows, today, chase }: { rows: Expiry[]; today: string; chase: boolean }) {
   const { lapsed, weeks } = groupByWeek(rows, today);
+  const toChase = chase ? lapsed.filter((r) => canChase(r) && !r.requested).map((r) => r.id) : [];
   if (!rows.length) return <EmptyState compact kind="table" title="Nothing lapses in the next 90 days" description="Certificates, policies and compliance items due later show in the lists." />;
   return (
     <div className="flex max-h-[560px] flex-col overflow-y-auto rounded-lg border bg-card">
       {lapsed.length > 0 && (
         <section className="border-b border-tone-danger/20 bg-tone-danger/[0.04]">
           <h3 className="sticky top-0 z-10 flex items-center justify-between bg-tone-danger/[0.06] px-3 py-1.5 text-[12px] font-semibold text-tone-danger backdrop-blur">
-            <span>Lapsed, needs action</span><span className="tabular-nums">{lapsed.length}</span>
+            <span>Lapsed, needs action</span>
+            <span className="flex items-center gap-2">{toChase.length > 1 && <RequestCoiButton ids={toChase} label={`Request all ${toChase.length} certificates`} className="bg-card" />}<span className="tabular-nums">{lapsed.length}</span></span>
           </h3>
-          <ul className="divide-y divide-tone-danger/10">{lapsed.map((r) => <TimelineRow key={`${r.kind}-${r.id}`} r={r} lapsed />)}</ul>
+          <ul className="divide-y divide-tone-danger/10">{lapsed.map((r) => <TimelineRow key={`${r.kind}-${r.id}`} r={r} lapsed chase={chase} />)}</ul>
         </section>
       )}
       {weeks.map(([monday, items]) => (
@@ -161,7 +170,6 @@ export default async function CompliancePage() {
     canTimeline ? expiries(ctx, 90).then((r) => ({ ...r, error: null }), () => ({ today: "", rows: [] as Expiry[], error: "The timeline couldn't load. Refresh to try again." })) : null,
     proposalsPage(data, { queue: "needs_you", agent: "compliance", size: 6 }).catch(() => null),
   ]);
-  const canApprove = ["principal", "regional_manager", "property_manager", "maintenance_supervisor"].includes(role);
   const props = proposals ? (JSON.parse(JSON.stringify(proposals.rows)) as ProposalJson[]) : null;
 
   return (
@@ -171,7 +179,7 @@ export default async function CompliancePage() {
         title="Compliance"
         description="Property insurance, vendor certificates, inspections, permits and legal cases, with what lapses next."
         meta={<><span>{session.actor.scope.label}</span>{timeline?.today && <span>As of <RelativeDate value={timeline.today} mode="date" /></span>}</>}
-        actions={<Button asChild size="sm" variant="outline"><Link href="/app/agents"><Bot /> Run Compliance agent</Link></Button>}
+        actions={<Button asChild size="sm" variant="outline"><Link href="/app/agents"><Bot /> Run Compliance Agent</Link></Button>}
       >
         <nav aria-label="Compliance lists" className="flex flex-wrap gap-1.5">
           {readable.map((l) => (
@@ -187,19 +195,19 @@ export default async function CompliancePage() {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           {timeline && (
             <Section title="Expiries timeline" description="Lapsed items first, then the next 90 days by week." actions={<Link href="/app/compliance/items?view=next-90" className="text-[12px] text-primary hover:underline">All upcoming</Link>}>
-              {timeline.error ? <ErrorBanner message={timeline.error} /> : <Timeline rows={timeline.rows} today={timeline.today} />}
+              {timeline.error ? <ErrorBanner message={timeline.error} /> : <Timeline rows={timeline.rows} today={timeline.today} chase={can(role, "vendor_cois.request_certificate", "vendor_cois")} />}
             </Section>
           )}
           <Section
-            title="Compliance agent proposals"
+            title="Compliance Agent proposals"
             description="Renewal requests and escalations waiting for a person."
             actions={<Link href="/app/ai/approvals?agent=compliance" className="inline-flex items-center gap-1 text-[12px] text-primary hover:underline">All approvals <ArrowRight className="size-3" /></Link>}
           >
             {!props ? <ErrorBanner message="Proposals couldn't load. Refresh to try again." /> : props.length === 0 ? (
-              <div className="rounded-lg border bg-card"><EmptyState compact kind="table" title="Nothing waiting on you" description="The Compliance agent checks certificates and due dates daily. Its handled items are in AI activity." action={{ label: "Open agents", href: "/app/agents" }} /></div>
+              <div className="rounded-lg border bg-card"><EmptyState compact kind="table" title="Nothing waiting on you" description="The Compliance Agent checks certificates and due dates daily. Its handled items are in AI activity." action={{ label: "Open agents", href: "/app/agents" }} /></div>
             ) : (
               <div className="flex flex-col gap-2">
-                {props.map((p) => <ProposalCard key={p.id} p={p} variant="card" canApprove={canApprove} />)}
+                {props.map((p) => <ProposalCard key={p.id} p={p} variant="card" />)}
                 {(proposals?.total ?? 0) > props.length && <Link href="/app/ai/approvals?agent=compliance" className="text-center text-[12px] text-primary hover:underline">{(proposals?.total ?? 0) - props.length} more waiting</Link>}
               </div>
             )}

@@ -5,7 +5,8 @@ import { getPersona, PERSONAS } from "@/auth/personas";
 import { canDecide } from "@/ai/http";
 import { actorFor } from "@/server/permissions";
 import { seed, WS } from "@/server/query.fixture";
-import { decidableTypes, inApp, inboxCounts, inboxPage } from "./data";
+import { staffDecision } from "@/ai/decide";
+import { inApp, inboxCounts, inboxPage, nextNeedingReply } from "./data";
 import { cachedCounts } from "./counts";
 
 vi.mock("@/lib/platform", async () => {
@@ -64,15 +65,14 @@ describe("inbox: links", () => {
 });
 
 describe("inbox: who decides what", () => {
-  it("lists entity types a role may decide, split by approve and write access", () => {
-    const pm = decidableTypes("property_manager");
-    expect(pm.write).toContain("residents");
-    expect(pm.write).not.toContain("bills");
-    expect(pm.approve).not.toContain("leases");
-    expect(pm.other).toBe("approve");
-    const acct = decidableTypes("accountant");
-    expect(acct.approve).toContain("bills");
-    expect(acct.write).not.toContain("residents");
+  it("decides by module access: write for low-risk items with no amount, approve for the rest", () => {
+    const low = (entity_type: string) => ({ entity_type, risk: "Low", amount_cents: null, queue_state: "needs_you" });
+    expect(staffDecision("property_manager", low("residents")).ok).toBe(true);
+    expect(staffDecision("property_manager", { ...low("bills"), amount_cents: 1000 }).ok).toBe(false);
+    expect(staffDecision("property_manager", { ...low("leases"), risk: "Medium" }).ok).toBe(false);
+    expect(staffDecision("property_manager", low("not_an_entity")).ok).toBe(true);
+    expect(staffDecision("accountant", { ...low("bills"), amount_cents: 1000 }).ok).toBe(true);
+    expect(staffDecision("accountant", low("residents")).ok).toBe(false);
   });
 });
 
@@ -187,5 +187,15 @@ describe("inbox for other roles", () => {
     const got = new Set(ids(await inboxPage(await ctx("daniel"), {})));
     for (const id of ["pr-renewal", "pr-bill-high", "pr-dallas", "t-unassigned", "t-org"]) expect(got.has(id)).toBe(true);
     for (const id of ["t-mine", "t-other", "n-m1"]) expect(got.has(id)).toBe(false);
+  });
+});
+
+describe("inbox: send and next", () => {
+  it("picks the next open conversation in scope where the other party wrote last", async () => {
+    const marcus = await ctx("marcus");
+    expect(await nextNeedingReply(marcus, "t-unassigned")).toBe("t-mine");
+    // t-unassigned waits on the resident, t-other is someone else's, t-dallas is out of scope.
+    expect(await nextNeedingReply(marcus, "t-mine")).toBeNull();
+    expect(await nextNeedingReply(await ctx("sam"), "t-unassigned")).toBeNull();
   });
 });

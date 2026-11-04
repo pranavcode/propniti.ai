@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/app/page";
-import { AGENT_LABEL } from "@/ai/ui/labels";
+import { agentName } from "@/ai/ui/labels";
 import { RunView } from "@/ai/ui/RunView";
 import { pageData } from "@/ai/ui/server";
 import { runDetail } from "@/ai/views";
@@ -19,7 +19,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const trigger = TRIGGER[String(run.trigger_kind)] ?? "Run";
   return (
     <main>
-      <PageHeader icon={<Activity />} title={`${AGENT_LABEL[String(run.agent_key)] ?? run.agent_key} run`} description="Every step the agent took: what it looked up, what the model said, and what it proposed." meta={<><span>{trigger}</span><span>Run {String(run.id)}</span></>} />
+      <PageHeader icon={<Activity />} title={`${agentName(String(run.agent_key))} run`} description="Every step the agent took: what it looked up, what the model said, and what it proposed." meta={<><span>{trigger}</span><span>Run {String(run.id)}</span></>} />
       <div className="mt-5">
         <RunView runId={id} initial={JSON.parse(JSON.stringify(r))} />
       </div>
