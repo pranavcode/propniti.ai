@@ -38,6 +38,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   const [palette, setPalette] = useState<{ open: boolean; q: string }>({ open: false, q: "" });
   const [shortcuts, setShortcuts] = useState(false);
   const [setup, setSetup] = useState(false);
+  const [profileMenu, setProfileMenu] = useState<ShellContext["profileMenu"]>(false);
   const [theme, setThemeState] = useState<Theme>(data.theme);
   const [density, setDensityState] = useState<Density>(data.density);
   const [crumbTitle, setCrumbTitle] = useState<string | null>(null);
@@ -97,7 +98,8 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
     startTour: tour.start,
     tourActive: touring,
     openSetup: () => setSetup(true),
-  }), [pageData, assistant, theme, setTheme, density, setDensity, crumbTitle, tour.start, touring]);
+    profileMenu, setProfileMenu,
+  }), [pageData, assistant, theme, setTheme, density, setDensity, crumbTitle, tour.start, touring, profileMenu]);
 
   const goto = useMemo(() => Object.fromEntries(gotoTargets(data.nav).map((g) => [`g ${g.key}`, () => router.push(g.href)])), [data.nav, router]);
   useHotkeys({
@@ -164,7 +166,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
 }
 
 function ViewingAsBanner() {
-  const { data } = useShell();
+  const { data, setProfileMenu } = useShell();
   const p = data.persona;
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-b border-primary/15 bg-primary/[0.06] px-3 text-[12.5px] md:px-4">
@@ -174,7 +176,7 @@ function ViewingAsBanner() {
         <span className="text-muted-foreground"> · {p.title} · {p.scopeLabel}</span>
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        <button onClick={() => document.querySelector<HTMLElement>("[data-tour=profile]")?.click()} className="inline-flex h-6 items-center gap-1 rounded px-2 text-primary hover:bg-primary/10"><UserRoundCog className="size-3.5" /> Switch</button>
+        <button onClick={() => setProfileMenu("switch")} className="inline-flex h-6 items-center gap-1 rounded px-2 text-primary hover:bg-primary/10"><UserRoundCog className="size-3.5" /> Switch</button>
         <button onClick={exitPersona} className="inline-flex h-6 items-center gap-1 rounded px-2 text-muted-foreground hover:bg-primary/10 hover:text-foreground"><LogOut className="size-3.5" /> Exit</button>
       </span>
     </div>

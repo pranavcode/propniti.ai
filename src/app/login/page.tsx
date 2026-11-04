@@ -5,8 +5,8 @@ import { SignIn, type Card } from "./SignIn";
 
 export const metadata: Metadata = { title: "Sign in · Propniti demo" };
 
-// Demo sign-in: an email and password form (one published password for every demo person) above
-// one-click persona cards. Both post to /api/session, which checks the password, sets the pn_as
+// Demo sign-in: an email and password form (one published password for every demo person) beside
+// a compact one-click people list. Both post to /api/session, which checks the password, sets the pn_as
 // cookie and lands on that persona's home (or a safe `next`). Plain form posts, so both work
 // before any JavaScript loads.
 
@@ -27,7 +27,7 @@ const SEES: Record<string, string> = {
 };
 
 const roleLabel = (p: Persona) => p.role.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) + (p.portal ? " portal" : "");
-const ERRORS = { email: "No demo account with that email — pick a person below.", password: "Wrong password — the demo password is shown above." } as const;
+const ERRORS = { email: "No demo account with that email — pick a person from the list.", password: "Wrong password — the demo password is shown above." } as const;
 
 type Params = Partial<Record<"next" | "as" | "error" | "email" | "switch", string | string[]>>;
 // A repeated query param (?email=a&email=b) arrives as an array: use the first value.
