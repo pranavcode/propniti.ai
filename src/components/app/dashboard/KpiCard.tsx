@@ -54,6 +54,9 @@ export function Sparkline({ data, tone = "neutral", className, width = 96, heigh
 // wraps to two lines (the row is always two lines tall), the value, an optional footnote, and the
 // delta with its sparkline pinned to the bottom. Values sit at the same height in every tile, and
 // tiles in a grid row stretch to one height.
+// The full text of a truncated value or footnote, on hover.
+const plain = (n: React.ReactNode) => (typeof n === "string" || typeof n === "number" ? String(n) : undefined);
+
 export function KpiFrame({ label, linkLabel, href, onClick, aside, value, footnote, delta, spark, className }: {
   label: React.ReactNode;
   linkLabel: string;                   // accessible name of the drill link
@@ -80,8 +83,8 @@ export function KpiFrame({ label, linkLabel, href, onClick, aside, value, footno
           </span>
         )}
       </div>
-      <div data-kpi-value className="mt-1 truncate text-[22px] leading-7 font-semibold tracking-[-0.015em] tabular-nums">{value}</div>
-      {footnote && <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{footnote}</div>}
+      <div data-kpi-value title={plain(value)} className="mt-1 truncate text-[22px] leading-7 font-semibold tracking-[-0.015em] tabular-nums">{value}</div>
+      {footnote && <div title={plain(footnote)} className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{footnote}</div>}
       <div className="mt-auto flex min-h-9 items-end justify-between gap-2 pt-2">
         {delta ?? <span />}
         {spark}
