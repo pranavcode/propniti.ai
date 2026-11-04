@@ -212,7 +212,9 @@ export function checkDraft(body: string, facts: Record<string, unknown> | undefi
 // Numbers a summary may state: every number in the facts, as written and as dollars/cents.
 export function unknownNumbers(text: string, facts: Facts): string[] {
   const allowed = new Set<number>();
-  for (const v of Object.values(facts)) {
+  for (const [k, v] of Object.entries(facts)) {
+    // A key like spend_12m names its own period, so "the last 12 months" is grounded too.
+    for (const m of k.matchAll(/\d+/g)) allowed.add(Number(m[0]));
     if (typeof v === "number") [v, v / 100, v * 100, Math.round(v), Math.round(v * 10) / 10, Math.round(v * 100)].forEach((x) => allowed.add(Math.round(x * 100) / 100));
     if (typeof v === "string") for (const m of v.matchAll(/\d+(?:\.\d+)?/g)) allowed.add(Number(m[0]));
   }

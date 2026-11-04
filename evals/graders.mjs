@@ -163,7 +163,7 @@ export function gradeNlFilter(c, res) {
 export function gradeSummary(c, res) {
   const s = res.summary ?? {};
   const facts = s.facts ?? {};
-  const allowed = new Set(Object.values(facts).flatMap((v) => (typeof v === "number" ? [v, v / 100, Math.round(v), Math.round(v * 10) / 10] : String(v).match(/\d+(\.\d+)?/g)?.map(Number) ?? [])).map((x) => Math.round(x * 100) / 100));
+  const allowed = new Set(Object.entries(facts).flatMap(([k, v]) => [...(k.match(/\d+/g)?.map(Number) ?? []), ...(typeof v === "number" ? [v, v / 100, Math.round(v), Math.round(v * 10) / 10] : String(v).match(/\d+(\.\d+)?/g)?.map(Number) ?? [])]).map((x) => Math.round(x * 100) / 100));
   const nums = [...String(s.summary ?? "").matchAll(/\$?\d[\d,]*(\.\d+)?%?/g)].map((m) => Number(m[0].replace(/[$,%]/g, ""))).filter((n) => n >= 10 && !/^(19|20)\d\d$/.test(String(n)));
   const unknown = nums.filter((n) => !allowed.has(Math.round(n * 100) / 100));
   const checks = [

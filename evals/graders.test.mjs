@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeExtract, gradeMap, gradeParse, isFallback, unknownNames } from "./graders.mjs";
+import { gradeExtract, gradeMap, gradeParse, gradeSummary, isFallback, unknownNames } from "./graders.mjs";
 
 const pass = (g) => g.pass ?? g.checks.every((c) => c.ok);
 const checks = (overrides = {}) =>
@@ -41,5 +41,11 @@ describe("eval graders", () => {
     const c = { expect: [{ tenant: "Mia Wong", unit: "2", rent: 2050, property: "Cedar" }] };
     expect(pass(gradeParse(c, { rows: [{ tenant: "Mia Wong", unit: "#2", rent: "$2,050", property: "Cedar House" }] }))).toBe(true);
     expect(pass(gradeParse(c, { rows: [{ tenant: "Mia Wong", unit: "Unit 3", rent: "2050", property: "Cedar House" }] }))).toBe(false);
+  });
+
+  it("summary numbers may come from a fact key such as spend_12m", () => {
+    const res = { summary: { summary: "Lone Star Plumbing billed $117,031 over the last 12 months.", facts: { spend_12m: 117031 } } };
+    expect(pass(gradeSummary({ expect: {} }, res))).toBe(true);
+    expect(pass(gradeSummary({ expect: {} }, { summary: { ...res.summary, summary: "Billed $117,031 over 18 months." } }))).toBe(false);
   });
 });

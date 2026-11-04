@@ -4,6 +4,7 @@ import { computeFix } from "../agents/data-health";
 import { scoreApplicant } from "../agents/leasing";
 import { triage } from "../agents/maintenance";
 import { checkDraft, fixProposal } from "../tools/write";
+import { unknownNumbers } from "../rules";
 
 // The rule-side eval cases (evals/cases/{triage,draft,data-fix,applicant-scoring}.json): what the
 // agents compute without a model, and what any model output is checked against.
@@ -84,5 +85,16 @@ describe("draft dates", () => {
     expect(letterDates(model)).toBe("Hi Ana, your lease ends on Nov 7, 2026. We can renew at $1,250.");
     expect(checkDraft(letterDates(model), { offer_rent_cents: 125000 })).toEqual([]);
     expect(letterDates("vence el 2026-11-07.", "es")).toBe("vence el 7 de noviembre de 2026.");
+  });
+});
+
+describe("summary number check", () => {
+  // Vendor summaries fell back to rules because "12 months" (from spend_12m) was flagged as unknown.
+  const facts = { vendor: "Lone Star Plumbing", rating: 4.6, open_jobs: 2, spend_12m: 117031, coi_expires: null };
+  it("accepts the period named in a fact key and full money figures", () => {
+    expect(unknownNumbers("Lone Star Plumbing (rated 4.6) has 2 open jobs and $117,031 of spend over the last 12 months.", facts)).toEqual([]);
+  });
+  it("still flags invented or abbreviated figures", () => {
+    expect(unknownNumbers("Spend was $117K over 18 months.", facts)).toEqual(["$117", "18"]);
   });
 });
