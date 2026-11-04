@@ -46,12 +46,60 @@ export const measureOf = (key: string) => MEASURES.find((m) => m.key === key);
 export const GROUP_LABEL: Record<GroupBy, string> = { property: "Property", metro: "Metro", gl: "GL account", month: "Month", vendor: "Vendor" };
 export const COMPARE_LABEL: Record<Compare, string> = { none: "", budget: "Budget", prior_year: "Prior year" };
 
+// The period as a type, never as dates: resolvePeriod() turns it into months from the demo
+// clock's last closed month, so "last 12 months" or "Q3" can't drift with the model.
+export const PERIOD_KINDS = ["last_month", "last_quarter", "quarter", "ytd", "trailing", "year", "range"] as const;
+export const PeriodSchema = z.object({
+  kind: z.enum(PERIOD_KINDS).nullable(),
+  quarter: z.number().int().nullable(),          // quarter: 1–4
+  year: z.number().int().nullable(),             // quarter, year, range: only when the person names a year
+  months: z.number().int().nullable(),           // trailing: how many months (12 for "last 12 months", "T12")
+  startMonth: z.number().int().nullable(),       // range: 1–12
+  endMonth: z.number().int().nullable(),         // range: 1–12
+});
+export type Period = z.infer<typeof PeriodSchema>;
+export const NO_PERIOD: Period = { kind: null, quarter: null, year: null, months: null, startMonth: null, endMonth: null };
+
+const mm = (y: number, m: number) => `${y}-${String(m).padStart(2, "0")}`;
+
+// Months for a period type. A quarter or month range with no year means the latest one that has
+// closed; anything without a type is the trailing 12 closed months.
+export function resolvePeriod(p: Period, lastClosed: string): { from: string; to: string; note?: string } {
+  const ly = Number(lastClosed.slice(0, 4));
+  const lm = Number(lastClosed.slice(5));
+  const clampN = (n: number | null, d: number) => Math.max(1, Math.min(24, n ?? d));
+  switch (p.kind) {
+    case "last_month": return { from: lastClosed, to: lastClosed };
+    case "last_quarter": {
+      const q = Math.floor(lm / 3);
+      const to = q === 0 ? mm(ly - 1, 12) : mm(ly, q * 3);
+      return { from: addMonths(to, -2), to };
+    }
+    case "quarter": {
+      const q = Math.min(4, Math.max(1, p.quarter ?? 1));
+      let y = p.year ?? ly;
+      if (!p.year && mm(y, q * 3) > lastClosed) y -= 1;
+      return { from: mm(y, q * 3 - 2), to: mm(y, q * 3) };
+    }
+    case "ytd": return { from: mm(ly, 1), to: lastClosed };
+    case "trailing": { const n = clampN(p.months, 12); return { from: addMonths(lastClosed, -(n - 1)), to: lastClosed }; }
+    case "year": { const y = p.year ?? ly; return { from: mm(y, 1), to: mm(y, 12) }; }
+    case "range": {
+      const a = Math.min(12, Math.max(1, p.startMonth ?? 1));
+      const b = Math.min(12, Math.max(1, p.endMonth ?? a));
+      let y = p.year ?? ly;
+      if (!p.year && mm(y, b) > lastClosed) y -= 1;
+      return a <= b ? { from: mm(y, a), to: mm(y, b) } : { from: mm(y - 1, a), to: mm(y, b) };
+    }
+    default: return { from: addMonths(lastClosed, -11), to: lastClosed };
+  }
+}
+
 // What the model returns. Loose on purpose: validateSpec() decides what survives.
 export const RawSpecSchema = z.object({
   measure: z.string(),
   groupBy: z.string().nullable(),
-  from: z.string().nullable(),
-  to: z.string().nullable(),
+  period: PeriodSchema.nullable(),
   compareTo: z.string().nullable(),
   properties: z.array(z.string()).nullable(),
   metros: z.array(z.string()).nullable(),
@@ -63,7 +111,6 @@ export type RawSpec = z.infer<typeof RawSpecSchema>;
 export type QuerySpec = { measure: string; groupBy: GroupBy; from: string; to: string; compareTo: Compare; properties: string[]; metros: string[]; chart: ChartKind; title: string };
 export type ScopeProperty = { id: string; name: string; metro: string };
 
-const YM = /^\d{4}-(0[1-9]|1[0-2])$/;
 export const addMonths = (ym: string, n: number) => {
   const [y, m] = ym.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
@@ -103,10 +150,7 @@ export function validateSpec(raw: RawSpec, scope: ScopeProperty[], lastClosed: s
     dropped.push(`${m.label} has no ${String(raw.compareTo).replace("_", " ")} to compare with`);
     compareTo = "none";
   }
-  let to = raw.to && YM.test(raw.to) ? raw.to : lastClosed;
-  let from = raw.from && YM.test(raw.from) ? raw.from : addMonths(to, -11);
-  if ((raw.from && !YM.test(raw.from)) || (raw.to && !YM.test(raw.to))) dropped.push("A date wasn't a month (YYYY-MM); used the last 12 closed months");
-  if (from > to) [from, to] = [to, from];
+  let { from, to } = resolvePeriod(raw.period ?? NO_PERIOD, lastClosed);
   if (to > lastClosed) { to = lastClosed; dropped.push(`Books are closed through ${monthLabel(lastClosed)}`); }
   if (from < FIRST_MONTH) { from = FIRST_MONTH; dropped.push(`History starts ${monthLabel(FIRST_MONTH)}`); }
   if (from > to) from = to;
@@ -137,34 +181,18 @@ export function rulesSpec(text: string, scope: ScopeProperty[], lastClosed: stri
     : null;
 
   const yearM = t.match(/\b(20\d{2})\b/);
-  const year = yearM ? Number(yearM[1]) : Number(lastClosed.slice(0, 4));
-  let from: string | null = null;
-  let to: string | null = null;
+  const year = yearM ? Number(yearM[1]) : null;
   const q = t.match(/\bq([1-4])\b/);
-  if (q) {
-    const start = (Number(q[1]) - 1) * 3 + 1;
-    from = `${year}-${String(start).padStart(2, "0")}`;
-    to = addMonths(from, 2);
-  } else if (/\blast month\b/.test(t)) {
-    from = to = lastClosed;
-  } else if (/\blast quarter\b/.test(t)) {
-    const m = Number(lastClosed.slice(5));
-    const qEnd = `${lastClosed.slice(0, 4)}-${String(m - (m % 3 === 0 ? 0 : m % 3)).padStart(2, "0")}`;
-    to = qEnd.endsWith("-00") ? `${Number(lastClosed.slice(0, 4)) - 1}-12` : qEnd;
-    from = addMonths(to, -2);
-  } else if (/\bytd\b|\byear to date\b|\bthis year\b/.test(t)) {
-    from = `${lastClosed.slice(0, 4)}-01`;
-    to = lastClosed;
-  } else if (/\bt12\b|\btrailing (12|twelve)|\blast (12|twelve) months/.test(t)) {
-    to = lastClosed;
-    from = addMonths(lastClosed, -11);
-  } else if (/\blast (3|three) months\b/.test(t)) {
-    to = lastClosed;
-    from = addMonths(lastClosed, -2);
-  } else if (yearM) {
-    from = `${year}-01`;
-    to = `${year}-12`;
-  }
+  const n = t.match(/\b(?:last|trailing|past) (\d{1,2}|three|six|twelve) months\b/);
+  const words: Record<string, number> = { three: 3, six: 6, twelve: 12 };
+  const period: Period = { ...NO_PERIOD };
+  if (q) Object.assign(period, { kind: "quarter", quarter: Number(q[1]), year });
+  else if (/\blast month\b/.test(t)) period.kind = "last_month";
+  else if (/\blast quarter\b/.test(t)) period.kind = "last_quarter";
+  else if (/\bytd\b|\byear to date\b|\bthis year\b/.test(t)) period.kind = "ytd";
+  else if (/\bt12\b|\btrailing (12|twelve)\b/.test(t)) Object.assign(period, { kind: "trailing", months: 12 });
+  else if (n) Object.assign(period, { kind: "trailing", months: words[n[1]] ?? Number(n[1]) });
+  else if (year) Object.assign(period, { kind: "year", year });
 
   const compareTo = /\b(vs\.?|versus|against|compared? (to|with)) (the )?budget|\bbudget(ed)?\b/.test(t) ? "budget"
     : /\b(vs\.?|versus|against|compared? (to|with)) (last|prior|previous) year|\byoy\b|\byear over year|\bprior year/.test(t) ? "prior_year"
@@ -175,5 +203,5 @@ export function rulesSpec(text: string, scope: ScopeProperty[], lastClosed: stri
     return t.includes(n) || (n.startsWith("the ") && t.includes(n.slice(4)));
   }).map((p) => p.id);
   const chart = /\btable\b/.test(t) ? "table" : null;
-  return { measure, groupBy, from, to, compareTo, properties, metros, chart, title: null };
+  return { measure, groupBy, period, compareTo, properties, metros, chart, title: null };
 }

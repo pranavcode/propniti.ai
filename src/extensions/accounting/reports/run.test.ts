@@ -39,7 +39,7 @@ describe("reports on the generated base", () => {
     const scope = await scopeProperties(ctx);
     for (const groupBy of ["property", "metro", "gl", "month", "vendor"]) {
       for (const compareTo of ["none", "budget", "prior_year"]) {
-        const { spec, dropped } = validateSpec({ measure, groupBy, from: "2026-04", to: "2026-09", compareTo, properties: null, metros: null, chart: null, title: null }, scope, "2026-10");
+        const { spec, dropped } = validateSpec({ measure, groupBy, period: { kind: "range", quarter: null, year: 2026, months: null, startMonth: 4, endMonth: 9 }, compareTo, properties: null, metros: null, chart: null, title: null }, scope, "2026-10");
         if (dropped.length) continue;
         const r = await runSpec(ctx, spec);
         expect(Number.isFinite(r.total)).toBe(true);

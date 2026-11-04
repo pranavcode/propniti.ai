@@ -16,7 +16,7 @@ export async function askReport(text: string, scope: ScopeProperty[], lastClosed
       const { value } = await model.structured(
         RawSpecSchema,
         "You turn a property accountant's request into a report spec for a US property management app. " +
-          `Books are closed through ${lastClosed}; history starts ${FIRST_MONTH}. Months are YYYY-MM. A quarter with no year means ${lastClosed.slice(0, 4)}.\n` +
+          "period: pick the TYPE only, never dates. kind: last_month | last_quarter | quarter (set quarter 1–4) | ytd | trailing (set months, e.g. 12 for 'last 12 months' or 'T12') | year | range (startMonth/endMonth 1–12) | null for no period. Set year only when the person names one. The app computes the months from its own calendar.\n" +
           `measure, one of:\n${MEASURES.map((m) => `- ${m.key}: ${m.label}; groupBy ${m.groupBy.join("|")}; compareTo ${m.compare.join("|")}`).join("\n")}\n` +
           `groupBy: ${Object.keys(GROUP_LABEL).join("|")}. compareTo: ${Object.keys(COMPARE_LABEL).join("|")}. chart: bar|line|hbar|table. metros: ${METROS.join(", ")}.\n` +
           `properties (use ids): ${scope.map((p) => `${p.id} ${p.name} (${p.metro})`).join("; ")}\n` +
