@@ -81,9 +81,17 @@ export const toastBlockedBy = (g: ToastGate) => (Object.keys(g) as (keyof ToastG
 export type OfferTour = { id: string; title: string; steps: number; paths: string[]; status: TourStatus | null };
 export type Offer = { tour: string; text: string };
 
-// One offer per page view: the page's feature, then a feature on screen (Improve with AI before the
-// bubble), then the page's own product tour. A tour already offered, started or finished never is.
-export function pickToast(i: { path: string; tours: OfferTour[]; present: string[]; state: WhatsNew }): Offer | null {
+// sessionStorage "pn_offer_session": set once a tour was offered in this browser session.
+export const OFFER_SESSION_KEY = "pn_offer_session";
+
+// A toast sits over the open desktop sidebar's foot (bottom left), so it never covers the page. With
+// no room there (phones, tablets, the collapsed rail) the chat bubble offers the tour instead.
+export const offerPlace = (w: { viewport: number; sidebar: number }): "toast" | "bubble" => (w.viewport >= 1024 && w.sidebar >= 200 ? "toast" : "bubble");
+
+// One offer per browser session: the page's feature, then a feature on screen (Improve with AI before
+// the bubble), then the page's own product tour. A tour already offered, started or finished never is.
+export function pickToast(i: { path: string; tours: OfferTour[]; present: string[]; state: WhatsNew; offeredThisSession?: boolean }): Offer | null {
+  if (i.offeredThisSession) return null;
   const open = (id: string) => {
     const t = i.tours.find((x) => x.id === id);
     return t && t.status === null && !i.state.offers?.[id] ? t : null;

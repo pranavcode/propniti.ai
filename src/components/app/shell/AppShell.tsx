@@ -159,7 +159,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
         <WhatsNew />
         <AskAutoOpen />
         {/* Toasts sit above the chat bubble. */}
-        <Toaster theme={theme} position="bottom-right" closeButton {...(showsBubble(pathname) && { offset: { bottom: 76 }, mobileOffset: { bottom: 76 } })} />
+        <Toaster theme={theme} position="bottom-right" closeButton offset={{ left: 8, ...(showsBubble(pathname) && { bottom: 76 }) }} {...(showsBubble(pathname) && { mobileOffset: { bottom: 76 } })} />
       </TooltipProvider>
     </ShellCtx.Provider>
   );

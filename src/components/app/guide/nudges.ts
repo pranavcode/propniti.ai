@@ -46,6 +46,7 @@ export type NudgeInput = {
   page: { explain: boolean; peekRows: boolean };           // what's on screen now
   prefs: GuidePrefs;
   session: GuideSession;
+  offer?: { tour: string; text: string } | null;           // the page's tour offer when no toast has room for it
 };
 
 export type Gate = {
@@ -74,7 +75,8 @@ const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
 
 // In priority order: work waiting for the person first, then how to use this page, then the basics
-// tour. A page's own tour is offered by the feature-tour toast (welcome/WhatsNew.tsx), not here.
+// tour. A page's own tour is offered by the feature-tour toast (welcome/WhatsNew.tsx), or here when
+// the toast has no room (phones, the collapsed sidebar).
 function candidates(i: NudgeInput): Nudge[] {
   const out: Nudge[] = [];
   const f = i.facts;
@@ -101,6 +103,10 @@ function candidates(i: NudgeInput): Nudge[] {
       text: `${plural(f.dataIssues.critical, "critical data issue is", "critical data issues are")} open in records that money depends on.`,
       action: { kind: "href", href: "/app/data-health?severity=critical", label: "Review fixes" },
     });
+  }
+
+  if (i.offer) {
+    out.push({ id: "tour.offer", key: i.offer.tour, source: "Product tour", text: i.offer.text, action: { kind: "tour", tour: i.offer.tour, label: "Start tour" } });
   }
 
   if (/^\/app\/properties\/[^/]+$/.test(i.path)) {

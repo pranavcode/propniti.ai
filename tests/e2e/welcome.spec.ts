@@ -93,3 +93,26 @@ test("Inbox is marked new until its first visit, which offers its tour once", as
   await expect(inbox.locator("[data-new-dot]")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("a page tour offer sits over the sidebar's foot, comes once a session, and never as a toast on a phone", async ({ page, browser }) => {
+  await go(page, `${BASE}/app/units`);
+  await page.evaluate(() => localStorage.removeItem("pn_tours"));
+  await reload(page);
+  const toast = page.locator("[data-feature-toast]");
+  await expect(toast).toBeVisible();
+  const box = (await toast.boundingBox())!;
+  const nav = (await page.getByRole("navigation", { name: "Main" }).boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(nav.x + nav.width);
+  await toast.getByRole("button", { name: "Not now" }).click();
+  await go(page, `${BASE}/app/maintenance/work-orders`);
+  await page.waitForTimeout(4000);
+  await expect(toast).toHaveCount(0);
+
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await as(phone, "daniel");
+  const p = await phone.newPage();
+  await go(p, `${BASE}/app/units`);
+  await p.waitForTimeout(4000);
+  await expect(p.locator("[data-feature-toast]")).toHaveCount(0);
+  await phone.close();
+});

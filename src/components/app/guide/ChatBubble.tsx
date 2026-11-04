@@ -11,6 +11,7 @@ import { useShell } from "../shell/context";
 import { localTourStore } from "../tour/TourEngine";
 import type { TourDef } from "../tour/types";
 import { splashDue } from "../welcome/rules";
+import { offerShown, pendingOffer } from "../welcome/WhatsNew";
 import { blockedBy, dismissNudge, EXPLAIN_SELECTOR, PEEK_ROW_SELECTOR, pickNudge, recordShown, type GuideFacts, type GuidePrefs, type GuideSession, type Nudge, type TourState } from "./nudges";
 
 // The "Ask Propniti" chat bubble, bottom right on every staff page. It toggles the same assistant
@@ -164,11 +165,14 @@ export function ChatBubble() {
       const facts = await loadFacts(personaId);
       if (cancelled) return;
       if (typing() || dialogOpen() || live.current.open || live.current.tourActive || toastShowing()) return retry();
+      const pending = pendingOffer(pathname, tours);
       const n = pickNudge({
         path: pathname, search: window.location.search, day: new Date().toLocaleDateString("en-CA"), nav: nav.flatMap((s) => s.items.map((i) => i.href)), facts, tours: tourStates(tours),
         page: { explain: !!document.querySelector(EXPLAIN_SELECTOR), peekRows: !!document.querySelector(PEEK_ROW_SELECTOR) }, prefs: p, session,
+        offer: pending?.place === "bubble" ? pending.offer : null,
       });
       if (!n) return;
+      if (n.id === "tour.offer") offerShown(n.key);
       writeSession(recordShown(session, n, Date.now()));
       setShown({ path: pathname, nudge: n });
     };
