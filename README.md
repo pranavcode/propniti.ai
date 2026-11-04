@@ -13,7 +13,7 @@ This README describes v2, the code on `main` that runs at propniti.ai. Product g
 
 ## What it does
 
-- **One record framework.** 64 record types in 13 modules are each described once (`src/entities/defs/`). The framework builds their list and record pages, the API, CSV export, permission checks and search from those definitions.
+- **One record framework.** 64 record types in 13 modules are each described once (`src/entities/defs/`). The framework builds their list and record pages, the API, downloads (CSV, Excel and PDF, with optional Propniti branding), permission checks and search from those definitions.
 - **A sample portfolio.** 30 properties in Austin, Dallas, Atlanta and Phoenix, with leases, ledgers, work orders, bills and history. Some records are wrong on purpose, so Data Health has issues to find.
 - **A simulated trust ledger.** Rent, fees, vendor bills, owner distributions and deposits move through guarded SQL. Every transfer has an idempotency key, so a double click pays once. No real money moves.
 - **AI agents with an audit trail.** Agents run every 15 minutes, on events and on request. Each run and step is stored and viewable. Agents propose; people approve.
@@ -118,7 +118,7 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 
 Measured on 2026-11-04 on `batch/four` (batch 4).
 
-- **Vitest:** 1133 tests in 120 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
+- **Vitest:** 1156 tests in 122 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
 - **Playwright:** 120 browser tests in 28 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import, the chat bubble, assistant history, the welcome screen and bulk actions. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches. `src/ai` and `src/extensions` are outside that scope.
 
