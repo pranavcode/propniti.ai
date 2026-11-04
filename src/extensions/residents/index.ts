@@ -3,6 +3,7 @@ import { LayoutDashboard, Sun } from "lucide-react";
 import { registerPage } from "@/entities/registry";
 import "./metrics";
 import "./actions";
+import "./insurance";
 import "./tabs";
 import "./tour";
 

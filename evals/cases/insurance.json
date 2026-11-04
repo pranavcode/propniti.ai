@@ -1,0 +1,14 @@
+[
+  {
+    "id": "insurance-declarations-clean",
+    "about": "A renters policy declarations page: liability is Coverage E, not personal property or the premium.",
+    "file": "evals/fixtures/renters-declarations.png",
+    "expect": { "isDeclarations": true, "carrier": "Hartwell", "policyNumber": "HMR-4471-0932", "liability": 300000, "startsOn": "2026-11-15", "expiresOn": "2027-11-15" }
+  },
+  {
+    "id": "insurance-not-declarations",
+    "about": "An invoice is not a declarations page.",
+    "file": "evals/fixtures/quickfix-plumbing.png",
+    "expect": { "isDeclarations": false }
+  }
+]

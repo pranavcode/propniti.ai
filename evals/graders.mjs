@@ -41,6 +41,19 @@ export function gradeExtract(c, res) {
   return { checks };
 }
 
+// /api/ai/extract with kind=insurance: the declarations-page fields the resident will confirm.
+export function gradeInsurance(c, res) {
+  const e = c.expect;
+  const f = res.fields ?? {};
+  const checks = [{ name: "is declarations page", ok: f.isDeclarations === e.isDeclarations, detail: f.isDeclarations }];
+  if (e.carrier) checks.push({ name: "carrier", ok: contains(f.carrier, e.carrier), detail: f.carrier });
+  if (e.policyNumber) checks.push({ name: "policy number", ok: contains(f.policyNumber, e.policyNumber), detail: f.policyNumber });
+  if (e.liability !== undefined) checks.push({ name: "liability", ok: f.liability === e.liability, detail: f.liability });
+  if (e.startsOn) checks.push({ name: "starts", ok: f.startsOn === e.startsOn, detail: f.startsOn });
+  if (e.expiresOn) checks.push({ name: "expires", ok: f.expiresOn === e.expiresOn, detail: f.expiresOn });
+  return { checks };
+}
+
 // /api/ai/validate: the final decision (after the rule override) and that issues are listed.
 export function gradeValidate(c, res) {
   const checks = [{ name: "decision", ok: c.expect.decision.includes(res.decision), detail: res.decision }];
