@@ -3,9 +3,11 @@
 import { useRef, useState } from "react";
 import { ArrowUp, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 
 // The large "Ask or tell Propniti…" prompt (home briefing, assistant dock, empty states).
-// Enter submits, Shift+Enter adds a line. Suggested questions submit on click.
+// Enter submits, Shift+Enter adds a line; Enter that confirms an IME composition doesn't submit.
+// The box grows to 10 lines, then scrolls. Suggested questions submit on click.
 export function AskBox({ onAsk, suggestions = [], placeholder = "Ask or tell Propniti anything about your portfolio…", size = "lg", autoFocus, busy, className, footer }: {
   onAsk: (q: string) => void;
   suggestions?: string[];
@@ -35,18 +37,17 @@ export function AskBox({ onAsk, suggestions = [], placeholder = "Ask or tell Pro
       >
         <div className="flex items-start gap-2.5">
           <span className={cn("mt-0.5 flex shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary", size === "lg" ? "size-7" : "size-6")}><Sparkles className="size-3.5" /></span>
-          <textarea
+          <AutoTextarea
             name="ask"
             autoComplete="off"
             ref={ref}
             value={q}
             autoFocus={autoFocus}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-            rows={size === "lg" ? 2 : 1}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); submit(); } }}
             placeholder={placeholder}
             aria-label="Ask Propniti"
-            className={cn("min-h-0 flex-1 resize-none bg-transparent leading-relaxed outline-none placeholder:text-muted-foreground/80", size === "lg" ? "pt-1 text-[15px]" : "pt-0.5 text-[13px]")}
+            className={cn("min-w-0 flex-1 bg-transparent leading-relaxed outline-none placeholder:text-muted-foreground/80", size === "lg" ? "pt-1 text-[15px]" : "pt-0.5 text-[13px]")}
           />
           <button
             onClick={(e) => { e.stopPropagation(); submit(); }}

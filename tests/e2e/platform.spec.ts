@@ -54,6 +54,23 @@ test("admin briefing shows overnight agents, what needs you and risks", async ({
   expect(errors).toEqual([]);
 });
 
+test("the ask box grows to 10 lines, then scrolls inside", async ({ context, page }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app`);
+  const box = page.getByLabel("Ask Propniti");
+  const size = () => box.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { height: el.getBoundingClientRect().height, scrollH: el.scrollHeight, clientH: el.clientHeight, line: parseFloat(s.lineHeight), pad: parseFloat(s.paddingTop) + parseFloat(s.paddingBottom) };
+  });
+  const empty = await size();
+  await box.fill(Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join("\n"));
+  const full = await size();
+  expect(full.height).toBeCloseTo(10 * full.line + full.pad, 0);
+  expect(full.scrollH).toBeGreaterThan(full.clientH);
+  await box.fill("");
+  expect((await size()).height).toBeCloseTo(empty.height, 0);
+});
+
 test("admin edits an approval limit and sees it in the change history", async ({ context, page }) => {
   await as(context, "sam");
   await go(page, `${BASE}/app/settings/approvals`);
