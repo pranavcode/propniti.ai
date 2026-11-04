@@ -4,35 +4,42 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     id: "getting-started-checklist",
     title: "Complete the setup checklist",
-    body: `New organizations finish setup through a short checklist before the portfolio goes live.
+    body: `New organizations finish setup through a short checklist before the portfolio goes live. Open it from the sidebar progress card or **/app/setup**.
 
-1. Open **Settings → Organization** and confirm the company name, time zone and management-fee rate.
-2. Add your first **bank account** under Settings → Banking so rent and bills have somewhere to post.
-3. Import or add **properties** (see "Import a portfolio with the AI wizard" if you have a spreadsheet).
-4. **Invite users** and assign roles under Settings → Users, scoped to the regions or properties they manage.
-5. Review **approval policies** under Settings → Policies so bill and work-order limits match your org.
-6. Mark the checklist complete from the sidebar progress card; it stays available from the Help menu if you need to revisit a step.
+1. **Company profile** (Settings → Company profile): legal name, EIN, logo and business address.
+2. **Connect trust and operating banks** (Banking) so rent and owner payouts have somewhere to post.
+3. **Import your portfolio** (Settings → Import data): upload exports from your current tool. See "Import data from another system".
+4. **Review roles and permissions** (Settings → Roles and permissions): who can approve bills, post fees and see owner data.
+5. **Invite your team** under Settings → Users, scoped to the regions or properties they manage.
+6. **Set payment and late-fee rules** (Settings → Fees and payments): grace period, fee caps by state and approval limits.
 
-Good to know: the checklist tracks progress per organization, not per user, so any admin can pick up where a teammate left off. You can reorder steps, but properties must exist before you invite leasing or maintenance staff, since their scope is assigned to specific properties. Nothing is locked once setup is "complete" — every setting here can be changed later from the same pages.`,
+Good to know: the checklist remembers progress in this browser, and you can tick a step done or not done yourself. A finished import ticks its step automatically. Properties must exist before you scope leasing or maintenance staff to them. Nothing is locked once setup is "complete"; every setting can be changed later from the same pages.`,
     tags: ["setup", "onboarding", "checklist"],
     entity_type: null,
-    route: "/app/settings/users",
+    route: "/app/setup",
   },
   {
     id: "import-portfolio-ai-wizard",
-    title: "Import a portfolio with the AI wizard",
-    body: `The import wizard reads a pasted spreadsheet or CSV of properties and units and maps it to Propniti's fields automatically.
+    title: "Import data from another system",
+    body: `**Settings → Import data** brings a portfolio over from AppFolio, Buildium, Yardi Breeze, Yardi Voyager, Rent Manager, Propertyware, DoorLoop, TenantCloud, Entrata or any spreadsheet.
 
-1. From **Settings → Import** (or the setup checklist), choose **Import portfolio**.
-2. Paste your data or upload a file. The AI wizard detects columns such as address, unit count, rent and lease dates, even when headers are swapped or renamed.
-3. Review the **mapping preview**: each source column is shown next to the field Propniti will fill. Fix any mapping the AI guessed wrong.
-4. Check the **issues panel** for rows it flagged, for example a missing unit type or a rent value that looks like a typo.
-5. Choose **Import** to create the properties, units and leases, or **Save as draft** to finish later.
+1. **Source.** Pick the tool you're leaving. Its report presets match columns by name. *Load … sample files* tries it with synthetic data.
+2. **Files.** Upload CSV, TSV or Excel (.xlsx) files: up to 6 files, 3 MB and 2,000 rows each. Files are read on your device.
+3. **Columns.** Check how each column is matched. With *Use AI to help map and clean up* on, a model suggests matches for columns the preset didn't match.
+4. **Review.** Fix or leave out rows with errors. AI cleanup suggestions (for example a name in the wrong case) appear here; nothing changes until you accept one, or choose *Accept all*.
+5. **Preview**, then **Import N records**.
 
-Good to know: the wizard never silently drops a row. Rows with unresolved problems are imported with a flag and a matching entry on the **Data Health** page, so you can fix them there with the same before/after review used for other data fixes. Re-running an import with the same source file updates existing records instead of duplicating them, matched by address and unit number.`,
-    tags: ["import", "onboarding", "ai wizard"],
-    entity_type: "properties",
-    route: "/app/properties",
+What it creates: properties, units, residents, leases from a rent roll (with deposits, recurring charges and opening balances when the file has them), owners and owner entities, vendors, and open balances by age.
+
+Good to know:
+- **AI is optional.** The model sees only column headers, the first 5 rows and up to 30 flagged cells per file, each cut to 60 characters, never the whole file. Parsing, checks, the preview and the import itself are done by code. With the switch off, or no model configured, nothing is sent to a model.
+- **Nothing is overwritten.** Records already on file are matched and counted, never changed. Opening balances go only on leases the same import creates. Importing the same files twice writes nothing the second time.
+- **Who can import.** Staff only, within each role's create rights: new properties need a principal or regional manager; balances, deposits and recurring charges need a principal, regional manager, property manager or accountant.
+- **Undo.** *Recent imports* lists the last 10 with *Undo import*. Undo removes what that import created, including later edits. It is refused if other records now point at those records (a work order, a note, a payment) or if any are at a property outside your scope.
+- After an import, the Data Health agent checks the new records at its next run.`,
+    tags: ["import", "onboarding", "appfolio", "buildium", "yardi", "ai"],
+    entity_type: null,
+    route: "/app/settings/import",
   },
   {
     id: "invite-users-roles-scope",
@@ -42,7 +49,7 @@ Good to know: the wizard never silently drops a row. Rows with unresolved proble
 1. Open **Settings → Users** and choose **Invite a user**.
 2. Enter their name and email, then pick a **role** such as Property Manager, Leasing Agent or Accountant. The role sets default module access (read, write or approve) shown in Settings → Roles.
 3. Set their **scope**: all properties, a region, or specific properties. A Leasing Agent scoped to three Austin properties never sees Dallas data, even through search or the assistant.
-4. Send the invite. New users sign in and land on the home page their role defines, for example Leasing lands on Prospects, Accounting lands on Bills.
+4. Send the invite. New users sign in and land on the home page their role defines, for example a leasing agent lands on the leasing day view and an accountant on the finance home.
 5. To change access later, edit the user and adjust role or scope; changes apply the next time they load a page.
 
 Good to know: scope is enforced on the server for every request, not just hidden in the menu, so a narrower scope can't be bypassed by guessing a URL. Roles with "approve" access (Principal, Regional Manager, Broker, Accountant, Maintenance Supervisor) can also act on proposals the AI agents raise, subject to the approval policy limits.`,
@@ -453,12 +460,12 @@ Good to know: money and legal fixes always need a person — the AI can suggest 
     title: "Use the AI agents command center",
     body: `The agents command center is where you see what every AI agent has done, is doing, and is allowed to do.
 
-1. Open **/app/agents** to see a card per agent (Collections, Leasing, Renewals, Maintenance Triage, Payables, Data Health, Owner Reporting, Compliance) with its status, last and next run, success rate, and counts of proposed, approved and auto-applied actions.
-2. Each agent has an **autonomy level**: **Suggest** (proposes only), **Act with approval** (proposes, executes once approved), or **Auto within policy** (executes directly for actions inside the approval policy's limits).
-3. Choose **Run now** on an agent to trigger it immediately and stream its live step trace.
+1. Open **/app/agents** to see a card per agent (Collections, Leasing, Renewals, Maintenance Triage, Payables, Data Health, Owner Reporting, Compliance) with its status, last and next run, and counts of proposed, approved and auto-applied actions.
+2. Each agent has an **autonomy level**: **Approve first** (every proposal waits for a person) or **Auto within policy** (low-risk proposals inside the approval policy's limits apply on their own).
+3. Choose **Run now** on an agent to trigger it immediately and watch its steps as they happen.
 4. Open any past run to inspect its full trace: each tool call, input, output, and the model used.
 
-Good to know: raising an agent's autonomy never removes the underlying guardrails — a Collections agent set to "auto within policy" still can't write off a balance or move money outside its policy's limits; those stay a person's decision. Every run, regardless of autonomy level, is logged with a full step trace, so "what did the AI actually do" always has a concrete answer, not just a summary.`,
+Good to know: only principals, regional managers and admins can turn an agent on or off or change its autonomy; everyone else sees the setting read-only. The same controls are on **Automations**. Raising autonomy never removes the guardrails: legal, safety and high-risk actions, and anything over a policy limit, still wait for a person. Every run is logged with a full step trace.`,
     tags: ["ai agents", "automation", "autonomy"],
     entity_type: "ai_proposals",
     route: "/app/agents",
@@ -466,14 +473,14 @@ Good to know: raising an agent's autonomy never removes the underlying guardrail
   {
     id: "approvals-inbox-audit-log",
     title: "Use the approvals inbox and audit log",
-    body: `The approvals inbox collects everything waiting on a person — bills, work orders, concessions, AI proposals — in one place; the audit log shows what already happened.
+    body: `The approvals inbox holds every AI agent proposal; the audit log shows what already happened.
 
-1. Open **/app/ai/approvals** to see items needing your decision, grouped by type and sorted by how long they've waited.
-2. Open an item to see its full context (the record, the reason it needs approval, and any AI reasoning behind it) without leaving the inbox.
-3. Approve, decline, or send it back for changes directly from the item.
-4. Open **/app/ai/activity** (the Audit tab) to see a complete history of approvals, AI actions, and manual changes, each with who or what did it and when.
+1. Open **/app/ai/approvals**. The tabs are **Needs you**, **Handled automatically**, **Waiting on others** and **Decided**.
+2. Open an item to see its reasons, the records it used, its confidence and a link to the run that produced it.
+3. **Approve** or **Reject** it. For a drafted message, choose **Edit before approving** to change the wording first; recipient, record and amounts can't be edited. **Approve N low-risk** approves low-risk items with no amount in one step.
+4. Open **/app/ai/activity** for every agent run and the AI decisions, and **Settings → Audit log** for every human and agent action.
 
-Good to know: an item only reaches the approvals inbox when a policy or role requires a person's sign-off — items an agent is allowed to auto-apply never appear here, by design, so the inbox stays focused on real decisions. The audit log is append-only; nothing in it can be edited or deleted, including by an administrator, which is what makes it usable as a record for owners or auditors.`,
+Good to know: you see in *Needs you* only what your role can decide. Items an agent applied on its own under *Auto within policy* are listed under *Handled automatically*, so nothing is hidden. Before an approved proposal runs, the server checks again that the record is in your scope and hasn't changed since the agent looked. The audit log is append-only.`,
     tags: ["approvals", "audit log", "ai"],
     entity_type: "ai_proposals",
     route: "/app/ai/approvals",
@@ -481,17 +488,17 @@ Good to know: an item only reaches the approvals inbox when a policy or role req
   {
     id: "approval-policies-limits",
     title: "Set approval policies and limits",
-    body: `Approval policies set the dollar limits and role requirements that decide when a bill, work order, or AI action needs a person's sign-off.
+    body: `Approval policies set how much each kind of decision may apply without a person, who approves above that, and when an owner must approve.
 
-1. Open **Settings → Policies**.
-2. For bills and work orders, set the dollar limit each role can approve without escalation, and separately, the limit an owner entity allows before an owner must approve.
-3. For AI agents, set the autonomy level per agent and, for "auto within policy", the dollar and scope limits within which it may act without a person.
-4. Save. Changes apply to new bills, work orders and agent runs going forward; anything already in the approval queue keeps the rule it was created under.
+1. Open **Settings → Approval policies**.
+2. Choose **Edit** on a policy, for example *Maintenance spend · org default*.
+3. Set the amount agents may apply on their own, the approver role above that, and the amount above which the owner approves.
+4. **Save policy**. The change is listed in the policy's **Change history**.
 
-Good to know: policy changes are tracked with history — Settings → Policies shows who changed a limit and when, since a mis-set limit has real financial consequences. A property-level limit, when set, overrides the organization default for that property only; leaving it blank falls back to the org default.`,
+Good to know: only principals, regional managers and admins can change policies. Legal and safety policies can't be set to act alone. Some owner entities have their own maintenance and bill limits, which override the org default for their properties. An agent's autonomy (*Approve first* or *Auto within policy*) is set on the **Agents** or **Automations** page, not here.`,
     tags: ["approval policy", "limits", "settings"],
     entity_type: "approval_policies",
-    route: "/app/settings/policies",
+    route: "/app/settings/approvals",
   },
   {
     id: "automations-trigger-condition-action",
@@ -512,14 +519,14 @@ Good to know: legal and safety actions, and anything high risk, always wait for 
   {
     id: "assistant-chat-actions-help",
     title: "Use the assistant (⌘J)",
-    body: `The assistant panel opens with **⌘J** and works in three modes: chat, actions, and help.
+    body: `The assistant, **Ask Propniti**, opens with **⌘J**, the *Ask Propniti* button in the top bar, or the round chat bubble at the bottom right. Leave it on **Auto**, or pick a mode: **Ask**, **Do** or **Help**.
 
-1. Open the assistant with **⌘J** from anywhere in the app.
-2. **Chat**: ask a question about your data, such as "who is late on rent in Austin?" The assistant turns your question into a query against your scoped data and answers with the actual figures, showing what it looked up.
-3. **Actions**: describe something to do, such as "send reminders to residents 90+ days delinquent in Austin." The assistant proposes a specific list of actions; review and approve before anything executes.
-4. **Help**: ask "how do I post a late fee?" and the assistant answers from the help articles, with a deep link to the right page and a **"Show me"** button that starts the matching tour step.
+1. **Ask**: a question about your data, such as "who is late on rent in Austin?" It answers with figures computed from your scoped data and shows what it looked up.
+2. **Do**: something to do, such as "send reminders to residents 90+ days delinquent." It proposes a list of actions; each waits for a person in the approvals inbox.
+3. **Help**: "how do I post a late fee?" It answers from these help articles.
+4. Each answer links to its **Full trace**. **/app/copilot** opens the assistant full page and lists your 30 most recent conversations.
 
-Good to know: the assistant only ever sees and acts within your current role's scope — a Leasing Agent asking about Dallas delinquency gets no data back, because their scope doesn't include it. Any text you paste into the assistant (an email, a question, a pasted record) is treated as data to reason about, never as an instruction to the assistant itself, so it can't be redirected by text you give it.`,
+Good to know: the assistant only sees and acts within your role's scope. Any text you paste in is treated as data to reason about, never as an instruction. Figures come from the data; if a model's answer states a number the data doesn't contain, the rules answer is shown instead. The side panel keeps a conversation for this session; long questions grow the input box up to 10 lines.`,
     tags: ["assistant", "copilot", "chat"],
     entity_type: null,
     route: "/app/copilot",
@@ -568,5 +575,68 @@ Good to know: notifications are generated from the same events the AI agents and
     tags: ["notifications", "alerts", "settings"],
     entity_type: null,
     route: "/app/inbox",
+  },
+  {
+    id: "inbox-what-needs-you",
+    title: "Use your Inbox",
+    body: `**Inbox** (/app/inbox, or press **I**) is one list of what needs you: conversations waiting on your reply, agent proposals you can decide, and your alerts.
+
+1. Open **Inbox** from the top of the sidebar. Its badge counts what needs you.
+2. Use the tabs: **All**, **Messages**, **Approvals** and **Alerts**. Each shows a count.
+3. **Messages** lists open conversations assigned to you or to nobody at your properties. *Needs reply* means the other party wrote last; otherwise the row says who you're waiting on. **Reply** opens the conversation, where *Suggest a reply* drafts an answer for you to edit.
+4. **Approvals** lists agent proposals your role can decide. **Review** opens the proposal in the approvals inbox.
+5. **Alerts** lists your notifications. **Open** goes to the record. Mark alerts read from the bell in the top bar.
+6. Click a row's title to preview its record in the side drawer.
+
+Good to know: the Inbox shows only what your role can act on. An accountant or admin sees no conversations; a role without AI access sees no approvals. Newest items come first, 25 to a page.`,
+    tags: ["inbox", "messages", "approvals", "alerts"],
+    entity_type: null,
+    route: "/app/inbox",
+  },
+  {
+    id: "my-tasks",
+    title: "Use My tasks",
+    body: `**My tasks** (/app/tasks) lists follow-ups assigned to you or to your role, from people, automations and AI agents.
+
+1. Pick a view: **Open** (the default), **Overdue**, **Today**, **Upcoming** or **Done**. Due dates count from the demo's today.
+2. Filter by related record, property, priority or source, or search your tasks.
+3. Click the circle to mark a task done. The toast offers **Undo**; in **Done**, click again to reopen it.
+4. Click the related record to preview it in the side drawer.
+5. Choose **New task** to add one: a title, optional details, a due date, a priority and a property (required if you work at specific properties). It is assigned to you.
+
+Good to know: you see your own tasks and your role's unassigned tasks, never other people's. Tasks with no property (a vendor, an owner, a certificate) show as *Org-wide*. Each change is logged on the task and its related record.`,
+    tags: ["tasks", "to-do", "follow-ups"],
+    entity_type: "tasks",
+    route: "/app/tasks",
+  },
+  {
+    id: "sign-in-demo-accounts",
+    title: "Sign in to the demo",
+    body: `The demo has an account for every persona. Open **/login**.
+
+1. Type a demo email, for example **marcus@propniti.demo**, and the password **propniti-demo**. Every demo account uses the same password, shown on the page. The form shows who the email belongs to as you type.
+2. Or pick a person below the form: click a card to fill the form, or double-click it (or choose *Sign in now*) to sign in straight away.
+3. Choose **Sign in as …**. You land on that persona's home page.
+4. Next time, the page remembers the last person. If you're already signed in, choose **Continue as …** or **Switch person**.
+
+Good to know: these are demo accounts, not real ones, and anyone can sign in as anyone. To change persona later, open the avatar menu and choose **Switch role (demo)**; **Sign out of demo** returns you to /login. Your changes stay in a private copy that resets at midnight Pacific.`,
+    tags: ["sign in", "login", "demo", "password", "persona"],
+    entity_type: null,
+    route: "/login",
+  },
+  {
+    id: "ask-propniti-bubble",
+    title: "The Ask Propniti chat bubble and tips",
+    body: `The round button at the bottom right of every staff page opens **Ask Propniti**, the same assistant as ⌘J.
+
+1. Click the bubble. The panel shows **On this page** with a short guide (*What can I do here?*) and questions suggested for the page you're on.
+2. Now and then the bubble offers one tip, drawn from your data or the page: proposals waiting for a decision, past-due balances over 30 days old, critical data issues, a tour of the page, or a feature such as *Explain* or the row preview.
+3. Use the tip's button to act on it, or dismiss it.
+4. To stop tips, open the bubble's **…** menu and clear **Show tips**. The same menu starts the product tour.
+
+Good to know: tips come at most once per page view, two minutes apart and five times a session, and never while you type, during a tour or while a dialog or the side drawer is open. A dismissed tip doesn't come back (tips about your data may return the next day). The bubble isn't shown on the full-page assistant (/app/copilot).`,
+    tags: ["assistant", "chat", "tips", "help"],
+    entity_type: null,
+    route: null,
   },
 ];
