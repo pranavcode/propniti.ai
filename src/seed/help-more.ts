@@ -747,7 +747,7 @@ Good to know: nothing in the audit log can be edited or deleted, including by an
 2. The **Event triggers** table shows what raises each event (for example, marking a payment returned raises *Payment returned* for the Collections agent) and how many are waiting.
 3. A sweep runs every 15 minutes and starts one piece of work: the scheduled agent that has waited longest, or one agent's queued events.
 4. Open **AI activity** to see every run: what started it, its steps, the proposals it made and whether it failed.
-5. To turn an agent off, or change its autonomy, use the **Agents** page (property managers, principals and other roles with approve access to Intelligence).
+5. To turn an agent off, or change its autonomy or schedule, use the **Agents** page. Only principals, regional managers and admins can, because these settings apply to the whole organization.
 
 Good to know: agents never move money on their own. They propose, and money, legal and safety actions wait for a person unless an approval policy allows them.`,
     tags: ["automation", "agents", "runs", "schedule"],

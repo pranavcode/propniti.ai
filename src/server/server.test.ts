@@ -48,7 +48,7 @@ describe("migrations and base", () => {
     const before = raw.prepare("SELECT count(*) AS n FROM sqlite_master").get();
     applyMigrations(raw);
     expect(raw.prepare("SELECT count(*) AS n FROM sqlite_master").get()).toEqual(before);
-    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql", "0007_returned_payment.sql"]);
+    expect(raw.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((r) => r.name)).toEqual(["0001_init.sql", "0002_v2.sql", "0003_read_indexes.sql", "0004_balances.sql", "0005_org_usage.sql", "0006_charge_paid.sql", "0007_returned_payment.sql", "0008_perf_indexes.sql"]);
   });
 
   it("loads the base once, with its version, as-of date and trust constants", async () => {
@@ -252,6 +252,38 @@ describe("money", { timeout: 60_000 }, () => {
     expect(await n("SELECT count(*) AS n FROM transfers WHERE workspace_id = ?1 AND kind = 'Management fee' AND amount_cents <= 0", c.ws)).toBe(0);
     // The page path keeps working: the next request doesn't throw.
     await expect(settleIfDue(db, c.ws, T0 + SETTLE_MS + 1)).resolves.toBeUndefined();
+  });
+
+  it("settle-on-read: nothing due means no writes, then no queries until the next transfer is due", async () => {
+    const c = await ctx();
+    // A Db of its own (the next-due marker is per Db) that logs every statement it runs.
+    const log: string[] = [];
+    type Stmt = ReturnType<Db["prepare"]>;
+    const inner = new WeakMap<Stmt, Stmt>();
+    const wrap = (s: Stmt, sql: string): Stmt => {
+      const w: Stmt = { bind: (...v) => wrap(s.bind(...v), sql), all: () => (log.push(sql), s.all()), first: () => (log.push(sql), s.first()), run: () => (log.push(sql), s.run()) };
+      inner.set(w, s);
+      return w;
+    };
+    const spy: Db = { prepare: (sql) => wrap(db.prepare(sql), sql), batch: (stmts) => (log.push("batch"), db.batch(stmts.map((s) => inner.get(s) ?? s))) };
+    const writes = () => log.filter((s) => s === "batch" || /^\s*(INSERT|UPDATE|DELETE)/i.test(s));
+
+    await settleIfDue(spy, c.ws, T0);
+    expect(log).toHaveLength(1);
+    await settleIfDue(spy, c.ws, T0 + 200);
+    await settleIfDue(spy, c.ws, T0 + 400);
+    expect(log).toHaveLength(1);
+    expect(writes()).toEqual([]);
+
+    // A rent payment through the same Db moves the marker: the read at its settle time settles it.
+    const ch = (await one<{ id: string }>(`SELECT c.id FROM ${effective("charges")} AS c WHERE c.period = '2026-11' AND c.property_id = 'p02' AND ${chargeStatusSql("c")} = 'Overdue' LIMIT 1`, c.ws))!;
+    expect(await payRent({ ...c, db: spy, nowMs: T0 + 500 }, ch.id)).toMatchObject({ status: 200 });
+    log.length = 0;
+    await settleIfDue(spy, c.ws, T0 + 500 + SETTLE_MS - 1);
+    expect(log).toEqual([]);
+    await settleIfDue(spy, c.ws, T0 + 500 + SETTLE_MS);
+    expect(writes().length).toBeGreaterThan(0);
+    expect(await one("SELECT status FROM transfers WHERE workspace_id = ?1 AND key = ?2", c.ws, `rent:${ch.id}`)).toEqual({ status: "Cleared" });
   });
 
   it("settles a backlog of pending transfers ten per request", async () => {

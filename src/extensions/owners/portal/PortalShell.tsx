@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowLeftRight } from "lucide-react";
 import type { PortalRole } from "@/entities/types";
 import { AppMark } from "@/components/app/shell/AppMark";

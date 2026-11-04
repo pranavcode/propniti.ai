@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { SNAPSHOT_DATE, type TocEntry } from "@/lib/docs";
 
 export const snapshotLabel = new Date(`${SNAPSHOT_DATE}T00:00:00Z`).toLocaleDateString("en-US", {

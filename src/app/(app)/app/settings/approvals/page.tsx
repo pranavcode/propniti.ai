@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ShieldCheck } from "lucide-react";
 import { INTERNAL_ROLES } from "@/entities";
 import { PERSONAS } from "@/auth/personas";

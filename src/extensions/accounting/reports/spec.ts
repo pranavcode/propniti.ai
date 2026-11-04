@@ -35,7 +35,11 @@ export const MEASURES: Measure[] = [
   { key: "bills_paid", label: "Paid to vendors", source: "transfers", groupBy: ["property", "metro", "month", "vendor"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /\bbills? paid|\bvendor (spend|payments?)|\bpaid to vendors|\bpayments? to vendors|\bby vendor\b|\bvendors?\b/i },
   { key: "noi", label: "Net operating income", source: "journal", types: ["Income", "Expense"], groupBy: ["property", "metro", "month"], compare: ["none", "budget", "prior_year"], goodWhen: "up", keywords: /\bnoi\b|\bnet operating/i },
   { key: "collections", label: "Rent collected", source: "metrics", column: "collected_cents", groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "up", keywords: /\bcollect/i },
-  { key: "delinquency", label: "Delinquent balances", source: "metrics", column: "aging_0_30_cents + aging_31_60_cents + aging_61_90_cents + aging_90p_cents", stock: true, groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /\bdelinquen|\bpast due\b|\barrears|\baging\b/i },
+  { key: "delinquency", label: "Delinquent balances", source: "metrics", column: "aging_0_30_cents + aging_31_60_cents + aging_61_90_cents + aging_90p_cents", stock: true, groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /\bdelinquen|\bpast[- ]due\b|\barrears|\baging\b/i },
+  // Aged past N days; chosen from the words ("30+ days") by agingMeasure(), never by keyword alone.
+  { key: "delinquency_30", label: "Delinquent balances, 30+ days", source: "metrics", column: "aging_31_60_cents + aging_61_90_cents + aging_90p_cents", stock: true, groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /(?!)/ },
+  { key: "delinquency_60", label: "Delinquent balances, 60+ days", source: "metrics", column: "aging_61_90_cents + aging_90p_cents", stock: true, groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /(?!)/ },
+  { key: "delinquency_90", label: "Delinquent balances, 90+ days", source: "metrics", column: "aging_90p_cents", stock: true, groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /(?!)/ },
   { key: "vacancy_loss", label: "Vacancy loss", source: "metrics", column: "vacancy_loss_cents", groupBy: ["property", "metro", "month"], compare: ["none", "prior_year"], goodWhen: "down", keywords: /\bvacancy/i },
   { key: "rent", label: "Rental income", source: "journal", gls: ["4000", "4010"], groupBy: ["property", "metro", "month"], compare: ["none", "budget", "prior_year"], goodWhen: "up", keywords: /\brent(al)? (income|revenue)\b|\brents?\b/i },
   { key: "income", label: "Total income", source: "journal", types: ["Income"], groupBy: ["property", "metro", "gl", "month"], compare: ["none", "budget", "prior_year"], goodWhen: "up", keywords: /\bincome\b|\brevenue\b/i },
@@ -156,9 +160,17 @@ export function validateSpec(raw: RawSpec, scope: ScopeProperty[], lastClosed: s
   if (from > to) from = to;
   if (monthsBetween(from, to) > 24) { from = addMonths(to, -23); dropped.push("Limited to 24 months"); }
   if (compareTo === "prior_year" && addMonths(from, -12) < FIRST_MONTH) dropped.push(`Prior-year figures before ${monthLabel(FIRST_MONTH)} aren't available, so some months compare with nothing`);
-  const ids = new Set(scope.map((p) => p.id));
-  const properties = (raw.properties ?? []).filter((id) => ids.has(id));
-  for (const id of raw.properties ?? []) if (!ids.has(id)) dropped.push(`Property ${id} is outside your scope`);
+  // Models write "p29", "p29 Biltmore Office Plaza" or the name; any of them is the property.
+  const idOf = (x: string) => {
+    const v = x.trim().toLowerCase();
+    return scope.find((p) => p.id === v || v.startsWith(`${p.id} `) || p.name.toLowerCase() === v)?.id ?? null;
+  };
+  const properties = [...new Set((raw.properties ?? []).map(idOf).filter((x): x is string => !!x))];
+  for (const x of raw.properties ?? []) {
+    if (idOf(x)) continue;
+    const id = x.trim().match(/^p\d{2}\b/i)?.[0].toLowerCase();
+    dropped.push(id ? `Property ${id} is outside your scope (${scope.length} propert${scope.length === 1 ? "y" : "ies"})` : `No property in your scope matches "${x.slice(0, 60)}"`);
+  }
   const metros = (raw.metros ?? []).map((x) => METROS.find((mm) => mm.toLowerCase() === x.toLowerCase())).filter((x): x is (typeof METROS)[number] => !!x);
   for (const x of raw.metros ?? []) if (!METROS.some((mm) => mm.toLowerCase() === x.toLowerCase())) dropped.push(`No metro called "${x}"`);
   const chartRaw = raw.chart as ChartKind | null;
@@ -180,20 +192,7 @@ export function rulesSpec(text: string, scope: ScopeProperty[]): RawSpec {
     : /\bby month|\bmonthly\b|\btrend|\bover time|\bt12\b|\btrailing/.test(t) ? "month"
     : null;
 
-  const yearM = t.match(/\b(20\d{2})\b/);
-  const year = yearM ? Number(yearM[1]) : null;
-  const q = t.match(/\bq([1-4])\b/);
-  const n = t.match(/\b(?:last|trailing|past) (\d{1,2}|three|six|twelve) months\b/);
-  const words: Record<string, number> = { three: 3, six: 6, twelve: 12 };
-  const period: Period = { ...NO_PERIOD };
-  if (q) Object.assign(period, { kind: "quarter", quarter: Number(q[1]), year });
-  else if (/\blast month\b/.test(t)) period.kind = "last_month";
-  else if (/\blast quarter\b/.test(t)) period.kind = "last_quarter";
-  else if (/\bytd\b|\byear to date\b|\bthis year\b/.test(t)) period.kind = "ytd";
-  else if (/\bt12\b|\btrailing (12|twelve)\b/.test(t)) Object.assign(period, { kind: "trailing", months: 12 });
-  else if (n) Object.assign(period, { kind: "trailing", months: words[n[1]] ?? Number(n[1]) });
-  else if (year) Object.assign(period, { kind: "year", year });
-
+  const period = rulesPeriod(t);
   const compareTo = /\b(vs\.?|versus|against|compared? (to|with)) (the )?budget|\bbudget(ed)?\b/.test(t) ? "budget"
     : /\b(vs\.?|versus|against|compared? (to|with)) (last|prior|previous) year|\byoy\b|\byear over year|\bprior year/.test(t) ? "prior_year"
     : "none";
@@ -203,5 +202,51 @@ export function rulesSpec(text: string, scope: ScopeProperty[]): RawSpec {
     return t.includes(n) || (n.startsWith("the ") && t.includes(n.slice(4)));
   }).map((p) => p.id);
   const chart = /\btable\b/.test(t) ? "table" : null;
-  return { measure, groupBy, period, compareTo, properties, metros, chart, title: null };
+  return { measure: agingMeasure(measure, text), groupBy, period, compareTo, properties, metros, chart, title: null };
+}
+
+function rulesPeriod(t: string): Period {
+  const yearM = t.match(/\b(20\d{2})\b/);
+  const year = yearM ? Number(yearM[1]) : null;
+  const q = t.match(/\bq([1-4])\b/);
+  const n = t.match(/\b(?:last|trailing|past) (\d{1,2}|three|six|twelve) months\b/);
+  const words: Record<string, number> = { three: 3, six: 6, twelve: 12 };
+  const period: Period = { ...NO_PERIOD };
+  if (q) Object.assign(period, { kind: "quarter", quarter: Number(q[1]), year });
+  else if (/\b(last|previous|prior) month\b/.test(t)) period.kind = "last_month";
+  else if (/\b(last|previous|prior) quarter\b/.test(t)) period.kind = "last_quarter";
+  else if (/\bytd\b|\byear to date\b|\bthis year\b/.test(t)) period.kind = "ytd";
+  else if (/\bt12\b|\btrailing (12|twelve)\b/.test(t)) Object.assign(period, { kind: "trailing", months: 12 });
+  else if (n) Object.assign(period, { kind: "trailing", months: words[n[1]] ?? Number(n[1]) });
+  else if (year) Object.assign(period, { kind: "year", year });
+  return period;
+}
+
+// "30+ days", "over 60 days", "90 days or more" pick the aged delinquency measure.
+export function agingMeasure(measure: string, text: string): string {
+  if (!measure.startsWith("delinquency")) return measure;
+  const n = text.match(/\b(30|60|90)\s*(?:days?\s*)?(?:\+|or more|plus)|\b(?:over|more than|at least|older than|beyond)\s+(30|60|90)\s*days?/i);
+  return n ? `delinquency_${n[1] ?? n[2]}` : measure;
+}
+
+// "May" counts only where it reads as the month ("in May", "May 2026"), not the verb.
+const MONTH_WORD = /\b(january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\b|\b(in|for|of|since|through|from|to|until|during|and) may\b|\bmay (\d|and\b|to\b|through\b)/i;
+
+// The model's reading checked against the words. Relative periods ("last month") resolve from the
+// demo clock as the rules read them; a year, quarter or month range the person never named is
+// dropped (production QA: "last month" came back as Jan 2026); aging words always apply.
+export function groundInText(raw: RawSpec, text: string, lastClosed: string): RawSpec {
+  const t = text.toLowerCase();
+  // "Prior year" and "vs last year" name a comparison, not a period.
+  const own = t.replace(/\b(vs\.?|versus|against|compared? (to|with)) (the )?(last|prior|previous) year\b|\b(prior|previous) year\b|\byear (over|to) (year|date)\b/g, "");
+  const rules = rulesPeriod(t);
+  let period = raw.period;
+  if (/\blast year\b/.test(own) && !rules.kind) period = { ...NO_PERIOD, kind: "year", year: Number(lastClosed.slice(0, 4)) - 1 };
+  else if (rules.kind && (rules.kind !== "year" || !period?.kind)) period = rules;
+  else if (period?.kind) {
+    const named = MONTH_WORD.test(t) || /\b20\d{2}\b|\bq[1-4]\b|\bquarter\b|\byear\b/.test(own);
+    if (!named && (period.kind === "range" || period.kind === "year" || period.kind === "quarter")) period = rules.kind ? rules : null;
+    else if (period.year && !/\b20\d{2}\b/.test(t)) period = { ...period, year: null };
+  }
+  return { ...raw, period, measure: agingMeasure(raw.measure, text) };
 }

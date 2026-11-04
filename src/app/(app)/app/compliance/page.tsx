@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, Bot, ClipboardCheck, FileBadge, Gavel, ShieldAlert, ShieldCheck } from "lucide-react";
 import { can, getEntity, type ChartDef, type EntityKey, type KpiDef } from "@/entities";
 import { currentSession } from "@/auth/session";

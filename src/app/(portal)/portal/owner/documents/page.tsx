@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { FileText } from "lucide-react";
 import { EmptyState } from "@/components/app/states";
 import { StatusBadge } from "@/components/app/display";

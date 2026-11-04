@@ -91,14 +91,37 @@ const transferAt = (db: Db, ws: string, key: string) => db.prepare("SELECT id, s
 // Settle: overlay transfers whose ACH window has passed clear on the next request.
 // ---------------------------------------------------------------------------------------------
 
+// When each workspace's next pending transfer is due, as last read by this isolate. Reads skip the
+// database until then. Another isolate may add a transfer this one hasn't seen, so the marker is
+// also re-read after SETTLE_RECHECK_MS; transfers added here move it at once (settleDueBy).
+const SETTLE_RECHECK_MS = 10_000;
+const nextDue = new WeakMap<Db, Map<string, { due: number; read: number }>>();
+const dueMarks = (db: Db) => nextDue.get(db) ?? nextDue.set(db, new Map()).get(db)!;
+
+export function settleDueBy(db: Db, ws: string, at: number) {
+  const mark = dueMarks(db).get(ws);
+  if (mark) mark.due = Math.min(mark.due, at);
+}
+
 // Settle-on-read for every request: called from actorFor (permissions.ts), which both page
-// sessions and API sessions go through. One indexed EXISTS check when nothing is due.
+// sessions and API sessions go through. No query while nothing is due; otherwise one indexed MIN.
 // Never throws: a page must render even if settling fails (settle itself isolates each transfer).
 export async function settleIfDue(db: Db, ws: string | null, nowMs: number) {
   if (!ws) return;
+  const marks = dueMarks(db);
+  const mark = marks.get(ws);
+  if (mark && nowMs < mark.due && nowMs >= mark.read && nowMs - mark.read < SETTLE_RECHECK_MS) return;
   try {
-    const due = await db.prepare("SELECT 1 FROM transfers WHERE workspace_id = ?1 AND status = 'Pending' AND settles_at <= ?2 LIMIT 1").bind(ws, nowMs).first();
-    if (due) await settle(db, ws, nowMs);
+    const row = await db.prepare("SELECT min(settles_at) AS due FROM transfers WHERE workspace_id = ?1 AND status = 'Pending'").bind(ws).first<{ due: number | null }>();
+    const due = row?.due == null ? Infinity : Number(row.due);
+    if (due > nowMs) {
+      if (marks.size >= 5000) marks.clear();
+      marks.set(ws, { due, read: nowMs });
+      return;
+    }
+    // More may be due than one call settles (or one may have failed): check again next request.
+    marks.delete(ws);
+    await settle(db, ws, nowMs);
   } catch (e) {
     console.error("settle failed", ws, e);
   }
@@ -211,7 +234,10 @@ export async function payRent(ctx: ActionContext, chargeId: string): Promise<Out
     auditStmt(db, ws, at, actor, { action: "Rent payment started", entityType: "charges", entityId: c.id, propertyId: c.property_id, detail: `${c.description}: ${dollars(c.open_cents)} by ACH into the operating trust` }, done(id)),
     notifyStmt(db, ws, at, "marcus", "Rent payment started", `${c.household_name} paid ${dollars(c.open_cents)} (${c.description}); ACH pending.`, `/app/receivables/charges/${c.id}`, ["charges", c.id], done(id)),
   ]);
-  if (insert.meta.changes) return { status: 200, message: `Payment of ${dollars(c.open_cents)} is processing.` };
+  if (insert.meta.changes) {
+    settleDueBy(db, ws, nowMs + SETTLE_MS);
+    return { status: 200, message: `Payment of ${dollars(c.open_cents)} is processing.` };
+  }
   const live = await transferAt(db, ws, `rent:${c.id}`);
   return { status: 409, error: live ? `${c.description} is already ${live.status === "Pending" ? "being processed" : "paid"}.` : c.open_cents <= 0 ? `${c.description} is already paid.` : `${c.description} changed while you were paying it. Check it and try again.` };
 }
@@ -387,7 +413,10 @@ export async function payBill(ctx: ActionContext, billId: string): Promise<Outco
     eventStmt(db, ws, at, "payment.scheduled", "bills", billId, bill.property_id, { transfer_id: id, amount_cents: bill.amount_cents, vendor_id: bill.vendor_id }, done(id)),
     auditStmt(db, ws, at, actor, { action: "Bill paid", entityType: "bills", entityId: billId, propertyId: bill.property_id, detail: `${billId}: ${dollars(bill.amount_cents)} to ${bill.company} by ACH` }, done(id)),
   ]);
-  if (insert.meta.changes) return { status: 200, message: `${dollars(bill.amount_cents)} to ${bill.company} is on its way.` };
+  if (insert.meta.changes) {
+    settleDueBy(db, ws, nowMs + SETTLE_MS);
+    return { status: 200, message: `${dollars(bill.amount_cents)} to ${bill.company} is on its way.` };
+  }
   if (await transferAt(db, ws, `vendor:${billId}`)) return { status: 409, error: `${billId} is already paid.` };
   if (!["Approved", "Scheduled"].includes(bill.status)) return { status: 409, error: `Only approved bills can be paid (this one is ${bill.status.toLowerCase()}).` };
   const hold = await db.prepare(`SELECT 1 FROM ${effective("data_issues")} AS di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ?2 AND di.status = 'open'`).bind(ws, bill.vendor_id).first();
@@ -470,7 +499,10 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
     auditStmt(db, ws, at, actor, { action: "Payment approved", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId}: ${dollars(amount)} to ${wo.company} by ACH` }, done(id)),
     auditStmt(db, ws, at, actor, { action: "Approval refused", entityType: "work_orders", entityId: woId, propertyId: wo.property_id, detail: `${woId}: not paid (status, trust balance or payment hold)` }, refused(id)),
   ]);
-  if (insert.meta.changes) return { status: 200, message: `${woId} approved; ${dollars(amount)} is on its way to ${wo.company}.` };
+  if (insert.meta.changes) {
+    settleDueBy(db, ws, nowMs + SETTLE_MS);
+    return { status: 200, message: `${woId} approved; ${dollars(amount)} is on its way to ${wo.company}.` };
+  }
   // A double click's losing request saw the job as Submitted; report what actually happened.
   if (await transferAt(db, ws, `vendor:${woId}`)) return { status: 409, error: `${woId} is already approved` };
   if (wo.status !== "Submitted") return { status: 409, error: notSubmitted };
@@ -517,7 +549,10 @@ export async function distributeOwner(ctx: ActionContext, ownerEntityId: string,
     notifyStmt(db, ws, at, oe.owner_id, "Distribution on its way", `Your distribution of ${dollars(st.net_cents)} from ${oe.name} is on its way by ACH.`, "/portal/owner/statements", ["owner_entities", ownerEntityId], done(id)),
     auditStmt(db, ws, at, actor, { action: "Owner distribution", entityType: "owner_entities", entityId: ownerEntityId, detail: `${dollars(st.net_cents)} to ${oe.owner_name} (${oe.name}) from the operating trust` }, done(id)),
   ]);
-  if (insert.meta.changes) return { status: 200, message: `${dollars(st.net_cents)} is on its way to ${oe.owner_name}.` };
+  if (insert.meta.changes) {
+    settleDueBy(db, ws, nowMs + SETTLE_MS);
+    return { status: 200, message: `${dollars(st.net_cents)} is on its way to ${oe.owner_name}.` };
+  }
   if (await db.prepare("SELECT 1 FROM transfers WHERE workspace_id = ?1 AND key = ?2").bind(ws, `owner:${idempotencyKey}`).first()) return { status: 200, message: "Already sent." };
   const avail = await db.prepare(`SELECT ${AVAILABLE_SQL("?2")} AS a`).bind(ws, trust).first<{ a: number }>();
   return {
@@ -571,7 +606,10 @@ export async function payOwnerAdjustment(ctx: ActionContext, distributionId: str
       db.prepare(overlayUpsertSql("data_issues", ISSUE_COLS, { status: "'fixed'", fixed_by: "?4", fixed_at: "?5" }, "e.status = 'open' AND e.rule_id = 'owner_distributions.rounding_cent' AND e.entity_id = ?6 AND EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, issueId, id, actor.personaId, at, d.id),
     );
   const [insert] = await db.batch(steps);
-  if (insert.meta.changes) return { status: 200, message: `${dollars(amountCents)} correction is on its way to ${d.owner_name}.` };
+  if (insert.meta.changes) {
+    settleDueBy(db, ws, nowMs + SETTLE_MS);
+    return { status: 200, message: `${dollars(amountCents)} correction is on its way to ${d.owner_name}.` };
+  }
   if (await transferAt(db, ws, key)) return { status: 409, error: `The ${d.period} statement correction is already paid.` };
   return { status: 409, error: d.owed_cents <= 0 ? `The ${d.period} statement doesn't owe anything.` : `The ${d.period} statement owes ${dollars(d.owed_cents)}, not ${dollars(amountCents)}.` };
 }
@@ -618,7 +656,10 @@ export async function payApplicationFee(ctx: ActionContext, applicationId: strin
     notifyStmt(db, ws, at, a.applicant_id, "Application fee received", `We received your ${dollars(APPLICATION_FEE_CENTS)} application fee for ${a.property_name}.`, "/portal/applicant", ["applications", a.id], done(id)),
     auditStmt(db, ws, at, actor, { action: "Application fee paid", entityType: "applications", entityId: a.id, propertyId: a.property_id, detail: `${dollars(APPLICATION_FEE_CENTS)} from ${a.applicant_name} into the operating trust` }, done(id)),
   ]);
-  if (insert.meta.changes) return { status: 200, message: `${dollars(APPLICATION_FEE_CENTS)} application fee paid.` };
+  if (insert.meta.changes) {
+    settleDueBy(db, ws, nowMs + SETTLE_MS);
+    return { status: 200, message: `${dollars(APPLICATION_FEE_CENTS)} application fee paid.` };
+  }
   if (a.fee_paid || (await transferAt(db, ws, `appfee:${a.id}`))) return { status: 409, error: "The application fee is already paid." };
   return { status: 409, error: `This application is ${a.stage.toLowerCase()}; no fee is due.` };
 }

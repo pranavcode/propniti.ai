@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { notFound } from "next/navigation";
 import { Eyebrow } from "@/components/marketing/parts";
 import { BackLinks, Toc, snapshotLabel } from "@/components/docs/parts";
