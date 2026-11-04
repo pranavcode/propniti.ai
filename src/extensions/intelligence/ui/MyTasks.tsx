@@ -199,7 +199,10 @@ export function MyTasks({ me, view, columns, rows, total, page, size, counts, fa
 
   // Bulk actions from the tasks entity config. Snooze asks for a date first; the bulk bar's
   // progress toast stays up until the dialog closes.
-  const onBulkAction = async (key: string, ids: string[]) => {
+  const onBulkAction = async (key: string, target: string[] | "matching") => {
+    // My tasks is scoped to the signed-in person and the open view, which the generic ids lookup can't reproduce.
+    if (target === "matching") throw new Error("Select tasks on this page; acting on every matching task isn't available on My tasks.");
+    const ids = target;
     if (key === "tasks.snooze") {
       const snoozed = await new Promise<boolean>((resolve) => setPending({ kind: "snooze", ids, title: "", done: resolve }));
       if (!snoozed) throw new Error("Snooze cancelled");
