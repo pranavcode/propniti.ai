@@ -11,13 +11,13 @@ import { StatusBadge } from "@/components/app/display";
 import { DataHealthBadge, type HealthIssue } from "@/components/app/ai/DataHealthBadge";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, type QueryCtx } from "@/server/query";
-import { actionsForRow } from "@/server/permissions";
 import { getPlatform } from "@/lib/platform";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { EntityList } from "./EntityList";
 import { ChartPanel, KpiTile, type ChartData, type KpiData } from "./Metrics";
 import { RecordActions } from "./RecordActions";
+import { actionButtons, aiSummary, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
 import { columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
 
@@ -184,15 +184,6 @@ function FieldGrid({ def, row, keys, role }: { def: EntityDef; row: Row; keys: s
   );
 }
 
-async function healthIssues(ctx: QueryCtx, entity: string, id: string): Promise<HealthIssue[]> {
-  const res = await ctx.db.prepare(`SELECT i.id, i.rule_id, i.severity, coalesce(r.name, i.rule_id) AS name FROM ${effective("data_issues", ctx.ws)} i LEFT JOIN ${effective("data_rules", ctx.ws)} r ON r.id = i.rule_id WHERE i.entity_type = ? AND i.entity_id = ? AND i.status = 'open' ORDER BY i.detected_at DESC LIMIT 10`).bind(entity, id).all();
-  return res.results.map((r) => ({ id: String(r.id), rule: String(r.rule_id), severity: r.severity as HealthIssue["severity"], summary: String(r.name) }));
-}
-
-async function aiSummary(ctx: QueryCtx, entity: string, id: string) {
-  return ctx.db.prepare(`SELECT summary, model, generated_at FROM ${effective("ai_summaries", ctx.ws)} WHERE entity_type = ? AND entity_id = ? ORDER BY generated_at DESC LIMIT 1`).bind(entity, id).first<{ summary: string; model: string; generated_at: string }>();
-}
-
 function CollabList({ kind, rows }: { kind: "notes" | "tasks" | "activity" | "documents"; rows: Row[] }) {
   if (!rows.length) return <EmptyState compact kind="table" title={kind === "activity" ? "No activity yet" : `No ${kind} yet`} description={kind === "activity" ? "Changes, payments, approvals and agent actions on this record appear here." : undefined} />;
   return (
@@ -266,10 +257,10 @@ export async function RecordView({ def, id, searchParams, session }: { def: Enti
     def.key === "properties" ? kpiData(ctx, (def.kpis ?? []).slice(0, 4), id) : Promise.resolve([] as KpiData[]),
     tabBody(),
   ]);
-  const statusKey = def.list.statusTabs && def.fields[def.list.statusTabs]?.type === "enum" ? def.list.statusTabs : def.fields.status ? "status" : null;
+  const statusKey = statusKeyOf(def);
   const hero = typeof row._image === "string" ? row._image.replace(/-400\.webp$/, ".webp") : null;
   const facts = def.detail.facts.filter((k) => k !== statusKey && def.fields[k] && !def.fields[k].hiddenFor?.includes(role));
-  const actions = actionsForRow(def.key, role, row).map((a) => ({ key: a.key, label: a.label, confirm: a.confirm, money: !!a.money, hasInput: !!a.input }));
+  const actions = actionButtons(def, role, row);
   const editFields = can(role, "update", def.key) ? formFields(def, role, "update") : [];
   const title = String(row._title ?? id);
 

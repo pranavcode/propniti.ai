@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PeekLink } from "@/components/app/peek/PeekLink";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, ChevronDown, Clock3, GripVertical, Sparkles } from "lucide-react";
@@ -79,7 +80,7 @@ export function PipelineBoard({ cards: initial, role }: { cards: Card[]; role: R
                   <div className="flex items-start gap-1.5">
                     <GripVertical className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <Link href={c.appId ? `/app/leasing/applications/${c.appId}` : `/app/leasing/prospects/${c.id}`} className="block truncate text-[13px] font-medium hover:text-primary hover:underline" draggable={false}>{c.name}</Link>
+                      <PeekLink entity={c.appId ? "applications" : "prospects"} id={c.appId ?? c.id} href={c.appId ? `/app/leasing/applications/${c.appId}` : `/app/leasing/prospects/${c.id}`} className="block truncate text-[13px] font-medium hover:text-primary hover:underline" draggable={false}>{c.name}</PeekLink>
                       <p className="truncate text-[11.5px] text-muted-foreground">{c.property}</p>
                     </div>
                     {c.column !== "leased" && (

@@ -13,9 +13,7 @@ import type { FormField } from "./spec";
 
 export type ActionButton = { key: string; label: string; confirm?: { title: string; body?: string }; money: boolean; hasInput: boolean };
 
-// Header actions on a record page: named actions (with confirmation), Edit (sheet; also opened by
-// ?edit=1), Delete, and "Ask about this" into the assistant dock. Also sets the breadcrumb title.
-export function RecordActions({ entity, id, title, label, routeBase, actions, edit, canDelete }: {
+type Props = {
   entity: string;
   id: string;
   title: string;
@@ -24,16 +22,27 @@ export function RecordActions({ entity, id, title, label, routeBase, actions, ed
   actions: ActionButton[];
   edit?: { fields: FormField[]; initial: Record<string, unknown> };
   canDelete: boolean;
-}) {
-  useBreadcrumbTitle(title);
+};
+
+// Header actions on a record page: named actions (with confirmation), Edit (sheet; also opened by
+// ?edit=1), Delete, and "Ask about this" into the assistant dock. Also sets the breadcrumb title.
+export function RecordActions(props: Props) {
+  useBreadcrumbTitle(props.title);
+  return <ActionBar {...props} />;
+}
+
+// The same buttons for the peek drawer: `onChanged` runs after any write (true after a delete),
+// so the drawer reloads or closes; the list behind it refreshes either way.
+export function ActionBar({ entity, id, title, label, routeBase, actions, edit, canDelete, onChanged }: Props & { onChanged?: (deleted: boolean) => void }) {
   const router = useRouter();
   const shell = useShellMaybe();
   const { params, set } = useUrlState();
   const [editLocal, setEditLocal] = useState(false);
-  const editOpen = editLocal || (!!edit && params.get("edit") === "1");
+  const editOpen = editLocal || (!!edit && !onChanged && params.get("edit") === "1");
   const setEdit = (o: boolean) => {
     setEditLocal(o);
-    if (!o && params.get("edit")) set({ edit: null });
+    if (!o && !onChanged && params.get("edit")) set({ edit: null });
+    if (!o && onChanged) onChanged(false);
   };
   const [confirm, setConfirm] = useState<ActionButton | "delete" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,11 +58,12 @@ export function RecordActions({ entity, id, title, label, routeBase, actions, ed
     if (!res || !res.ok) return toast.error(out.error ?? "Nothing was changed. Try again.");
     if (a === "delete") {
       toast.success(`${label.one} deleted`);
+      if (onChanged) { onChanged(true); return router.refresh(); }
       return router.push(routeBase);
     }
     toast.success(out.message ?? `${a.label} done`);
     if (out.href) router.push(out.href);
-    else router.refresh();
+    else { router.refresh(); onChanged?.(false); }
   };
 
   const pending = confirm === "delete" ? { title: `Delete this ${label.one.toLowerCase()}?`, body: "It disappears from lists and searches. The change is recorded in the audit log." } : confirm?.confirm ?? (confirm ? { title: `${confirm.label}?` } : null);
