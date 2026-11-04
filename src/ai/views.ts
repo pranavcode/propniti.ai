@@ -15,7 +15,7 @@ import { modelInfo } from "./providers";
 export type AgentCard = {
   key: AgentKey; name: string; goal: string; ownerRole: string; enabled: boolean; autonomy: string; schedule: string | null; events: string[];
   lastRun: { id: string; status: string; started_at: string; summary: string | null; model: string | null; trigger_kind: string } | null;
-  nextRunAt: string | null; runs30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
+  nextRunAt: string | null; runs30: number; ok30: number; failed30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
 };
 
 export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<AgentCard[]> {
@@ -23,7 +23,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
   const configs = await agentConfigs(data.db, data.ws);
   const since = demoIsoIn(-30 * 86_400_000, nowMs);
   const [runs, props, last] = await Promise.all([
-    sql<{ agent_key: string; n: number; ok: number }>(data, "SELECT agent_key, count(*) AS n, sum(status IN ('done', 'waiting_approval')) AS ok FROM {agent_runs} WHERE started_at >= ? GROUP BY agent_key", [since], { unscoped: true }),
+    sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, "SELECT agent_key, count(*) AS n, sum(status IN ('done', 'waiting_approval')) AS ok, sum(status = 'failed') AS failed FROM {agent_runs} WHERE started_at >= ? GROUP BY agent_key", [since], { unscoped: true }),
     sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
       `SELECT p.agent, count(*) AS n, sum(d.decision IN ('Approved', 'Edited') AND p.queue_state <> 'auto_handled') AS approved, sum(p.queue_state = 'auto_handled') AS auto, sum(d.id IS NULL AND p.queue_state <> 'auto_handled') AS pending
        FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`),
@@ -39,7 +39,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
     return {
       key, name: def.name, goal: def.goal, ownerRole: def.ownerRole, enabled: cfg.enabled, autonomy: cfg.autonomy, schedule: cfg.schedule ?? null, events: cfg.events,
       lastRun: l ? { id: String(l.id), status: String(l.status), started_at: String(l.started_at), summary: (l.summary as string) ?? null, model: (l.model as string) ?? null, trigger_kind: String(l.trigger_kind) } : null,
-      nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
+      nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, ok30: Number(r?.ok ?? 0), failed30: Number(r?.failed ?? 0), successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
       proposed: p?.n ?? 0, approved: Number(p?.approved ?? 0), auto: Number(p?.auto ?? 0), pending: Number(p?.pending ?? 0), tools: def.tools, actions: def.actions,
     };
   });
