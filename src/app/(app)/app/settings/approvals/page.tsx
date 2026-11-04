@@ -68,7 +68,7 @@ export default async function ApprovalsPage() {
           <EmptyState kind="table" title="No approval policies yet" description="Until policies exist, every agent action that moves money, changes a lease or involves legal or safety waits for a person." />
         ) : (
           <>
-            <Section title="Org defaults" description="Apply to every owner entity without an override.">
+            <Section title="Org defaults" description="Apply to every owner entity without an override. Agents currently apply these org defaults to every owner, including those with an override below.">
               <Table items={defaults} canEdit={canEdit} />
             </Section>
             {[...overrides.entries()].map(([owner, items]) => (

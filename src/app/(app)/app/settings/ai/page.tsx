@@ -3,17 +3,13 @@ import { Cpu, ShieldCheck, Sparkles } from "lucide-react";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { agentCards, aiStatus } from "@/ai/views";
+import { autonomyLevel } from "@/ai/automations";
 import { pageData } from "@/ai/ui/server";
 import { NoAccess } from "@/extensions/settings/pages";
 import { canSettings } from "@/extensions/settings/nav";
 
 export const metadata = { title: "AI settings · Propniti" };
 
-const AUTONOMY: Record<string, { label: string; tone: "neutral" | "info" | "ai" }> = {
-  suggest: { label: "Suggest only", tone: "neutral" },
-  act_with_approval: { label: "Act with approval", tone: "info" },
-  auto_within_policy: { label: "Auto within policy", tone: "ai" },
-};
 
 export default async function AiSettingsPage() {
   const { data, persona } = await pageData();
@@ -51,12 +47,13 @@ export default async function AiSettingsPage() {
               </thead>
               <tbody>
                 {agents.map((a) => {
-                  const au = AUTONOMY[a.autonomy] ?? { label: a.autonomy, tone: "neutral" as const };
+                  // Two levels at runtime; a saved "suggest" behaves as Approve first.
+                  const au = autonomyLevel(a.autonomy);
                   return (
                     <tr key={a.key} className="border-t">
                       <td className="px-3 py-2"><div className="font-medium">{a.name}</div><div className="max-w-[26rem] truncate text-[12px] text-muted-foreground" title={a.goal}>{a.goal}</div></td>
                       <td className="px-3 py-2"><StatusBadge value={a.enabled ? "On" : "Off"} tone={a.enabled ? "success" : "neutral"} /></td>
-                      <td className="px-3 py-2"><StatusBadge value={au.label} tone={au.tone} /></td>
+                      <td className="px-3 py-2"><StatusBadge value={au.label} tone={au.value === "auto_within_policy" ? "ai" : "info"} /></td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.runs30}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.successRate == null ? "—" : `${a.successRate}%`}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{a.pending ? <Link href={`/app/ai/approvals?agent=${a.key}`} className="text-primary hover:underline">{a.pending}</Link> : 0}</td>

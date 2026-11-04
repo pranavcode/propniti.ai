@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
-import { autonomyLevel, automationsView, describeCron, sweepTiming } from "../automations";
+import { getEntity } from "@/entities";
+import { autonomyLevel, automationsView, canEditPolicies, describeCron, sweepTiming } from "../automations";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
 
 const SAM: Actor = { personaId: "sam", name: "Sam Okafor", role: "admin", scope: { kind: "org", label: "All" }, propertyIds: "all" };
@@ -112,5 +113,17 @@ describe("automations view", () => {
     const v = await automationsView({ db, ws: WS, actor: DANIEL }, NOW);
     expect(v.dataRules).toBe(1);
     expect(v.stateCaps).toEqual({ lateFeePct: [{ state: "TX", value: 10 }], nsfCents: [{ state: "AZ", value: 2500 }] });
+  });
+});
+
+describe("what people can change", () => {
+  it("only roles the policy route accepts may edit approval policies", () => {
+    expect(["principal", "regional_manager", "admin"].map((r) => canEditPolicies(r as never))).toEqual([true, true, true]);
+    expect(["property_manager", "accountant", "maintenance_supervisor", "broker", "leasing_agent", "owner"].some((r) => canEditPolicies(r as never))).toBe(false);
+  });
+
+  it("the sample automation rules that never ran are not exposed as records", () => {
+    expect(getEntity("automation_rules")).toBeUndefined();
+    expect(getEntity("automation_runs")).toBeUndefined();
   });
 });

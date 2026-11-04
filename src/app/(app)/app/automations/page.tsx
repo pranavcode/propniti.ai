@@ -39,6 +39,7 @@ export default async function AutomationsPage() {
   return (
     <main>
       <PageHeader
+        className="[&>div:first-child>div:first-child]:basis-72"
         icon={<Workflow />}
         title="Automations"
         description="What runs on its own, when, and under which rules. Agents propose; a person approves anything involving money, legal terms or safety unless an approval rule below allows it."

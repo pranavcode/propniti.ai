@@ -1,6 +1,6 @@
-// Entity defs for the settings module: users, approval policies, state rules, automations and
+// Entity defs for the settings module: users, approval policies, state rules and
 // the audit log. Owned by the platform lane; see AGENTS.md "v2 lanes and ownership".
-import { Bot, History, Landmark, ShieldCheck, UserRound, Workflow } from "lucide-react";
+import { History, Landmark, ShieldCheck, UserRound } from "lucide-react";
 import { ROLES, type Role } from "../types";
 import { AS_OF } from "../common";
 import { PERMISSIONS } from "@/auth/personas";
@@ -141,83 +141,6 @@ registerEntity({
   writes: "none",
   actions: ["state_rules.amend"],
   help: { summary: "Late-fee caps, grace periods, deposit limits and notice periods for Texas, Georgia and Arizona. Late fees are capped by these when they post.", article: "state-rules" },
-});
-
-registerEntity({
-  key: "automation_rules",
-  table: "automation_rules",
-  label: { one: "Automation", many: "Automations" },
-  icon: Workflow,
-  module: "settings",
-  route: "/app/settings/automations",
-  titleField: "name",
-  subtitle: (r) => String(r.kind ?? ""),
-  scopePath: null,
-  fields: {
-    name: { type: "text", label: "Automation", required: true, search: true, sortable: true, list: { default: true, width: 300 } },
-    kind: { type: "enum", label: "Type", facet: true, list: { default: true }, editable: [], enum: [{ value: "Rule", tone: "neutral" }, { value: "Workflow", tone: "info" }] },
-    enabled: { type: "bool", label: "On", facet: true, list: { default: true }, editable: ADMINS },
-    agent: { type: "text", label: "Agent", facet: true, list: { default: true }, editable: [] },
-    trigger_spec: { type: "json", label: "Trigger", editable: [] },
-    conditions: { type: "json", label: "Conditions", editable: [] },
-    action: { type: "json", label: "Action", editable: [] },
-    steps: { type: "json", label: "Workflow steps", editable: [] },
-    runs_30d: { type: "number", label: "Runs (30 days)", sortable: true, list: { default: true, align: "right" },
-      sql: `(SELECT count(*) FROM {automation_runs} r WHERE r.rule_id = automation_rules.id AND r.started_at >= date(${AS_OF}, '-30 days'))` },
-    failed_30d: { type: "number", label: "Failed (30 days)", sortable: true, list: { default: true, align: "right" },
-      sql: `(SELECT count(*) FROM {automation_runs} r WHERE r.rule_id = automation_rules.id AND r.status = 'Failed' AND r.started_at >= date(${AS_OF}, '-30 days'))` },
-    last_run_at: { type: "datetime", label: "Last run", sortable: true, list: { default: true }, sql: "(SELECT max(r.started_at) FROM {automation_runs} r WHERE r.rule_id = automation_rules.id)" },
-    created_by: { system: true, type: "ref", ref: "staff", label: "Created by", editable: [] },
-  },
-  relations: [{ name: "runs", label: "Run log", entity: "automation_runs", fk: "rule_id", kind: "many" }],
-  list: { defaultSort: ["name", "asc"], savedViews: [{ key: "failing", label: "Failing", filters: { "failed_30d.min": "1" }, sort: ["failed_30d", "desc"] }, { key: "off", label: "Turned off", filters: { enabled: "false" } }] },
-  detail: {
-    facts: ["kind", "enabled", "agent", "runs_30d", "failed_30d", "last_run_at"],
-    tabs: [
-      { key: "overview", label: "Definition", fields: ["name", "kind", "enabled", "agent", "trigger_spec", "conditions", "action", "steps", "created_by"] },
-      { key: "runs", label: "Run log", relation: "runs" },
-    ],
-    related: [],
-  },
-  capabilities: { activity: true, notes: true },
-  permissions: { read: READERS, update: ADMINS },
-  writes: "generic",
-  help: { summary: "Rules and workflows that run on events or a schedule: reminders, late fees, renewal offers, COI requests. Anything that moves money still waits for approval.", article: "automations-trigger-condition-action" },
-});
-
-registerEntity({
-  key: "automation_runs",
-  table: "automation_runs",
-  label: { one: "Automation run", many: "Automation runs" },
-  icon: Bot,
-  module: "settings",
-  route: "/app/settings/automations/runs",
-  titleField: "summary",
-  scopePath: "automation_runs.property_id",
-  fields: {
-    summary: { type: "text", label: "What happened", search: true, list: { default: true, width: 360 },
-      sql: "coalesce(json_extract(automation_runs.detail, '$.summary'), CASE WHEN json_extract(automation_runs.detail, '$.matched') IS NOT NULL THEN 'Matched ' || json_extract(automation_runs.detail, '$.matched') || ' records' || coalesce(' at ' || (SELECT p.name FROM {properties} p WHERE p.id = automation_runs.property_id), '') END, automation_runs.status)" },
-    rule_id: { type: "ref", ref: "automation_rules", label: "Automation", facet: true, list: { default: true } },
-    status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
-      { value: "Succeeded", tone: "success" }, { value: "Needs approval", tone: "warning" }, { value: "Skipped", tone: "neutral" }, { value: "Failed", tone: "danger" },
-    ] },
-    started_at: { type: "datetime", label: "Ran", sortable: true, list: { default: true } },
-    entity_type: { type: "text", label: "Record type", facet: true, list: { default: true } },
-    entity_id: { type: "text", label: "Record", search: true, list: { default: true } },
-    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, list: { default: false } },
-    error: { type: "text", label: "Error", sql: "json_extract(automation_runs.detail, '$.error')", list: { default: false } },
-    detail: { type: "json", label: "Detail" },
-  },
-  relations: [],
-  list: { defaultSort: ["started_at", "desc"], statusTabs: "status" },
-  detail: {
-    facts: ["status", "rule_id", "started_at", "entity_type", "entity_id", "property_id"],
-    tabs: [{ key: "overview", label: "Run", fields: ["summary", "status", "rule_id", "started_at", "entity_type", "entity_id", "property_id", "error", "detail"] }],
-    related: [],
-  },
-  permissions: { read: READERS },
-  writes: "none",
-  help: { summary: "Every time an automation ran, on which record, and whether it succeeded.", article: "automations-trigger-condition-action" },
 });
 
 registerEntity({

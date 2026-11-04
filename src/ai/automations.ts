@@ -6,6 +6,8 @@ import { getAgent } from "./agents/registry";
 import { sql, type DataCtx } from "./data";
 import { lastSweep, loadPolicies, SWEEP_EVERY_MS } from "./orchestrator";
 import { agentCards } from "./views";
+import { canEditPolicies } from "./policy-editors";
+export { canEditPolicies } from "./policy-editors";
 
 // Read model for /app/automations: what runs on its own, when, and under which rules. Everything
 // here comes from the same config, policies and code paths the orchestrator and runtime use.
@@ -137,8 +139,7 @@ export async function automationsView(data: DataCtx, nowMs = Date.now()) {
   const role = data.actor.role;
   const access = PERMISSIONS[role].intelligence ?? "none";
   const settings = (PERMISSIONS[role].settings ?? "none") !== "none";
-  // Mirrors /api/ai/policies/[id]: leaders and admins with intelligence access change policies.
-  const editPolicies = ["principal", "admin", "regional_manager"].includes(role) && access !== "none";
+  const editPolicies = canEditPolicies(role);
   const policiesHref = PERMISSIONS[role].settings === "approve" ? "/app/settings/approvals" : editPolicies ? "/app/agents" : settings ? "/app/settings/approvals" : null;
 
   return {

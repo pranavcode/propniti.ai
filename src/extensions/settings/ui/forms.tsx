@@ -343,24 +343,3 @@ export function AmendRule({ id, title, value, unit, note, minDate }: { id: strin
     </>
   );
 }
-
-// ---------------------------------------------------------------------------------------------
-// Automation on/off (generic PATCH of `enabled`)
-// ---------------------------------------------------------------------------------------------
-
-export function AutomationSwitch({ id, name, enabled, canEdit }: { id: string; name: string; enabled: boolean; canEdit: boolean }) {
-  const [on, setOn] = useState(enabled);
-  const router = useRouter();
-  const flip = async (next: boolean) => {
-    setOn(next);
-    try {
-      await apiJson("PATCH", `/api/e/automation_rules/${encodeURIComponent(id)}`, { enabled: next });
-      toast.success(`${name} turned ${next ? "on" : "off"}`);
-      router.refresh();
-    } catch (e) {
-      setOn(!next);
-      toast.error((e as Error).message);
-    }
-  };
-  return <Switch checked={on} disabled={!canEdit} onCheckedChange={flip} aria-label={`${name}: ${on ? "on" : "off"}`} />;
-}

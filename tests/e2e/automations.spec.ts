@@ -65,3 +65,33 @@ test("property manager sees the same automations without settings links", async 
   await expect(page.locator("main a[href^='/app/settings']")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("the old settings automations pages lead to the real page", async ({ page, context }) => {
+  await as(context, "sam");
+  for (const path of ["/app/settings/automations", "/app/settings/automations/runs", "/app/settings/automations/ar-1"]) {
+    await go(page, `${BASE}${path}`);
+    await expect(page).toHaveURL(/\/app\/automations$/);
+  }
+  await go(page, `${BASE}/app/settings`);
+  await expect(page.locator("main a[href^='/app/settings/automations']")).toHaveCount(0);
+});
+
+test("AI settings shows the two autonomy levels the runtime has", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/settings/ai`);
+  await expect(page.getByText("Approve first").first()).toBeVisible();
+  await expect(page.getByText(/Suggest only|Act with approval/)).toHaveCount(0);
+});
+
+test("approval policies are read-only on the Agents page for a property manager", async ({ page, context }) => {
+  await as(context, "marcus");
+  await go(page, `${BASE}/app/agents`);
+  await expect(page.getByText("Only a principal, regional manager or administrator can change approval policies.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /auto-approve limit in dollars/ })).toHaveCount(0);
+});
+
+test("approval policies page says agents apply the org defaults", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/settings/approvals`);
+  await expect(page.getByText(/Agents currently apply these org defaults/)).toBeVisible();
+});
