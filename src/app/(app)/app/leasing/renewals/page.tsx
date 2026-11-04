@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { StatusBadge } from "@/components/app/display";
-import { leasingCtx, renewalHistory, renewals } from "@/extensions/leasing/data";
+import { leasingCtx, renewalDrafts, renewalHistory, renewals } from "@/extensions/leasing/data";
+import { PrepareDrafts } from "@/extensions/leasing/ui/BulkRenewals";
 import { RenewalPanel, type Selected } from "@/extensions/leasing/ui/RenewalsWorkbench";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
   const window = WINDOWS.includes(Number(sp.window)) ? Number(sp.window) : 90;
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
   const page = Math.max(1, Number(sp.page) || 1);
-  const data = await renewals(c, { window, status, page, size: SIZE });
+  const [data, drafts] = await Promise.all([renewals(c, { window, status, page, size: SIZE }), WRITERS.includes(c.actor.role) ? renewalDrafts(c, window) : Promise.resolve([])]);
   const total = status ? data.counts[status] ?? 0 : data.total;
   const pages = Math.max(1, Math.ceil(total / SIZE));
   const sel = data.rows.find((r) => r.leaseId === sp.lease) ?? data.rows.find((r) => r.status === "No offer" || r.status === "Draft") ?? data.rows[0];
@@ -54,7 +55,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
     <>
       <PageHeader
         title="Renewals"
-        description="Leases ending soon. The Renewals agent proposes a rent with its reasons; you accept or edit it, then send an AI-drafted offer."
+        description="Leases ending soon. The Renewals Agent proposes a rent with its reasons; you accept or edit it, then send an AI-drafted offer."
         meta={<><span>{data.total} lease{data.total === 1 ? "" : "s"} ending in {window} days</span><span>{data.counts["No offer"] ?? 0} without an offer</span><span>{c.actor.scope.label}</span></>}
         actions={<Button asChild size="sm" variant="outline"><Link href="/app/leasing/renewal-offers">All offers</Link></Button>}
       >
@@ -74,6 +75,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
         </div>
       </PageHeader>
       <PageBody>
+        <PrepareDrafts drafts={drafts} />
         {!data.rows.length ? (
           <EmptyState title={status ? `No leases with status “${status}”` : "No leases ending in this window"} description="Try a longer window or another status." action={{ label: "Show all", href: "/app/leasing/renewals" }} />
         ) : (
@@ -110,7 +112,7 @@ export default async function RenewalsPage({ searchParams }: Props) {
               </footer>
             </div>
             <aside id="renewal-panel" className="scroll-mt-16 self-start rounded-lg border bg-card p-4 xl:sticky xl:top-4">
-              {selected ? <RenewalPanel key={selected.leaseId + (selected.offer?.id ?? "")} s={selected} /> : null}
+              {selected ? <RenewalPanel key={selected.leaseId + (selected.offer?.id ?? "") + (selected.suggestion?.runId ?? "")} s={selected} /> : null}
             </aside>
           </div>
         )}

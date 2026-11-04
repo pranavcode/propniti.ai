@@ -10,6 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "../display";
 import { SetupPill } from "../onboarding/SetupChecklist";
+import { NewDot, useNewDot } from "../welcome/WhatsNew";
+import { loadFacts } from "../guide/ChatBubble";
 import { useShell } from "./context";
 import { AppMark } from "./AppMark";
 import type { ShellNavItem, ShellNavSection } from "./types";
@@ -52,6 +54,15 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
   };
   const [closed, setClosed] = useLocalStorage<string[]>("pn_nav_closed", []);
   const toggleSection = (key: string) => setClosed((c) => (c.includes(key) ? c.filter((k) => k !== key) : [...c, key]));
+  // A closed AI agents section keeps pending decisions in view: Approvals › Needs you (the bubble's cached count).
+  const [approvals, setApprovals] = useState<number | null>(null);
+  const aiClosed = closed.includes("intelligence");
+  useEffect(() => {
+    if (!aiClosed) return;
+    let live = true;
+    loadFacts(data.persona.id).then((f) => { if (live) setApprovals(f?.approvals ?? null); });
+    return () => { live = false; };
+  }, [aiClosed, data.persona.id]);
 
   return (
     <nav data-tour="sidebar" aria-label="Main" className={cn("flex h-full flex-col bg-sidebar text-sidebar-foreground", className)}>
@@ -76,14 +87,18 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
       <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3", collapsed ? "px-2" : "px-2.5")}>
         {data.nav.map((section) => {
           const isClosed = closed.includes(section.section);
+          const ai = section.section === "intelligence";
+          const waiting = ai ? section.items.reduce((a, i) => a + (i.count ?? 0), 0) || (approvals ?? 0) : 0;
           return (
             <div key={section.section} className="mt-3 first:mt-1.5">
               {collapsed ? (
                 <div className="mx-auto mb-1 h-px w-5 bg-sidebar-border first:hidden" />
               ) : section.section !== "home" && (
-                <button onClick={() => toggleSection(section.section)} className="group/sec mb-0.5 flex h-6 w-full items-center gap-1 rounded px-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">
+                <button onClick={() => toggleSection(section.section)} aria-expanded={!isClosed} className="group/sec mb-0.5 flex h-6 w-full items-center gap-1 rounded px-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">
+                  {ai && <Sparkles className="size-3 text-tone-ai" aria-hidden />}
                   {section.label}
                   <ChevronDown className={cn("size-3 opacity-0 transition-transform group-hover/sec:opacity-100", isClosed && "-rotate-90 opacity-100")} />
+                  {ai && isClosed && waiting > 0 && <span className="ml-auto rounded bg-primary px-1.5 text-[11px] leading-[18px] font-medium tabular-nums text-primary-foreground">{waiting > 999 ? "999+" : waiting}<span className="sr-only"> waiting for a decision</span></span>}
                 </button>
               )}
               {!(isClosed && !collapsed) && (
@@ -116,6 +131,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
 
 function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellNavItem; active: boolean; collapsed?: boolean; nested?: boolean; onNavigate: (e: React.MouseEvent, href: string) => void }) {
   const count = item.count ? (item.count > 999 ? "999+" : String(item.count)) : null;
+  const isNew = useNewDot(item.href);
   const link = (
     <Link
       href={item.href}
@@ -129,13 +145,14 @@ function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellN
       )}
     >
       {!nested && <span className={cn("shrink-0 [&_svg]:size-4", active ? "text-primary" : "text-muted-foreground group-hover/nav:text-foreground")}>{item.icon}</span>}
-      {!collapsed && <span className={cn("min-w-0 truncate", !item.ai && "flex-1")}>{item.label}</span>}
+      {!collapsed && <span className={cn("min-w-0 truncate", !item.ai && !isNew && "flex-1")}>{item.label}</span>}
       {item.ai && !collapsed && (
         <Tooltip>
-          <TooltipTrigger asChild><span data-ai-mark className="mr-auto flex shrink-0 text-tone-ai"><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span></TooltipTrigger>
+          <TooltipTrigger asChild><span data-ai-mark className={cn("flex shrink-0 text-tone-ai", !isNew && "mr-auto")}><Sparkles className="size-3" aria-hidden /><span className="sr-only">(AI-powered)</span></span></TooltipTrigger>
           <TooltipContent side="right">AI-powered: agents propose, you approve</TooltipContent>
         </Tooltip>
       )}
+      {isNew && <NewDot collapsed={collapsed} className={collapsed ? undefined : "mr-auto"} />}
       {count && !collapsed && (
         <span className={cn("ml-auto rounded px-1.5 text-[11px] leading-[18px] font-medium tabular-nums", item.countTone === "attention" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{count}</span>
       )}

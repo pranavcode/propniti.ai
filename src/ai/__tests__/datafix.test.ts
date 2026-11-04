@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { get } from "../data";
-import { applyFixes } from "../datafix";
+import { applyFixes, issueTargets } from "../datafix";
+import { healthFilters } from "../filters";
+import { issuesPage } from "../views";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
 import { startRun } from "../orchestrator";
@@ -134,5 +136,57 @@ describe("applying fixes from Data Health", () => {
     const failing = { prepare: (q: string) => f.db.prepare(q), batch: async () => { throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long."); } };
     expect(await executeProposal({ ...data, db: failing }, row, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: false, message: DB_BUSY });
     quiet.mockRestore();
+  });
+});
+
+describe("Data Health filters and bulk actions across pages", () => {
+  // 30 address fixes at p02 (low risk), the rent fix (money) and di1 from the fixture.
+  function many() {
+    const f = setup();
+    const add = f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', ?, 'properties.address_format', 'properties', 'p02', 'p02', '2026-10-01', 'info', '{}', ?)");
+    for (let i = 0; i < 30; i++) add.run(`di-a${i}`, JSON.stringify({ changes: { street: `${i} Main St` } }));
+    return f;
+  }
+
+  it("reads the record, rule and issue links other pages send", () => {
+    expect(healthFilters({ "f.entity_id": "l1", "f.rule_id": "leases.rent_outlier" })).toEqual({ entity_id: "l1", rule: "leases.rent_outlier" });
+    expect(healthFilters(new URLSearchParams("issue=di1&severity=warn&page=2"))).toEqual({ issue: "di1", severity: "warn" });
+  });
+
+  it("filters the issue list by record and by issue", async () => {
+    const f = many();
+    const data = { db: f.db, ws: WS, actor: DANIEL };
+    expect((await issuesPage(data, { entity_id: "l1" })).rows.map((r) => (r as Record<string, unknown>).id)).toEqual(["di-rent"]);
+    expect((await issuesPage(data, { issue: "di-a3" })).rows.map((r) => (r as Record<string, unknown>).id)).toEqual(["di-a3"]);
+    expect((await issuesPage(data, { entity_id: "p02" })).total).toBe(31);
+  });
+
+  it("counts safe fixes and fixes to send on every page, by role", async () => {
+    const f = many();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    expect(await issueTargets(marcus, {}, "safe")).toMatchObject({ count: 31, more: false });
+    expect(await issueTargets(marcus, {}, "send")).toMatchObject({ count: 1, ids: ["di-rent"] });
+    expect(await issueTargets(marcus, { rule: "leases.rent_outlier" }, "safe")).toMatchObject({ count: 0 });
+    expect(await issueTargets(marcus, {}, "safe", 10)).toMatchObject({ count: 10, more: true });
+    // A leasing agent can't apply fixes: everything with a fix is one to send.
+    const lena = { db: f.db, ws: WS, actor: actorOf("lena") };
+    expect(await issueTargets(lena, {}, "safe")).toMatchObject({ count: 0 });
+    expect(await issueTargets(lena, {}, "send")).toMatchObject({ count: 32 });
+  });
+
+  it("applies all safe matching fixes once and sends the rest, skipping ones already waiting", async () => {
+    const f = many();
+    const data = { db: f.db, ws: WS, actor: MARCUS };
+    const t = await issueTargets(data, { entity_id: "p02" }, "safe");
+    const [a, b] = await Promise.all([applyFixes(data, getPersona("marcus")!, t.ids, { safeOnly: true }), applyFixes(data, getPersona("marcus")!, t.ids, { safeOnly: true })]);
+    expect(a.applied + b.applied).toBe(31);
+    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_decisions WHERE workspace_id = ? AND decision = 'Approved'").get(WS)).toMatchObject({ n: 31 });
+    // A proposal that lost the race is closed (Rejected, noted as superseded), so nothing is left waiting.
+    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_proposals p WHERE workspace_id = ? AND entity_type = 'data_issues' AND NOT EXISTS (SELECT 1 FROM ai_decisions d WHERE d.workspace_id = p.workspace_id AND d.proposal_id = p.id)").get(WS)).toMatchObject({ n: 0 });
+    const lena = { db: f.db, ws: WS, actor: actorOf("lena") };
+    const send = await issueTargets(lena, { rule: "leases.rent_outlier" }, "send");
+    const r = await applyFixes(lena, getPersona("lena")!, send.ids, { safeOnly: false });
+    expect(r.queued).toBe(1);
+    expect(await issueTargets(lena, { rule: "leases.rent_outlier" }, "send")).toMatchObject({ count: 0 });
   });
 });

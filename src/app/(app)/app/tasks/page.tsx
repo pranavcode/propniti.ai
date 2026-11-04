@@ -8,7 +8,9 @@ import { facetOptions, list, QueryError, type QueryCtx } from "@/server/query";
 import { tableColumns, tableFacets } from "@/components/entity/spec";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
-import { myTasksQuery, propertyOptions, relatedRecords, taskView, type Related } from "@/extensions/intelligence/my-tasks";
+import { myTasksQuery, propertyOptions, relatedRecords, staffOptions, taskView, type Related } from "@/extensions/intelligence/my-tasks";
+import { getAction } from "@/extensions/actions";
+import { AS_OF } from "@/seed/constants";
 import { MyTasks } from "@/extensions/intelligence/ui/MyTasks";
 
 export const metadata: Metadata = { title: "My tasks · Propniti" };
@@ -42,11 +44,14 @@ export default async function TasksPage({ searchParams }: Props) {
   const ctx: QueryCtx = { db: getPlatform().db, ws: session.ws, actor };
   const view = taskView(sp.get("due"));
   const q = myTasksQuery(actor, sp);
-  const [result, facets, properties] = await Promise.all([
+  const [result, facets, properties, staff] = await Promise.all([
     list(ctx, "tasks", q).then((res) => ({ res, error: null }), (e) => ({ res: null, error: e instanceof QueryError ? e.message : "Your tasks couldn't load. Try again, or clear the filters." })),
     facetOptions(ctx, "tasks", q).catch(() => ({})),
     propertyOptions(ctx).catch(() => []),
+    staffOptions(ctx).catch(() => []),
   ]);
+  // The tasks entity's bulk actions this role may run, labelled from the action registry.
+  const bulkActions = (def.list.bulkActions ?? []).filter((k) => can(actor.role, k, "tasks")).map((k) => ({ key: k, label: getAction(k)?.label ?? k }));
   const res = result.res;
   const related = res ? await relatedRecords(ctx, res.rows).catch((): Record<string, Related> => ({})) : {};
   const rows = (res?.rows ?? []).map((r) => ({
@@ -79,6 +84,9 @@ export default async function TasksPage({ searchParams }: Props) {
           error={result.error}
           properties={properties}
           needsProperty={actor.propertyIds !== "all"}
+          bulkActions={bulkActions}
+          staff={staff}
+          today={AS_OF}
         />
       </PageBody>
     </main>

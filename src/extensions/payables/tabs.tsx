@@ -13,10 +13,10 @@ import { expectedGl, hardStop, proposeGl, runChecks, scannedTotalCents, viewable
 import { duplicateOf, glOptions, vendorFacts } from "./inbox/data";
 import { BillActionBar, ConfirmBankForm, ProposalCard, RecodeSuggestion } from "./inbox/TabControls";
 
-// Bill record tabs: Review (checks, the Payables agent's proposals, the scanned invoice, the
+// Bill record tabs: Review (checks, the Payables Agent's proposals, the scanned invoice, the
 // bank-change hold) and Lines (GL coding with recode suggestions that a person approves).
 
-const AP_AGENT = "Payables agent";
+const AP_AGENT = "Payables Agent";
 const parse = <T,>(s: unknown, d: T): T => { try { return typeof s === "string" ? JSON.parse(s) as T : d; } catch { return d; } };
 
 async function billContext(id: string, row: TabProps["row"]) {
@@ -99,9 +99,9 @@ async function ReviewTab({ id, row }: TabProps) {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h3 className="flex items-center gap-2 text-[13px] font-semibold">Payables agent <span className="font-normal text-muted-foreground">proposals on this bill and vendor</span></h3>
+          <h3 className="flex items-center gap-2 text-[13px] font-semibold">Payables Agent <span className="font-normal text-muted-foreground">proposals on this bill and vendor</span></h3>
           {proposals.results.length === 0
-            ? <p className="rounded-lg border border-dashed px-3.5 py-3 text-[12.5px] text-muted-foreground">The Payables agent hasn&apos;t reviewed this bill yet. It runs every two hours and when an invoice arrives; the checks above are the same rules it applies.</p>
+            ? <p className="rounded-lg border border-dashed px-3.5 py-3 text-[12.5px] text-muted-foreground">The Payables Agent hasn&apos;t reviewed this bill yet. It runs every two hours and when an invoice arrives; the checks above are the same rules it applies.</p>
             : proposals.results.map((p) => {
                 const ev = parse<{ entity_type: string; entity_id: string; label: string }[]>(p.evidence, []);
                 const model = typeof p.model === "string" ? p.model : null;
@@ -138,7 +138,7 @@ async function LinesTab({ id, row }: TabProps) {
   const total = lines.reduce((s, l) => s + l.amount_cents, 0);
 
   // A suggestion per line: an open data-health issue first (precomputed by the generator or the
-  // Data Health agent), else the vendor-history rule.
+  // Data Health Agent), else the vendor-history rule.
   type Suggestion = { line: (typeof lines)[number]; issueId?: string; gl: string; why: string[]; confidence: number; source: "precomputed" | "rules" };
   const suggestions = lines.flatMap((l): Suggestion[] => {
     const issue = issues.find((i) => i.entity_id === l.id) ?? issues.find((i) => i.entity_id === id && (parse<{ line_id?: string }>(i.evidence, {}).line_id ?? l.id) === l.id);

@@ -28,7 +28,7 @@ export type Selected = {
 
 const ICON = { "+": Plus, "-": Minus, "=": CornerDownRight };
 
-// One lease's renewal: the Renewals agent proposes a rent with its reasons, a person accepts or
+// One lease's renewal: the Renewals Agent proposes a rent with its reasons, a person accepts or
 // edits it, the AI drafts the message, the person edits and sends. Each AI step links to its run.
 export function RenewalPanel({ s }: { s: Selected }) {
   const router = useRouter();
@@ -121,7 +121,7 @@ export function RenewalPanel({ s }: { s: Selected }) {
             <div className="flex flex-col gap-2.5 p-3 pl-3.5">
               <div className="flex flex-wrap items-center gap-2">
                 <Sparkles className="size-3.5 text-tone-ai" />
-                <h3 id="ren-ai" className="text-[13px] font-semibold">Renewals agent</h3>
+                <h3 id="ren-ai" className="text-[13px] font-semibold">Renewals Agent</h3>
                 {suggestion && <AIBadge source={suggestion.source} model={suggestion.source === "live" ? suggestion.model : undefined} size="xs" />}
                 {suggestion?.runId && <Link href={runHref(suggestion.runId)!} className="inline-flex items-center gap-0.5 text-[11.5px] font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>}
               </div>
@@ -141,7 +141,7 @@ export function RenewalPanel({ s }: { s: Selected }) {
               )}
               {s.canEdit && (
                 <div className="flex gap-2">
-                  <Button size="sm" variant={suggestion ? "outline" : "default"} disabled={!!busy} onClick={() => void propose()}>{busy === "propose" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}{suggestion ? "Price again" : "Ask the Renewals agent"}</Button>
+                  <Button size="sm" variant={suggestion ? "outline" : "default"} disabled={!!busy} onClick={() => void propose()}>{busy === "propose" ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}{suggestion ? "Price again" : "Ask the Renewals Agent"}</Button>
                 </div>
               )}
             </div>

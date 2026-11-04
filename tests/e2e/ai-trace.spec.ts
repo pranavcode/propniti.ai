@@ -13,7 +13,7 @@ test("a run page shows each step in plain words, with the raw data behind Techni
   await go(page, `${BASE}/app/ai/activity?agent=leasing`);
   // The scheduled leasing run that proposed prospect follow-ups.
   await page.getByRole("row").filter({ hasText: "Found prospects waiting on a reply" }).first().getByRole("link").first().click();
-  await expect(page.getByRole("heading", { name: "Leasing agent run" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Leasing Agent run" })).toBeVisible();
 
   const rows = page.locator("[data-trace-row]");
   const proposal = rows.filter({ hasText: /^Proposed “Send follow-up” for .+ \(prospect at .+\): no contact in \d+ days · 88% confidence/ }).first();

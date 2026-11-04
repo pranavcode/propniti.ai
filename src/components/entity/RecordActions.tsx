@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBreadcrumbTitle, useShellMaybe } from "@/components/app/shell/context";
 import { useUrlState } from "@/hooks/use-url-state";
+import { leavePeek, notifyDone } from "./notify";
 import { RecordSheet } from "./RecordSheet";
 import type { FormField } from "./spec";
 
@@ -25,7 +26,8 @@ type Props = {
 };
 
 // Header actions on a record page: named actions (with confirmation), Edit (sheet; also opened by
-// ?edit=1), Delete, and "Ask about this" into the assistant dock. Also sets the breadcrumb title.
+// ?edit=1), Delete, and "Ask about this", which opens the assistant dock on this record without
+// sending anything. Also sets the breadcrumb title.
 export function RecordActions(props: Props) {
   useBreadcrumbTitle(props.title);
   return <ActionBar {...props} />;
@@ -62,7 +64,8 @@ export function ActionBar({ entity, id, title, label, routeBase, actions, edit, 
       if (onChanged) { onChanged(true); return router.refresh(); }
       return router.push(routeBase);
     }
-    toast.success(out.message ?? `${a.label} done`);
+    // In the peek drawer the record page is one click away; on the record page it's already open.
+    notifyDone(out.message ?? `${a.label} done`, onChanged && !out.href ? { href: `${routeBase}/${encodeURIComponent(id)}`, go: (href) => leavePeek(() => router.push(href)) } : undefined);
     if (out.href) router.push(out.href);
     else { router.refresh(); onChanged?.(false); }
   };
@@ -71,7 +74,7 @@ export function ActionBar({ entity, id, title, label, routeBase, actions, edit, 
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {shell && <Button variant="outline" size="sm" onClick={() => { onAsk?.(); shell.assistant.ask(`Tell me about ${title}`, { entity, id, title }); }}><Sparkles className="size-4 text-tone-ai" />Ask about this</Button>}
+      {shell && <Button variant="outline" size="sm" onClick={() => { onAsk?.(); shell.assistant.ask(null, { entity, id, title }); }}><Sparkles className="size-4 text-tone-ai" />Ask about this</Button>}
       {actions.filter((a) => !a.hasInput).map((a) => (
         <Button key={a.key} size="sm" variant={a.money ? "default" : "outline"} disabled={busy} onClick={() => (a.confirm || a.money ? setConfirm(a) : run(a))}>{a.label}</Button>
       ))}

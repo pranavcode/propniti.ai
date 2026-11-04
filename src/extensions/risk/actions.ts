@@ -1,42 +1,85 @@
 import { z } from "zod";
 import { BadgeCheck, BadgeX, BellRing, CircleCheck } from "lucide-react";
-import type { Role, Row } from "@/entities/types";
+import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
+import { AS_OF } from "@/seed/constants";
 import { overlayUpsertSql } from "@/server/effective";
 import { demoNowIso } from "@/lib/clock";
 import { registerAction } from "../actions";
 
 const RISK_WRITE: Role[] = ["principal", "regional_manager", "property_manager", "maintenance_supervisor"];
 const rid = () => crypto.randomUUID();
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const activity = (ws: string, entity: string, id: string, propertyId: unknown, at: string, actorId: string, verb: string, summary: string) => ({
   sql: "INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?, ?, ?, ?, ?, ?, 'staff', ?, ?, ?, '{}')",
   binds: [ws, rid(), entity, id, propertyId == null ? null : String(propertyId), at, actorId, verb, summary],
 });
 
 // Asks the vendor for a current certificate: a notification in their portal and an activity entry
-// on both the certificate and the vendor. No money moves and nothing is sent outside the demo.
+// on the vendor (and the certificate, when there is one). No money moves and nothing is sent
+// outside the demo. A vendor is asked at most once every REQUEST_DAYS days: the notification
+// insert is the guard, and the activity rows run only if it landed, so a double click or a
+// "Request all" that overlaps a single request asks once.
+export const REQUEST_DAYS = 7;
+const REQUEST_TITLE = "Upload a current certificate of insurance";
+const LAPSING = ["Expiring", "Expired", "Missing", "Rejected"];
+
+async function requestCertificate(ctx: ActionContext, vendor: string, company: string, when: string, coiId: string | null): Promise<ActionResult> {
+  const at = demoNowIso(ctx.nowMs);
+  const since = new Date(Date.parse(at) - REQUEST_DAYS * 86_400_000).toISOString();
+  const recent = "SELECT max(n.at) AS at FROM notifications n WHERE n.workspace_id IN (?1, 'base') AND n.user_id = ?2 AND n.title = ?3 AND n.at >= ?4";
+  const gate = rid();
+  // Activity rows run only if this request's notification landed.
+  const after = (entity: string, id: string, summary: string) => ({
+    sql: "INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) SELECT ?, ?, ?, ?, NULL, ?, 'staff', ?, 'requested', ?, '{}' WHERE EXISTS (SELECT 1 FROM notifications WHERE workspace_id = ? AND id = ?)",
+    binds: [ctx.ws, rid(), entity, id, at, ctx.actor.personaId, summary, ctx.ws, gate],
+  });
+  const stmts = [
+    { sql: `INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, href, entity_type, entity_id, at) SELECT ?1, ?5, ?2, 'In-app', ?3, ?6, '/portal/vendor/insurance', ?7, ?8, ?9 WHERE (${recent}) IS NULL`,
+      binds: [ctx.ws, vendor, REQUEST_TITLE, since, gate, `Your certificate on file ${when}. Upload a renewed certificate so we can keep assigning you work.`, coiId ? "vendor_cois" : "vendors", coiId ?? vendor, at] },
+    after("vendors", vendor, `${ctx.actor.name} asked for a current certificate of insurance`),
+    ...(coiId ? [after("vendor_cois", coiId, `${ctx.actor.name} asked ${company} for a current certificate`)] : []),
+  ];
+  const [res] = await ctx.db.batch(stmts.map((s) => ctx.db.prepare(s.sql).bind(...s.binds)));
+  if (!res.meta.changes) {
+    const last = await ctx.db.prepare(recent).bind(ctx.ws, vendor, REQUEST_TITLE, since).first<{ at: string | null }>();
+    const on = (last?.at ?? at).slice(0, 10);
+    return { status: 409, error: `${company} was already asked on ${on}. You can ask again after ${REQUEST_DAYS} days.` };
+  }
+  return { status: 200, message: `Asked ${company} for a current certificate` };
+}
+
 registerAction({
   key: "vendor_cois.request_certificate",
-  label: "Request a current certificate",
+  label: "Request certificate",
   entity: "vendor_cois",
   roles: RISK_WRITE,
   icon: BellRing,
-  when: (r: Row) => ["Expiring", "Expired", "Missing", "Rejected"].includes(String(r.status)),
+  bulk: true,
+  when: (r: Row) => LAPSING.includes(String(r.status)),
   confirm: { title: "Ask the vendor for a current certificate?", body: "They get a notification in the vendor portal asking them to upload a renewed certificate of insurance." },
   handler: async (ctx, row) => {
-    const at = demoNowIso(ctx.nowMs);
-    const vendor = String(row.vendor_id);
-    const company = String(row.vendor_id__label ?? vendor);
-    const when = row.status === "Expiring" ? `expires ${row.expires_on}` : row.status === "Missing" ? "is missing" : `expired ${row.expires_on}`;
-    const stmts = [
-      { sql: "INSERT INTO notifications (workspace_id, id, user_id, channel, title, body, href, entity_type, entity_id, at) VALUES (?, ?, ?, 'In-app', ?, ?, '/portal/vendor', 'vendor_cois', ?, ?)",
-        binds: [ctx.ws, rid(), vendor, "Upload a current certificate of insurance", `Your certificate on file ${when}. Upload a renewed certificate so we can keep assigning you work.`, String(row.id), at] },
-      activity(ctx.ws, "vendor_cois", String(row.id), null, at, ctx.actor.personaId, "requested", `${ctx.actor.name} asked ${company} for a current certificate`),
-      activity(ctx.ws, "vendors", vendor, null, at, ctx.actor.personaId, "requested", `${ctx.actor.name} asked for a current certificate of insurance`),
-    ];
-    await ctx.db.batch(stmts.map((s) => ctx.db.prepare(s.sql).bind(...s.binds)));
-    return { status: 200, message: `Asked ${company} for a current certificate` };
+    const when = row.status === "Expiring" ? `expires ${row.expires_on}` : row.status === "Missing" ? "is missing" : row.status === "Rejected" ? "was rejected" : `expired ${row.expires_on}`;
+    return requestCertificate(ctx, String(row.vendor_id), String(row.vendor_id__label ?? row.vendor_id), when, String(row.id));
   },
-  help: { summary: "Sends the vendor a portal notification asking for a renewed certificate of insurance.", article: "vendor-insurance-certificates" },
+  help: { summary: `Sends the vendor a portal notification asking for a renewed certificate of insurance. Each vendor is asked at most once every ${REQUEST_DAYS} days.`, article: "vendor-insurance-certificates" },
+});
+
+// The same request from the vendor's record, including vendors with no certificate on file at all.
+registerAction({
+  key: "vendors.request_certificate",
+  label: "Request certificate",
+  entity: "vendors",
+  roles: RISK_WRITE,
+  icon: BellRing,
+  bulk: true,
+  when: (r: Row) => r.status === "Active" && (r.coi_expires == null || String(r.coi_expires) <= addDays(AS_OF, 30)),
+  confirm: { title: "Ask the vendor for a current certificate?", body: "They get a notification in the vendor portal asking them to upload a renewed certificate of insurance." },
+  handler: async (ctx, row) => {
+    const exp = row.coi_expires == null ? null : String(row.coi_expires);
+    const when = !exp ? "is missing or not verified yet" : exp < AS_OF ? `expired ${exp}` : `expires ${exp}`;
+    return requestCertificate(ctx, String(row.id), String(row.company ?? row.id), when, null);
+  },
+  help: { summary: `Sends the vendor a portal notification asking for a renewed certificate of insurance. Each vendor is asked at most once every ${REQUEST_DAYS} days.`, article: "vendor-insurance-certificates" },
 });
 
 // Certificates a vendor submits stay "Pending verification" until compliance, accounting or admin

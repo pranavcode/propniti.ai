@@ -203,7 +203,7 @@ export type ApplicationStatus = {
   proposal: { title: string; why: string[]; confidence: number; model: string | null; run_id: string | null } | null;
 };
 
-// The visitor's own application and the Leasing agent's proposal for it, if the run has finished.
+// The visitor's own application and the Leasing Agent's proposal for it, if the run has finished.
 export async function applicationStatus(ws: string, id: string): Promise<ApplicationStatus | null> {
   const a = await db().prepare(`SELECT a.id, a.stage, ap.first_name, ap.email FROM ${effective("applications")} AS a JOIN ${effective("applicants")} AS ap ON ap.id = a.applicant_id WHERE a.id = ?2 AND a.workspace_id = ?1`)
     .bind(ws, id).first<Omit<ApplicationStatus, "proposal" | "run">>();

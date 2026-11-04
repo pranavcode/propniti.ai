@@ -6,6 +6,7 @@ import Link from "@/components/Link";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatNumber, formatTime } from "@/lib/format";
 import { useMounted } from "@/hooks/use-mounted";
+import { runStatusLabel } from "@/ai/ui/labels";
 import { describeSteps, type Part, type TraceRefs, type TraceRow } from "@/ai/trace";
 import type { RunStatus, Step, StepKind } from "@/ai/types";
 import { StatusBadge } from "../display";
@@ -42,10 +43,7 @@ const KIND: Record<StepKind, { label: string; icon: typeof Wrench; cls: string }
 };
 const kindOf = (k: string) => KIND[k as StepKind] ?? KIND.message;
 
-const STATUS: Record<RunStatus, { label: string; tone: "info" | "ai" | "warning" | "success" | "danger" }> = {
-  queued: { label: "Queued", tone: "info" }, running: { label: "Running", tone: "ai" }, waiting_approval: { label: "Waiting for approval", tone: "warning" },
-  done: { label: "Done", tone: "success" }, failed: { label: "Failed", tone: "danger" },
-};
+const STATUS_TONE: Record<RunStatus, "info" | "ai" | "warning" | "success" | "danger"> = { queued: "info", running: "ai", waiting_approval: "warning", done: "success", failed: "danger" };
 const ms = (n: number) => (n < 1000 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
 
 export function RunTrace({ steps, refs, agent, status, model, tokensIn, tokensOut, costCents, live, compact, className }: RunTraceProps) {
@@ -57,7 +55,7 @@ export function RunTrace({ steps, refs, agent, status, model, tokensIn, tokensOu
       {!compact && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-muted/40 px-3 py-2 text-[12px]">
           {agent && <span className="font-semibold">{agent}</span>}
-          {status && <StatusBadge value={status} label={STATUS[status]?.label ?? status} tone={live ? "ai" : STATUS[status]?.tone} />}
+          {status && <StatusBadge value={status} label={runStatusLabel(status)} tone={live ? "ai" : STATUS_TONE[status]} />}
           <span className="ml-auto flex flex-wrap items-center gap-x-3 text-muted-foreground tabular-nums">
             {model && model !== "…" && <span title={model}>{model === "rules" ? "Rules, no model" : modelName(model)}</span>}
             {tokens > 0 && <span title={`${formatNumber(tokensIn ?? 0)} tokens in · ${formatNumber(tokensOut ?? 0)} out`}>{formatNumber(tokens)} tokens</span>}

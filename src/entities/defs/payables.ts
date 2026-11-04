@@ -7,6 +7,7 @@ import { z } from "zod";
 import { AS_OF, issuesField } from "../common";
 import { registerEntity } from "../registry";
 import type { Role, RuleKey } from "../types";
+import { billSentence } from "@/ai/rules-sentences";
 
 const AP: Role[] = ["principal", "regional_manager", "accountant"];
 const AP_READ: Role[] = ["principal", "regional_manager", "property_manager", "accountant", "maintenance_supervisor"];
@@ -97,6 +98,7 @@ registerEntity({
   ],
   ai: {
     facts: (r) => ({ bill: String(r.title), vendor: (r.vendor_id__label as string) ?? null, property: (r.property_id__label as string) ?? null, status: String(r.status), amount: Number(r.amount ?? 0), due_on: String(r.due_on), gl: (r.gl_account_id__label as string) ?? null }),
+    rulesSummary: billSentence,
     summaryPrompt: "Summarise this bill for an accountant in 2 sentences: what it's for, whether anything about it looks unusual, and the next step. Use only the facts.",
     agents: ["ap"],
   },
@@ -109,7 +111,7 @@ registerEntity({
   actions: ["bills.submit", "bills.approve", "bills.pay", "bills.approve_and_pay", "bills.recode", "bills.void", "bills.confirm_vendor_bank"],
   // INTEGRATE: scenarios.md names this rule bill_lines.gl_miscoded, but bill_lines isn't an EntityKey (logged in lane-requests.md).
   dataRules: ["bill_lines.gl_miscoded" as RuleKey],
-  help: { summary: "Vendor invoices to approve and pay. The Payables agent checks each one for unusual amounts, duplicates, GL coding and vendor bank changes before you approve.", article: "approve-a-bill" },
+  help: { summary: "Vendor invoices to approve and pay. The Payables Agent checks each one for unusual amounts, duplicates, GL coding and vendor bank changes before you approve.", article: "approve-a-bill" },
 });
 
 registerEntity({

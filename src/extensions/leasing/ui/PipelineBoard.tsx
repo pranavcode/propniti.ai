@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Money } from "@/components/app/display";
 import { cn } from "@/lib/utils";
-import { COLUMNS, COLUMN_KEYS, planMove, type Column } from "../pipeline";
+import { COLUMNS, COLUMN_KEYS, canUndo, planMove, type Column } from "../pipeline";
 import type { Card } from "../data";
 import { callAction } from "./client";
 import type { Role } from "@/entities/types";
@@ -30,18 +30,24 @@ export function PipelineBoard({ cards: initial, role }: { cards: Card[]; role: R
 
   const check = (c: Card, to: Column) => planMove(c.column, to, { role, hasApplication: !!c.appId, toured: c.stage === "Toured" || !!c.nextTour });
 
-  const move = async (c: Card, to: Column) => {
+  // `undo` is the move back from the toast: same action, same rules, no further Undo.
+  const move = async (c: Card, to: Column, undo = false) => {
     const plan = check(c, to);
     if (!plan.ok) return toast.error(plan.error);
-    const before = cards;
     setCards((cs) => cs.map((x) => (x.id === c.id ? { ...x, column: to, stale: false, days: 0 } : x)));
     setBusy(c.id);
     try {
       await callAction("prospects", c.id, "move_stage", { to });
-      toast.success(`${c.name} moved to ${COLUMNS.find((x) => x.key === to)!.label}`, { description: "Saved to the lead and its application, with your name in the activity." });
+      const label = COLUMNS.find((x) => x.key === to)!.label;
+      const ctx = { role, hasApplication: !!c.appId, toured: c.stage === "Toured" || !!c.nextTour };
+      if (undo) toast.success(`${c.name} moved back to ${label}`);
+      else toast.success(`${c.name} moved to ${label}`, {
+        description: "Saved to the lead and its application, with your name in the activity.",
+        action: canUndo(c.column, to, ctx) ? { label: "Undo", onClick: () => void move({ ...c, column: to }, c.column, true) } : undefined,
+      });
       router.refresh();
     } catch (e) {
-      setCards(before);
+      setCards((cs) => cs.map((x) => (x.id === c.id ? c : x)));
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);

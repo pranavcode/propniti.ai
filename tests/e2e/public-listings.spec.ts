@@ -117,7 +117,7 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
   await expect(page.getByText("Application received")).toBeVisible();
   await expect(page.getByRole("heading", { name: "AI screening summary" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open the broker's approvals" })).toBeVisible();
-  // The Leasing agent scores this application in the background; the page refreshes itself.
+  // The Leasing Agent scores this application in the background; the page refreshes itself.
   await expect(async () => {
     await reload(page);
     await expect(page.getByText(/Jordan Avery .* score \d+/)).toBeVisible({ timeout: 15_000 });

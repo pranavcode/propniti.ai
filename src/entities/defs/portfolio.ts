@@ -6,6 +6,7 @@ import { AS_OF, issuesField, LEADERS, OPS, propertyPhoto, STAFF, thumb } from ".
 import { getEntity, registerEntity } from "../registry";
 import type { Facts, Role } from "../types";
 import { formatMoney, formatPct } from "@/lib/format";
+import { unitSentence } from "@/ai/rules-sentences";
 
 const OWNER_PORTAL: Role[] = ["owner"];
 
@@ -227,6 +228,7 @@ registerEntity({
   ],
   ai: {
     facts: (r, rel) => ({ unit: String(r.label), status: String(r.status), beds: Number(r.beds ?? 0), market_rent: Number(r.market_rent ?? 0), lease_rent: r.rent == null ? null : Number(r.rent), resident: (r.resident as string) ?? null, lease_end: (r.lease_end as string) ?? null, open_work_orders: rel.work_orders?.length ?? 0 }),
+    rulesSummary: unitSentence,
     agents: ["leasing", "renewals"],
   },
   permissions: { read: [...STAFF, ...OWNER_PORTAL], create: [...OPS], update: [...OPS, "maintenance_supervisor", "leasing_agent"], delete: ["principal", "regional_manager"] },

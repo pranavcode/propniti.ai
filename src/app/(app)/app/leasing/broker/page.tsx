@@ -5,7 +5,8 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { EmptyState } from "@/components/app/states";
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
-import { AGENT_NAME, fairHousingFlags, kpis, leasingCtx, leasingProposals, sourceOf, waitingApplications } from "@/extensions/leasing/data";
+import { AGENT_NAME, fairHousingFlags, kpis, leasingAgents, leasingCtx, leasingProposals, sourceOf, staleLeadsByAgent, waitingApplications } from "@/extensions/leasing/data";
+import { ReassignLeads, SendFollowUps } from "@/extensions/leasing/ui/BulkLeads";
 import { AskPanel, ProposalQueue, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
 import { formatMoney, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -21,16 +22,18 @@ const KPIS: Omit<KpiData, "value" | "previous" | "spark">[] = [
 ];
 const REC: Record<string, string> = { Approve: "text-tone-success", Conditional: "text-tone-warning", Deny: "text-tone-danger" };
 
-// The broker's AI-first home: applications waiting on a decision with the Leasing agent's score,
+// The broker's AI-first home: applications waiting on a decision with the Leasing Agent's score,
 // what the agents proposed, how each leasing agent is doing, and fair-housing flags to clear.
 export default async function BrokerDesk() {
   const c = await leasingCtx();
-  const [apps, proposals, flags, k, perf] = await Promise.all([
+  const [apps, proposals, flags, k, perf, stale, team] = await Promise.all([
     waitingApplications(c, 12),
     leasingProposals(c, { actions: ["applications.decide"], limit: 6 }),
     fairHousingFlags(c),
     kpis(c, KPIS.map((x) => x.key)),
     kpis(c, ["leasing.agent_performance"]),
+    staleLeadsByAgent(c),
+    leasingAgents(c),
   ]);
   const agents = perf[0].points as { agent_id: string; agent: string | null; leads: number; tours: number; applied: number; leased: number; stale: number; conversion: number; first_reply_h: number | null }[];
   const items: ProposalView[] = proposals.map((p) => ({
@@ -62,7 +65,13 @@ export default async function BrokerDesk() {
               <li><Link href="#approvals" className="hover:text-primary"><span className="font-semibold tabular-nums">{apps.total}</span> application{apps.total === 1 ? "" : "s"} waiting on you{oldest ? <>, the oldest for <span className="font-semibold tabular-nums">{Number(oldest.waiting)}</span> days ({String(oldest.applicant)})</> : null}.</Link></li>
               {unscored > 0 && <li className="text-muted-foreground"><span className="font-semibold text-foreground tabular-nums">{unscored}</span> of the ones shown have no AI score yet; open one and choose “Score with AI”.</li>}
               <li><Link href="#compliance" className={cn("hover:text-primary", flags.length && "text-tone-danger")}><span className="font-semibold tabular-nums">{flags.length}</span> listing{flags.length === 1 ? "" : "s"} with fair-housing wording to fix.</Link></li>
-              {agents.filter((a) => a.stale > 0).sort((a, b) => b.stale - a.stale).slice(0, 1).map((a) => <li key={a.agent_id} className="text-muted-foreground">{a.agent ?? "Unassigned"} has the most leads going stale ({a.stale}).</li>)}
+              {agents.filter((a) => a.stale > 0).sort((a, b) => b.stale - a.stale).slice(0, 1).map((a) => (
+                <li key={a.agent_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+                  <span>{a.agent ?? "Unassigned"} has the most leads going stale ({a.stale}).</span>
+                  <SendFollowUps ids={(stale[String(a.agent_id)] ?? []).map((l) => l.id)} label="Send follow-ups" who={`${a.agent ?? "the unassigned"}'s stale leads`} />
+                  <ReassignLeads leads={stale[String(a.agent_id)] ?? []} from={String(a.agent_id)} fromName={a.agent ?? "Unassigned"} agents={team} />
+                </li>
+              ))}
             </ul>
             <div className="border-t px-4 py-3">
               <AskPanel suggestions={c.persona.assistantPrompts} placeholder="Ask about applications, agents or listings…" />
@@ -72,7 +81,7 @@ export default async function BrokerDesk() {
           <div className="grid grid-cols-2 gap-3 self-start xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid-cols-4">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>
 
-        <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
+        <Section title={<span id="approvals" className="scroll-mt-16">Applications waiting on you</span>} description="Oldest first. The score and recommendation come from the Leasing Agent and use financial and rental-history facts only." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/applications?view=decide">All {apps.total}</Link></Button>}>
           <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-approvals">
             {apps.rows.length ? (
               <Table className="text-[13px]">
@@ -120,7 +129,8 @@ export default async function BrokerDesk() {
                         <Link href={`/app/leasing/listings/${f.id}`} className="block truncate font-medium hover:text-primary hover:underline">{f.property}{f.unit ? ` #${f.unit}` : ""} · {f.headline}</Link>
                         <p className="mt-1 text-[12.5px]">{f.flags.map((x) => <span key={x.phrase + x.index} className="mr-2 inline-block"><span className="rounded bg-tone-danger/10 px-1 text-tone-danger">“{x.phrase}”</span> <span className="text-muted-foreground">{x.category}</span></span>)}</p>
                       </div>
-                      <Button asChild size="sm" variant="outline" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
+                      <Button asChild size="sm" variant="outline" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}?rewrite=1`}><Sparkles className="text-tone-ai" data-icon="inline-start" />Rewrite with AI</Link></Button>
+                      <Button asChild size="sm" variant="ghost" className="shrink-0"><Link href={`/app/leasing/listings/${f.id}`}>Fix wording</Link></Button>
                     </li>
                   ))}
                 </ul>
@@ -132,7 +142,7 @@ export default async function BrokerDesk() {
             <div className="overflow-x-auto rounded-lg border bg-card" data-tour="broker-agents">
               {agents.length === 0 ? <EmptyState compact kind="table" title="No leads in the last 30 days" description="Agent numbers appear once leads are assigned." /> : <Table className="text-[13px]">
                 <TableHeader className="bg-muted/40 text-left text-[12px] text-muted-foreground">
-                  <TableRow><TableHead className="px-3 py-2 font-medium">Agent</TableHead><TableHead className="px-3 py-2 text-right font-medium">Leads</TableHead><TableHead className="px-3 py-2 text-right font-medium">Toured</TableHead><TableHead className="px-3 py-2 text-right font-medium">Applied</TableHead><TableHead className="px-3 py-2 text-right font-medium">Leased</TableHead><TableHead className="px-3 py-2 text-right font-medium">Going stale</TableHead></TableRow>
+                  <TableRow><TableHead className="px-3 py-2 font-medium">Agent</TableHead><TableHead className="px-3 py-2 text-right font-medium">Leads</TableHead><TableHead className="px-3 py-2 text-right font-medium">Toured</TableHead><TableHead className="px-3 py-2 text-right font-medium">Applied</TableHead><TableHead className="px-3 py-2 text-right font-medium">Leased</TableHead><TableHead className="px-3 py-2 text-right font-medium">Going stale</TableHead><TableHead className="px-3 py-2"><span className="sr-only">Actions</span></TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
                   {agents.map((a) => (
@@ -143,6 +153,7 @@ export default async function BrokerDesk() {
                       <TableCell className="px-3 py-2 text-right tabular-nums">{a.applied}</TableCell>
                       <TableCell className="px-3 py-2 text-right tabular-nums">{a.leased}</TableCell>
                       <TableCell className={cn("px-3 py-2 text-right tabular-nums", a.stale > 5 && "text-tone-warning")}><Link href={`/app/leasing/prospects?f.follow_up_due=true&f.assigned_to=${a.agent_id}`} className="hover:underline">{a.stale}</Link></TableCell>
+                      <TableCell className="py-1.5 pr-2 pl-0 text-right whitespace-nowrap">{a.stale > 0 && <span className="inline-flex gap-1"><SendFollowUps ids={(stale[String(a.agent_id)] ?? []).map((l) => l.id)} label="Follow up" size="xs" who={`${a.agent ?? "the unassigned"}'s stale leads`} /><ReassignLeads size="xs" leads={stale[String(a.agent_id)] ?? []} from={String(a.agent_id)} fromName={a.agent ?? "Unassigned"} agents={team} /></span>}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -151,8 +162,8 @@ export default async function BrokerDesk() {
           </Section>
         </div>
 
-        <Section title="Leasing agent recommendations" description="Approve to accept the agent's recommendation as your decision; it is logged with your name. Open the application to decide differently.">
-          <ProposalQueue items={items} empty="When the Leasing agent scores an application, its recommendation waits here for you." />
+        <Section title="Leasing Agent recommendations" description="Approve to accept the agent's recommendation as your decision; it is logged with your name. Open the application to decide differently.">
+          <ProposalQueue items={items} empty="When the Leasing Agent scores an application, its recommendation waits here for you." />
         </Section>
       </PageBody>
     </>

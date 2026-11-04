@@ -53,3 +53,6 @@ export function planMove(from: Column, to: Column, ctx: { role: Role; hasApplica
     case "leased": return { ok: true, prospectStage: "Leased", appStage: "Leased" };
   }
 }
+
+// The toast after a move offers Undo only when the same rules allow the card back.
+export const canUndo = (from: Column, to: Column, ctx: { role: Role; hasApplication: boolean; toured: boolean }) => planMove(to, from, ctx).ok;

@@ -4,7 +4,7 @@ import Link from "@/components/Link";
 import { useId } from "react";
 import { ArrowUpRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDelta } from "@/lib/format";
+import { formatCountDelta, formatDelta } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatValue } from "./fmt";
@@ -59,7 +59,7 @@ export function KpiCard({ label, value, format = "count", previous, deltaLabel =
       </div>
     );
   }
-  const delta = value != null && previous != null ? formatDelta(value, previous) : null;
+  const delta = value != null && previous != null ? (format === "count" ? formatCountDelta(value, previous) : formatDelta(value, previous)) : null;
   const up = value != null && previous != null && value >= previous;
   const good = delta ? (up ? goodWhen === "up" : goodWhen === "down") : null;
   const flat = value != null && previous != null && value === previous;

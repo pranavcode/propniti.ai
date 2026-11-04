@@ -9,6 +9,7 @@ import * as listRoute from "../[entity]/route";
 import * as recordRoute from "../[entity]/[id]/route";
 import * as actionRoute from "../[entity]/[id]/actions/[action]/route";
 import * as exportRoute from "../[entity]/export.csv/route";
+import * as idsRoute from "../[entity]/ids/route";
 import * as notesRoute from "../[entity]/[id]/notes/route";
 import * as metricRoute from "../../metrics/[key]/route";
 import * as sessionRoute from "../../session/route";
@@ -52,6 +53,25 @@ describe("GET /api/e/[entity]", () => {
     expect((await listRoute.GET(req("/api/e/properties?f.bogus=1"), p({ entity: "properties" }))).status).toBe(400);
     expect((await listRoute.GET(req("/api/e/charges", { persona: "lena" }), p({ entity: "charges" }))).status).toBe(403);
     expect((await listRoute.GET(req("/api/e/nope"), p({ entity: "nope" }))).status).toBe(404);
+  });
+});
+
+describe("GET /api/e/[entity]/ids", () => {
+  it("returns the matching ids in scope, and counts against the write limit", async () => {
+    process.env.TRUSTED_IP_HEADER = "x-forwarded-for";
+    try {
+      const call = (ip: string) => idsRoute.GET(req("/api/e/units?f.status=Vacant", { persona: "marcus", headers: { "x-forwarded-for": ip } }), p({ entity: "units" }));
+      const first = await call("203.0.113.20");
+      expect(first.status).toBe(200);
+      expect(await first.json()).toMatchObject({ ids: expect.arrayContaining([expect.stringMatching(/^p0[123]-/)]), capped: false });
+      const statuses: number[] = [];
+      for (let i = 0; i < 60; i++) statuses.push((await call("203.0.113.20")).status);
+      expect(statuses.slice(0, 59).every((s) => s === 200)).toBe(true);
+      expect(statuses[59]).toBe(429);
+      expect((await call("203.0.113.21")).status).toBe(200);
+    } finally {
+      delete process.env.TRUSTED_IP_HEADER;
+    }
   });
 });
 

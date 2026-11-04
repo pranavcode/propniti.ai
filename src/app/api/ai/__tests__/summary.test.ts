@@ -2,10 +2,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { getPlatform } from "@/lib/platform";
 import { seed, WS } from "@/server/query.fixture";
 import { setModelForTests, type ChatModel } from "@/ai/providers";
-import { rulesSummary } from "@/ai/summaries";
 import * as route from "../summary/route";
 
-// "Summarize with AI" on a record with no stored summary: POST /api/ai/summary writes one now
+// "Summarize with AI" on a record with no stored model summary: POST /api/ai/summary writes one now
 // (model, or the rules sentence when the model fails), in the persona's scope, and GET then returns it.
 vi.mock("@/lib/platform", async () => {
   const db = (await import("@/server/query.fixture")).emptyDb();
@@ -43,12 +42,14 @@ afterEach(() => setModelForTests(undefined));
 describe("POST /api/ai/summary for a record with no summary yet", () => {
   it("writes the rules summary when the model fails, and GET shows it after a reload", async () => {
     setModelForTests(model(null));
-    expect(await get("marcus", "wo-1")).toBeNull();
+    // Before: the rules sentence from current figures, with nothing stored.
+    expect(await get("marcus", "wo-1")).toMatchObject({ source: "rules" });
+    expect(await stored("wo-1")).toEqual([]);
     const res = await post("marcus", "wo-1");
     expect(res.status).toBe(200);
     const { summary } = await res.json();
     expect(summary).toMatchObject({ source: "rules", model: "rules" });
-    expect(summary.summary).toContain("Leaking kitchen faucet 1");
+    expect(summary.summary).toMatch(/^Urgent Plumbing job at .+, new and not yet assigned\./);
     expect(await stored("wo-1")).toEqual([{ workspace_id: WS, model: "rules", summary: summary.summary }]);
     expect(await get("marcus", "wo-1")).toMatchObject({ source: "rules", summary: summary.summary });
   });
@@ -77,9 +78,3 @@ describe("POST /api/ai/summary for a record with no summary yet", () => {
   });
 });
 
-describe("rulesSummary", () => {
-  it("writes a plain sentence from the facts, and just the title when there are none", () => {
-    expect(rulesSummary("Leak", { work_order: "WO-1", title: "Leak", status: "New", past_sla: false })).toBe("Leak. work order: WO-1; status: New; past sla: no.");
-    expect(rulesSummary("WO-1", { note: "" })).toBe("WO-1.");
-  });
-});

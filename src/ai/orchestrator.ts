@@ -1,4 +1,5 @@
 import { demoIsoIn, demoNow, demoNowIso } from "@/lib/clock";
+import { PERMISSIONS, type Persona } from "@/auth/personas";
 import type { ActionKey, Actor, AgentKey } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { allAgents, getAgent } from "./agents/registry";
@@ -73,6 +74,22 @@ export async function startRun(o: StartOpts): Promise<{ runId: string; done: Pro
   const done = executeRun(def, runId, o, nowMs);
   if (o.waitUntil) o.waitUntil(done);
   return { runId, done };
+}
+
+// "Run now" (agents page) and "run the collections agent" (assistant): staff whose role has AI
+// access. A run of the same agent still going in this workspace is returned instead of a second one.
+export async function runNow(o: { db: Db; ws: string; actor: Actor; persona: Persona; waitUntil?: (p: Promise<unknown>) => void }, key: string): Promise<
+  { ok: true; runId: string; href: string; name: string; already: boolean; done?: Promise<RunResult> } | { ok: false; status: number; error: string; name?: string }
+> {
+  await loadAgents();
+  const def = getAgent(key);
+  if (!def) return { ok: false, status: 404, error: "Unknown agent" };
+  if (o.persona.portal) return { ok: false, status: 403, error: "only staff can run agents", name: def.name };
+  if ((PERMISSIONS[o.actor.role]?.intelligence ?? "none") === "none") return { ok: false, status: 403, error: `${o.persona.title} can't run agents`, name: def.name };
+  const running = await o.db.prepare("SELECT id FROM agent_runs WHERE workspace_id = ? AND agent_key = ? AND status = 'running' AND started_at > ? ORDER BY seq DESC LIMIT 1").bind(o.ws, def.key, demoIsoIn(-5 * 60_000)).first<{ id: string }>();
+  if (running) return { ok: true, runId: running.id, href: `/app/ai/runs/${running.id}`, name: def.name, already: true };
+  const { runId, done } = await startRun({ db: o.db, ws: o.ws, actor: o.actor, agent: def.key, trigger: { kind: "manual" }, waitUntil: o.waitUntil });
+  return { ok: true, runId, href: `/app/ai/runs/${runId}`, name: def.name, already: false, done };
 }
 
 class BudgetEnded extends Error {}

@@ -28,6 +28,9 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : u
 const words = (key: string) => key.replace(/[_.]+/g, " ").trim();
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const andList = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+// Seeded plans name tables: "Check work_orders, vendors; propose …".
+const PLAN_TABLES = /^Check ([a-z_]+(?:, [a-z_]+)*); (.+)$/;
 const article = (w: string) => (/^[aeiou]/i.test(w) ? "an" : "a");
 // Table keys to a singular noun when the registry has no label: "work_orders" → "work order".
 const singular = (t: string) => words(t.endsWith("ies") ? `${t.slice(0, -3)}y` : t.replace(/s$/, ""));
@@ -106,6 +109,8 @@ export function wantedRefs(steps: TraceStepLike[]) {
     if (str(i?.related)) entities.add(String(i!.related));
     for (const a of [i?.action, out?.action]) if (str(a)) actions.add(String(a));
     if (s.kind === "proposal" && str(out?.proposal_id) && !refOf(s)) proposals.add(String(out!.proposal_id));
+    const plan = PLAN_TABLES.exec(str(out?.plan) ?? "");
+    if (plan) plan[1].split(", ").forEach((t) => entities.add(t));
     if (s.toolKey && !s.toolKey.startsWith("model.") && !KNOWN_TOOLS.has(s.toolKey)) entities.add(s.toolKey.split(".")[0]);
   }
   for (const [type] of records.values()) entities.add(type);
@@ -279,7 +284,10 @@ function planSentence(c: Ctx, out: unknown): Sentence | null {
   if (str(out)) return { parts: [String(out)] };
   const o = obj(out);
   if (!o) return null;
-  if (str(o.plan)) return { parts: [String(o.plan)] };
+  if (str(o.plan)) {
+    const m = PLAN_TABLES.exec(String(o.plan));
+    return { parts: [m ? `Check ${andList(m[1].split(", ").map((t) => manyLabel(c, t)))}; ${m[2]}` : String(o.plan)] };
+  }
   if (str(o.trigger)) {
     const m = str(o.model);
     return { parts: [`${TRIGGER[String(o.trigger)] ?? "Started"}${m ? `, using ${/^rules/i.test(m) ? "the rules (no model)" : modelName(m)}` : ""}${AUTONOMY[String(o.autonomy)] ? `; ${AUTONOMY[String(o.autonomy)]}` : ""}`] };

@@ -1,4 +1,5 @@
 import type { Actor, Row } from "@/entities/types";
+import { decidableSql } from "@/ai/decide";
 import type { Db } from "@/lib/platform/types";
 import { effective as wsEffective } from "@/server/effective";
 import { AS_OF } from "@/seed/constants";
@@ -108,7 +109,9 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
          (SELECT ph.url FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo,
          (SELECT ph.check_result FROM ${effective("photos", ws)} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id LIMIT 1) AS photo_check,
          (SELECT pr.title FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = pr.id) ORDER BY pr.created_at DESC LIMIT 1) AS suggestion,
-         (SELECT pr.confidence FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' ORDER BY pr.created_at DESC LIMIT 1) AS confidence
+         (SELECT pr.confidence FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' ORDER BY pr.created_at DESC LIMIT 1) AS confidence,
+         (SELECT json_object('id', pr.id, 'vendor_id', json_extract(pr.payload, '$.effects[0].changes.vendor_id'), 'amount_cents', pr.amount_cents, 'confidence', pr.confidence, 'queue_state', pr.queue_state, 'risk', pr.risk)
+            FROM ${effective("ai_proposals", ws)} pr WHERE pr.entity_id = w.id AND pr.agent = 'maintenance_triage' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = pr.id) ORDER BY pr.created_at DESC LIMIT 1) AS open_suggestion
        FROM ${wo} w JOIN ${effective("properties", ws)} p ON p.id = w.property_id LEFT JOIN ${effective("units", ws)} u ON u.id = w.unit_id
        WHERE w.status IN ('New', 'Triaged')${s.sql}
        ORDER BY CASE w.priority WHEN 'Emergency' THEN 0 WHEN 'Urgent' THEN 1 WHEN 'Normal' THEN 2 ELSE 3 END, w.opened_at LIMIT 12`, s.binds),
@@ -121,7 +124,9 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
     db.prepare(`SELECT count(*) AS open, coalesce(sum(t.target_ready_on < ${today}), 0) AS late FROM ${effective("turnovers", ws)} t WHERE t.status IN ('Not started', 'In progress')${scoped(actor.propertyIds, "t.property_id").sql}`).bind(...scoped(actor.propertyIds, "t.property_id").binds).first<{ open: number; late: number }>(),
     db.prepare(`SELECT count(*) AS due, coalesce(sum(m.next_due_on < ${today}), 0) AS overdue FROM ${effective("pm_schedules", ws)} m WHERE m.active = 1 AND m.next_due_on <= date(${today}, '+7 days')${scoped(actor.propertyIds, "m.property_id").sql}`).bind(...scoped(actor.propertyIds, "m.property_id").binds).first<{ due: number; overdue: number }>(),
     // Only vendors who worked at this person's properties in the last 12 months.
-    all<Row>(db, `SELECT c.vendor_id, v.company, c.expires_on, c.status FROM ${effective("vendor_cois", ws)} c JOIN ${effective("vendors", ws)} v ON v.id = c.vendor_id
+    all<Row>(db, `SELECT c.id, c.vendor_id, v.company, c.expires_on, c.status,
+        (SELECT max(n.at) FROM ${effective("notifications", ws)} n WHERE n.user_id = c.vendor_id AND n.title = 'Upload a current certificate of insurance' AND n.at >= date(${today}, '-7 days')) AS requested
+      FROM ${effective("vendor_cois", ws)} c JOIN ${effective("vendors", ws)} v ON v.id = c.vendor_id
       WHERE c.expires_on <= date(${today}, '+30 days') AND v.status = 'Active'
         AND EXISTS (SELECT 1 FROM ${wo} w WHERE w.vendor_id = v.id AND w.opened_at >= date(${today}, '-12 months')${s.sql})
       ORDER BY c.expires_on LIMIT 6`, s.binds),
@@ -134,10 +139,12 @@ export async function homeData(db: Db, ws: string | null, actor: Actor) {
 export async function maintenanceProposals(db: Db, ws: string | null, actor: Actor, limit = 6) {
   // Org-level proposals (vendor COIs) have no property and show to everyone in the module.
   const s = actor.propertyIds === "all" ? { sql: "", binds: [] as unknown[] } : { sql: " AND (p.property_id IS NULL OR p.property_id IN (SELECT value FROM json_each(?)))", binds: [JSON.stringify(actor.propertyIds)] };
+  // Open items only where this role may decide them (decide.ts); waiting ones show as waiting.
+  const mine = decidableSql(actor.role);
   return all<Row>(db,
-    `SELECT p.* FROM ${effective("ai_proposals", ws)} p WHERE p.agent IN ('maintenance_triage', 'compliance', 'photo_check') AND p.queue_state IN ('needs_you', 'waiting')
+    `SELECT p.* FROM ${effective("ai_proposals", ws)} p WHERE p.agent IN ('maintenance_triage', 'compliance', 'photo_check') AND (p.queue_state = 'waiting' OR (p.queue_state = 'needs_you' AND ${mine.sql}))
        AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ws)} d WHERE d.proposal_id = p.id)${s.sql}
-     ORDER BY CASE p.risk WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, p.created_at DESC LIMIT ${limit}`, s.binds);
+     ORDER BY CASE p.risk WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, p.created_at DESC LIMIT ${limit}`, [...mine.params, ...s.binds]);
 }
 
 // ---------------------------------------------------------------------------------------------

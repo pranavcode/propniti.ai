@@ -41,7 +41,7 @@ const RULES: Rule[] = [
   },
   {
     match: /^\/app\/receivables\/collections$/, title: "Collections",
-    about: "Delinquent residents ranked by risk, with the reasons and the Collections agent's next step. Low-risk reminders can be approved together; plans and legal referrals one at a time.",
+    about: "Delinquent residents ranked by risk, with the reasons and the Collections Agent's next step. Low-risk reminders can be approved together; plans and legal referrals one at a time.",
     links: [{ label: "High risk first", href: "/app/receivables/collections?band=High" }, { label: "Delinquency aging", href: "/app/receivables/delinquency" }],
     prompts: ["Who is 30+ days late on rent?", "What changed in delinquency since last month?"],
   },

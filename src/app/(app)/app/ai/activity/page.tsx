@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/app/states";
 import { AIBadge } from "@/components/app/ai";
 import { cn } from "@/lib/utils";
 import { sql } from "@/ai/data";
-import { AGENT_LABEL } from "@/ai/ui/labels";
+import { AGENT_LABEL, agentName, runStatusLabel } from "@/ai/ui/labels";
 import { PERMISSIONS } from "@/auth/personas";
 import { pageData } from "@/ai/ui/server";
 import { runsPage } from "@/ai/views";
@@ -53,8 +53,8 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                   <tbody>
                     {runs.rows.map((r) => (
                       <tr key={String(r.id)} className="h-[var(--row-h)] border-t hover:bg-muted/40">
-                        <td className="px-3"><Link className="font-medium hover:underline" href={`/app/ai/runs/${r.id}`}>{AGENT_LABEL[String(r.agent_key)] ?? String(r.agent_key)}</Link></td>
-                        <td className="px-3"><StatusBadge value={r.status === "waiting_approval" ? "Waiting approval" : String(r.status)} tone={TONE[r.status as keyof typeof TONE] ?? "neutral"} /></td>
+                        <td className="px-3"><Link className="font-medium hover:underline" href={`/app/ai/runs/${r.id}`}>{agentName(String(r.agent_key))}</Link></td>
+                        <td className="px-3"><StatusBadge value={String(r.status)} label={runStatusLabel(String(r.status))} tone={TONE[r.status as keyof typeof TONE] ?? "neutral"} /></td>
                         <td className="px-3 text-muted-foreground">{TRIGGER[String(r.trigger_kind)] ?? String(r.trigger_kind)}</td>
                         <td className="px-3 whitespace-nowrap"><RelativeDate value={String(r.started_at)} /></td>
                         <td className="px-3 tabular-nums">{Number(r.steps)}</td>
@@ -87,7 +87,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                     <tr key={i} className="h-[var(--row-h)] border-t">
                       <td className="px-3 whitespace-nowrap"><RelativeDate value={String(a.at)} /></td>
                       <td className="px-3">{String(a.actor)}<span className="ml-1 text-[11px] text-muted-foreground">{a.role ? String(a.role).replace(/_/g, " ") : ""}</span></td>
-                      <td className="px-3 text-muted-foreground">{a.agent ? `${AGENT_LABEL[String(a.agent)] ?? a.agent}${a.model ? ` · ${a.model}` : ""}` : "—"}</td>
+                      <td className="px-3 text-muted-foreground">{a.agent ? `${agentName(String(a.agent))}${a.model ? ` · ${a.model}` : ""}` : "—"}</td>
                       <td className="px-3">{String(a.action)}</td>
                       <td className="px-3 text-muted-foreground">{a.entity_type ? `${a.entity_type} ${a.entity_id}` : ""}</td>
                       <td className="max-w-md truncate px-3 text-muted-foreground" title={String(a.detail ?? "")}>{String(a.detail ?? "")}</td>

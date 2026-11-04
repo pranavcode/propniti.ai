@@ -16,9 +16,14 @@ import { StatusBadge } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { AIBadge, Confidence } from "@/components/app/ai";
-import { homeData, maintenanceProposals } from "@/extensions/maintenance/queries";
+import { homeData, maintenanceProposals, policyFor } from "@/extensions/maintenance/queries";
+import { HIGH_CONFIDENCE } from "@/extensions/maintenance/actions";
+import { policyCheck } from "@/extensions/maintenance/rules";
+import { staffDecision } from "@/ai/decide";
+import { AcceptSuggestions, DispatchSuggested } from "@/extensions/maintenance/ui/TriageActions";
 import { OPEN_FILTER } from "@/extensions/maintenance/store";
 import { MxApprovals, MxAsk } from "@/extensions/maintenance/ui/home";
+import { RequestCoiButton } from "@/extensions/risk/ui/RequestCoi";
 
 export const metadata = { title: "Maintenance · Propniti" };
 
@@ -61,17 +66,32 @@ export default async function MaintenanceHome() {
   ]);
   const h = home.v;
   const c = h?.counts ?? {};
-  const proposals = (props.v ?? []).map((r: Row) => proposalOut(r) as unknown as ProposalJson);
+  const proposals = (props.v ?? []).map((r: Row) => proposalOut(r, persona.role) as unknown as ProposalJson);
   const isSup = persona.role === "maintenance_supervisor";
   const failed = [home, sla, ageP, trade, spend, techs].some((x) => x.error);
   const invoiceTotal = (h?.invoices ?? []).reduce((a, r) => a + Number(r.invoice_cents ?? 0), 0);
 
-  const watch: { text: string; href: string; tone: string }[] = [];
+  // The agent's open suggestion on each queued request, and whether this person's click dispatches
+  // it or leaves it in Approvals (the same rule the server applies).
+  const canDispatch = can(actor.role, "work_orders.dispatch_suggested", "work_orders");
+  const policies = new Map(await Promise.all([...new Set((h?.triage ?? []).map((w) => String(w.property_id)))].map(async (pid) => [pid, await policyFor(db, ws, pid).catch(() => null)] as const)));
+  const suggested = new Map((h?.triage ?? []).flatMap((w) => {
+    const sg = w.open_suggestion ? JSON.parse(String(w.open_suggestion)) as { id: string; vendor_id: string | null; amount_cents: number | null; confidence: number; queue_state: string; risk: string } : null;
+    if (!sg?.vendor_id || sg.queue_state === "auto_handled") return [];
+    const decision = staffDecision(actor.role, { entity_type: "work_orders", property_id: w.property_id, amount_cents: sg.amount_cents, risk: sg.risk, queue_state: "needs_you" });
+    const owner = policyCheck(Number(sg.amount_cents ?? 0), policies.get(String(w.property_id)) ?? null).level === "owner";
+    return [[String(w.id), { high: Number(sg.confidence) >= HIGH_CONFIDENCE, toApprovals: !decision.ok, note: !decision.ok ? `${decision.error} This leaves it in Approvals.` : owner ? "Estimate is over the owner's limit: the job waits for the owner" : undefined }]] as const;
+  }));
+  const highIds = [...suggested].filter(([, v]) => v.high).map(([k]) => k);
+  const watch: { text: string; href: string; tone: string; coi?: boolean }[] = [];
   if (Number(c.emergencies)) watch.push({ text: `${c.emergencies} emergency work order${c.emergencies > 1 ? "s" : ""} open`, href: `/app/maintenance/work-orders?f.priority=Emergency&f.status=${OPEN}`, tone: "bg-tone-danger" });
   if (Number(c.past_sla)) watch.push({ text: `${c.past_sla} past SLA, ${c.due_today} more due today`, href: "/app/maintenance/work-orders?view=past-sla", tone: "bg-tone-danger" });
   if (h?.turns.late) watch.push({ text: `${h.turns.late} make-readies past their target date`, href: "/app/maintenance/turnovers?view=late", tone: "bg-tone-warning" });
   if (h?.pm.overdue) watch.push({ text: `${h.pm.overdue} preventive tasks overdue`, href: "/app/maintenance/preventive?view=due-7", tone: "bg-tone-warning" });
-  if (h?.cois.length) watch.push({ text: `${h.cois.length} vendor insurance certificate${h.cois.length > 1 ? "s" : ""} expired or expiring within 30 days`, href: "/app/maintenance/vendors?view=coi-expiring", tone: "bg-tone-warning" });
+  if (h?.cois.length) watch.push({ text: `${h.cois.length} vendor insurance certificate${h.cois.length > 1 ? "s" : ""} expired or expiring within 30 days`, href: "/app/maintenance/vendors?view=coi-expiring", tone: "bg-tone-warning", coi: true });
+  // Certificates the supervisor can chase from here: not asked in the last week.
+  const chase = can(actor.role, "vendor_cois.request_certificate", "vendor_cois");
+  const toChase = (h?.cois ?? []).filter((x) => !x.requested).map((x) => String(x.id));
 
   return (
     <main>
@@ -116,7 +136,8 @@ export default async function MaintenanceHome() {
               <div className="flex flex-col gap-2 px-4 py-3">
                 <h3 className="text-[11.5px] font-medium text-muted-foreground">Watch</h3>
                 {watch.length ? (
-                  <ul className="flex flex-col gap-1.5">{watch.slice(0, 5).map((w) => <li key={w.text}><Link href={w.href} className="flex gap-2 text-[12.5px] leading-snug hover:text-primary"><span className={cn("mt-[6px] size-1.5 shrink-0 rounded-full", w.tone)} />{w.text}</Link></li>)}</ul>
+                  <ul className="flex flex-col gap-1.5">{watch.slice(0, 5).map((w) => <li key={w.text}><Link href={w.href} className="flex gap-2 text-[12.5px] leading-snug hover:text-primary"><span className={cn("mt-[6px] size-1.5 shrink-0 rounded-full", w.tone)} />{w.text}</Link>
+                    {w.coi && chase && toChase.length > 0 && <RequestCoiButton ids={toChase} className="mt-1 ml-3.5" />}</li>)}</ul>
                 ) : <p className="text-[12.5px] text-muted-foreground">Nothing outside normal ranges.</p>}
               </div>
             </div>
@@ -145,14 +166,14 @@ export default async function MaintenanceHome() {
         </KpiRow>
 
         <div className="grid gap-5 xl:grid-cols-12">
-          <Section id="triage" title="Triage queue" description="New requests, emergencies first. The Maintenance Triage agent's suggestion is ready on most; open one to review and dispatch." className="xl:col-span-7"
-            actions={<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button>}>
+          <Section id="triage" title="Triage queue" description="New requests, emergencies first. Dispatch the Maintenance Triage Agent's suggestion here, or open a request to review it." className="xl:col-span-7"
+            actions={<>{canDispatch && <AcceptSuggestions ids={highIds} toApprovals={highIds.filter((id) => suggested.get(id)?.toApprovals).length} />}<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button></>}>
             <div data-tour="mx-triage" className="overflow-hidden rounded-lg border bg-card">
               {h?.triage.length ? (
                 <ul className="divide-y">
                   {h.triage.map((w) => (
-                    <li key={String(w.id)}>
-                      <Link href={`/app/maintenance/intake/${encodeURIComponent(String(w.id))}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40">
+                    <li key={String(w.id)} className="flex items-center gap-2 pr-3 hover:bg-muted/40">
+                      <Link href={`/app/maintenance/intake/${encodeURIComponent(String(w.id))}`} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3">
                         {w.photo
                           // eslint-disable-next-line @next/next/no-img-element -- 400px static thumb
                           ? <img src={String(w.photo).replace(/\.webp$/, "-400.webp")} alt="" className="size-10 shrink-0 rounded-md object-cover ring-1 ring-border" loading="lazy" />
@@ -163,8 +184,9 @@ export default async function MaintenanceHome() {
                           {w.suggestion ? <span className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-tone-ai"><Sparkles className="size-3 shrink-0" /><span className="truncate">{String(w.suggestion).replace(/^[\w-]+: /, "")}</span>{w.confidence != null && <Confidence value={Number(w.confidence)} />}</span>
                             : <span className="mt-0.5 block text-[12px] text-muted-foreground">Not triaged yet</span>}
                         </span>
-                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                        {!(canDispatch && suggested.has(String(w.id))) && <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
                       </Link>
+                      {canDispatch && suggested.has(String(w.id)) && <DispatchSuggested id={String(w.id)} note={suggested.get(String(w.id))?.note} />}
                     </li>
                   ))}
                 </ul>
@@ -211,15 +233,18 @@ export default async function MaintenanceHome() {
               ) : <EmptyState compact kind="inbox" title="No invoices waiting" description="Vendor invoices land here once the work is submitted." />}
             </div>
           </Section>
-          <Section title="Vendor insurance" description="Vendors who worked at your properties this year, with certificates expired or expiring in 30 days. The triage agent won't suggest them.">
+          <Section title="Vendor insurance" description="Vendors who worked at your properties this year, with certificates expired or expiring in 30 days. The triage agent won't suggest them."
+            actions={chase && toChase.length > 1 ? <RequestCoiButton ids={toChase} /> : undefined}>
             <div className="overflow-hidden rounded-lg border bg-card">
               {h?.cois.length ? (
                 <ul className="divide-y">{h.cois.map((x) => (
-                  <li key={String(x.vendor_id)}><Link href={`/app/maintenance/vendors/${x.vendor_id}?tab=cois`} className="flex items-center gap-2 px-3 py-2 text-[13px] hover:bg-muted/40">
+                  <li key={String(x.id)} className="flex items-center gap-2 pr-3 hover:bg-muted/40"><Link href={`/app/maintenance/vendors/${x.vendor_id}?tab=cois`} className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 text-[13px]">
                     {x.status === "Expired" ? <ShieldAlert className="size-4 text-tone-danger" /> : <AlertTriangle className="size-4 text-tone-warning" />}
                     <span className="flex-1 truncate font-medium">{String(x.company)}</span>
                     <span className="text-[12px] text-muted-foreground">{x.status === "Expired" ? "Expired" : "Expires"} {formatDate(String(x.expires_on))}</span>
-                  </Link></li>
+                  </Link>
+                  {chase && (x.requested ? <span className="w-28 text-right text-[11.5px] text-muted-foreground">Asked {formatDate(String(x.requested).slice(0, 10))}</span> : <RequestCoiButton ids={[String(x.id)]} />)}
+                  </li>
                 ))}</ul>
               ) : <EmptyState compact kind="table" title="All certificates are current" />}
             </div>

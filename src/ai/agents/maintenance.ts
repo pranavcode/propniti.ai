@@ -10,7 +10,7 @@ export { triage } from "../rules";
 
 export default defineAgent({
   key: "maintenance_triage",
-  name: "Maintenance triage agent",
+  name: "Maintenance Triage Agent",
   ownerRole: "maintenance_supervisor",
   goal: "Triage every new work order: trade, urgency, a cost estimate from past jobs, the best available vendor, and whether the owner's approval limit is exceeded.",
   tools: ["records.search", "records.get", "records.related", "policy.lookup", "actions.propose"],

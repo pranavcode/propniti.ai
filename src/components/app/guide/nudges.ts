@@ -14,6 +14,9 @@ export type GuideFacts = {
   approvals: number | null;                                // Approvals › Needs you
   pastDue: { cents: number; properties: number } | null;   // open balances more than 30 days past due
   dataIssues: { critical: number } | null;                 // open critical data issues
+  remind?: { residents: number } | null;                   // residents 30+ days late (what "send reminders" drafts)
+  replies?: number | null;                                 // Inbox › conversations waiting on the persona's reply
+  tasks?: { overdue: number; today: number } | null;       // My tasks › overdue and due today
 };
 
 // localStorage: "Don't show tips", dismissed nudges (id → the key it had) and whether Explain was used.
@@ -51,14 +54,13 @@ export type Gate = {
   session: GuideSession;
   shownThisView: boolean;
   tourActive: boolean;
-  firstTourPending: boolean;    // the first-visit tour is about to start
   typing: boolean;
   overlay: boolean;             // a dialog, drawer or menu is open
 };
 
 export function blockedBy(g: Gate): "off" | "tour" | "typing" | "overlay" | "view" | "cap" | "cooldown" | null {
   if (g.prefs.off) return "off";
-  if (g.tourActive || g.firstTourPending) return "tour";
+  if (g.tourActive) return "tour";
   if (g.typing) return "typing";
   if (g.overlay) return "overlay";
   if (g.shownThisView) return "view";
@@ -71,7 +73,8 @@ export function blockedBy(g: Gate): "off" | "tour" | "typing" | "overlay" | "vie
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
 
-// In priority order: work waiting for the person first, then how to use this page, then the tour.
+// In priority order: work waiting for the person first, then how to use this page, then the basics
+// tour. A page's own tour is offered by the feature-tour toast (welcome/WhatsNew.tsx), not here.
 function candidates(i: NudgeInput): Nudge[] {
   const out: Nudge[] = [];
   const f = i.facts;
@@ -100,11 +103,6 @@ function candidates(i: NudgeInput): Nudge[] {
     });
   }
 
-  for (const t of i.tours) {
-    if (t.id !== "app-basics" && t.status === null && t.paths.includes(i.path)) {
-      out.push({ id: `tour.${t.id}`, key: "1", source: "Product tour", text: `New to this page? “${t.title}” walks through it in ${t.steps} steps.`, action: { kind: "tour", tour: t.id, label: "Start tour" } });
-    }
-  }
   if (/^\/app\/properties\/[^/]+$/.test(i.path)) {
     out.push({ id: "tip.ask-noi", key: "1", source: "Tip", text: "Ask why this property's NOI changed. Propniti answers from computed figures and shows every record it looked up.", action: { kind: "ask", prompt: "Why did NOI change at this property?", label: "Ask Propniti" } });
   }

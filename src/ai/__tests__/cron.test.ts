@@ -24,7 +24,7 @@ describe("cron schedules", () => {
     const { raw, db } = openFixture();
     const at = Date.parse("2026-11-04T14:00:30Z");
     raw.prepare("UPDATE workspaces SET last_seen_at = ? WHERE id = ?").run(at - 60_000, WS);
-    raw.prepare("INSERT INTO agent_definitions (workspace_id, id, name, owner_role, goal, tools, triggers, autonomy) VALUES (?, 'collections', 'Collections agent', 'property_manager', 'x', '[]', ?, 'act_with_approval')").run(WS, JSON.stringify({ schedule: "0-2000000 * * * *" }));
+    raw.prepare("INSERT INTO agent_definitions (workspace_id, id, name, owner_role, goal, tools, triggers, autonomy) VALUES (?, 'collections', 'Collections Agent', 'property_manager', 'x', '[]', ?, 'act_with_approval')").run(WS, JSON.stringify({ schedule: "0-2000000 * * * *" }));
     const t0 = Date.now();
     const report = await sweep(db, at);
     expect(Date.now() - t0).toBeLessThan(5_000);

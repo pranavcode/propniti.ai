@@ -33,5 +33,5 @@ export type Theme = "light" | "dark" | "system";
 export type Density = "comfortable" | "compact";
 
 export const SECTION_LABEL: Record<NavSection, string> = {
-  home: "Home", portfolio: "Portfolio", operations: "Operations", finance: "Finance", intelligence: "Intelligence", settings: "Settings",
+  home: "Home", portfolio: "Portfolio", operations: "Operations", finance: "Finance", intelligence: "AI agents", settings: "Settings",
 };

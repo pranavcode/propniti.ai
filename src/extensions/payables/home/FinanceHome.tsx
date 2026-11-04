@@ -1,6 +1,6 @@
 import "server-only";
 import Link from "@/components/Link";
-import { ArrowRight, BarChart3, Bot, ChevronRight, FileStack, Inbox, Landmark, Sparkles } from "lucide-react";
+import { ArrowRight, BarChart3, Bot, ChevronRight, CircleDollarSign, FileStack, Inbox, Landmark, Sparkles } from "lucide-react";
 import type { Session } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
 import { personaGreeting } from "@/lib/format";
@@ -28,7 +28,10 @@ function Items({ items, empty }: { items: BriefingItem[]; empty: string }) {
   return (
     <ul className="flex flex-col gap-1.5">
       {items.slice(0, 5).map((r) => (
-        <li key={r.text}><Link href={r.href} className="flex gap-2 text-[12.5px] leading-snug hover:text-primary"><span className={cn("mt-[6px] size-1.5 shrink-0 rounded-full", TONE[r.tone])} />{r.text}</Link></li>
+        <li key={r.text}>
+          <Link href={r.href} className="flex gap-2 text-[12.5px] leading-snug hover:text-primary"><span className={cn("mt-[6px] size-1.5 shrink-0 rounded-full", TONE[r.tone])} />{r.text}</Link>
+          {r.action && <Link href={r.action.href} className="mt-0.5 ml-3.5 inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">{r.action.label}<ArrowRight className="size-3" aria-hidden /></Link>}
+        </li>
       ))}
     </ul>
   );
@@ -98,6 +101,7 @@ export async function FinanceHome({ session }: { session: Session }) {
             <div className="flex flex-wrap gap-1.5">
               <Button asChild size="sm" variant="outline"><Link href="/app/ai/approvals?agent=ap"><Inbox />Approvals{h.queue.total ? ` (${h.queue.total})` : ""}</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/banking/reconciliations?f.status=Open"><Landmark />Reconcile</Link></Button>
+              <Button asChild size="sm" variant="outline"><Link href="/app/finance/payment-run"><CircleDollarSign />Payment run</Link></Button>
               <Button asChild size="sm" variant="outline"><Link href="/app/finance/1099"><FileStack />1099s</Link></Button>
               {persona.quickActions.map((a) => <Button key={a.href} asChild size="sm" variant="ghost"><Link href={a.href}>{a.label}</Link></Button>)}
             </div>

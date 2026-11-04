@@ -4,6 +4,7 @@
 import { Car, FileSignature, Home, Megaphone, MessagesSquare, Receipt, ShieldCheck, TextQuote, UserRound, Wrench } from "lucide-react";
 import { AS_OF, FINANCE, issuesField, LEADERS, OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
+import { leaseSentence, residentSentence } from "@/ai/rules-sentences";
 
 // Stored balance (generator) plus the visitor's overlay ledger delta. Not sortable or filterable:
 // that would compute it for every row in scope (seconds on D1 for the whole portfolio). Every ledger read goes through
@@ -103,6 +104,7 @@ registerEntity({
   ],
   ai: {
     facts: (r, rel) => ({ resident: String(r.name), status: String(r.status), unit: (r.unit as string) ?? null, balance: r.balance == null ? null : Number(r.balance), lease_end: (r.lease_end as string) ?? null, risk_score: r.risk_score == null ? null : Number(r.risk_score), autopay: !!r.autopay, nsf_payments: rel.payments?.filter((p) => p.nsf).length ?? 0 }),
+    rulesSummary: residentSentence,
     summaryPrompt: "Summarise this resident's standing for the property manager in 2-3 sentences: balance and payment pattern, lease timing, and any follow-up. Use only the facts; never promise a waiver.",
     agents: ["collections", "renewals"],
   },
@@ -204,6 +206,7 @@ registerEntity({
   ],
   ai: {
     facts: (r, rel) => ({ lease: String(r.label), status: String(r.status), start: String(r.start_on), end: (r.end_on as string) ?? null, rent: Number(r.rent ?? 0), market_rent: r.market_rent == null ? null : Number(r.market_rent), balance: r.balance == null ? null : Number(r.balance), residents: rel.residents?.length ?? 0, days_to_end: r.days_to_end == null ? null : Number(r.days_to_end) }),
+    rulesSummary: leaseSentence,
     summaryPrompt: "Summarise this lease for the property manager in 2-3 sentences: term and timing, rent versus market, balance, and the renewal decision if it ends within 90 days. Use only the facts.",
     agents: ["renewals", "collections"],
   },
@@ -303,14 +306,15 @@ registerEntity({
     starts_on: { type: "date", label: "Starts", required: true, sortable: true },
     expires_on: { type: "date", label: "Expires", required: true, sortable: true, list: { default: true } },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
-      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" },
+      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" }, { value: "Pending verification", tone: "info" },
     ] },
   },
   relations: [{ name: "lease", entity: "leases", fk: "lease_id", kind: "one" }, { name: "property", entity: "properties", fk: "property_id", kind: "one" }],
   list: {
     defaultSort: ["expires_on", "asc"],
     statusTabs: "status",
-    savedViews: [{ key: "gaps", label: "Lapsed or expiring", filters: { status: ["Lapsed", "Expiring"] }, sort: ["expires_on", "asc"] }],
+    savedViews: [{ key: "gaps", label: "Lapsed or expiring", filters: { status: ["Lapsed", "Expiring"] }, sort: ["expires_on", "asc"] }, { key: "to-verify", label: "To verify", filters: { status: "Pending verification" }, sort: ["expires_on", "asc"] }],
+    bulkActions: ["renters_insurance.verify"],
   },
   detail: { facts: ["status", "carrier", "lease_id", "liability", "starts_on", "expires_on"], tabs: [{ key: "overview", label: "Overview", fields: ["policy_number", "carrier", "lease_id", "property_id", "liability", "starts_on", "expires_on", "status"] }], related: ["lease", "property"] },
   capabilities: { notes: true, activity: true, documents: true },

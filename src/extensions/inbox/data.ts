@@ -1,6 +1,7 @@
 import "server-only";
 import { PERMISSIONS } from "@/auth/personas";
-import { allEntities, can, getEntity, type Role } from "@/entities";
+import { can, getEntity } from "@/entities";
+import { decidableSql } from "@/ai/decide";
 import type { Row } from "@/entities/types";
 import { proposalSource, type AiSource } from "@/ai/rules";
 import { recipientIds } from "@/app/api/notifications/shared";
@@ -36,15 +37,6 @@ const parse = <T,>(v: unknown, fallback: T): T => {
   }
 };
 
-// Who may decide a proposal, mirroring canDecide (src/ai/http.ts): access to the record's module
-// (intelligence for record types without an entity def). Approve access decides anything; write
-// access decides only low-risk items that carry no amount.
-export function decidableTypes(role: Role): { approve: string[]; write: string[]; known: string[]; other: string } {
-  const access = (key: string) => PERMISSIONS[role][getEntity(key)!.module] ?? "none";
-  const known = allEntities().map((d) => d.key as string);
-  return { approve: known.filter((k) => access(k) === "approve"), write: known.filter((k) => access(k) === "write"), known, other: PERMISSIONS[role].intelligence ?? "none" };
-}
-
 // The UNION ALL branches this persona can see, each selecting (kind, id, at, unread).
 function branches(ctx: QueryCtx, only?: InboxKind): { sql: string; params: unknown[] }[] {
   const { actor } = ctx;
@@ -60,17 +52,13 @@ function branches(ctx: QueryCtx, only?: InboxKind): { sql: string; params: unkno
     });
   }
   if ((!only || only === "approval") && (PERMISSIONS[actor.role].intelligence ?? "none") !== "none") {
-    const d = decidableTypes(actor.role);
-    // A type without an entity def counts as an intelligence item; add it to that access level's list.
-    const unknown = "p.entity_type NOT IN (SELECT value FROM json_each(?))";
-    const approve = d.other === "approve" ? `(p.entity_type IN (SELECT value FROM json_each(?)) OR ${unknown})` : "p.entity_type IN (SELECT value FROM json_each(?))";
-    const write = d.other === "write" ? `(p.entity_type IN (SELECT value FROM json_each(?)) OR ${unknown})` : "p.entity_type IN (SELECT value FROM json_each(?))";
+    const d = decidableSql(actor.role);
     // Reply drafts show on their conversation instead.
     out.push({
       sql: `SELECT 'approval' AS kind, p.id, p.created_at AS at, 1 AS unread, 1 AS needs FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND p.action <> 'message_threads.reply'
         AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id)
-        AND (${approve} OR (p.risk = 'Low' AND p.amount_cents IS NULL AND ${write}))${scope("p.property_id")}`,
-      params: [json(d.approve), ...(d.other === "approve" ? [json(d.known)] : []), json(d.write), ...(d.other === "write" ? [json(d.known)] : []), ...scopeParams],
+        AND ${d.sql}${scope("p.property_id")}`,
+      params: [...d.params, ...scopeParams],
     });
   }
   if (!only || only === "alert") {
@@ -98,6 +86,15 @@ export async function inboxCounts(ctx: QueryCtx, ws?: Ws): Promise<InboxCounts> 
     }
   }
   return { ...c, needsYou: c.needsReply + c.approvals + c.unreadAlerts };
+}
+
+// "Send and next" in a conversation: the newest other open conversation this persona would see in
+// the inbox where the other party wrote last.
+export async function nextNeedingReply(ctx: QueryCtx, after: string): Promise<string | null> {
+  const [b] = branches(ctx, "message");
+  if (!b) return null;
+  const rows = await all<{ id: string }>(ctx, await readWs(ctx), `SELECT id FROM (${b.sql}) WHERE needs = 1 AND id <> ? ORDER BY at DESC, id LIMIT 1`, [...b.params, after]);
+  return rows[0]?.id ?? null;
 }
 
 export async function inboxPage(ctx: QueryCtx, f: { filter?: InboxFilter; page?: number; size?: number }, known?: InboxCounts) {

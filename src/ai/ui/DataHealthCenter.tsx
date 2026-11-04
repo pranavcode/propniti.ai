@@ -2,16 +2,19 @@
 
 import Link from "@/components/Link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCheck, Info } from "lucide-react";
+import { CheckCheck, Info, Lock, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FixPreview } from "@/components/app/ai";
 import { Meter } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { IssueFilters } from "@/ai/filters";
 import { cn } from "@/lib/utils";
 import { api } from "./client";
+import { actOnIssue, fixPreviewProps, type Issue } from "./IssueFix";
 
 type Health = {
   score: number; open: number; formula: string;
@@ -19,22 +22,23 @@ type Health = {
   modules: { module: string; open: number; entities: string[]; score: number }[];
   rules: { id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }[];
 };
-type Issue = {
-  id: string; rule_id: string; rule_name: string | null; rule_description: string | null; entity_type: string; entity_id: string; property: string | null; severity: string; detected_at: string;
-  suggested_fix: { why?: string[]; confidence?: number; source?: string; merge_into?: string } | null; before: Record<string, unknown> | null; after: Record<string, unknown>; needsPerson: string | null; href?: string; evidence: Record<string, unknown>;
-};
+type Mode = "safe" | "send";
+type Preview = { count: number; more: boolean; cap: number };
+const PILL: { key: keyof IssueFilters; label: string }[] = [
+  { key: "rule", label: "Rule" }, { key: "property", label: "Property" }, { key: "entity", label: "Record type" }, { key: "entity_id", label: "Record" }, { key: "issue", label: "Issue" },
+];
 
 const tone = (score: number) => (score >= 95 ? "success" : score >= 85 ? "warning" : "danger") as "success" | "warning" | "danger";
 const TEXT = { success: "text-tone-success", warning: "text-tone-warning", danger: "text-tone-danger" } as const;
 
-export function DataHealthCenter({ health, issues, filters }: { health: Health; issues: { rows: Issue[]; total: number; page: number; size: number }; filters: Record<string, string | undefined> }) {
+export function DataHealthCenter({ health, issues, filters }: { health: Health; issues: { rows: Issue[]; total: number; page: number; size: number }; filters: IssueFilters }) {
   const router = useRouter();
   const [done, setDone] = useState<Record<string, "applied" | "dismissed" | "sent for approval">>({});
   const qs = (o: Record<string, string | undefined>) => "?" + new URLSearchParams(Object.entries({ ...filters, ...o }).filter(([, v]) => v).map(([k, v]) => [k, v!])).toString();
 
   const act = async (id: string, action: "apply" | "dismiss") => {
     try {
-      const r = await api<{ message: string; queued?: boolean; proposalId?: string }>(`/api/ai/data-health/issues/${id}`, "POST", { action });
+      const r = await actOnIssue(id, action);
       setDone((d) => ({ ...d, [id]: r.queued ? "sent for approval" : action === "apply" ? "applied" : "dismissed" }));
       if (r.queued) toast.info(r.message, { action: { label: "Open approvals", onClick: () => router.push(`/app/ai/approvals?proposal=${r.proposalId}`) } });
       else toast.success(r.message);
@@ -44,17 +48,30 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
       throw e;
     }
   };
-  const noFix = (i: Issue) => !Object.keys(i.after ?? {}).length && !i.suggested_fix?.merge_into;
-  const safe = issues.rows.filter((i) => !i.needsPerson && !done[i.id] && Object.keys(i.after ?? {}).length);
-  const bulk = async () => {
+  // Bulk buttons count every page that matches the filters, on the server: safe fixes this role may
+  // apply, and (with a rule picked) fixes that need a person, to send to the approvals inbox at once.
+  const match = JSON.stringify(filters);
+  const [counts, setCounts] = useState<Partial<Record<Mode, Preview>>>({});
+  const [confirm, setConfirm] = useState<{ mode: Mode; p: Preview } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const modes: Mode[] = filters.rule ? ["safe", "send"] : ["safe"];
+    void Promise.all(modes.map((mode) => api<Preview>("/api/ai/data-health/bulk", "POST", { match: JSON.parse(match), mode, preview: true }).then((p) => [mode, p] as const)))
+      .then((r) => { if (live) setCounts(Object.fromEntries(r)); }, () => {});
+    return () => { live = false; };
+  }, [match, filters.rule, issues]);
+  const bulk = async (mode: Mode) => {
+    setConfirm(null);
     try {
-      const r = await api<{ applied: number; queued: number; runId: string }>("/api/ai/data-health/bulk", "POST", { ids: safe.map((i) => i.id) });
-      toast.success(`Applied ${r.applied} safe fixes${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
+      const r = await api<{ applied: number; queued: number; runId: string; more: boolean }>("/api/ai/data-health/bulk", "POST", { match: filters, mode });
+      const msg = mode === "safe" ? `Applied ${r.applied} safe fixes${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}` : `Sent ${r.queued} fixes to the approvals inbox${r.applied ? `; applied ${r.applied}` : ""}`;
+      toast.success(`${msg}${r.more ? ". More match: run it again for the rest." : ""}`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
       router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }
   };
+  const label = (p: Preview) => `${p.count}${p.more ? "+" : ""}`;
 
   return (
     <div className="space-y-5 px-4 pb-10 md:px-6">
@@ -86,25 +103,23 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
             {["", "critical", "warn", "info"].map((s) => <Link key={s} href={qs({ severity: s || undefined, page: undefined })} className={cn("rounded-full border px-2.5 py-0.5 capitalize", (filters.severity ?? "") === s ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>{s || "All severities"}</Link>)}
-            {(filters.rule || filters.property || filters.entity) && <Link href={qs({ rule: undefined, property: undefined, entity: undefined })} className="text-primary hover:underline">Clear filters</Link>}
-            {safe.length > 0 && <Button size="sm" variant="outline" className="ml-auto" onClick={() => void bulk()}><CheckCheck /> Apply {safe.length} safe fixes</Button>}
+            {PILL.filter((x) => filters[x.key]).map((x) => (
+              <span key={x.key} className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 py-0.5 pr-1 pl-2.5 text-primary">
+                {x.label}: {x.key === "rule" ? health.rules.find((r) => r.id === filters.rule)?.name ?? filters.rule : x.key === "property" ? health.properties.find((p) => p.id === filters.property)?.name ?? filters.property : String(filters[x.key]).replace(/_/g, " ")}
+                <Link href={qs({ [x.key]: undefined, page: undefined })} aria-label={`Remove ${x.label.toLowerCase()} filter`} className="rounded-full p-0.5 hover:bg-primary/15"><X className="size-3" /></Link>
+              </span>
+            ))}
+            {PILL.filter((x) => filters[x.key]).length > 1 && <Link href={qs(Object.fromEntries(PILL.map((x) => [x.key, undefined])))} className="text-primary hover:underline">Clear filters</Link>}
+            <span className="ml-auto flex gap-1.5">
+              {!!counts.send?.count && <Button size="sm" variant="outline" onClick={() => setConfirm({ mode: "send", p: counts.send! })}><Lock /> Send all {label(counts.send)} for approval</Button>}
+              {!!counts.safe?.count && <Button size="sm" variant="outline" onClick={() => setConfirm({ mode: "safe", p: counts.safe! })}><CheckCheck /> Apply {label(counts.safe)} safe fixes</Button>}
+            </span>
           </div>
           {issues.rows.length ? issues.rows.map((i) => done[i.id] ? (
             <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? i.rule_id} on {i.entity_type.replace(/_/g, " ")} {i.entity_id}: {done[i.id]}.</div>
           ) : (
-            <FixPreview
-              key={i.id}
-              title={`${i.rule_name ?? i.rule_id} · ${i.entity_type.replace(/_/g, " ")} ${i.entity_id}${i.property ? ` · ${i.property}` : ""}`}
-              rule={i.rule_id}
-              changes={Object.entries(i.after ?? {}).map(([field, after]) => ({ field, label: field.replace(/_/g, " "), before: i.before?.[field] ?? i.evidence?.[field] ?? null, after }))}
-              why={i.suggested_fix?.why ?? [i.rule_description ?? "Flagged by a data rule"]}
-              confidence={i.suggested_fix?.confidence ?? 0.7}
-              source={i.suggested_fix?.source === "rule" || !i.suggested_fix?.source ? "rule" : "Data Health agent"}
-              needsPerson={noFix(i) ? "No automatic fix: open the record to correct it" : i.needsPerson}
-              onApply={noFix(i) ? undefined : () => act(i.id, "apply")}
-              onDismiss={() => act(i.id, "dismiss")}
-            />
-          )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health agent re-checks the rules every morning." />}
+            <FixPreview key={i.id} {...fixPreviewProps(i, (a) => act(i.id, a))} />
+          )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health Agent re-checks the rules every morning." />}
           <div className="flex items-center justify-end gap-3 text-[12px] text-muted-foreground">
             <span>{issues.total} issues · page {issues.page} of {Math.max(1, Math.ceil(issues.total / issues.size))}</span>
             {issues.page > 1 && <Link className="text-primary hover:underline" href={qs({ page: String(issues.page - 1) })}>Previous</Link>}
@@ -130,6 +145,24 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           </div>
         </aside>
       </section>
+
+      <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <DialogContent data-surface="app">
+          <DialogHeader>
+            <DialogTitle>{confirm?.mode === "send" ? `Send ${confirm.p.count} fixes for approval?` : `Apply ${confirm?.p.count} safe fixes?`}</DialogTitle>
+            <DialogDescription>
+              {confirm?.mode === "send"
+                ? "Every matching fix that needs a person goes to the approvals inbox, with its reasons and evidence. Nothing changes until someone with the right role approves it. Fixes already waiting there are skipped."
+                : "Every matching fix your role may apply directly: field corrections only, no money, fraud, legal or critical fixes. Each one is logged with before and after values."}
+              {confirm?.p.more ? ` At most ${confirm.p.cap} per click; more match, so run it again for the rest.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
+            {confirm && <Button onClick={() => void bulk(confirm.mode)}>{confirm.mode === "send" ? <><Lock /> Send {confirm.p.count}</> : <><CheckCheck /> Apply {confirm.p.count}</>}</Button>}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

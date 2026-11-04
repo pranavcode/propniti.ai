@@ -6,6 +6,7 @@ import { AS_OF, LEADERS, OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 import type { Role } from "../types";
 import { COI_STATUS_SQL, COMPLIANCE_STATUS_SQL, POLICY_STATUS_SQL } from "@/extensions/risk/sql";
+import { complianceSentence } from "@/ai/rules-sentences";
 
 const RISK_WRITE: Role[] = [...OPS, "maintenance_supervisor"];
 const WO_OPEN = "('Completed', 'Paid', 'Cancelled')";
@@ -190,6 +191,7 @@ registerEntity({
   capabilities: { notes: true, activity: true, tasks: true, documents: true, aiSummary: true },
   ai: {
     facts: (r) => ({ item: String(r.title), kind: String(r.kind), status: String(r.status), due_on: String(r.due_on), days_to_due: Number(r.days_to_due ?? 0), property: (r.property_id__label as string) ?? null, completed_on: (r.completed_on as string) ?? null }),
+    rulesSummary: complianceSentence,
     summaryPrompt: "Summarise this compliance item for the property manager in 2 sentences: what it is, where it stands against its due date, and the next step. Use only the facts.",
     agents: ["compliance"],
   },

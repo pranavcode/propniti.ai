@@ -1,7 +1,8 @@
 import type { Role } from "@/entities/types";
 
 // Product tour definitions (plain data, so the server layout can pass them to the client).
-// A step points at an element by its data-tour attribute: target "ask" → [data-tour="ask"].
+// A step points at an element by its data-tour attribute: target "ask" → [data-tour="ask"], or by a
+// CSS selector (target 'nav[aria-label="Inbox filter"]') on pages that carry no data-tour marks.
 // Steps without a target, or whose target isn't on the page, show as a centred card.
 
 export type TourStep = {

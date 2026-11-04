@@ -7,7 +7,7 @@ import { AS_OF } from "@/seed/constants";
 import { effective, type QueryCtx } from "@/server/query";
 import { isSelfScope } from "./queries";
 
-// Collections workbench data: delinquent leases (the Collections agent's own facts, first-in
+// Collections workbench data: delinquent leases (the Collections Agent's own facts, first-in
 // first-out aging), a risk score with plain reasons, the next step the agent's rules would take, a
 // drafted message, and the agent's open proposal for the lease when there is one.
 
@@ -101,7 +101,7 @@ export async function workbench(ctx: QueryCtx, f: { property?: string; band?: st
     const nsf12 = nsfBy.get(d.lease_id) ?? 0;
     const market = e?.market_rent_cents ?? 0;
     const dataError = e && (e.outlier || (market > 0 && e.rent_cents >= market * 5)) ? { rent: e.rent_cents, market, flagged: !!e.outlier } : null;
-    // Same rounding as the Collections agent, so the preview matches what it sends.
+    // Same rounding as the Collections Agent, so the preview matches what it sends.
     const s = scoreRisk(d, dataError ? market || Math.round(dataError.rent / 10) : e?.rent_cents ?? 0, nsf12);
     // The agent proposes per lease; precomputed proposals in the seed are per household.
     const p = prop.get(d.lease_id) ?? prop.get(d.household_id);
