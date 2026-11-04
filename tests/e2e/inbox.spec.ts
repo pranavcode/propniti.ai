@@ -34,7 +34,7 @@ test("Marcus sees his conversations, approvals and alerts, filters by kind and o
   await page.getByRole("link", { name: /^Messages/ }).filter({ hasText: /\d/ }).last().click();
   await expect(page).toHaveURL(/tab=messages/);
   const thread = list.locator("li[data-kind=message]").first();
-  await expect(thread.getByText(/Needs reply|Unread/)).toBeVisible();
+  await expect(thread.getByText(/^(Needs reply|Waiting on \w+)/)).toBeVisible();
   // A title click opens the peek drawer on the conversation.
   await thread.locator("a[data-peek-id]").click();
   await expect(page).toHaveURL(/[?&]peek=message_threads(:|%3A)/);
@@ -43,6 +43,20 @@ test("Marcus sees his conversations, approvals and alerts, filters by kind and o
   await expect(page.getByRole("dialog")).toBeHidden();
   await thread.getByRole("link", { name: /^Reply/ }).click();
   await expect(page).toHaveURL(/\/app\/communications\/inbox\?t=/);
+  expect(errors).toEqual([]);
+});
+
+test("deciding an approval lowers the sidebar Inbox count without a reload", async ({ page, context }) => {
+  await as(context, "marcus");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/inbox?tab=approvals`);
+  const before = Number((await badge(page).innerText()).match(/\d+/)![0]);
+  const review = page.getByRole("list", { name: "Inbox items" }).locator("li[data-kind=approval]").first().getByRole("link", { name: /^Review/ });
+  const id = new URL((await review.getAttribute("href"))!, BASE).searchParams.get("proposal")!;
+  await review.click();
+  await expect(page).toHaveURL(/\/app\/ai\/approvals\?proposal=/);
+  await page.locator(`#proposal-${id}`).getByRole("button", { name: /^Approve/ }).click();
+  await expect(badge(page)).toContainText(String(before - 1));
   expect(errors).toEqual([]);
 });
 

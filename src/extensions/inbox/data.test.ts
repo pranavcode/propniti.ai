@@ -30,10 +30,16 @@ beforeAll(async () => {
     thread("t-closed", "p01", "Closed", "marcus", "2026-11-03T12:00:00Z"),
     thread("t-dallas", "p04", "Open", "marcus", "2026-11-03T13:00:00Z"),
     thread("t-org", null, "Open", null, "2026-11-03T14:00:00Z"),
+    // t-mine's last message is the resident's (needs a reply); t-unassigned's is the team's own.
+    "INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES ('base', 'm0', 't-mine', 'SMS', 'out', 'staff', 'marcus', 'We will send someone.', '2026-11-02T10:00:00Z')",
     "INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES ('base', 'm1', 't-mine', 'SMS', 'in', 'resident', 'res-p01-u1', 'The dishwasher is leaking again.', '2026-11-03T10:00:00Z')",
+    "INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES ('base', 'm2', 't-unassigned', 'Email', 'in', 'resident', 'res-p02-u1', 'Is the pool open?', '2026-11-01T10:00:00Z')",
+    "INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, sent_at) VALUES ('base', 'm3', 't-unassigned', 'Email', 'out', 'agent', 'copilot', 'Thanks, we have logged this.', '2026-11-02T10:00:00Z')",
     // Proposals.
     proposal("pr-renewal", "leases", "p01", "property_manager", "2026-11-03T09:00:00Z", { risk: "Medium", amount: 150000 }),
     proposal("pr-fix", "residents", "p02", "admin", "2026-11-03T08:00:00Z"),
+    // A record type with no entity def: decided under the intelligence module, as canDecide does.
+    proposal("pr-unknown", "not_an_entity", "p01", null, "2026-11-03T07:30:00Z"),
     proposal("pr-bill-low", "bills", "p01", "accountant", "2026-11-03T07:00:00Z", { amount: 50000 }),
     proposal("pr-bill-high", "bills", "p05", "accountant", "2026-11-03T06:00:00Z", { risk: "High", amount: 900000 }),
     proposal("pr-dallas", "leases", "p04", "property_manager", "2026-11-03T05:00:00Z", { risk: "Medium", amount: 150000 }),
@@ -54,6 +60,7 @@ describe("inbox: who decides what", () => {
     expect(pm.write).toContain("residents");
     expect(pm.write).not.toContain("bills");
     expect(pm.approve).not.toContain("leases");
+    expect(pm.other).toBe("approve");
     const acct = decidableTypes("accountant");
     expect(acct.approve).toContain("bills");
     expect(acct.write).not.toContain("residents");
@@ -61,14 +68,26 @@ describe("inbox: who decides what", () => {
 });
 
 describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
-  it("shows his open conversations, approvals routed to him or that he can decide, and his alerts, newest first", async () => {
+  it("shows his open conversations, approvals he can decide and his alerts, newest first", async () => {
     const r = await inboxPage(await ctx("marcus"), {});
-    expect(ids(r)).toEqual(["n-m1", "t-mine", "pr-renewal", "pr-fix", "t-unassigned", "n-m2"]);
+    expect(ids(r)).toEqual(["n-m1", "t-mine", "pr-fix", "pr-unknown", "t-unassigned", "n-m2"]);
+  });
+
+  it("leaves out proposals routed to his role that need approve access he lacks (money on a lease)", async () => {
+    const got = ids(await inboxPage(await ctx("marcus"), { filter: "approvals" }));
+    expect(got).toEqual(["pr-fix", "pr-unknown"]);
+    expect(got).not.toContain("pr-renewal");
   });
 
   it("keeps out other people's threads, closed threads, out-of-scope and property-less records, decided and auto-handled proposals and reply drafts", async () => {
     const got = new Set(ids(await inboxPage(await ctx("marcus"), {})));
-    for (const id of ["t-other", "t-closed", "t-dallas", "t-org", "pr-dallas", "pr-decided", "pr-auto", "pr-reply", "pr-bill-low", "pr-bill-high", "n-g1"]) expect(got.has(id)).toBe(false);
+    for (const id of ["t-other", "t-closed", "t-dallas", "t-org", "pr-renewal", "pr-dallas", "pr-decided", "pr-auto", "pr-reply", "pr-bill-low", "pr-bill-high", "n-g1"]) expect(got.has(id)).toBe(false);
+  });
+
+  it("marks a thread as needing a reply only when the other party wrote last", async () => {
+    const r = await inboxPage(await ctx("marcus"), { filter: "messages" });
+    expect(r.items.map((i) => [i.id, i.needsReply])).toEqual([["t-mine", true], ["t-unassigned", false]]);
+    expect(r.items.find((i) => i.id === "t-unassigned")?.detail).toBe("Thanks, we have logged this.");
   });
 
   it("shows a thread's last message, unread state and the open AI reply draft with its source", async () => {
@@ -82,7 +101,7 @@ describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
   });
 
   it("links approvals to the approvals deep link and peeks the record they act on", async () => {
-    const r = await inboxPage(await ctx("marcus"), { filter: "approvals" });
+    const r = await inboxPage(await ctx("daniel"), { filter: "approvals" });
     const p = r.items.find((i) => i.id === "pr-renewal")!;
     expect(p).toMatchObject({ kind: "approval", risk: "Medium", amountCents: 150000, title: "Title pr-renewal", agent: "renewals" });
     expect(p.ai).toMatchObject({ label: "Why", text: "Because pr-renewal", source: "rules", confidence: 0.82 });
@@ -96,9 +115,9 @@ describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
     expect(r.items.find((i) => i.id === "n-m2")).toMatchObject({ unread: false, action: null });
   });
 
-  it("counts each kind and the items that need him (unread alerts only)", async () => {
+  it("counts each kind and what needs him: threads awaiting his reply, approvals and unread alerts", async () => {
     const c = await inboxCounts(await ctx("marcus"));
-    expect(c).toEqual({ messages: 2, approvals: 2, alerts: 2, unreadAlerts: 1, needsYou: 5 });
+    expect(c).toEqual({ messages: 2, needsReply: 1, approvals: 2, alerts: 2, unreadAlerts: 1, needsYou: 4 });
   });
 
   it("filters by kind and pages on the server", async () => {
@@ -106,14 +125,14 @@ describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
     const first = await inboxPage(c, { size: 2 });
     const second = await inboxPage(c, { size: 2, page: 2 });
     expect(first.total).toBe(6);
-    expect([...ids(first), ...ids(second)]).toEqual(["n-m1", "t-mine", "pr-renewal", "pr-fix"]);
+    expect([...ids(first), ...ids(second)]).toEqual(["n-m1", "t-mine", "pr-fix", "pr-unknown"]);
     expect(ids(await inboxPage(c, { filter: "messages" }))).toEqual(["t-mine", "t-unassigned"]);
   });
 
   it("reads the visitor's overlay: a decision clears the approval and a read alert stops counting", async () => {
     await db().prepare("INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, decided_at) VALUES (?, 'd2', 'pr-fix', 'Approved', 'marcus', '2026-11-04T09:00:00Z')").bind(WS).run();
     await db().prepare("INSERT INTO notifications (workspace_id, id, user_id, title, body, href, entity_type, entity_id, read_at, at) SELECT ?, id, user_id, title, body, href, entity_type, entity_id, '2026-11-04T09:00:00Z', at FROM notifications WHERE workspace_id = 'base' AND id = 'n-m1'").bind(WS).run();
-    expect(await inboxCounts(await ctx("marcus"))).toEqual({ messages: 2, approvals: 1, alerts: 2, unreadAlerts: 0, needsYou: 3 });
+    expect(await inboxCounts(await ctx("marcus"))).toEqual({ messages: 2, needsReply: 1, approvals: 1, alerts: 2, unreadAlerts: 0, needsYou: 2 });
     // Without a workspace, base rows only.
     expect((await inboxCounts(await ctx("marcus", null))).approvals).toBe(2);
   });
@@ -122,7 +141,7 @@ describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
 describe("inbox for other roles", () => {
   it("gives an accountant bills to decide and her alerts, and no conversations (communications isn't her module)", async () => {
     const r = await inboxPage(await ctx("grace"), {});
-    expect(new Set(ids(r))).toEqual(new Set(["n-g1", "pr-bill-low", "pr-bill-high"]));
+    expect(new Set(ids(r))).toEqual(new Set(["n-g1", "pr-bill-low", "pr-bill-high", "pr-unknown"]));
   });
 
   it("gives an org-wide principal every pending proposal and unassigned or org-level threads", async () => {

@@ -49,6 +49,8 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
     const sp = new URLSearchParams(search.toString());
     sp.set("t", threadId);
     router.replace(`${pathname}?${sp}`, { scroll: false });
+    // A layout isn't re-rendered by a search-param change; refresh so the Inbox count updates.
+    router.refresh();
   };
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<string>(CHANNELS.includes(initialChannel as (typeof CHANNELS)[number]) ? initialChannel : "Email");

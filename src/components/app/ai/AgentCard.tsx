@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Autonomy } from "@/ai/types";
 import { RelativeDate } from "../display";
+import { modelName } from "./model";
 
 export type AgentStatus = "idle" | "running" | "waiting_approval" | "failed" | "paused";
 
@@ -107,7 +108,7 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
       </div>
 
       <div className="mt-auto flex items-center gap-2 border-t px-4 py-2.5">
-        {model && <span className="truncate text-[11px] text-muted-foreground">{model}</span>}
+        {model && <span className="truncate text-[11px] text-muted-foreground" title={model}>{modelName(model)}</span>}
         <Button size="sm" variant="outline" className="ml-auto" disabled={!on || running || !onRunNow} onClick={() => void run()}>
           {running ? <Loader2 className="animate-spin" /> : <Play />} {running ? "Running…" : "Run now"}
         </Button>
