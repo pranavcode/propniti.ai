@@ -8,6 +8,7 @@ import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatAsOf } from "@/lib/format";
 import { cashForecast } from "../metrics";
 import { DownloadMenu } from "@/extensions/export/DownloadMenu";
 import { askParams } from "@/extensions/export/reports";
@@ -160,7 +161,7 @@ export async function ArAgingReport({ ctx, property }: { ctx: Ctx; property?: st
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 xl:grid-cols-12">
         <div className="xl:col-span-5">
-          <ChartCard title="Aging buckets" description={`Open resident balances at ${asOf}`} kind="bar" x="label" height={240}
+          <ChartCard title="Aging buckets" description={`Open resident balances at ${formatAsOf(asOf)}`} kind="bar" x="label" height={240}
             data={buckets.map((b) => ({ label: b.label, bucket: b.bucket, amount: sum(b.key) }))} series={[{ key: "amount", label: "Balance", format: "money" }]}
             drill={`/app/receivables/charges?f.aging={bucket}${property ? `&f.property_id=${property}` : ""}`} />
         </div>
@@ -170,7 +171,7 @@ export async function ArAgingReport({ ctx, property }: { ctx: Ctx; property?: st
             drill="/app/receivables/charges?f.property_id={property_id}&f.status=Overdue" />
         </div>
       </div>
-      <TableCard title="Accounts receivable aging" description={`By property · as of ${asOf} · open balance of each past-due charge`}
+      <TableCard title="Accounts receivable aging" description={`By property · as of ${formatAsOf(asOf)} · open balance of each past-due charge`}
         actions={dl({ r: "ar_aging", property })}>
         <thead className={HEAD}><tr className="border-b"><Th>Property</Th>{buckets.map((b) => <Th key={b.key} right>{b.label}</Th>)}<Th right>Total</Th><Th right>Charges</Th></tr></thead>
         <tbody>

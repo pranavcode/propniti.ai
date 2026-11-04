@@ -6,6 +6,7 @@ import { Banknote, Gavel, HandCoins, Landmark, Receipt } from "lucide-react";
 import { AS_OF, FINANCE, LEADERS } from "../common";
 import { chargeOpenStoredSql, chargeStatusStoredSql } from "@/server/data";
 import { registerEntity } from "../registry";
+import { formatDate } from "@/lib/format";
 import type { Role } from "../types";
 
 const ACCOUNTING: Role[] = ["principal", "regional_manager", "accountant"];
@@ -105,7 +106,7 @@ registerEntity({
   nav: { section: "finance", group: "Receivables", order: 20 },
   route: "/app/receivables/payments",
   titleField: "label",
-  subtitle: (r) => [r.lease_id__label, r.received_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.lease_id__label, r.received_on && formatDate(String(r.received_on), "always")].filter(Boolean).join(" · "),
   scopePath: "payments.property_id",
   fields: {
     label: { type: "text", label: "Payment", sortable: true, list: { default: true, width: 200 }, sql: "CASE WHEN payments.reference = '' THEN payments.method || ' · ' || payments.id WHEN payments.reference LIKE payments.method || ' %' THEN payments.reference ELSE payments.method || ' · ' || payments.reference END" },
@@ -170,7 +171,7 @@ registerEntity({
   nav: { section: "finance", group: "Receivables", order: 30 },
   route: "/app/receivables/credits",
   titleField: "description",
-  subtitle: (r) => [r.kind, r.lease_id__label, r.on_date].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.kind, r.lease_id__label, r.on_date && formatDate(String(r.on_date), "always")].filter(Boolean).join(" · "),
   scopePath: "credits.property_id",
   fields: {
     description: { type: "text", label: "Credit", search: true, sortable: true, list: { default: true, width: 260 } },
@@ -218,7 +219,7 @@ registerEntity({
   nav: { section: "finance", group: "Receivables", order: 40, label: "Deposits" },
   route: "/app/receivables/deposits",
   titleField: "label",
-  subtitle: (r) => [r.property_id__label, r.received_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.property_id__label, r.received_on && formatDate(String(r.received_on), "always")].filter(Boolean).join(" · "),
   scopePath: "deposits.property_id",
   fields: {
     label: { type: "text", label: "Deposit", sortable: true, list: { default: true, width: 220 }, sql: `coalesce((SELECT h.name FROM {households} h WHERE h.id = ${DEP_LEASE("household_id")}), deposits.lease_id)` },

@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { fillTemplate } from "@/components/app/data-table/params";
-import { formatCountDelta, formatMoney, formatNumber, formatPct } from "@/lib/format";
+import { formatAsOf, formatCountDelta, formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { monthTick } from "@/components/app/dashboard/fmt";
 import { cn } from "@/lib/utils";
 import { useImprove } from "@/components/app/ai/ImproveWithAI";
@@ -23,8 +23,7 @@ const fmt = (v: number | null | undefined, f: Fmt | undefined, compact = false) 
 
 const monthLabel = (v: unknown) => {
   const s = String(v ?? "");
-  if (!/^\d{4}-\d{2}$/.test(s)) return s;
-  return monthTick(s);
+  return /^\d{4}-\d{2}$/.test(s) ? monthTick(s) : formatAsOf(s);
 };
 
 function Spark({ values, good }: { values: number[]; good: boolean | null }) {

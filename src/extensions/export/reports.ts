@@ -4,6 +4,7 @@ import { runSpec, scopeProperties, type Ctx } from "@/extensions/accounting/repo
 import { addMonths, canOpenReports, COMPARE_LABEL, describeSpec, FIRST_MONTH, GROUP_LABEL, measureOf, METROS, monthsBetween, periodLabel, type Compare, type GroupBy, type QuerySpec } from "@/extensions/accounting/reports/spec";
 import { arAging, noiByProperty, pnl, rentRoll } from "@/extensions/accounting/reports/standard";
 import { demoNowIso } from "@/lib/clock";
+import { formatAsOf } from "@/lib/format";
 import { capNote, EXPORT_CAP, type Column, type ExportDoc } from "@/lib/export/types";
 import { asOfMonth, QueryError } from "@/server/query";
 
@@ -54,7 +55,7 @@ export async function reportDoc(ctx: Ctx, sp: URLSearchParams, branded: boolean)
   if (r === "ar_aging") {
     const { rows, asOf } = await arAging(ctx, property?.id);
     const sum = (k: "d0_30" | "d31_60" | "d61_90" | "d90p" | "total" | "charges") => rows.reduce((a, x) => a + x[k], 0);
-    return { ...base, name: `ar-aging-${asOf}`, title: "Accounts receivable aging", filters: [`As of ${asOf}`, where],
+    return { ...base, name: `ar-aging-${asOf}`, title: "Accounts receivable aging", filters: [`As of ${formatAsOf(asOf)}`, where],
       columns: [{ label: "Property" }, money("0–30 days"), money("31–60"), money("61–90"), money("90+"), money("Total"), { label: "Charges", kind: "number" }],
       rows: [...rows.map((x) => [x.property, x.d0_30, x.d31_60, x.d61_90, x.d90p, x.total, x.charges]), ["Total", sum("d0_30"), sum("d31_60"), sum("d61_90"), sum("d90p"), sum("total"), sum("charges")]] };
   }
