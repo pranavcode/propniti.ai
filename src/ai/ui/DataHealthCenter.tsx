@@ -2,14 +2,15 @@
 
 import Link from "@/components/Link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCheck, Info, X } from "lucide-react";
+import { CheckCheck, Info, Lock, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FixPreview } from "@/components/app/ai";
 import { Meter } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { IssueFilters } from "@/ai/filters";
 import { cn } from "@/lib/utils";
 import { api } from "./client";
@@ -21,6 +22,8 @@ type Health = {
   modules: { module: string; open: number; entities: string[]; score: number }[];
   rules: { id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }[];
 };
+type Mode = "safe" | "send";
+type Preview = { count: number; more: boolean; cap: number };
 const PILL: { key: keyof IssueFilters; label: string }[] = [
   { key: "rule", label: "Rule" }, { key: "property", label: "Property" }, { key: "entity", label: "Record type" }, { key: "entity_id", label: "Record" }, { key: "issue", label: "Issue" },
 ];
@@ -45,16 +48,30 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
       throw e;
     }
   };
-  const safe = issues.rows.filter((i) => !i.needsPerson && !done[i.id] && Object.keys(i.after ?? {}).length);
-  const bulk = async () => {
+  // Bulk buttons count every page that matches the filters, on the server: safe fixes this role may
+  // apply, and (with a rule picked) fixes that need a person, to send to the approvals inbox at once.
+  const match = JSON.stringify(filters);
+  const [counts, setCounts] = useState<Partial<Record<Mode, Preview>>>({});
+  const [confirm, setConfirm] = useState<{ mode: Mode; p: Preview } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const modes: Mode[] = filters.rule ? ["safe", "send"] : ["safe"];
+    void Promise.all(modes.map((mode) => api<Preview>("/api/ai/data-health/bulk", "POST", { match: JSON.parse(match), mode, preview: true }).then((p) => [mode, p] as const)))
+      .then((r) => { if (live) setCounts(Object.fromEntries(r)); }, () => {});
+    return () => { live = false; };
+  }, [match, filters.rule, issues]);
+  const bulk = async (mode: Mode) => {
+    setConfirm(null);
     try {
-      const r = await api<{ applied: number; queued: number; runId: string }>("/api/ai/data-health/bulk", "POST", { ids: safe.map((i) => i.id) });
-      toast.success(`Applied ${r.applied} safe fixes${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
+      const r = await api<{ applied: number; queued: number; runId: string; more: boolean }>("/api/ai/data-health/bulk", "POST", { match: filters, mode });
+      const msg = mode === "safe" ? `Applied ${r.applied} safe fixes${r.queued ? `; ${r.queued} sent to the approvals inbox` : ""}` : `Sent ${r.queued} fixes to the approvals inbox${r.applied ? `; applied ${r.applied}` : ""}`;
+      toast.success(`${msg}${r.more ? ". More match: run it again for the rest." : ""}`, { action: { label: "See run", onClick: () => router.push(`/app/ai/runs/${r.runId}`) } });
       router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }
   };
+  const label = (p: Preview) => `${p.count}${p.more ? "+" : ""}`;
 
   return (
     <div className="space-y-5 px-4 pb-10 md:px-6">
@@ -93,7 +110,10 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
               </span>
             ))}
             {PILL.filter((x) => filters[x.key]).length > 1 && <Link href={qs(Object.fromEntries(PILL.map((x) => [x.key, undefined])))} className="text-primary hover:underline">Clear filters</Link>}
-            {safe.length > 0 && <Button size="sm" variant="outline" className="ml-auto" onClick={() => void bulk()}><CheckCheck /> Apply {safe.length} safe fixes</Button>}
+            <span className="ml-auto flex gap-1.5">
+              {!!counts.send?.count && <Button size="sm" variant="outline" onClick={() => setConfirm({ mode: "send", p: counts.send! })}><Lock /> Send all {label(counts.send)} for approval</Button>}
+              {!!counts.safe?.count && <Button size="sm" variant="outline" onClick={() => setConfirm({ mode: "safe", p: counts.safe! })}><CheckCheck /> Apply {label(counts.safe)} safe fixes</Button>}
+            </span>
           </div>
           {issues.rows.length ? issues.rows.map((i) => done[i.id] ? (
             <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? i.rule_id} on {i.entity_type.replace(/_/g, " ")} {i.entity_id}: {done[i.id]}.</div>
@@ -125,6 +145,24 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           </div>
         </aside>
       </section>
+
+      <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <DialogContent data-surface="app">
+          <DialogHeader>
+            <DialogTitle>{confirm?.mode === "send" ? `Send ${confirm.p.count} fixes for approval?` : `Apply ${confirm?.p.count} safe fixes?`}</DialogTitle>
+            <DialogDescription>
+              {confirm?.mode === "send"
+                ? "Every matching fix that needs a person goes to the approvals inbox, with its reasons and evidence. Nothing changes until someone with the right role approves it. Fixes already waiting there are skipped."
+                : "Every matching fix your role may apply directly: field corrections only, no money, fraud, legal or critical fixes. Each one is logged with before and after values."}
+              {confirm?.p.more ? ` At most ${confirm.p.cap} per click; more match, so run it again for the rest.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
+            {confirm && <Button onClick={() => void bulk(confirm.mode)}>{confirm.mode === "send" ? <><Lock /> Send {confirm.p.count}</> : <><CheckCheck /> Apply {confirm.p.count}</>}</Button>}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

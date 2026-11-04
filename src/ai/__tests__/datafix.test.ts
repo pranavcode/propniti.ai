@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { get } from "../data";
-import { applyFixes } from "../datafix";
+import { applyFixes, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
 import { issuesPage } from "../views";
 import { DB_BUSY, publicError } from "../http";
@@ -139,7 +139,7 @@ describe("applying fixes from Data Health", () => {
   });
 });
 
-describe("Data Health filters from links", () => {
+describe("Data Health filters and bulk actions across pages", () => {
   // 30 address fixes at p02 (low risk), the rent fix (money) and di1 from the fixture.
   function many() {
     const f = setup();
@@ -161,4 +161,30 @@ describe("Data Health filters from links", () => {
     expect((await issuesPage(data, { entity_id: "p02" })).total).toBe(31);
   });
 
+  it("counts safe fixes and fixes to send on every page, by role", async () => {
+    const f = many();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    expect(await issueTargets(marcus, {}, "safe")).toMatchObject({ count: 31, more: false });
+    expect(await issueTargets(marcus, {}, "send")).toMatchObject({ count: 1, ids: ["di-rent"] });
+    expect(await issueTargets(marcus, { rule: "leases.rent_outlier" }, "safe")).toMatchObject({ count: 0 });
+    expect(await issueTargets(marcus, {}, "safe", 10)).toMatchObject({ count: 10, more: true });
+    // A leasing agent can't apply fixes: everything with a fix is one to send.
+    const lena = { db: f.db, ws: WS, actor: actorOf("lena") };
+    expect(await issueTargets(lena, {}, "safe")).toMatchObject({ count: 0 });
+    expect(await issueTargets(lena, {}, "send")).toMatchObject({ count: 32 });
+  });
+
+  it("applies all safe matching fixes once and sends the rest, skipping ones already waiting", async () => {
+    const f = many();
+    const data = { db: f.db, ws: WS, actor: MARCUS };
+    const t = await issueTargets(data, { entity_id: "p02" }, "safe");
+    const [a, b] = await Promise.all([applyFixes(data, getPersona("marcus")!, t.ids, { safeOnly: true }), applyFixes(data, getPersona("marcus")!, t.ids, { safeOnly: true })]);
+    expect(a.applied + b.applied).toBe(31);
+    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_decisions WHERE workspace_id = ?").get(WS)).toMatchObject({ n: 31 });
+    const lena = { db: f.db, ws: WS, actor: actorOf("lena") };
+    const send = await issueTargets(lena, { rule: "leases.rent_outlier" }, "send");
+    const r = await applyFixes(lena, getPersona("lena")!, send.ids, { safeOnly: false });
+    expect(r.queued).toBe(1);
+    expect(await issueTargets(lena, { rule: "leases.rent_outlier" }, "send")).toMatchObject({ count: 0 });
+  });
 });

@@ -204,9 +204,15 @@ async function runProposal(data: DataCtx, proposal: Row, by: By, edited: unknown
   const payload = withEdits(parseJson<Record<string, unknown>>(proposal.payload, {}), edited);
   const action = String(proposal.action) as ActionKey;
   const d = eff("ai_decisions", ws);
+  // A data issue is fixed once: two clicks that raced into two proposals for the same issue
+  // can't both apply.
+  const p2 = eff("ai_proposals", ws);
+  const once = proposal.entity_type === "data_issues"
+    ? { sql: ` AND NOT EXISTS (SELECT 1 FROM ${d.sql} d2 JOIN ${p2.sql} p2 ON p2.id = d2.proposal_id WHERE p2.entity_type = 'data_issues' AND p2.entity_id = ? AND d2.decision IN ('Approved', 'Edited'))`, params: [...d.params, ...p2.params, proposal.entity_id] }
+    : { sql: "", params: [] };
   const decide = db
-    .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)`)
-    .bind(ws, decisionId, proposal.id, edited === undefined ? "Approved" : "Edited", by.id, note, edited === undefined ? null : JSON.stringify(edited), now, ...d.params, proposal.id);
+    .prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = ?)${once.sql}`)
+    .bind(ws, decisionId, proposal.id, edited === undefined ? "Approved" : "Edited", by.id, note, edited === undefined ? null : JSON.stringify(edited), now, ...d.params, proposal.id, ...once.params);
   const gate = { decisionId };
   const record = async (message: string) => [
     await insertGated(db, ws, "audit", {
