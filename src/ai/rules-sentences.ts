@@ -9,7 +9,8 @@ type V = Facts[string];
 const num = (v: V) => (v == null || v === "" ? null : Number(v));
 const str = (v: V) => (v == null || v === "" ? null : String(v));
 const low = (v: V) => String(v ?? "").toLowerCase();
-const money = (v: V) => formatMoney(Number(v), "whole");
+// As the facts panel shows money: cents when there are any ($1,234.56), whole dollars otherwise.
+const money = (v: V) => { const n = Number(v); return formatMoney(n, Math.round(n * 100) % 100 ? "full" : "whole"); };
 const date = (v: V) => formatDate(String(v));
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const sentences = (...s: (string | null | false)[]) => s.filter(Boolean).join(" ");
