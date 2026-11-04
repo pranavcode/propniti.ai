@@ -37,6 +37,9 @@ export type ShellContext = {
   startTour: (id?: string) => void;
   tourActive: boolean;
   openSetup: () => void;
+  // The avatar menu, controlled so the "Viewing as" banner can open it straight on the people list.
+  profileMenu: false | "menu" | "switch";
+  setProfileMenu: (m: false | "menu" | "switch") => void;
 };
 
 export const ShellCtx = createContext<ShellContext | null>(null);

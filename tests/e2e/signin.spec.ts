@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { BASE, go } from "./helpers";
+import { as, BASE, go } from "./helpers";
 
 // The sign-in page: email + password form beside a compact one-click people list. Each test starts signed
 // out (storageState carries the workspace cookie only, no pn_as).
@@ -98,6 +98,16 @@ test.describe("sign in", () => {
     await expect(email(page)).toHaveValue("lena@propniti.demo");
     await expect(page.getByRole("button", { name: "Sign in as Lena Ortiz" })).toBeFocused();
   });
+});
+
+test("the banner's Switch opens the people list on the current person, and choosing one switches", async ({ page, context }) => {
+  await as(context, "marcus");
+  await go(page, "/app/today");
+  await page.getByRole("button", { name: "Switch", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /Marcus Bell/ })).toBeFocused();
+  await page.getByRole("menuitem", { name: /Priya Shah/ }).click();
+  await landed(page, "/app");
+  expect(await persona(page)).toBe("priya");
 });
 
 test.describe("sign in without JavaScript", () => {
