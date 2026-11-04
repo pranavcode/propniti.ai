@@ -19,6 +19,7 @@ import { AIBadge, Confidence } from "@/components/app/ai";
 import { homeData, maintenanceProposals, policyFor } from "@/extensions/maintenance/queries";
 import { HIGH_CONFIDENCE } from "@/extensions/maintenance/actions";
 import { policyCheck } from "@/extensions/maintenance/rules";
+import { staffDecision } from "@/ai/decide";
 import { AcceptSuggestions, DispatchSuggested } from "@/extensions/maintenance/ui/TriageActions";
 import { OPEN_FILTER } from "@/extensions/maintenance/store";
 import { MxApprovals, MxAsk } from "@/extensions/maintenance/ui/home";
@@ -71,16 +72,15 @@ export default async function MaintenanceHome() {
   const invoiceTotal = (h?.invoices ?? []).reduce((a, r) => a + Number(r.invoice_cents ?? 0), 0);
 
   // The agent's open suggestion on each queued request, and whether this person's click dispatches
-  // it or sends it to Approvals (estimate over the auto-approve limit, and they aren't the approver).
+  // it or leaves it in Approvals (the same rule the server applies).
   const canDispatch = can(actor.role, "work_orders.dispatch_suggested", "work_orders");
   const policies = new Map(await Promise.all([...new Set((h?.triage ?? []).map((w) => String(w.property_id)))].map(async (pid) => [pid, await policyFor(db, ws, pid).catch(() => null)] as const)));
   const suggested = new Map((h?.triage ?? []).flatMap((w) => {
-    const sg = w.open_suggestion ? JSON.parse(String(w.open_suggestion)) as { id: string; vendor_id: string | null; amount_cents: number | null; confidence: number; queue_state: string } : null;
+    const sg = w.open_suggestion ? JSON.parse(String(w.open_suggestion)) as { id: string; vendor_id: string | null; amount_cents: number | null; confidence: number; queue_state: string; risk: string } : null;
     if (!sg?.vendor_id || sg.queue_state === "auto_handled") return [];
-    const pol = policies.get(String(w.property_id)) ?? null;
-    const level = policyCheck(Number(sg.amount_cents ?? 0), pol).level;
-    const toApprovals = level === "approver" && !["principal", "regional_manager", pol?.approver_role ?? "property_manager"].includes(actor.role);
-    return [[String(w.id), { high: Number(sg.confidence) >= HIGH_CONFIDENCE, toApprovals, note: toApprovals ? "Estimate is over the auto-approve limit: this sends it to Approvals" : level === "owner" ? "Estimate is over the owner's limit: the job waits for the owner" : undefined }]] as const;
+    const decision = staffDecision(actor.role, { entity_type: "work_orders", property_id: w.property_id, amount_cents: sg.amount_cents, risk: sg.risk, queue_state: "needs_you" });
+    const owner = policyCheck(Number(sg.amount_cents ?? 0), policies.get(String(w.property_id)) ?? null).level === "owner";
+    return [[String(w.id), { high: Number(sg.confidence) >= HIGH_CONFIDENCE, toApprovals: !decision.ok, note: !decision.ok ? `${decision.error} This leaves it in Approvals.` : owner ? "Estimate is over the owner's limit: the job waits for the owner" : undefined }]] as const;
   }));
   const highIds = [...suggested].filter(([, v]) => v.high).map(([k]) => k);
   const watch: { text: string; href: string; tone: string; coi?: boolean }[] = [];
@@ -167,7 +167,7 @@ export default async function MaintenanceHome() {
 
         <div className="grid gap-5 xl:grid-cols-12">
           <Section id="triage" title="Triage queue" description="New requests, emergencies first. Dispatch the Maintenance Triage Agent's suggestion here, or open a request to review it." className="xl:col-span-7"
-            actions={<>{canDispatch && <AcceptSuggestions ids={highIds} overLimit={highIds.filter((id) => suggested.get(id)?.toApprovals).length} />}<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button></>}>
+            actions={<>{canDispatch && <AcceptSuggestions ids={highIds} toApprovals={highIds.filter((id) => suggested.get(id)?.toApprovals).length} />}<Button asChild size="sm" variant="ghost"><Link href="/app/maintenance/work-orders?f.status=New,Triaged">All {Number(c.untriaged ?? 0)} <ArrowRight /></Link></Button></>}>
             <div data-tour="mx-triage" className="overflow-hidden rounded-lg border bg-card">
               {h?.triage.length ? (
                 <ul className="divide-y">

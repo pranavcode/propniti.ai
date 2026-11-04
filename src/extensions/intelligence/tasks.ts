@@ -18,32 +18,40 @@ const isOpen = (r: Row) => OPEN.includes(String(r.status));
 const inList = (xs: string[]) => `(${xs.map((x) => `'${x}'`).join(", ")})`;
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-// `guard` is SQL on the task as stored (alias e): the change lands only while it holds. `set` maps
-// columns to SQL, where ?3 is `value`.
-async function change(ctx: ActionContext, row: Row, guard: string, set: Record<string, string>, value: unknown, verb: string, summary: string) {
+type Stmt = ReturnType<ActionContext["db"]["prepare"]>;
+type Opts = { arg?: string; more?: (gate: string, at: string) => Stmt[] };
+
+// `guard(n)` is SQL on the task as stored (alias e): the change lands only while it holds. It may
+// use ?n, bound to `opts.arg`, so request values never become SQL text. `set` maps columns to SQL,
+// where ?3 is `value`. `opts.more` adds statements to the same batch; they must run only when the
+// gate activity row (id `gate`) exists, so they land together with the change or not at all.
+async function change(ctx: ActionContext, row: Row, guard: (n: number) => string, set: Record<string, string>, value: unknown, verb: string, summary: string, opts: Opts = {}) {
   const { db, ws } = ctx;
   const at = demoNowIso(ctx.nowMs);
   const id = String(row.id);
   const gate = crypto.randomUUID();
   const pid = row.property_id == null ? null : String(row.property_id);
-  // ?1 workspace, ?2 activity id, ?3/?4 record, ?5 property, ?6 at, ?7 actor, ?8 verb, ?9 summary, ?10 data, ?11 task, ?12 gate.
+  const arg = opts.arg === undefined ? [] : [opts.arg];
+  // ?1 workspace, ?2 activity id, ?3/?4 record, ?5 property, ?6 at, ?7 actor, ?8 verb, ?9 summary, ?10 data, ?11 task, ?12 gate, ?13 arg.
   const activity = (when: string) => `INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'staff', ?7, ?8, ?9, ?10 WHERE ${when}`;
   const binds = (actId: string, type: string, recId: string) => [ws, actId, type, recId, pid, at, ctx.actor.personaId, verb, summary, JSON.stringify({ task_id: id }), id, gate];
   const stmts = [
     // The gate: the task's own entry (its id is the gate id, so ?2 = ?12 always holds and every bound number is used).
-    db.prepare(activity(`EXISTS (SELECT 1 FROM ${effective("tasks")} AS e WHERE e.id = ?11 AND ${guard}) AND ?12 = ?2`)).bind(...binds(gate, "tasks", id)),
-    db.prepare(overlayUpsertSql("tasks", COLS, set, `${guard} AND EXISTS (SELECT 1 FROM activity_events WHERE workspace_id = ?1 AND id = ?4)`))
-      .bind(ws, id, value, gate),
+    db.prepare(activity(`EXISTS (SELECT 1 FROM ${effective("tasks")} AS e WHERE e.id = ?11 AND ${guard(13)}) AND ?12 = ?2`)).bind(...binds(gate, "tasks", id), ...arg),
+    db.prepare(overlayUpsertSql("tasks", COLS, set, `${guard(5)} AND EXISTS (SELECT 1 FROM activity_events WHERE workspace_id = ?1 AND id = ?4)`))
+      .bind(ws, id, value, gate, ...arg),
   ];
   if (row.entity_type && row.entity_id) {
     stmts.push(db.prepare(activity("EXISTS (SELECT 1 FROM activity_events WHERE workspace_id = ?1 AND id = ?12)")).bind(...binds(crypto.randomUUID(), String(row.entity_type), String(row.entity_id))));
   }
+  stmts.push(...(opts.more?.(gate, at) ?? []));
   const results = await db.batch(stmts);
   return results[0].meta.changes > 0;
 }
 
-const changeStatus = (ctx: ActionContext, row: Row, from: string[], to: "Done" | "Open", verb: string, summary: string) =>
-  change(ctx, row, `e.status IN ${inList(from)}`, { status: `'${to}'`, completed_at: to === "Done" ? "?3" : "NULL" }, to === "Done" ? demoNowIso(ctx.nowMs) : null, verb, summary);
+const stillOpen = () => `e.status IN ${inList(OPEN)}`;
+const changeStatus = (ctx: ActionContext, row: Row, from: string[], to: "Done" | "Open", verb: string, summary: string, more?: Opts["more"]) =>
+  change(ctx, row, () => `e.status IN ${inList(from)}`, { status: `'${to}'`, completed_at: to === "Done" ? "?3" : "NULL" }, to === "Done" ? demoNowIso(ctx.nowMs) : null, verb, summary, { more });
 
 registerAction({
   key: "tasks.complete",
@@ -75,7 +83,6 @@ registerAction({
 });
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
-const lit = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
 registerAction({
   key: "tasks.snooze",
@@ -90,7 +97,7 @@ registerAction({
     const today = demoNowIso(ctx.nowMs).slice(0, 10);
     if (input.due_on <= today) return { status: 400, error: "Pick a date after today" };
     if (input.due_on > addDays(today, 365)) return { status: 400, error: "Pick a date within a year" };
-    const ok = await change(ctx, row, `e.status IN ${inList(OPEN)} AND coalesce(e.due_on, '') <> ${lit(input.due_on)}`, { due_on: "?3" }, input.due_on, "task_snoozed", `${ctx.actor.name} snoozed task "${String(row.title)}" to ${input.due_on}`);
+    const ok = await change(ctx, row, (n) => `${stillOpen()} AND coalesce(e.due_on, '') <> ?${n}`, { due_on: "?3" }, input.due_on, "task_snoozed", `${ctx.actor.name} snoozed task "${String(row.title)}" to ${input.due_on}`, { arg: input.due_on });
     return ok ? { status: 200, message: `Snoozed "${String(row.title)}" to ${input.due_on}` } : { status: 409, error: "This task is already due then, or no longer open" };
   },
   help: { summary: "Moves the due date to a later day. The task stays on the list and comes back as due on that day." },
@@ -114,14 +121,14 @@ registerAction({
     const who = await ctx.db.prepare(`SELECT st.name FROM ${effective("staff")} st WHERE st.id = ?2 AND st.active = 1${pid ? ` AND ${COVERS}` : ""}`)
       .bind(ctx.ws, input.assignee_id, ...(pid ? [pid] : [])).first<{ name: string }>();
     if (!who) return { status: 400, error: "Pick someone who works at this task's property" };
-    const ok = await change(ctx, row, `e.status IN ${inList(OPEN)} AND coalesce(e.assignee_id, '') <> ${lit(input.assignee_id)}`, { assignee_id: "?3", assignee_role: "NULL" }, input.assignee_id, "task_reassigned", `${ctx.actor.name} reassigned task "${String(row.title)}" to ${who.name}`);
+    const ok = await change(ctx, row, (n) => `${stillOpen()} AND coalesce(e.assignee_id, '') <> ?${n}`, { assignee_id: "?3", assignee_role: "NULL" }, input.assignee_id, "task_reassigned", `${ctx.actor.name} reassigned task "${String(row.title)}" to ${who.name}`, { arg: input.assignee_id });
     return ok ? { status: 200, message: `Reassigned "${String(row.title)}" to ${who.name}` } : { status: 409, error: `This task is already with ${who.name}, or no longer open` };
   },
   help: { summary: "Gives the task to someone else who works at its property. It leaves your list and shows on theirs." },
 });
 
 // Notice of entry: a person sends the notice drafted for them (see draftNotice in notice.ts), and
-// the task is done. The task changes first and only once, so a double click sends one notice.
+// the task is done, in one batch.
 registerAction({
   key: "tasks.send_notice",
   label: "Send notice",
@@ -133,18 +140,19 @@ registerAction({
   handler: async (ctx, row, input) => {
     const to = await noticeRecipient(ctx.db, ctx.ws, String(row.entity_id), input.resident_id);
     if (!to) return { status: 400, error: "That resident doesn't live in this unit now" };
-    const ok = await changeStatus(ctx, row, OPEN, "Done", "task_completed", `${ctx.actor.name} sent the notice of entry to ${to.name} and completed the task`);
-    if (!ok) return { status: 409, error: "This notice was already sent" };
-    const at = demoNowIso(ctx.nowMs);
     const thread = `thr-${crypto.randomUUID().slice(0, 12)}`;
-    await ctx.db.batch([
-      ctx.db.prepare("INSERT INTO message_threads (workspace_id, id, property_id, party_kind, party_id, subject, entity_type, entity_id, assigned_to, status, last_message_at, unread) VALUES (?, ?, ?, 'resident', ?, ?, 'units', ?, ?, 'Waiting', ?, 0)")
-        .bind(ctx.ws, thread, row.property_id ?? to.property_id, input.resident_id, input.subject, row.entity_id, ctx.actor.personaId, at),
-      ctx.db.prepare("INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, template_id, drafted_by_agent, sent_at) VALUES (?, ?, ?, ?, 'out', 'staff', ?, ?, 'tpl-entry-notice', NULL, ?)")
-        .bind(ctx.ws, `msg-${crypto.randomUUID().slice(0, 12)}`, thread, input.channel, ctx.actor.personaId, input.body, at),
-      ctx.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?, ?, 'units', ?, ?, ?, 'staff', ?, 'messaged', ?, ?)")
-        .bind(ctx.ws, crypto.randomUUID(), row.entity_id, row.property_id ?? null, at, ctx.actor.personaId, `${ctx.actor.name} sent a notice of entry to ${to.name} by ${input.channel}`, JSON.stringify({ thread_id: thread })),
+    // One batch: the task completes, and the thread, message and unit activity are written only if
+    // that change landed (the gate row exists). A double click sends one notice.
+    const gated = "WHERE EXISTS (SELECT 1 FROM activity_events WHERE workspace_id = ?1 AND id = ?2)";
+    const ok = await changeStatus(ctx, row, OPEN, "Done", "task_completed", `${ctx.actor.name} sent the notice of entry to ${to.name} and completed the task`, (gate, at) => [
+      ctx.db.prepare(`INSERT INTO message_threads (workspace_id, id, property_id, party_kind, party_id, subject, entity_type, entity_id, assigned_to, status, last_message_at, unread) SELECT ?1, ?3, ?4, 'resident', ?5, ?6, 'units', ?7, ?8, 'Waiting', ?9, 0 ${gated}`)
+        .bind(ctx.ws, gate, thread, row.property_id ?? to.property_id, input.resident_id, input.subject, row.entity_id, ctx.actor.personaId, at),
+      ctx.db.prepare(`INSERT INTO messages (workspace_id, id, thread_id, channel, direction, sender_kind, sender_id, body, template_id, drafted_by_agent, sent_at) SELECT ?1, ?3, ?4, ?5, 'out', 'staff', ?6, ?7, 'tpl-entry-notice', NULL, ?8 ${gated}`)
+        .bind(ctx.ws, gate, `msg-${crypto.randomUUID().slice(0, 12)}`, thread, input.channel, ctx.actor.personaId, input.body, at),
+      ctx.db.prepare(`INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) SELECT ?1, ?3, 'units', ?4, ?5, ?6, 'staff', ?7, 'messaged', ?8, ?9 ${gated}`)
+        .bind(ctx.ws, gate, crypto.randomUUID(), row.entity_id, row.property_id ?? null, at, ctx.actor.personaId, `${ctx.actor.name} sent a notice of entry to ${to.name} by ${input.channel}`, JSON.stringify({ thread_id: thread })),
     ]);
+    if (!ok) return { status: 409, error: "This notice was already sent" };
     return { status: 200, message: `Notice sent to ${to.name} by ${input.channel} (simulated)`, href: `/app/communications/inbox?t=${encodeURIComponent(thread)}` };
   },
   help: { summary: "Sends the notice of entry you reviewed to the resident and completes the task. In this demo sending is simulated: the message is recorded but nothing leaves the system." },

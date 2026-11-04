@@ -170,6 +170,13 @@ describe("snooze, reassign and bulk", () => {
     expect(await run("tasks.reassign", "t-overdue", { assignee_id: "s-bob" })).toMatchObject({ status: 400 });
     expect((await Promise.all([run("tasks.reassign", "t-role", { assignee_id: "s-ann" }), run("tasks.reassign", "t-role", { assignee_id: "s-ann" })])).map((r) => r.status).sort()).toEqual([200, 409]);
     expect(await taskRow("t-role")).toMatchObject({ assignee_id: "s-ann", assignee_role: null });
+    // Ids are bound, not spliced into SQL: a quote in one is just part of the id.
+    await db.batch([
+      db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 's-o''neil', 'org1', 'Pat O''Neil', 'Leasing', 'p@x.example')"),
+      db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-pat', 's-o''neil', 'leasing_agent', 'org', NULL)"),
+    ]);
+    expect((await run("tasks.reassign", "t-today", { assignee_id: "s-o'neil" })).status).toBe(200);
+    expect(await taskRow("t-today")).toMatchObject({ assignee_id: "s-o'neil" });
     // It leaves my list.
     expect(await mineIds(await actor("marcus"))).not.toContain("t-role");
   });
@@ -211,6 +218,7 @@ describe("notice of entry", () => {
     const send = async () => runAction(await wctx("marcus"), getAction("tasks.send_notice")!, "t-notice", input).catch((e) => ({ status: e.status as number }));
     expect((await Promise.all([send(), send()])).map((r) => r.status).sort()).toEqual([200, 409]);
     expect((await db.prepare("SELECT count(*) AS n FROM messages WHERE workspace_id = ? AND template_id = 'tpl-entry-notice'").bind(WS).first<{ n: number }>())?.n).toBe(1);
+    expect((await db.prepare("SELECT count(*) AS n FROM message_threads WHERE workspace_id = ?").bind(WS).first<{ n: number }>())?.n).toBe(1);
     expect(await db.prepare("SELECT party_id, entity_id FROM message_threads WHERE workspace_id = ?").bind(WS).first()).toEqual({ party_id: "res-p01-u1", entity_id: "p01-u1" });
     expect(await db.prepare("SELECT status FROM tasks WHERE workspace_id = ? AND id = 't-notice'").bind(WS).first()).toEqual({ status: "Done" });
     // Only to a resident of that unit.

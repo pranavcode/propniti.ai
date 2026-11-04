@@ -130,19 +130,29 @@ describe("dispatch as suggested", () => {
     expect(await decisions("prop-10")).toBe(1);
   });
 
-  it("sends an estimate over the auto-approve limit to the approver instead of dispatching", async () => {
+  it("follows the approvals rule: approve access dispatches, write access leaves it in Approvals", async () => {
     await db.batch([wo("WO-11"), suggest("prop-11", "WO-11", "v01", 120000)]);
-    const r = await act("work_orders.dispatch_suggested", "WO-11");
-    expect(r).toMatchObject({ status: 202, message: expect.stringContaining("over the $750 auto-approve limit") });
+    // Marcus (property manager) has write access to maintenance, not approve: nothing is dispatched
+    // and the proposal isn't re-addressed to him or anyone else.
+    const r = await act("work_orders.dispatch_suggested", "WO-11", {}, "marcus");
+    expect(r).toMatchObject({ status: 202, message: expect.stringContaining("stays in Approvals") });
     expect(await db.prepare("SELECT status FROM work_orders WHERE workspace_id = ? AND id = 'WO-11'").bind(WS).first()).toBeNull();
-    expect(await db.prepare("SELECT assignee_role FROM ai_proposals WHERE workspace_id = ? AND id = 'prop-11'").bind(WS).first()).toEqual({ assignee_role: "property_manager" });
-    // The property manager is the approver: their click dispatches.
-    expect((await act("work_orders.dispatch_suggested", "WO-11", {}, "marcus")).status).toBe(200);
+    expect(await db.prepare("SELECT assignee_role FROM ai_proposals WHERE workspace_id = ? AND id = 'prop-11'").bind(WS).first()).toBeNull();
+    expect(await decisions("prop-11")).toBe(0);
+    // Tom (maintenance supervisor) has approve access: his click dispatches.
+    expect((await act("work_orders.dispatch_suggested", "WO-11")).status).toBe(200);
   });
 
   it("holds a job over the owner's limit for the owner", async () => {
     await db.batch([wo("WO-12"), suggest("prop-12", "WO-12", "v01", 300000)]);
-    expect(await act("work_orders.dispatch_suggested", "WO-12", {}, "marcus")).toMatchObject({ status: 200, message: expect.stringContaining("on hold until the owner approves") });
+    expect(await act("work_orders.dispatch_suggested", "WO-12")).toMatchObject({ status: 200, message: expect.stringContaining("on hold until the owner approves") });
+  });
+
+  it("checks the confidence threshold on the server for Accept N", async () => {
+    await db.batch([wo("WO-17"), suggest("prop-17", "WO-17", "v01", 30000, 0.6)]);
+    expect(await act("work_orders.dispatch_suggested", "WO-17", { high_confidence_only: true })).toMatchObject({ status: 409, error: expect.stringContaining("below 80% confidence") });
+    // One at a time, a person may still accept a lower-confidence suggestion.
+    expect((await act("work_orders.dispatch_suggested", "WO-17")).status).toBe(200);
   });
 
   it("won't dispatch an uninsured vendor, an in-house suggestion, or a decided one", async () => {
