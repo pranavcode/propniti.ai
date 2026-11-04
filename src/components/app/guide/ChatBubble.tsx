@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, Compass, Ellipsis, Lightbulb, Sparkles, X } from "lucide-react";
+import { Compass, Ellipsis, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -73,6 +73,10 @@ export function ChatBubble() {
   // The nudge belongs to the page view it was picked for; navigating away drops it.
   const [shown, setShown] = useState<{ path: string; nudge: Nudge } | null>(null);
   const nudge = shown?.path === pathname ? shown.nudge : null;
+  // A nudge picked while the person was typing, in a dialog or on a tour: a dot on the bubble
+  // until it can show, and the bubble's click opens it.
+  const [pending, setPending] = useState<{ path: string; nudge: Nudge } | null>(null);
+  const waiting = !nudge && pending?.path === pathname ? pending.nudge : null;
   const [overlay, setOverlay] = useState(false);
   const [lift, setLift] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -153,23 +157,22 @@ export function ChatBubble() {
       const session = readSession();
       const p = readLocal<GuidePrefs>(PREFS, NO_PREFS);
       const { nav, tours } = shell.current;
-      const why = blockedBy({
-        now: Date.now(), prefs: p, session, shownThisView: false,
-        tourActive: live.current.tourActive,
-        typing: typing(), overlay: dialogOpen() || live.current.open || toastShowing(),
-      });
+      // Off, the session cap and the cooldown end the look; typing, a dialog or a tour only defer it.
+      if (blockedBy({ now: Date.now(), prefs: p, session, shownThisView: false, tourActive: false, typing: false, overlay: false })) return;
       const retry = () => { if (++tries < 6) timer = setTimeout(attempt, RETRY_MS); };
-      if (why === "typing" || why === "overlay" || why === "tour") return retry();
-      if (why) return;
       const facts = await loadFacts(personaId);
       if (cancelled) return;
-      if (typing() || dialogOpen() || live.current.open || live.current.tourActive || toastShowing()) return retry();
       const n = pickNudge({
         path: pathname, search: window.location.search, day: new Date().toLocaleDateString("en-CA"), nav: nav.flatMap((s) => s.items.map((i) => i.href)), facts, tours: tourStates(tours),
         page: { explain: !!document.querySelector(EXPLAIN_SELECTOR), peekRows: !!document.querySelector(PEEK_ROW_SELECTOR) }, prefs: p, session,
       });
       if (!n) return;
+      if (typing() || dialogOpen() || live.current.open || live.current.tourActive || toastShowing()) {
+        setPending({ path: pathname, nudge: n });
+        return retry();
+      }
       writeSession(recordShown(session, n, Date.now()));
+      setPending(null);
       setShown({ path: pathname, nudge: n });
     };
     timer = setTimeout(attempt, FIRST_LOOK_MS);
@@ -213,8 +216,14 @@ export function ChatBubble() {
     else if (a.kind === "tour") startTour(a.tour);
     else document.querySelector<HTMLElement>(a.selector)?.click();
   };
+  const reveal = (n: Nudge) => {
+    writeSession(recordShown(readSession(), n, Date.now()));
+    setPending(null);
+    setShown({ path: pathname, nudge: n });
+  };
   const setTips = (on: boolean) => {
     setPrefs((p) => ({ ...p, off: !on }));
+    if (!on) setPending(null);
     if (!on && nudge) { setShown(null); bubbleRef.current?.focus(); }
   };
 
@@ -245,21 +254,26 @@ export function ChatBubble() {
             onFocus={holdNudge}
             onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) releaseNudge(); }}
             onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setShown(null); bubbleRef.current?.focus(); } }}
-            className="relative w-[min(300px,calc(100vw-2rem))] rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-1 duration-300 motion-reduce:animate-none"
+            className={cn(
+              "relative w-[min(320px,calc(100vw-2rem))] rounded-lg border border-l-[3px] border-l-primary bg-card p-3.5 pl-3 text-card-foreground dark:bg-popover",
+              "shadow-[0_12px_32px_-8px_rgb(0_0_0/0.22),0_2px_6px_rgb(0_0_0/0.08)] ring-1 ring-black/[0.03] dark:border-white/15 dark:border-l-primary dark:shadow-[0_14px_36px_-6px_rgb(0_0_0/0.65)] dark:ring-white/5",
+              // One gentle rise with a slight settle; nothing under reduced motion.
+              "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-3 duration-500 ease-[cubic-bezier(0.34,1.4,0.64,1)] motion-reduce:animate-none",
+            )}
           >
-            <div className="mb-1 flex items-center gap-1.5 pr-5 text-[11px] text-muted-foreground">
-              {nudge.source === "Tip" ? <Lightbulb className="size-3" /> : nudge.source === "Product tour" ? <Compass className="size-3" /> : <BarChart3 className="size-3" />}
+            <div className="mb-1.5 flex items-center gap-1.5 pr-5 text-[12px] font-medium text-primary">
+              <Sparkles className="size-3.5 shrink-0" aria-hidden />
               <span className="truncate">{nudge.source === "Tip" || nudge.source === "Product tour" ? nudge.source : `From ${nudge.source}`}</span>
             </div>
-            <p className="text-[13px] leading-snug">{nudge.text}</p>
-            <div className="mt-2.5 flex items-center gap-1.5">
+            <p className="text-[14px] leading-snug text-foreground">{nudge.text}</p>
+            <div className="mt-3 flex items-center gap-1.5">
               <Button size="xs" onClick={() => act(nudge)}>{nudge.action.label}</Button>
               <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setTips(false)}>Don&apos;t show tips</Button>
             </div>
             <button type="button" onClick={() => dismiss(nudge)} aria-label="Dismiss suggestion" className="absolute top-2 right-2 rounded p-0.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50">
               <X className="size-3.5" />
             </button>
-            <span aria-hidden className="absolute -bottom-[5px] right-[17px] size-2.5 rotate-45 border-r border-b bg-popover" />
+            <span aria-hidden className="absolute -bottom-[5px] right-[17px] size-2.5 rotate-45 border-r border-b bg-card dark:border-white/15 dark:bg-popover" />
           </div>
         )}
 
@@ -297,8 +311,8 @@ export function ChatBubble() {
             ref={bubbleRef}
             type="button"
             data-chat-bubble
-            onClick={() => assistant.setOpen(!open, "bubble")}
-            aria-label={open ? "Close Ask Propniti" : "Open Ask Propniti"}
+            onClick={() => (waiting && !open ? reveal(waiting) : assistant.setOpen(!open, "bubble"))}
+            aria-label={open ? "Close Ask Propniti" : waiting ? "Show a tip from Propniti" : "Open Ask Propniti"}
             aria-expanded={open}
             className={cn(
               "flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-1 ring-black/5 outline-none",
@@ -309,6 +323,8 @@ export function ChatBubble() {
           >
             {open ? <X className="size-5" /> : <Sparkles className="size-5" />}
           </button>
+          {waiting && !open && <span data-guide-pending aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 size-3 rounded-full border-2 border-background bg-tone-warning" />}
+          {nudge && !open && <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full bg-primary/40 motion-safe:animate-ping motion-reduce:hidden" style={{ animationIterationCount: 1, animationFillMode: "forwards" }} />}
         </div>
       </div>
   );
