@@ -3,6 +3,8 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { get } from "../data";
 import { applyFixes } from "../datafix";
+import { healthFilters } from "../filters";
+import { issuesPage } from "../views";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
 import { startRun } from "../orchestrator";
@@ -135,4 +137,28 @@ describe("applying fixes from Data Health", () => {
     expect(await executeProposal({ ...data, db: failing }, row, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: false, message: DB_BUSY });
     quiet.mockRestore();
   });
+});
+
+describe("Data Health filters from links", () => {
+  // 30 address fixes at p02 (low risk), the rent fix (money) and di1 from the fixture.
+  function many() {
+    const f = setup();
+    const add = f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', ?, 'properties.address_format', 'properties', 'p02', 'p02', '2026-10-01', 'info', '{}', ?)");
+    for (let i = 0; i < 30; i++) add.run(`di-a${i}`, JSON.stringify({ changes: { street: `${i} Main St` } }));
+    return f;
+  }
+
+  it("reads the record, rule and issue links other pages send", () => {
+    expect(healthFilters({ "f.entity_id": "l1", "f.rule_id": "leases.rent_outlier" })).toEqual({ entity_id: "l1", rule: "leases.rent_outlier" });
+    expect(healthFilters(new URLSearchParams("issue=di1&severity=warn&page=2"))).toEqual({ issue: "di1", severity: "warn" });
+  });
+
+  it("filters the issue list by record and by issue", async () => {
+    const f = many();
+    const data = { db: f.db, ws: WS, actor: DANIEL };
+    expect((await issuesPage(data, { entity_id: "l1" })).rows.map((r) => (r as Record<string, unknown>).id)).toEqual(["di-rent"]);
+    expect((await issuesPage(data, { issue: "di-a3" })).rows.map((r) => (r as Record<string, unknown>).id)).toEqual(["di-a3"]);
+    expect((await issuesPage(data, { entity_id: "p02" })).total).toBe(31);
+  });
+
 });

@@ -9,6 +9,7 @@ import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
 import { modelInfo } from "./providers";
+import type { IssueFilters } from "./filters";
 
 // Read models for the AI pages (agents command center, runs, approvals inbox, data health). Server
 // components call these directly; the /api/ai routes return the same shapes.
@@ -241,17 +242,26 @@ export async function dataHealth(data: DataCtx) {
   };
 }
 
-export async function issuesPage(data: DataCtx, f: { status?: string; severity?: string; rule?: string; property?: string; entity?: string; page?: number; size?: number }) {
+// The Data Health filters as SQL over `i` (data_issues), shared by the page and the bulk actions.
+export function issueWhere(f: IssueFilters & { status?: string }) {
   const where = ["i.status = ?"];
   const params: unknown[] = [f.status ?? "open"];
   if (f.severity) { where.push("i.severity = ?"); params.push(f.severity); }
   if (f.rule) { where.push("i.rule_id = ?"); params.push(f.rule); }
   if (f.property) { where.push("i.property_id = ?"); params.push(f.property); }
   if (f.entity) { where.push("i.entity_type = ?"); params.push(f.entity); }
+  if (f.entity_id) { where.push("i.entity_id = ?"); params.push(f.entity_id); }
+  if (f.issue) { where.push("i.id = ?"); params.push(f.issue); }
+  return { where, params };
+}
+export const ISSUE_ORDER = "CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC, i.id";
+
+export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: string; page?: number; size?: number }) {
+  const { where, params } = issueWhere(f);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const [rows, total] = await Promise.all([
-    sql<Row>(data, `SELECT i.*, r.name AS rule_name, r.description AS rule_description, p.name AS property FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id LEFT JOIN {properties} p ON p.id = i.property_id WHERE ${where.join(" AND ")} ORDER BY CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
+    sql<Row>(data, `SELECT i.*, r.name AS rule_name, r.description AS rule_description, p.name AS property FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id LEFT JOIN {properties} p ON p.id = i.property_id WHERE ${where.join(" AND ")} ORDER BY ${ISSUE_ORDER} LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n FROM {data_issues} i WHERE ${where.join(" AND ")}`, params),
   ]);
   const out = await Promise.all(rows.map(async (i) => {

@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ActionBar } from "@/components/entity/RecordActions";
 import type { PeekData } from "@/components/entity/peek";
+import { IssueFix } from "@/ai/ui/IssueFix";
 import { DataHealthBadge } from "../ai/DataHealthBadge";
 import { Cell } from "../data-table/cells";
 import type { Row } from "../data-table/types";
@@ -175,6 +176,7 @@ function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (delete
           <section className="rounded-lg border border-tone-warning/30 bg-tone-warning/[0.05] p-3">
             <h3 className="text-[12.5px] font-semibold">Data health</h3>
             <ul className="mt-1.5 flex flex-col gap-1 text-[12.5px]">{p.health.map((i) => <li key={i.id}><Link href={`/app/data-health?f.entity_id=${encodeURIComponent(id)}`} className="hover:underline">{i.summary}</Link></li>)}</ul>
+            {p.health.length === 1 && <IssueFix key={p.health[0].id} id={p.health[0].id} onDone={() => onChanged(false)} />}
           </section>
         )}
 
