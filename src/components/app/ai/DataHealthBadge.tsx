@@ -42,7 +42,6 @@ export function DataHealthBadge({ issues, compact, onFix, className }: { issues:
               <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", i.severity === "critical" ? "bg-tone-danger" : i.severity === "warn" ? "bg-tone-warning" : "bg-tone-info")} />
               <div className="min-w-0 flex-1">
                 <div className="leading-snug">{i.summary}</div>
-                <div className="font-mono text-[10.5px] text-muted-foreground">{i.rule}</div>
               </div>
               {onFix && <button onClick={() => onFix(i)} className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11.5px] font-medium text-primary hover:bg-primary/10"><Sparkles className="size-3" /> Fix</button>}
             </li>

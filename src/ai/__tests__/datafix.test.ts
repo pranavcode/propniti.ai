@@ -4,7 +4,8 @@ import type { Actor } from "@/entities/types";
 import { get } from "../data";
 import { applyFixes, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
-import { issuesPage } from "../views";
+import { dataHealth, issuesPage } from "../views";
+import { fixPreviewProps, type Issue } from "../ui/IssueFix";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
 import { startRun } from "../orchestrator";
@@ -136,6 +137,24 @@ describe("applying fixes from Data Health", () => {
     const failing = { prepare: (q: string) => f.db.prepare(q), batch: async () => { throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long."); } };
     expect(await executeProposal({ ...data, db: failing }, row, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: false, message: DB_BUSY });
     quiet.mockRestore();
+  });
+});
+
+describe("Data Health in plain words", () => {
+  it("names the record and its fields, and formats cents and dates, never rule keys or snake_case", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'leases.rent_outlier', 'leases', 'Rent far above market', 'warn', 'Rent over 3× market', 'computed')").run();
+    f.raw.prepare("UPDATE data_issues SET suggested_fix = ? WHERE id = 'di-rent'").run(JSON.stringify({ changes: { rent_cents: 150000 }, why: ["Lease started 2025-12-16, matching term_months"] }));
+    const data = { db: f.db, ws: WS, actor: DANIEL };
+    const issue = (await issuesPage(data, { issue: "di-rent" })).rows[0] as unknown as Issue;
+    expect(issue).toMatchObject({ record: "Lee household · #412", entity_label: "Lease" });
+    const p = fixPreviewProps(issue, async () => null);
+    expect(p.rule).toBeUndefined();
+    expect(p.title).toBe("Rent far above market · Lease Lee household · #412 · The Lofts at Riverside");
+    expect(p.changes).toEqual([{ field: "rent_cents", label: "Rent", before: "$1,400.00", after: "$1,500.00" }]);
+    expect(p.why).toEqual(["Lease started Dec 16, 2025, matching term months"]);
+    const health = await dataHealth(data);
+    for (const m of health.modules) for (const e of m.entities) expect(e).not.toMatch(/_/);
   });
 });
 

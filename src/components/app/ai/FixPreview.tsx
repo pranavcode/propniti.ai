@@ -13,7 +13,7 @@ export type FixChange = { field: string; label?: string; before: unknown; after:
 
 export type FixPreviewProps = {
   title: string;                         // "Lease end is before lease start"
-  rule?: string;                         // RuleKey, e.g. "leases.end_before_start"
+  rule?: string;                         // RuleKey, e.g. "leases.end_before_start"; never shown
   changes: FixChange[];
   why: string[];
   confidence: number;
@@ -26,7 +26,7 @@ export type FixPreviewProps = {
 
 const show = (v: unknown) => (v == null || v === "" ? <span className="italic text-muted-foreground">empty</span> : typeof v === "object" ? JSON.stringify(v) : String(v));
 
-export function FixPreview({ title, rule, changes, why, confidence, source, needsPerson, onApply, onDismiss, className }: FixPreviewProps) {
+export function FixPreview({ title, changes, why, confidence, source, needsPerson, onApply, onDismiss, className }: FixPreviewProps) {
   const [state, setState] = useState<"open" | "applied" | "queued" | "dismissed">("open");
   const [busy, setBusy] = useState(false);
   // The server decides whether a fix applied or went to the approvals inbox: onApply may return { queued }.
@@ -45,8 +45,7 @@ export function FixPreview({ title, rule, changes, why, confidence, source, need
         <div className="min-w-0 flex-1">
           <div className="font-medium">{title}</div>
           <div className="flex flex-wrap items-center gap-x-2 text-[11.5px] text-muted-foreground">
-            {rule && <code className="font-mono text-[11px]">{rule}</code>}
-            <span>· proposed by {source === "rule" ? "a fixed rule" : source}</span>
+            <span>Proposed by {source === "rule" ? "a fixed rule" : source}</span>
           </div>
         </div>
         <Confidence value={confidence} className="self-center" />

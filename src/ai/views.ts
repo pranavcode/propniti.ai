@@ -1,7 +1,8 @@
 import { demoIsoIn, demoNow } from "@/lib/clock";
 import { can, getEntity } from "@/entities";
 import { getAction } from "@/extensions/actions";
-import { effective, expand, readWs } from "@/server/query";
+import { effective, expand, getRow, readWs } from "@/server/query";
+import { hintsFor, humanizeKey } from "@/lib/fieldText";
 import type { AgentKey, Role, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
@@ -372,7 +373,7 @@ export async function dataHealth(data: DataCtx) {
   return {
     score: healthScore(counts.map((c) => ({ weighted: weightOf(issues.filter((i) => i.entity_type === c.entity)), records: c.total })), ORG_FLOOR),
     open: count(issues), formula: HEALTH_FORMULA, properties,
-    modules: [...modules.values()].filter((m) => m.open).map((m) => ({ module: m.module, open: m.open, entities: m.entities, score: healthScore(m.parts, ORG_FLOOR) })).sort((a, b) => a.score - b.score),
+    modules: [...modules.values()].filter((m) => m.open).map((m) => ({ module: m.module, open: m.open, entities: m.entities, labels: m.entities.map((e) => getEntity(e)?.label.many ?? humanizeKey(e)), score: healthScore(m.parts, ORG_FLOOR) })).sort((a, b) => a.score - b.score),
     rules,
   };
 }
@@ -390,6 +391,17 @@ export function issueWhere(f: IssueFilters & { status?: string }) {
   return { where, params };
 }
 export const ISSUE_ORDER = "CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC, i.id";
+
+// A record's display name (its def's title field), for issue titles. Computed titles go through
+// getRow; plain ones read the row already loaded.
+async function recordTitle(data: DataCtx, table: string, rec: Row | null): Promise<string | null> {
+  const def = getEntity(table);
+  if (!def || !rec) return null;
+  const tf = def.fields[def.titleField];
+  if (tf && !tf.sql) return rec[tf.column ?? def.titleField] == null ? null : String(rec[tf.column ?? def.titleField]);
+  const row = await getRow(data, def.key, String(rec.id)).catch(() => null);
+  return row?._title == null ? null : String(row._title);
+}
 
 export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: string; page?: number; size?: number }) {
   const { where, params } = issueWhere(f);
@@ -411,7 +423,13 @@ export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: str
     const changes = (fix?.changes ?? {}) as Record<string, unknown>;
     if (rec) before = Object.fromEntries(Object.keys(changes).map((k) => [k, rec[k] ?? null]));
     const needsPerson = queueReason(fixProposal({ ...i, suggested_fix: JSON.stringify(fix ?? {}) }), data.actor.role);
-    return { ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)) };
+    const def = getEntity(table);
+    const hints = hintsFor(def);
+    return {
+      ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)),
+      entity_label: def?.label.one ?? humanizeKey(table), record: await recordTitle(data, table, rec),
+      fields: Object.fromEntries(Object.keys(changes).filter((k) => hints[k]).map((k) => [k, hints[k]])),
+    };
   }));
   return { rows: out, total: total[0]?.n ?? 0, page, size };
 }
