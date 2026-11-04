@@ -50,7 +50,8 @@ export function PortalAssistant({ endpoint, prompts, samples = [], title = "Ask 
     return () => window.removeEventListener(ASK_EVENT, on);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ask only reads stable setters and props
   }, [endpoint]);
-  useEffect(() => end.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [turns]);
+  // Braces: Chrome's scrollIntoView returns a promise, and an effect may return only a cleanup function.
+  useEffect(() => { end.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [turns]);
 
   return (
     <>
