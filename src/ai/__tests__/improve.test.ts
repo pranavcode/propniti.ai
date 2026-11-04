@@ -3,6 +3,7 @@ import "@/entities";
 import type { Actor } from "@/entities/types";
 import { getAction } from "@/extensions";
 import { setModelForTests } from "../providers";
+import { startRun } from "../orchestrator";
 import { getAgent } from "../agents/registry";
 import { delinquency } from "../facts";
 import { clearImproveCache, executePlan, PlanConflict, planSummary, preview, REGISTRY } from "../improve";
@@ -260,5 +261,13 @@ describe("improve: work orders past SLA", () => {
     expect(r.auto).toBe(1);
     // The On-hold job in Atlanta is outside Marcus's scope.
     expect(p.steps.find((x) => x.key === "on_hold")).toBeUndefined();
+  });
+});
+
+describe("improve: review fixes", () => {
+  it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {
+    const f = setup();
+    const r = await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "event", input: { plan: "x", improve: "delinquency", steps: [{ action: "leases.send_reminder", ids: ["l4"] }], ids: ["l4"] } } })).done;
+    expect(r.proposals).toBeGreaterThan(1);
   });
 });

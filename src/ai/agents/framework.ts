@@ -44,7 +44,9 @@ const sameWhy = (w: string) => w.toLowerCase().replace(/\s+/g, " ").replace(/[.!
 // figures came from the data and the person asked for exactly this).
 export type PlanInput = { plan: string; improve: string; ids: string[] };
 export const PLAN_MAX = 30;
-export function planOf(trigger: { input?: unknown }): PlanInput | null {
+// Only a person's manual start can be a plan run: an event's payload never narrows an agent's work.
+export function planOf(trigger: { kind?: string; input?: unknown }): PlanInput | null {
+  if (trigger.kind !== "manual") return null;
   const i = trigger.input as Partial<PlanInput> | undefined;
   return i && typeof i.plan === "string" && Array.isArray(i.ids) ? (i as PlanInput) : null;
 }
