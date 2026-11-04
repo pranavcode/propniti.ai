@@ -1,8 +1,10 @@
+/* eslint-disable @next/next/no-img-element -- image optimisation is off on Workers; files are pre-sized webp */
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowLeft, ArrowRight, Lock } from "lucide-react";
 import { PERSONAS, type Persona } from "@/auth/personas";
 import { Wordmark } from "@/components/Logo";
-import { Arrow, Bezel, Eyebrow, ease } from "@/components/marketing/parts";
+import { MK_VARS } from "@/components/marketing/ui";
 
 export const metadata: Metadata = { title: "Sign in · Propniti demo" };
 
@@ -26,32 +28,39 @@ const SEES: Record<string, string> = {
   applicant: "Applicant portal: what's left to finish the application, documents and the fee.",
 };
 
-const TINT = ["bg-[#E7DCCB]", "bg-[#DCE5DF]", "bg-[#E3DCE8]", "bg-[#E8DED6]", "bg-[#DDE3EA]"];
+// Avatar tones from the brand palette: teal and its neighbours, light fill with dark text.
+const TONES = [
+  "bg-[oklch(0.92_0.04_192)] text-[oklch(0.34_0.07_198)]",
+  "bg-[oklch(0.92_0.035_225)] text-[oklch(0.36_0.07_235)]",
+  "bg-[oklch(0.93_0.04_165)] text-[oklch(0.36_0.07_165)]",
+  "bg-[oklch(0.93_0.04_80)] text-[oklch(0.4_0.07_70)]",
+];
 const initials = (name: string) => name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("");
+const roleLabel = (p: Persona) => p.role.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) + (p.portal ? " portal" : "");
 
 function PersonaCard({ p, i, next }: { p: Persona; i: number; next?: string }) {
   return (
     <form action="/api/session" method="post" className="h-full">
       <input type="hidden" name="persona" value={p.id} />
       {next && <input type="hidden" name="next" value={next} />}
-      <button type="submit" aria-label={`Continue as ${p.name}, ${p.title}`} className={`group block h-full w-full text-left transition-transform duration-500 ${ease} hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1C1917] focus-visible:ring-offset-4 focus-visible:ring-offset-[#F6F2EA] rounded-[1.75rem] active:scale-[0.99]`}>
-        <Bezel className="h-full" inner="flex h-full flex-col p-5">
-          <div className="flex items-start gap-3">
-            <span aria-hidden className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#1C1917] ${TINT[i % TINT.length]}`}>{initials(p.name)}</span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-semibold">{p.name}</div>
-              <div className="truncate text-[13px] text-[#57534E]">{p.title}</div>
-            </div>
-            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#1C1917]/5 transition-transform duration-500 ${ease} group-hover:translate-x-0.5 group-hover:-translate-y-[1px]`}>
-              <Arrow className="h-4 w-4" />
-            </span>
+      <button
+        type="submit"
+        aria-label={`Continue as ${p.name}, ${p.title}`}
+        className="group flex h-full w-full flex-col rounded-xl bg-white p-5 text-left ring-1 ring-(--mk-line) transition-[box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md hover:ring-(--mk-teal)/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--mk-teal) active:translate-y-0"
+      >
+        <div className="flex items-center gap-3">
+          <span aria-hidden className={`grid size-10 shrink-0 place-items-center rounded-full text-[14px] font-semibold ${TONES[i % TONES.length]}`}>{initials(p.name)}</span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold">{p.name}</div>
+            <div className="truncate text-[13px] text-(--mk-muted)">{p.title}</div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
-            <span className="rounded-full bg-[#1C1917] px-2 py-0.5 font-medium text-[#FBF9F4]">{p.role.replace(/_/g, " ")}</span>
-            <span className="rounded-full bg-[#1C1917]/[0.05] px-2 py-0.5 text-[#44403C]">{p.scope.label}</span>
-          </div>
-          <p className="mt-3 text-[13px] leading-relaxed text-[#57534E]">{SEES[p.id]}</p>
-        </Bezel>
+          <ArrowRight aria-hidden className="size-4 shrink-0 text-(--mk-muted) transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-(--mk-teal)" />
+        </div>
+        <div className="mt-3.5 flex flex-wrap gap-1.5 text-[12px]">
+          <span className="rounded-md bg-(--mk-teal-tint) px-2 py-0.5 font-medium text-(--mk-teal-deep)">{roleLabel(p)}</span>
+          <span className="rounded-md bg-(--mk-bg-2) px-2 py-0.5 text-(--mk-muted)">{p.scope.label}</span>
+        </div>
+        <p className="mt-3 text-[14px] leading-relaxed text-(--mk-muted)">{SEES[p.id]}</p>
       </button>
     </form>
   );
@@ -62,38 +71,53 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   const staff = PERSONAS.filter((p) => !p.portal);
   const portals = PERSONAS.filter((p) => p.portal);
   return (
-    <main className="min-h-[100dvh] bg-[#F6F2EA] px-4 pb-20 pt-8 text-[#1C1917] sm:px-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="flex items-center justify-between">
-          <Link href="/" aria-label="Propniti home"><Wordmark size={32} text="text-3xl" /></Link>
-          <Link href="/" className="rounded-full px-4 py-2 text-[13px] text-[#44403C] ring-1 ring-[#1C1917]/10 hover:bg-white/60">Back to site</Link>
+    <div style={MK_VARS} className="min-h-[100dvh] bg-(--mk-bg) font-sans text-(--mk-text) antialiased">
+      <header className="relative isolate overflow-hidden bg-(--mk-ink) text-(--mk-on-ink)">
+        <img src="/img/marketing/hero-community.webp" alt="" className="absolute inset-0 -z-10 h-full w-full object-cover object-[center_40%]" />
+        <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,oklch(0.2_0.03_208/0.85),oklch(0.2_0.03_208/0.95))]" />
+        <div className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
+          <div className="flex items-center justify-between text-white">
+            <Link href="/" aria-label="Propniti home"><Wordmark size={28} /></Link>
+            <Link href="/" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] text-(--mk-on-ink-muted) hover:bg-white/10 hover:text-white">
+              <ArrowLeft aria-hidden className="size-4" /> Back to site
+            </Link>
+          </div>
+          <div className="mt-14 max-w-3xl">
+            <h1 className="text-balance text-[clamp(2.25rem,5vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-white">Choose who to sign in as.</h1>
+            <p className="mt-5 max-w-2xl text-pretty text-[17px] leading-relaxed text-(--mk-on-ink-muted)">
+              Each person sees Propniti through their own role and scope: 30 properties, 18 months of history and the agents working alongside them. Switch any time from the top bar.
+            </p>
+            <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[13px] text-white">
+              <Lock aria-hidden className="size-3.5 text-(--mk-mint)" />
+              Private demo data, resets at midnight Pacific. No password needed.
+            </p>
+          </div>
         </div>
-        <div className="mt-14 max-w-3xl">
-          <Eyebrow>Live demo · sample portfolio · no password</Eyebrow>
-          <h1 className="mt-5 font-serif text-[clamp(2.5rem,6vw,4.75rem)] leading-[0.95] tracking-[-0.01em]">
-            Sign in as <em className="text-[#8A6A45]">anyone.</em>
-          </h1>
-          <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-[#57534E]">
-            Pick a person to see Propniti through their role and scope: 30 properties, 18 months of history and the AI agents working alongside them. Switch any time from your avatar menu.
-          </p>
-        </div>
+      </header>
 
-        <section aria-labelledby="staff" className="mt-12">
-          <h2 id="staff" className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#78716C]">Your company · {staff.length} roles</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <main className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
+        <section aria-labelledby="staff" className="pt-12">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="staff" className="text-[20px] font-semibold tracking-[-0.01em]">Staff</h2>
+            <p className="text-[14px] text-(--mk-muted)">{staff.length} roles inside a property management company</p>
+          </div>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {staff.map((p, i) => <PersonaCard key={p.id} p={p} i={i} next={next} />)}
           </div>
         </section>
 
-        <section aria-labelledby="portals" className="mt-12">
-          <h2 id="portals" className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#78716C]">Portals · owners, residents, vendors and applicants</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section aria-labelledby="portals" className="pt-14">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="portals" className="text-[20px] font-semibold tracking-[-0.01em]">Portals</h2>
+            <p className="text-[14px] text-(--mk-muted)">Owners, residents, vendors and applicants see only their own records</p>
+          </div>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {portals.map((p, i) => <PersonaCard key={p.id} p={p} i={i + staff.length} />)}
           </div>
         </section>
 
-        <p className="mt-12 text-center text-xs text-[#78716C]">Sample data with fictional names. Your changes are private to you and reset at midnight. No real payments or messages are sent.</p>
-      </div>
-    </main>
+        <p className="mt-14 text-center text-[13px] text-(--mk-muted)">Fictional names and companies. No real payments or messages are sent.</p>
+      </main>
+    </div>
   );
 }
