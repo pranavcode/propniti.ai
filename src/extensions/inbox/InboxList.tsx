@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Bell, MessageSquare, ShieldCheck } from "lucide-react";
 import { AIBadge, Confidence, RiskBadge, type Risk } from "@/components/app/ai";
 import { Money, RelativeDate } from "@/components/app/display";
