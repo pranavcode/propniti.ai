@@ -23,8 +23,8 @@ describe("starting agents from the assistant", () => {
     const r = await ask({ data: { db, ws: WS, actor: MARCUS }, persona: getPersona("marcus")!, question: "Run the collections agent", waitUntil: (p) => void pending.push(p) });
     await Promise.all(pending);
     expect(r.mode).toBe("actions");
-    expect(r.answer).toBe("Started the Collections agent. Watch the run below; anything it proposes waits for approval.");
-    expect(r.run).toMatchObject({ agent: "collections", label: "Collections agent", already: false });
+    expect(r.answer).toBe("Started the Collections Agent. Watch the run below; anything it proposes waits for approval.");
+    expect(r.run).toMatchObject({ agent: "collections", label: "Collections Agent", already: false });
     expect(r.citations).toContainEqual({ label: "Watch the run", href: `/app/ai/runs/${r.run!.id}` });
     expect(r.proposals).toEqual([]);
     expect(runs(raw, "collections")).toBe(1);
@@ -43,7 +43,7 @@ describe("starting agents from the assistant", () => {
     setModelForTests(null);
     const { db, raw } = openFixture();
     const r = await ask({ data: { db, ws: WS, actor: RESIDENT }, persona: resident, question: "Run the collections agent" });
-    expect(r.answer).toMatch(/^I can't start the Collections agent for you: only staff can run agents\./);
+    expect(r.answer).toMatch(/^I can't start the Collections Agent for you: only staff can run agents\./);
     expect(r.run).toBeUndefined();
     expect(runs(raw, "collections")).toBe(0);
   });
@@ -58,7 +58,7 @@ describe("starting agents from the assistant", () => {
     raw.prepare("UPDATE agent_runs SET status = 'running', ended_at = NULL WHERE id = ?").run(first.runId);
     const again = await ask({ data: { db, ws: WS, actor: MARCUS }, persona: s.persona, question: "Run the collections agent" });
     expect(again.run).toMatchObject({ id: first.runId, already: true });
-    expect(again.answer).toMatch(/^The Collections agent is already running/);
+    expect(again.answer).toMatch(/^The Collections Agent is already running/);
     expect(runs(raw, "collections")).toBe(1);
     // Once it has finished, a new request starts a new run.
     await first.done;

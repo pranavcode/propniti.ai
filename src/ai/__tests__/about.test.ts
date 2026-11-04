@@ -59,8 +59,8 @@ describe("record card", () => {
     const text = JSON.stringify(c.facts);
     expect(text).toContain("The Lofts at Riverside");
     expect(text).not.toMatch(/"(p01|u1|v01)"/);
-    // No stored summary and no rules sentence for work orders: the card shows none, like the record page.
-    expect(c.summary).toBeUndefined();
+    // No stored summary: the card shows the rules sentence, like the record page.
+    expect(c.summary).toMatchObject({ source: "rules", text: expect.stringContaining("The Lofts at Riverside") });
     expect(c.questions).toContain("Is the $578 estimate normal for this job?");
   });
 
