@@ -12,6 +12,7 @@ import { rows } from "@/extensions/settings/data";
 import { canSettings } from "@/extensions/settings/nav";
 import { canEditPolicies } from "@/ai/policy-editors";
 import { EditPolicy, type PolicyRow } from "@/extensions/settings/ui/forms";
+import { agentName } from "@/ai/ui/labels";
 
 export const metadata = { title: "Approval policies · Propniti" };
 
@@ -84,7 +85,7 @@ export default async function ApprovalsPage() {
             <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {agents.map((a) => (
                 <li key={a.id} className="rounded-lg border bg-card px-3 py-2">
-                  <div className="font-medium">{a.name}</div>
+                  <div className="font-medium">{agentName(a.id)}</div>
                   <div className="text-[12px] text-muted-foreground">{a.autonomy.replace(/_/g, " ")}{a.category ? ` · ${a.category}` : ""}</div>
                 </li>
               ))}
