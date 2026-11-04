@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { Nav } from "@/components/marketing/Nav";
 import { SiteFooter } from "@/components/marketing/Footer";
 import { DocsTheme } from "@/components/docs/Theme";
-import { themeMode, themePreload } from "@/lib/theme";
+import { ThemePreload } from "@/components/app/ThemePreload";
+import { themeMode } from "@/lib/theme";
 
 // Public but unlisted: never indexed, and not in any sitemap.
 export const metadata: Metadata = {
@@ -18,7 +19,7 @@ export default async function DocsLayout({ children }: LayoutProps<"/docs">) {
   // marketing colours or light and then switch.
   return (
     <div data-surface="app" data-docs suppressHydrationWarning className={`relative overflow-x-clip bg-background text-[15px] text-foreground antialiased ${mode === "dark" ? "dark" : ""}`}>
-      <script dangerouslySetInnerHTML={{ __html: themePreload(mode) }} />
+      <ThemePreload mode={mode} />
       <DocsTheme theme={mode} />
       <Nav />
       <main className="px-4 pb-24 pt-24 sm:px-6 sm:pt-28">{children}</main>

@@ -7,7 +7,8 @@ import { AppShell } from "@/components/app/shell/AppShell";
 import { shellData } from "@/components/app/shell/data";
 import { AssistantDock } from "@/ai/ui/AssistantChat";
 import { PeekDrawer } from "@/components/app/peek/PeekDrawer";
-import { themeMode, themePreload } from "@/lib/theme";
+import { ThemePreload } from "@/components/app/ThemePreload";
+import { themeMode } from "@/lib/theme";
 
 // Staff app frame (lane B): sidebar from the entity registry, top bar, ⌘K, "Viewing as" banner and
 // the assistant dock, plus the record peek drawer every list opens (?peek=…). Keep the data-surface root and SurfaceBody (tokens in globals.css).
@@ -20,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const mode = themeMode((await cookies()).get("pn_theme")?.value);
   return (
     <div data-surface="app" suppressHydrationWarning className={mode === "dark" ? "app dark" : "app"}>
-      <script dangerouslySetInnerHTML={{ __html: themePreload(mode) }} />
+      <ThemePreload mode={mode} />
       <SurfaceBody />
       <AppShell data={data} assistant={<AssistantDock />}>
         {children}
