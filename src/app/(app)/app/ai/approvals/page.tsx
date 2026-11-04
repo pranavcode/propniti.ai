@@ -10,8 +10,9 @@ export const metadata = { title: "Approvals · Propniti" };
 const QUEUES: Queue[] = ["needs_you", "auto_handled", "waiting", "decided"];
 
 // The approvals inbox: everything agents proposed, split by who acts next.
-export default async function ApprovalsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const sp = await searchParams;
+export default async function ApprovalsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // A repeated parameter arrives as a list; keep only single values.
+  const sp = Object.fromEntries(Object.entries(await searchParams).filter((e): e is [string, string] => typeof e[1] === "string"));
   const { data } = await pageData();
   // ?proposal=<id> or ?record=applications/<id> opens the queue and page holding that proposal.
   const focus = sp.proposal || sp.record ? await proposalFocus(data, { proposal: sp.proposal, record: sp.record }) : null;
