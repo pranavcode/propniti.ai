@@ -125,6 +125,9 @@ test("a tour offer held back in the bubble isn't spent until it's shown", async 
   const p = await phone.newPage();
   const errors = watch(p);
   await go(p, `${BASE}/app/units`);
+  // The run's storage state turns tips off and marks every tour dismissed; undo both.
+  await p.evaluate(() => { localStorage.removeItem("pn_guide"); localStorage.removeItem("pn_tours"); });
+  await reload(p);
   await p.locator("[data-table-search]").focus();
   await expect(p.locator("[data-guide-pending]")).toBeVisible();
   const spent = () => p.evaluate(() => ({ offers: JSON.parse(localStorage.getItem("pn_whats_new") ?? "{}").offers ?? {}, session: sessionStorage.getItem("pn_offer_session") }));
