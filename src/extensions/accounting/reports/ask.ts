@@ -24,7 +24,7 @@ export async function askReport(text: string, scope: ScopeProperty[], lastClosed
         question,
         { timeoutMs: 15_000 },
       );
-      raw = groundInText(value, question);
+      raw = groundInText(value, question, lastClosed);
     } catch (err) {
       console.error("[reports] model spec failed, using rules:", err instanceof Error ? err.message : err);
     }

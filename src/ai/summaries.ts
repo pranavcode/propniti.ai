@@ -109,16 +109,19 @@ export async function generateSummary(data: DataCtx, entity: string, id: string,
   return { entity_type: entity, entity_id: id, summary, facts: f.facts, model: info.model, generated_at, source: text ? "live" : "rules" };
 }
 
-// The stored briefing while it was written today (demo clock) from the figures as they are now;
-// otherwise the rules sentence from current figures. Never calls a model (GET on every home load).
-export async function cachedBriefing(data: DataCtx, personaId: string): Promise<Summary | null> {
+// The stored briefing while it was written today (demo clock) from the same balances, approvals
+// and data issues; otherwise the rules sentence from current figures. Agent activity counts change
+// with every run, so they don't make a briefing stale. Never calls a model (GET on every home load).
+const ACTIVITY = new Set(["agent_runs_24h", "auto_applied_24h"]);
+const settled = (f: Facts) => JSON.stringify(Object.entries(f).filter(([k]) => !ACTIVITY.has(k)));
+export async function cachedBriefing(data: DataCtx, personaId: string): Promise<Summary> {
   const e = eff("ai_summaries", data.ws);
   const [{ facts, today }, r] = await Promise.all([
     briefingFacts(data),
     data.db.prepare(`SELECT t.* FROM ${e.sql} t WHERE t.id = ?`).bind(...e.params, summaryId("briefing", personaId)).first<Row>(),
   ]);
-  if (r && r.model !== "rules" && String(r.generated_at).slice(0, 10) === today && String(r.facts) === JSON.stringify(facts)) {
-    return { entity_type: "briefing", entity_id: personaId, summary: String(r.summary), facts, model: String(r.model), generated_at: String(r.generated_at), source: r.workspace_id === "base" ? "precomputed" : "live" };
+  if (r && r.model !== "rules" && String(r.generated_at).slice(0, 10) === today && settled(JSON.parse(String(r.facts || "{}"))) === settled(facts)) {
+    return { entity_type: "briefing", entity_id: personaId, summary: String(r.summary), facts: JSON.parse(String(r.facts)), model: String(r.model), generated_at: String(r.generated_at), source: r.workspace_id === "base" ? "precomputed" : "live" };
   }
   return { entity_type: "briefing", entity_id: personaId, summary: rulesBriefing(facts), facts, model: RULES.model, generated_at: demoNowIso(), source: "rules" };
 }

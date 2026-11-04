@@ -229,18 +229,22 @@ export function agingMeasure(measure: string, text: string): string {
   return n ? `delinquency_${n[1] ?? n[2]}` : measure;
 }
 
-const MONTH_WORD = /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\b/i;
+// "May" counts only where it reads as the month ("in May", "May 2026"), not the verb.
+const MONTH_WORD = /\b(january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec)\b|\b(in|for|of|since|through|from|to|until|during|and) may\b|\bmay (\d|and\b|to\b|through\b)/i;
 
 // The model's reading checked against the words. Relative periods ("last month") resolve from the
 // demo clock as the rules read them; a year, quarter or month range the person never named is
 // dropped (production QA: "last month" came back as Jan 2026); aging words always apply.
-export function groundInText(raw: RawSpec, text: string): RawSpec {
+export function groundInText(raw: RawSpec, text: string, lastClosed: string): RawSpec {
   const t = text.toLowerCase();
+  // "Prior year" and "vs last year" name a comparison, not a period.
+  const own = t.replace(/\b(vs\.?|versus|against|compared? (to|with)) (the )?(last|prior|previous) year\b|\b(prior|previous) year\b|\byear (over|to) (year|date)\b/g, "");
   const rules = rulesPeriod(t);
   let period = raw.period;
-  if (rules.kind && (rules.kind !== "year" || !period?.kind)) period = rules;
+  if (/\blast year\b/.test(own) && !rules.kind) period = { ...NO_PERIOD, kind: "year", year: Number(lastClosed.slice(0, 4)) - 1 };
+  else if (rules.kind && (rules.kind !== "year" || !period?.kind)) period = rules;
   else if (period?.kind) {
-    const named = MONTH_WORD.test(t) || /\b20\d{2}\b|\bq[1-4]\b|\bquarter\b|\byear\b/.test(t);
+    const named = MONTH_WORD.test(t) || /\b20\d{2}\b|\bq[1-4]\b|\bquarter\b|\byear\b/.test(own);
     if (!named && (period.kind === "range" || period.kind === "year" || period.kind === "quarter")) period = rules.kind ? rules : null;
     else if (period.year && !/\b20\d{2}\b/.test(t)) period = { ...period, year: null };
   }

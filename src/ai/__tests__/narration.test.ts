@@ -28,6 +28,16 @@ describe("narration direction check", () => {
     expect(wrongDirections("Operating expenses rise by $50,000 a year.", { opex_effect_usd: -50000 })).toEqual([]);
   });
 
+  it("checks gainer/loser wording only for facts that rank properties (review)", () => {
+    expect(wrongDirections("Uptown Tower was the top gainer, up $22,184.", { mover_1: "Uptown Tower", mover_1_change_usd: 22184 })).toEqual([]);
+    expect(wrongDirections("Every property gained; Elm Street loses most.", { top_gainer: "A", top_gainer_delta_usd: 10, gains_least: "Elm Street", gains_least_delta_usd: 5 })).toEqual(["names a top loser, but no property lost"]);
+  });
+
+  it("doesn't read 'improved' as a rise, so falling delinquency can improve (review)", () => {
+    expect(wrongDirections("Delinquency improved by $5,000.", { change_usd: -5000 })).toEqual([]);
+    expect(wrongDirections("Delinquency fell by $5,000.", { change_usd: -5000 })).toEqual([]);
+  });
+
   it("allows a top loser when one lost", () => {
     expect(wrongDirections("The top loser is Elm Street, down $4,619.", { top_loser: "Elm Street", top_loser_delta_usd: -4619 })).toEqual([]);
   });

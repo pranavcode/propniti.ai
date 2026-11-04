@@ -73,3 +73,12 @@ describe("assistant lookups (production QA)", () => {
     }
   });
 });
+
+describe("records.search input (review)", () => {
+  it("caps in/nin lists", async () => {
+    const { getTool } = await import("../tools/registry");
+    const input = getTool("records.search")!.input;
+    expect(input.safeParse({ entity: "leases", filters: [{ field: "id", op: "nin", value: Array.from({ length: 1000 }, (_, i) => `L-${i}`) }] }).success).toBe(true);
+    expect(input.safeParse({ entity: "leases", filters: [{ field: "id", op: "nin", value: Array.from({ length: 1001 }, (_, i) => `L-${i}`) }] }).success).toBe(false);
+  });
+});

@@ -14,9 +14,10 @@ export const hasTokens = (text: string) => TOKEN.test(text);
 
 // The figure check proves a number came from the facts, not that the sentence moves it the right
 // way: "$4,619 decrease" passes when the fact is +4,619. These checks catch the direction.
-const UP = /^(increas\w*|gain\w*|ris(e|es|ing)|rose|grow\w*|grew|higher|up|add(s|ed|ing)?|improv\w*|boost\w*)$/i;
+const UP = /^(increas\w*|gain\w*|ris(e|es|ing)|rose|grow\w*|grew|higher|up|add(s|ed|ing)?|boost\w*)$/i;
 const DOWN = /^(decreas\w*|declin\w*|drop\w*|fell|fall\w*|lower\w*|loss\w*|los(e|es|ing)|lost|loser|down|reduc\w*|shrink\w*|shrank|tak(e|es|ing))$/i;
-// For costs, "rose" means NOI fell, so clauses about costs are left to the figure check.
+// For costs, "rose" means NOI fell, so clauses about costs are left to the figure check. "Improved"
+// is no direction at all: delinquency improves when it falls.
 const COST = /\b(expense|opex|cost|vacancy|concession|tax|insurance|payroll|repair|utilit)/i;
 
 export function wrongDirections(text: string, facts: Record<string, unknown>): string[] {
@@ -38,7 +39,8 @@ export function wrongDirections(text: string, facts: Record<string, unknown>): s
       if (said && said !== sign) out.push(`${m[0].trim()} is a ${sign > 0 ? "gain" : "loss"}`);
     }
   }
-  // "Top loser" for a property that gained (or "top gainer" for one that lost).
+  // "Top loser" for a property that gained (or "top gainer" for one that lost), when the facts rank properties.
+  if (!["top_gainer", "top_loser", "holds_up_best", "gains_least"].some((k) => k in facts)) return out;
   const ranked = (kind: "gainer" | "loser") => Object.entries(facts).some(([k, v]) => k.includes(kind) && k.endsWith("_usd") && typeof v === "number" && (kind === "gainer" ? v > 0 : v < 0));
   if (/\blosers?\b|\bloses (the )?most\b/i.test(text) && !ranked("loser")) out.push("names a top loser, but no property lost");
   if (/\bgainers?\b|\bgains (the )?most\b/i.test(text) && !ranked("gainer")) out.push("names a top gainer, but no property gained");

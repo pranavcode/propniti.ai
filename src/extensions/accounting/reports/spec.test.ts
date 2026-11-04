@@ -83,14 +83,23 @@ describe("production QA: '30+ days delinquent by property last month'", () => {
   });
   it("overrides a model that read the period as January and dropped the aging", () => {
     const model = raw({ measure: "delinquency", groupBy: "property", period: { ...NO_PERIOD, kind: "range", startMonth: 1, endMonth: 1, year: 2026 } });
-    const { spec } = validateSpec(groundInText(model, Q), SCOPE, "2026-10");
+    const { spec } = validateSpec(groundInText(model, Q, "2026-10"), SCOPE, "2026-10");
     expect(spec).toMatchObject({ measure: "delinquency_30", from: "2026-10", to: "2026-10" });
   });
   it("drops a month or year the person never named, and keeps one they did", () => {
     const jan = { ...NO_PERIOD, kind: "range" as const, startMonth: 1, endMonth: 1, year: 2026 };
-    expect(groundInText(raw({ period: jan }), "Past-due balance by property for Phoenix").period).toBeNull();
-    expect(groundInText(raw({ period: jan }), "Past-due balance by property for January 2026").period).toEqual(jan);
-    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "quarter", quarter: 3, year: 2025 } }), "utilities in Q3").period).toMatchObject({ quarter: 3, year: null });
+    expect(groundInText(raw({ period: jan }), "Past-due balance by property for Phoenix", "2026-10").period).toBeNull();
+    expect(groundInText(raw({ period: jan }), "Past-due balance by property for January 2026", "2026-10").period).toEqual(jan);
+    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "quarter", quarter: 3, year: 2025 } }), "utilities in Q3", "2026-10").period).toMatchObject({ quarter: 3, year: null });
+  });
+  it("doesn't take 'may' the verb or 'prior year' as a named period (review)", () => {
+    const year = { ...NO_PERIOD, kind: "year" as const, year: 2025 };
+    expect(groundInText(raw({ period: year }), "NOI by property vs prior year", "2026-10").period).toBeNull();
+    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "range", startMonth: 5, endMonth: 5 } }), "show repairs that may be late", "2026-10").period).toBeNull();
+    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "range", startMonth: 5, endMonth: 5 } }), "repairs in May", "2026-10").period).toMatchObject({ startMonth: 5 });
+    expect(groundInText(raw({ period: year }), "NOI by property for the year 2025", "2026-10").period).toEqual(year);
+    expect(groundInText(raw({ period: year }), "landscaping by property last year", "2026-10").period).toEqual(year);
+    expect(groundInText(raw({ period: year }), "repairs by month vs last year", "2026-10").period).toBeNull();
   });
   it("takes property ids written with their names, and words a miss by the person's real scope", () => {
     const { spec, dropped } = validateSpec(raw({ properties: ["p12 Camelback Terrace", "The Lofts at Riverside"] }), SCOPE, "2026-10");

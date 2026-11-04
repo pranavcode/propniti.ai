@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { demoNowIso } from "@/lib/clock";
 import { cachedBriefing, generateBriefing } from "../summaries";
 import { setModelForTests } from "../providers";
 import { DANIEL, openFixture, TODAY } from "./fixture";
@@ -29,7 +30,7 @@ describe("home briefing", () => {
     const { data, store } = setup();
     const { facts } = await generateBriefing(data, "daniel", { writeTo: "none" });
     store({ ...facts, residents_late: 371 }, "2026-11-03T21:38:24.896Z", "rules");
-    const b = (await cachedBriefing(data, "daniel"))!;
+    const b = await cachedBriefing(data, "daniel");
     expect(b.source).toBe("rules");
     expect(b.facts).toEqual(facts);
     expect(b.generated_at.slice(0, 10)).toBe(TODAY);
@@ -43,6 +44,11 @@ describe("home briefing", () => {
     const { facts } = await generateBriefing(data, "daniel", { writeTo: "none" });
     store(facts, `${TODAY}T08:00:00Z`);
     expect(await cachedBriefing(data, "daniel")).toMatchObject({ summary: "Stored briefing.", source: "precomputed" });
+    // Another agent run doesn't make it stale (the stored activity counts are shown as written)…
+    raw.prepare("INSERT INTO agent_runs (workspace_id, id, agent_key, trigger_kind, status, started_at) VALUES ('base', 'run-x', 'collections', 'schedule', 'done', ?)").run(demoNowIso());
+    expect((await generateBriefing(data, "daniel", { writeTo: "none" })).facts.agent_runs_24h).toBe(Number(facts.agent_runs_24h) + 1);
+    expect(await cachedBriefing(data, "daniel")).toMatchObject({ summary: "Stored briefing.", facts: { agent_runs_24h: facts.agent_runs_24h } });
+    // …a balance change does.
     raw.prepare("UPDATE charges SET paid_cents = amount_cents WHERE id = 'c-big'").run();
     expect(await cachedBriefing(data, "daniel")).toMatchObject({ source: "rules" });
   });

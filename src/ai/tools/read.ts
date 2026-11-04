@@ -28,7 +28,7 @@ export function slim(row: Row): Row {
 const FilterSchema = z.object({
   field: z.string().describe("column name"),
   op: z.enum(["eq", "ne", "in", "nin", "gt", "gte", "lt", "lte", "like", "null", "notnull"]),
-  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]).optional(),
+  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()])).max(1000)]).optional(),
 });
 
 registerTool({
