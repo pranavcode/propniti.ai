@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { BrowserContext, Page } from "@playwright/test";
 
@@ -21,6 +22,14 @@ export const TIPS_OFF = JSON.stringify({ off: true });
 // Act as a persona inside the run's shared workspace (the pn_ws cookie comes from storageState).
 export async function as(context: BrowserContext, persona: string) {
   await context.addCookies([{ name: "pn_as", value: persona, url: BASE }]);
+}
+
+// Moves this test to a workspace of its own, created on its first request, so what earlier tests
+// and the 15-minute agent sweep did to the run's shared workspace can't change what it finds.
+// Use sparingly: the app caps new workspaces per IP per hour (30 on Cloudflare).
+export async function ownWorkspace(context: BrowserContext) {
+  const url = new URL(BASE);
+  await context.addCookies([{ name: "pn_ws", value: randomBytes(18).toString("base64url"), domain: url.hostname, path: "/", httpOnly: true, secure: url.protocol === "https:", sameSite: "Lax" }]);
 }
 
 // A plain click on a list row opens the record peek drawer; this continues to the full record page.
