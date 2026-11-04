@@ -1,12 +1,17 @@
 import { demoNowIso } from "@/lib/clock";
 import type { Row } from "@/entities/types";
 import { daysBetween, sql, upsertOverlay } from "../data";
-import { defineAgent, money, type Candidate } from "./framework";
+import type { AgentCtx } from "../runtime";
+import { defineAgent, money, planOf, type Candidate } from "./framework";
 import { scoreApplicant } from "../rules";
 export { scoreApplicant, type Factor } from "../rules";
 
 // Applicant scoring with plain-English reasons for and against (a broker or manager decides), and
-// follow-ups for prospects nobody has contacted in three days.
+// follow-ups for prospects nobody has contacted in three days. "Improve with AI" occupancy plans
+// also hand it paused or draft listings on vacant units to put back on the market.
+
+export const FOLLOW_UP_STAGES = ["Inquiry", "Contacted", "Toured"];
+export const STALE_CONTACT_DAYS = 3;
 
 export default defineAgent({
   key: "leasing",
@@ -17,11 +22,13 @@ export default defineAgent({
   triggers: { schedule: "0 */4 * * *", events: ["application.submitted", "screening.completed"] },
   autonomy: "act_with_approval",
   entities: ["applications", "applicants", "screening_results", "prospects"],
-  actions: ["applications.decide", "prospects.send_follow_up"],
+  actions: ["applications.decide", "prospects.send_follow_up", "listings.publish"],
   maxProposals: 10,
   async collect(ctx, trigger) {
     // An application.submitted event names the new application: score it first, whatever its stage.
     const fresh = (trigger.input as { application_id?: string } | undefined)?.application_id;
+    const plan = planOf(trigger);
+    if (plan) return planCandidates(ctx, plan.ids);
     const apps = await ctx.call<{ rows: Row[] }>("records.search", { entity: "applications", filters: [{ field: "stage", op: "in", value: ["Submitted", "Screening", "Review"] }], sort: ["submitted_at", "asc"], size: 25 });
     const ids = [...new Set([...(fresh ? [fresh] : []), ...apps.rows.map((a) => String(a.id))])];
     const details = ids.length
@@ -60,18 +67,37 @@ export default defineAgent({
       await ctx.step({ kind: "message", output: { scored: scored.entityId, score: changes.score, recommendation: changes.recommendation }, ok: true });
     }
 
-    const cutoff = new Date(Date.parse(ctx.today) - 3 * 86_400_000).toISOString().slice(0, 10);
-    const stale = await ctx.call<{ rows: Row[] }>("records.search", { entity: "prospects", filters: [{ field: "stage", op: "in", value: ["Inquiry", "Contacted", "Toured"] }, { field: "last_contact_at", op: "lt", value: cutoff }], sort: ["last_contact_at", "asc"], size: 10 });
-    for (const p of stale.rows) {
-      const days = daysBetween(String(p.last_contact_at).slice(0, 10), ctx.today);
-      out.push({
-        entity: "prospects", entityId: String(p.id), propertyId: String(p.property_id), action: "prospects.send_follow_up",
-        title: `Follow up with ${p.name} — no contact in ${days} days`, why: [`Stage ${p.stage}, last contact ${String(p.last_contact_at).slice(0, 10)}`, p.budget_cents ? `Budget ${money(Number(p.budget_cents))}` : "Came in through " + (p.source || "the website")],
-        confidence: 0.85, risk: "Low", facts: { prospect: String(p.name), days_since_contact: days, budget_cents: (p.budget_cents as number) ?? null, desired_beds: (p.desired_beds as number) ?? null },
-        message: { party_kind: "prospect", party_id: String(p.id), subject: "Still looking for a new home?", body: `Hi ${String(p.name).split(" ")[0]}, thanks again for your interest. We have homes available that fit what you told us. Would you like to book a tour this week? Just reply with a time that works.` },
-        effects: [], priority: 100 + days,
-      });
-    }
-    return out;
+    const cutoff = new Date(Date.parse(ctx.today) - STALE_CONTACT_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const stale = await ctx.call<{ rows: Row[] }>("records.search", { entity: "prospects", filters: [{ field: "stage", op: "in", value: FOLLOW_UP_STAGES }, { field: "last_contact_at", op: "lt", value: cutoff }], sort: ["last_contact_at", "asc"], size: 10 });
+    return [...out, ...stale.rows.map((p) => followUp(ctx.today, p))];
   },
 });
+
+function followUp(today: string, p: Row): Candidate {
+  const days = daysBetween(String(p.last_contact_at ?? today).slice(0, 10), today);
+  return {
+    entity: "prospects", entityId: String(p.id), propertyId: String(p.property_id), action: "prospects.send_follow_up",
+    title: `Follow up with ${p.name} — no contact in ${days} days`, why: [`Stage ${p.stage}, last contact ${String(p.last_contact_at).slice(0, 10)}`, p.budget_cents ? `Budget ${money(Number(p.budget_cents))}` : "Came in through " + (p.source || "the website")],
+    confidence: 0.85, risk: "Low", facts: { prospect: String(p.name), days_since_contact: days, budget_cents: (p.budget_cents as number) ?? null, desired_beds: (p.desired_beds as number) ?? null },
+    message: { party_kind: "prospect", party_id: String(p.id), subject: "Still looking for a new home?", body: `Hi ${String(p.name).split(" ")[0]}, thanks again for your interest. We have homes available that fit what you told us. Would you like to book a tour this week? Just reply with a time that works.` },
+    effects: [], priority: 100 + days,
+  };
+}
+
+// A plan's records: prospects still open for follow-up, and listings that are off the market.
+async function planCandidates(ctx: AgentCtx, ids: string[]): Promise<Candidate[]> {
+  const only = [{ field: "id", op: "in", value: ids.slice(0, 50) }];
+  const prospects = await ctx.call<{ rows: Row[] }>("records.search", { entity: "prospects", filters: [...only, { field: "stage", op: "in", value: FOLLOW_UP_STAGES }], size: 50 });
+  const listings = await ctx.call<{ rows: Row[] }>("records.search", { entity: "listings", filters: [...only, { field: "status", op: "in", value: ["Draft", "Paused"] }], size: 50 });
+  return [
+    ...prospects.rows.map((p) => followUp(ctx.today, p)),
+    ...listings.rows.filter((l) => String(l.description ?? "").trim()).map((l): Candidate => ({
+      entity: "listings", entityId: String(l.id), propertyId: String(l.property_id), action: "listings.publish",
+      title: `Relist ${l.headline} at ${money(Number(l.rent_cents))}`,
+      why: [`Listing is ${String(l.status).toLowerCase()} while the unit is vacant`, Number(l.leads) ? `${l.leads} leads and ${l.views} views while it was live` : "No leads recorded yet"],
+      confidence: 0.8, risk: "Low", facts: { listing: String(l.id), headline: String(l.headline), rent_cents: Number(l.rent_cents), status: String(l.status) },
+      evidence: [{ entity_type: "listings", entity_id: String(l.id), label: String(l.headline) }],
+      effects: [], priority: 300,
+    })),
+  ];
+}

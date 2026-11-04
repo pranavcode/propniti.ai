@@ -1,12 +1,43 @@
 import type { Row } from "@/entities/types";
-import { parseJson, sql } from "../data";
-import { defineAgent, money, type Candidate } from "./framework";
+import { demoNow } from "@/lib/clock";
+import { parseJson, sql, type DataCtx } from "../data";
+import { defineAgent, money, planOf, type Candidate } from "./framework";
 import { triage } from "../rules";
 import { coiVerifiedSql } from "@/extensions/risk/sql";
 export { triage } from "../rules";
 
 // Triage of new work orders: trade, urgency, a cost estimate from history, ranked vendors and the
 // owner approval limit. Safety issues (gas, smoke, sparks, flooding) always go to a person.
+// "Improve with AI" plans also send it past-SLA jobs whose vendor is overloaded, to propose a
+// vendor with capacity (a person approves the switch).
+
+export type PoolVendor = Row & { id: string; company: string; open_jobs: number; coi_expires: string | null };
+
+// Active vendors with their open jobs and latest verified insurance. One query at a time and no
+// per-vendor subqueries: D1 shares capacity with every visitor.
+export async function vendorPool(data: DataCtx): Promise<PoolVendor[]> {
+  const active = await sql<Row>(data, "SELECT v.id, v.company, v.trade, v.metros, v.rating, v.status FROM {vendors} v WHERE v.status = 'Active'", [], { unscoped: true });
+  const jobs = new Map((await sql<{ vendor_id: string; n: number }>(data, "SELECT vendor_id, count(*) AS n FROM {work_orders} WHERE vendor_id IS NOT NULL AND status IN ('Assigned', 'Scheduled', 'In progress') GROUP BY vendor_id", [], { unscoped: true })).map((r) => [r.vendor_id, r.n]));
+  const cois = new Map((await sql<{ vendor_id: string; e: string }>(data, `SELECT k.vendor_id, max(k.expires_on) AS e FROM {vendor_cois} k WHERE ${coiVerifiedSql("k")} GROUP BY k.vendor_id`, [], { unscoped: true })).map((r) => [r.vendor_id, r.e]));
+  return active.map((v) => ({ ...v, id: String(v.id), company: String(v.company), open_jobs: jobs.get(String(v.id)) ?? 0, coi_expires: cois.get(String(v.id)) ?? null }));
+}
+
+// Vendors for a trade in a metro with valid insurance, best first (rating, minus load).
+export function rankVendors(vendors: PoolVendor[], trade: string, metro: string, today: string) {
+  return vendors
+    .filter((v) => v.trade === trade && parseJson<string[]>(v.metros, []).includes(metro) && v.coi_expires && String(v.coi_expires) >= today)
+    .map((v) => ({ v, score: Number(v.rating ?? 3) * 20 - v.open_jobs * 5 }))
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.v);
+}
+
+// A job already with a vendor is worth moving only to a ranked vendor with fewer open jobs.
+export function reassignTarget(w: { vendor_id?: unknown; category?: unknown }, vendors: PoolVendor[], metro: string, today: string): { from: PoolVendor | null; to: PoolVendor } | null {
+  const from = vendors.find((v) => v.id === w.vendor_id) ?? null;
+  const to = rankVendors(vendors, String(w.category), metro, today).find((v) => v.id !== w.vendor_id);
+  if (!to || (from && to.open_jobs >= from.open_jobs)) return null;
+  return { from, to };
+}
 
 export default defineAgent({
   key: "maintenance_triage",
@@ -17,36 +48,50 @@ export default defineAgent({
   triggers: { schedule: "*/15 * * * *", events: ["wo.created", "service_request.created"] },
   autonomy: "auto_within_policy",
   entities: ["work_orders", "vendors"],
-  actions: ["work_orders.triage"],
+  actions: ["work_orders.triage", "work_orders.assign_vendor"],
   maxProposals: 10,
   async collect(ctx, trigger) {
     const one = (trigger.input as { work_order_id?: string } | undefined)?.work_order_id;
-    const wos = await ctx.call<{ rows: Row[] }>("records.search", { entity: "work_orders", filters: one ? [{ field: "id", op: "eq", value: one }] : [{ field: "status", op: "eq", value: "New" }], sort: ["opened_at", "asc"], size: 15 });
+    const plan = planOf(trigger);
+    const filters = plan ? [{ field: "id", op: "in", value: plan.ids.slice(0, 50) }] : one ? [{ field: "id", op: "eq", value: one }] : [{ field: "status", op: "eq", value: "New" }];
+    const wos = await ctx.call<{ rows: Row[] }>("records.search", { entity: "work_orders", filters, sort: ["opened_at", "asc"], size: plan ? 50 : 15 });
     if (!wos.rows.length) return [];
     const policies = await ctx.call<{ approval_policies: Row[] }>("policy.lookup", { category: "Maintenance spend" });
     const pol = policies.approval_policies.find((p) => p.owner_entity_id == null) ?? policies.approval_policies[0];
     const limit = pol?.limit_cents == null ? null : Number(pol.limit_cents);
     const ownerOver = pol?.owner_approval_over_cents == null ? null : Number(pol.owner_approval_over_cents);
-    // One query at a time and no per-vendor subqueries: D1 shares capacity with every visitor.
     const costs = await sql<{ category: string; cost: number }>(ctx.data, "SELECT category, cost_cents AS cost FROM {work_orders} WHERE cost_cents > 0 AND status IN ('Completed', 'Paid') ORDER BY category, cost_cents LIMIT 5000", [], { unscoped: true });
-    const active = await sql<Row>(ctx.data, "SELECT v.id, v.company, v.trade, v.metros, v.rating, v.status FROM {vendors} v WHERE v.status = 'Active'", [], { unscoped: true });
-    const jobs = new Map((await sql<{ vendor_id: string; n: number }>(ctx.data, "SELECT vendor_id, count(*) AS n FROM {work_orders} WHERE vendor_id IS NOT NULL AND status IN ('Assigned', 'Scheduled', 'In progress') GROUP BY vendor_id", [], { unscoped: true })).map((r) => [r.vendor_id, r.n]));
-    const cois = new Map((await sql<{ vendor_id: string; e: string }>(ctx.data, `SELECT k.vendor_id, max(k.expires_on) AS e FROM {vendor_cois} k WHERE ${coiVerifiedSql("k")} GROUP BY k.vendor_id`, [], { unscoped: true })).map((r) => [r.vendor_id, r.e]));
-    const vendors: Row[] = active.map((v) => ({ ...v, open_jobs: jobs.get(String(v.id)) ?? 0, coi_expires: cois.get(String(v.id)) ?? null }));
+    const vendors = await vendorPool(ctx.data);
     const props = await sql<{ id: string; metro: string; name: string }>(ctx.data, "SELECT id, metro, name FROM {properties}");
     const median = (cat: string) => {
       const xs = costs.filter((c) => c.category === cat).map((c) => c.cost);
       return xs.length ? xs[Math.floor(xs.length / 2)] : null;
     };
     const month = Number(ctx.today.slice(5, 7));
-    return wos.rows.map((w): Candidate => {
-      const t = triage(`${w.title} ${w.description ?? ""}`, month);
+    return wos.rows.flatMap((w): Candidate[] => {
       const prop = props.find((p) => p.id === w.property_id);
-      const ranked = vendors
-        .filter((v) => v.trade === t.trade && parseJson<string[]>(v.metros, []).includes(prop?.metro ?? "") && v.coi_expires && String(v.coi_expires) >= ctx.today)
-        .map((v) => ({ v, score: Number(v.rating ?? 3) * 20 - Number(v.open_jobs) * 5 }))
-        .sort((a, b) => b.score - a.score);
-      const best = ranked[0]?.v;
+      // Plans: a job already with a vendor moves only to one with capacity; untriaged jobs are triaged below.
+      if (plan && !["New", "Triaged"].includes(String(w.status))) {
+        const r = ["Assigned", "Scheduled"].includes(String(w.status)) ? reassignTarget(w, vendors, prop?.metro ?? "", ctx.today) : null;
+        if (!r) return [];
+        const late = w.sla_due_at ? Math.max(0, Math.round((demoNow(ctx.nowMs).getTime() - Date.parse(String(w.sla_due_at))) / 3_600_000)) : null;
+        return [{
+          entity: "work_orders", entityId: String(w.id), propertyId: String(w.property_id), action: "work_orders.assign_vendor",
+          title: `${w.id}: move to ${r.to.company} (${r.to.open_jobs} open jobs${r.from ? ` vs ${r.from.open_jobs} with ${r.from.company}` : ""})`,
+          why: [
+            late != null ? `Past its SLA due time by about ${late} hours (${String(w.priority).toLowerCase()} priority)` : "Open past its SLA due time",
+            r.from ? `${r.from.company} has ${r.from.open_jobs} open jobs` : "No vendor on the job",
+            `${r.to.company}: rating ${r.to.rating ?? "n/a"}, ${r.to.open_jobs} open jobs, insurance valid to ${r.to.coi_expires}`,
+          ],
+          confidence: 0.75, risk: "Medium",
+          facts: { work_order: String(w.id), title: String(w.title), from_vendor: r.from?.company ?? null, to_vendor: r.to.company, to_open_jobs: r.to.open_jobs, property: prop?.name ?? null },
+          evidence: [{ entity_type: "work_orders", entity_id: String(w.id), label: String(w.title) }, { entity_type: "vendors", entity_id: r.to.id, label: r.to.company }],
+          effects: [{ kind: "update", table: "work_orders", id: String(w.id), changes: { vendor_id: r.to.id, status: "Assigned" } }],
+          priority: 1500 + (late ?? 0),
+        }];
+      }
+      const t = triage(`${w.title} ${w.description ?? ""}`, month);
+      const best = rankVendors(vendors, t.trade, prop?.metro ?? "", ctx.today)[0];
       const estimate = median(t.trade) ?? median(String(w.category)) ?? 25000;
       const overOwner = ownerOver != null && estimate > ownerOver;
       const why = [
@@ -55,7 +100,7 @@ export default defineAgent({
         best ? `${best.company}: rating ${best.rating ?? "n/a"}, ${best.open_jobs} open jobs, insurance valid to ${best.coi_expires}` : `No ${t.trade.toLowerCase()} vendor with valid insurance covers ${prop?.metro ?? "this metro"}; assign in-house`,
         overOwner ? `Over the owner's ${money(ownerOver!)} approval limit: the owner approves in their portal` : limit != null ? `Within the ${money(limit)} auto-approve limit` : "No auto-approve limit set",
       ];
-      return {
+      return [{
         entity: "work_orders", entityId: String(w.id), propertyId: String(w.property_id), action: "work_orders.triage",
         title: `${w.id}: ${t.trade}, ${t.priority}${best ? ` → ${best.company}` : ""} (est. ${money(estimate)})`,
         why, confidence: best ? 0.88 : 0.7, risk: t.safety ? "High" : "Low", category: t.safety ? "Safety" : "Maintenance spend", amountCents: estimate, alwaysHuman: t.safety, mandatory: t.safety,
@@ -63,7 +108,7 @@ export default defineAgent({
         evidence: [{ entity_type: "work_orders", entity_id: String(w.id), label: String(w.title) }, ...(best ? [{ entity_type: "vendors", entity_id: String(best.id), label: String(best.company) }] : [])],
         effects: [{ kind: "update", table: "work_orders", id: String(w.id), changes: { category: t.trade, priority: t.priority, vendor_id: best ? String(best.id) : null, status: best ? "Assigned" : "Triaged", estimate_cents: estimate } }],
         priority: (t.safety ? 3000 : t.priority === "Urgent" ? 2000 : 1000) + (best ? 10 : 0),
-      };
+      }];
     });
   },
 });

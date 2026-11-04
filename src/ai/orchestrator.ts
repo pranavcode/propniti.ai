@@ -56,6 +56,8 @@ export async function loadPolicies(db: Db, ws: string): Promise<(ApprovalPolicy 
 export type StartOpts = {
   db: Db; ws: string; actor: Actor; agent: AgentKey; trigger: { kind: TriggerKind; eventId?: string; input?: unknown };
   waitUntil?: (p: Promise<unknown>) => void; deadlineMs?: number; nowMs?: number;
+  // A caller-chosen id: inserting it twice fails on the unique key, which makes a start idempotent.
+  runId?: string;
 };
 
 // Creates the run row right away (so the UI can open its trace) and runs it in the background
@@ -64,7 +66,7 @@ export async function startRun(o: StartOpts): Promise<{ runId: string; done: Pro
   await loadAgents();
   const def = getAgent(o.agent);
   if (!def) throw new Error(`Unknown agent ${o.agent}`);
-  const runId = newId("run");
+  const runId = o.runId ?? newId("run");
   const nowMs = o.nowMs ?? Date.now();
   await (await insert(o.db, o.ws, "agent_runs", {
     id: runId, agent_key: o.agent, trigger_kind: o.trigger.kind, event_id: o.trigger.eventId ?? null, started_by: o.trigger.kind === "manual" || o.trigger.kind === "chat" ? o.actor.personaId : null,
@@ -101,7 +103,7 @@ export async function runWithContext<T>(
       deadlineMs: nowMs + (o.deadlineMs ?? 25_000), waitUntil: o.waitUntil, allowedActions: actions,
       execute: (data, proposal, by, payload) => executeProposal(data, proposal, by, payload),
     });
-    await ctx.step({ kind: "plan", ok: true, output: { trigger: o.trigger.kind, event_id: o.trigger.eventId ?? null, autonomy: ctx.autonomy, model: ctx.model?.info.label ?? "Rules (no model configured)", as_of: ctx.today } });
+    await ctx.step({ kind: "plan", ok: true, input: o.trigger.input, output: { trigger: o.trigger.kind, event_id: o.trigger.eventId ?? null, autonomy: ctx.autonomy, model: ctx.model?.info.label ?? "Rules (no model configured)", as_of: ctx.today } });
     const c = ctx;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const hardStop = new Promise<never>((_, rej) => (timer = setTimeout(() => ((c.aborted = true), rej(new BudgetEnded())), Math.max(3_000, c.deadline - Date.now() + 3_000))));
