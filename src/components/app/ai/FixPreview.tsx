@@ -78,7 +78,7 @@ export function FixPreview({ title, changes, why, confidence, source, needsPerso
         {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
       </ul>
 
-      {changes.length === 0 && (
+      {!onApply && (
         <div className="border-t px-3 py-2 text-[12.5px]">
           <p className="font-medium">No automatic fix — a person needs to check this.</p>
           {nextStep && <p className="mt-0.5 text-muted-foreground">{nextStep.text}{nextStep.href && <> <Link href={nextStep.href} className="font-medium text-primary hover:underline">{nextStep.label ?? "Open the record"}</Link></>}</p>}
