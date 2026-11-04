@@ -47,3 +47,24 @@ test("a list row opens the peek drawer, J moves, Back closes, Open full page nav
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test("Ask about this closes the drawer so the assistant can be used; a crafted ?peek doesn't crash", async ({ page }) => {
+  const errors = watch(page);
+  await go(page, `${BASE}/app/properties?sort=name`);
+  await page.locator("tbody a[data-peek-id]").first().click();
+  const drawer = page.getByRole("dialog");
+  await drawer.getByRole("button", { name: "Ask about this" }).click();
+  await expect(drawer).toBeHidden();
+  await expect(page).not.toHaveURL(/peek=/);
+  const dock = page.getByRole("complementary", { name: "Ask Propniti" });
+  await expect(dock).toBeVisible();
+  // Nothing modal is left over the dock: its own controls take clicks.
+  await dock.getByRole("button", { name: "Close assistant" }).click();
+  await expect(dock).toBeHidden();
+
+  for (const bad of [".", "..", "units:.", "units:a%2Fb"]) {
+    await go(page, `${BASE}/app/units?peek=${bad}`);
+    await expect(page.getByRole("dialog")).toBeHidden();
+  }
+  expect(errors).toEqual([]);
+});

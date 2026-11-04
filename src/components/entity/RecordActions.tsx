@@ -32,8 +32,9 @@ export function RecordActions(props: Props) {
 }
 
 // The same buttons for the peek drawer: `onChanged` runs after any write (true after a delete),
-// so the drawer reloads or closes; the list behind it refreshes either way.
-export function ActionBar({ entity, id, title, label, routeBase, actions, edit, canDelete, onChanged }: Props & { onChanged?: (deleted: boolean) => void }) {
+// so the drawer reloads or closes; the list behind it refreshes either way. `onAsk` runs before
+// "Ask about this" opens the assistant, so the drawer can close first (its modal blocks the dock).
+export function ActionBar({ entity, id, title, label, routeBase, actions, edit, canDelete, onChanged, onAsk }: Props & { onChanged?: (deleted: boolean) => void; onAsk?: () => void }) {
   const router = useRouter();
   const shell = useShellMaybe();
   const { params, set } = useUrlState();
@@ -70,7 +71,7 @@ export function ActionBar({ entity, id, title, label, routeBase, actions, edit, 
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {shell && <Button variant="outline" size="sm" onClick={() => shell.assistant.ask(`Tell me about ${title}`, { entity, id, title })}><Sparkles className="size-4 text-tone-ai" />Ask about this</Button>}
+      {shell && <Button variant="outline" size="sm" onClick={() => { onAsk?.(); shell.assistant.ask(`Tell me about ${title}`, { entity, id, title }); }}><Sparkles className="size-4 text-tone-ai" />Ask about this</Button>}
       {actions.filter((a) => !a.hasInput).map((a) => (
         <Button key={a.key} size="sm" variant={a.money ? "default" : "outline"} disabled={busy} onClick={() => (a.confirm || a.money ? setConfirm(a) : run(a))}>{a.label}</Button>
       ))}

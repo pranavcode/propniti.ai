@@ -14,8 +14,9 @@ export function peekValue(target: PeekTarget, pageEntity?: string | null) {
 export function parsePeek(value: string | null | undefined, pageEntity?: string | null): PeekTarget | null {
   if (!value) return null;
   const i = value.indexOf(":");
-  if (i > 0 && /^[a-z_]+$/.test(value.slice(0, i))) return value.length > i + 1 ? { entity: value.slice(0, i), id: value.slice(i + 1) } : null;
-  return pageEntity ? { entity: pageEntity, id: value } : null;
+  const t = i > 0 && /^[a-z_]+$/.test(value.slice(0, i)) ? { entity: value.slice(0, i), id: value.slice(i + 1) } : pageEntity ? { entity: pageEntity, id: value } : null;
+  // "." and ".." resolve away in the record API URL, and "/" adds a path segment.
+  return t && t.id && t.id !== "." && t.id !== ".." && !t.id.includes("/") ? t : null;
 }
 
 // The query string with `peek` set (or removed when value is null), keeping every other key.

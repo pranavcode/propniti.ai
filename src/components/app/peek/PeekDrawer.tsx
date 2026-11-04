@@ -43,7 +43,7 @@ async function load(t: PeekTarget, signal: AbortSignal): Promise<Loaded> {
     fetch(`${base}/activity?size=5`, { signal }).catch(() => null),
   ]);
   const body = await rec.json().catch(() => ({}));
-  if (!rec.ok) throw new Error(body.error ?? "This record couldn't load.");
+  if (!rec.ok || !body.peek) throw new Error(body.error ?? "This record couldn't load.");
   const events = act?.ok ? ((await act.json().catch(() => null))?.rows as ActivityEvent[] | undefined) : undefined;
   return { row: body.row, peek: body.peek, activity: events ? events.slice(0, 5) : null };
 }
@@ -116,13 +116,13 @@ export function PeekDrawer() {
             <div className="px-4"><ErrorBanner title="Couldn't open this record" message={current.message} onRetry={() => setReload((n) => n + 1)} /></div>
           </>
         )}
-        {data && <PeekBody data={data} onChanged={onChanged} />}
+        {data && <PeekBody data={data} onChanged={onChanged} onAsk={close} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function PeekBody({ data, onChanged }: { data: Loaded; onChanged: (deleted: boolean) => void }) {
+function PeekBody({ data, onChanged, onAsk }: { data: Loaded; onChanged: (deleted: boolean) => void; onAsk: () => void }) {
   const { row, peek: p, activity } = data;
   const id = String(row.id);
   return (
@@ -143,7 +143,7 @@ function PeekBody({ data, onChanged }: { data: Loaded; onChanged: (deleted: bool
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild size="sm"><Link href={p.href}>Open full page<ArrowUpRight data-icon="inline-end" /></Link></Button>
           <ActionBar key={id} entity={p.entity} id={id} title={p.title} label={p.label} routeBase={p.route} actions={p.actions}
-            edit={p.edit?.length ? { fields: p.edit, initial: row } : undefined} canDelete={p.canDelete} onChanged={onChanged} />
+            edit={p.edit?.length ? { fields: p.edit, initial: row } : undefined} canDelete={p.canDelete} onChanged={onChanged} onAsk={onAsk} />
         </div>
       </SheetHeader>
 

@@ -29,9 +29,10 @@ export function usePeekPageEntity(entity: string) {
   }, [entity]);
 }
 
-// True while the open drawer sits on a history entry this page pushed (so close = Back).
-let pushed = false;
-if (typeof window !== "undefined") window.addEventListener("popstate", () => { pushed = false; });
+// The pathname whose open drawer sits on a history entry it pushed (so close = Back). Tied to the
+// pathname so a client navigation away doesn't leave a stale flag behind.
+let pushed: string | null = null;
+if (typeof window !== "undefined") window.addEventListener("popstate", () => { pushed = null; });
 
 function writeUrl(value: string | null, mode: "push" | "replace") {
   const url = `${window.location.pathname}${withPeek(window.location.search, value)}${window.location.hash}`;
@@ -43,12 +44,12 @@ export function openPeek(target: PeekTarget) {
   const value = peekValue(target, currentPageEntity());
   const isOpen = new URLSearchParams(window.location.search).has(PEEK_PARAM);
   if (isOpen) writeUrl(value, "replace");
-  else { writeUrl(value, "push"); pushed = true; }
+  else { writeUrl(value, "push"); pushed = window.location.pathname; }
 }
 
 export function closePeek() {
   if (!new URLSearchParams(window.location.search).has(PEEK_PARAM)) return;
-  if (pushed) { pushed = false; window.history.back(); }
+  if (pushed === window.location.pathname) { pushed = null; window.history.back(); }
   else writeUrl(null, "replace");
 }
 

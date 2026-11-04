@@ -30,6 +30,10 @@ describe("peek URL", () => {
     expect(parsePeek("2026-01:x", "charges")).toEqual({ entity: "charges", id: "2026-01:x" });
   });
 
+  it("rejects ids that would change the record API path", () => {
+    for (const v of [".", "..", "units:.", "units:..", "a/b", "units:a/b", "units:../x"]) expect(parsePeek(v, "properties")).toBeNull();
+  });
+
   it("sets and clears only peek, keeping filters, sort and page", () => {
     expect(withPeek("f.status=Open&sort=-rent&page=3", "p02")).toBe("?f.status=Open&sort=-rent&page=3&peek=p02");
     expect(withPeek("f.status=Open&peek=p02&page=3", "p03")).toBe("?f.status=Open&peek=p03&page=3");
