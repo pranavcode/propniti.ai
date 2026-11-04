@@ -35,8 +35,8 @@ export function MxApprovals({ rows, more }: { rows: ProposalJson[]; more: number
         <ApprovalItem key={p.id} variant="row" agent={AGENT_LABEL[p.agent] ?? p.agent} title={p.title} amount={p.amount_cents == null ? null : p.amount_cents / 100} risk={p.risk}
           why={p.why} evidence={p.evidence.map((e) => ({ label: e.label, href: e.href }))} confidence={p.confidence} runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
           recordHref={p.agent === "maintenance_triage" ? `/app/maintenance/intake/${encodeURIComponent(p.entity_id)}` : p.href} createdAt={p.created_at}
-          source={sourceOf(p)} model={p.model ?? undefined} policy={p.queue_state === "waiting" ? "Waiting on the owner's approval" : undefined}
-          canApprove={p.queue_state !== "waiting"} onApprove={() => decide(p, "approve")} onReject={() => decide(p, "reject")} />
+          source={sourceOf(p)} model={p.model ?? undefined} policy={p.queue_state === "waiting" ? "Waiting on the owner's approval" : p.decide_reason ?? undefined}
+          canApprove={p.can_decide ?? p.queue_state !== "waiting"} onApprove={() => decide(p, "approve")} onReject={() => decide(p, "reject")} />
       ))}
       {more > 0 && <Link href="/app/ai/approvals" className="flex items-center gap-1.5 border-t px-3 py-2 text-[12.5px] text-primary hover:bg-muted/40"><Inbox className="size-3.5" />{more} more in the approvals inbox</Link>}
     </div>

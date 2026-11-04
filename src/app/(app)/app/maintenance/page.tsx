@@ -65,7 +65,7 @@ export default async function MaintenanceHome() {
   ]);
   const h = home.v;
   const c = h?.counts ?? {};
-  const proposals = (props.v ?? []).map((r: Row) => proposalOut(r) as unknown as ProposalJson);
+  const proposals = (props.v ?? []).map((r: Row) => proposalOut(r, persona.role) as unknown as ProposalJson);
   const isSup = persona.role === "maintenance_supervisor";
   const failed = [home, sla, ageP, trade, spend, techs].some((x) => x.error);
   const invoiceTotal = (h?.invoices ?? []).reduce((a, r) => a + Number(r.invoice_cents ?? 0), 0);
