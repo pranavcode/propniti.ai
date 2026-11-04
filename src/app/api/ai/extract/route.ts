@@ -1,4 +1,4 @@
-import { extractCoi, extractInvoice } from "@/lib/llm";
+import { extractCoi, extractInsurance, extractInvoice } from "@/lib/llm";
 import { rateLimit, readBodyLimited } from "@/lib/guard";
 import { sameOrigin } from "@/ai/session";
 
@@ -41,7 +41,8 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniff(bytes);
   if (!mime) return Response.json({ error: "Upload a JPEG, PNG, WebP or PDF" }, { status: 415 });
-  // kind=coi reads a certificate of insurance (vendor portal); anything else reads an invoice.
+  // kind=coi reads a vendor certificate of insurance; kind=insurance reads a renters insurance
+  // declarations page; anything else reads an invoice.
   const doc = { mime, base64: toBase64(bytes) };
-  return Response.json(kind === "coi" ? await extractCoi(doc) : await extractInvoice(doc));
+  return Response.json(kind === "coi" ? await extractCoi(doc) : kind === "insurance" ? await extractInsurance(doc) : await extractInvoice(doc));
 }

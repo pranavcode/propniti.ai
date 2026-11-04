@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Loader2 } from "lucide-react";
+import { Banknote, CheckCircle2, Loader2 } from "lucide-react";
+import Link from "@/components/Link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,11 +16,13 @@ import { newKey, runAction, usd } from "./client";
 const METHODS = ["Check", "Money order", "Cash", "ACH", "Card"] as const;
 
 export type PayableCharge = { id: string; description: string; open: number; due_on?: string };
+// Where to go next once a payment is recorded: another payment at the same property, or the lease's ledger.
+export type NextAfterPayment = { leaseId: string; propertyId: string };
 
 // Record a payment received in the office against one charge. The idempotency key lives until a
 // payment succeeds: a double click, a retry after a timeout, or closing and reopening the dialog
 // mid-request all re-send the same key, so the payment is recorded once.
-export function RecordPaymentButton({ charge, size = "sm", variant = "outline", label = "Record payment" }: { charge: PayableCharge; size?: "xs" | "sm" | "default"; variant?: "outline" | "default" | "ghost"; label?: string }) {
+export function RecordPaymentButton({ charge, size = "sm", variant = "outline", label = "Record payment", next }: { charge: PayableCharge; size?: "xs" | "sm" | "default"; variant?: "outline" | "default" | "ghost"; label?: string; next?: NextAfterPayment }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(newKey);
@@ -28,6 +31,7 @@ export function RecordPaymentButton({ charge, size = "sm", variant = "outline", 
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<string | null>(null);
   const value = Number(amount);
   const invalid = !(value > 0) ? "Enter an amount above $0." : value > charge.open + 0.001 ? `Only ${usd(charge.open)} is open on this charge.` : null;
 
@@ -35,6 +39,7 @@ export function RecordPaymentButton({ charge, size = "sm", variant = "outline", 
     if (!o && busy) return;
     setOpen(o);
     if (o) {
+      setRecorded(null);
       setAmount(String(charge.open));
       setReference("");
       setError(null);
@@ -50,7 +55,8 @@ export function RecordPaymentButton({ charge, size = "sm", variant = "outline", 
     if (!r.ok) return setError(r.error);
     toast.success(r.message ?? "Payment recorded");
     setKey(newKey());
-    setOpen(false);
+    if (next) setRecorded(`${usd(value)} by ${method.toLowerCase()}${reference ? ` (${reference})` : ""}`);
+    else setOpen(false);
     router.refresh();
   };
 
@@ -59,6 +65,18 @@ export function RecordPaymentButton({ charge, size = "sm", variant = "outline", 
       <Button size={size} variant={variant} onClick={() => show(true)} aria-label={label === "Record payment" ? undefined : `Record payment for ${charge.description}`}><Banknote data-icon="inline-start" />{label}</Button>
       <Dialog open={open} onOpenChange={show}>
         <DialogContent className="sm:max-w-md">
+          {recorded && next ? (
+            <div className="flex flex-col gap-4">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><CheckCircle2 className="size-4 text-tone-success" aria-hidden />Payment recorded</DialogTitle>
+                <DialogDescription>{recorded} against {charge.description}. It&apos;s on the lease ledger and in today&apos;s trust deposit.</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button asChild variant="outline"><Link href={`/app/receivables/ledger/${encodeURIComponent(next.leaseId)}`} onClick={() => setOpen(false)}>View ledger</Link></Button>
+                <Button asChild><Link href={`/app/receivables/record-payment?property=${encodeURIComponent(next.propertyId)}`} onClick={() => setOpen(false)}>Record another</Link></Button>
+              </DialogFooter>
+            </div>
+          ) : (
           <form onSubmit={submit} className="flex flex-col gap-4">
             <DialogHeader>
               <DialogTitle>Record payment</DialogTitle>
@@ -91,6 +109,7 @@ export function RecordPaymentButton({ charge, size = "sm", variant = "outline", 
               <Button type="submit" disabled={!!invalid || busy}>{busy && <Loader2 data-icon="inline-start" className="animate-spin" />}{busy ? "Recording…" : `Record ${value > 0 ? usd(value) : "payment"}`}</Button>
             </DialogFooter>
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </>

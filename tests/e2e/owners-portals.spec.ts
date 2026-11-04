@@ -125,3 +125,25 @@ test("a staff user on a portal URL is offered a switch, not someone else's data"
   await expect(page.getByRole("button", { name: "View as Helen Carter" })).toBeVisible();
   await expect(page.getByText("Your monthly briefing")).toHaveCount(0);
 });
+
+test("resident uploads a declarations page, confirms the AI-read fields and staff see it to verify", async ({ page, context }) => {
+  await as(context, "resident");
+  const errors = watch(page);
+  // A canned read: the e2e run never calls a paid model.
+  await page.route("**/api/ai/extract", (r) => r.fulfill({ json: { fields: { isDeclarations: true, carrier: "Lemonade Insurance Co.", policyNumber: "LP-2027-55810", liability: 100000, startsOn: "2026-11-01", expiresOn: "2027-11-01", confidence: 0.94, issues: [] }, source: "anthropic" } }));
+  await go(page, `${BASE}/portal/resident/lease`);
+  await page.getByRole("button", { name: /declarations page/ }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("#ri-file").setInputFiles({ name: "declarations.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%test\n") });
+  await expect(dialog.getByText(/Read by AI \(Anthropic, 94% confident\)/)).toBeVisible();
+  await expect(dialog.getByLabel("Policy number")).toHaveValue("LP-2027-55810");
+  await expect(dialog.getByText("Read by AI", { exact: true })).toHaveCount(5);
+  await dialog.getByRole("button", { name: "Confirm and send" }).click();
+  await expect(page.getByText(/Received\. Your policy shows as pending/)).toBeVisible();
+  await expect(page.locator("#insurance").getByText("Pending verification").first()).toBeVisible();
+  expect(errors).toEqual([]);
+
+  await as(context, "marcus");
+  await go(page, `${BASE}/app/residents/insurance?view=to-verify`);
+  await expect(page.getByText("LP-2027-55810").first()).toBeVisible();
+});

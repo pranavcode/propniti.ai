@@ -303,14 +303,15 @@ registerEntity({
     starts_on: { type: "date", label: "Starts", required: true, sortable: true },
     expires_on: { type: "date", label: "Expires", required: true, sortable: true, list: { default: true } },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
-      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" },
+      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" }, { value: "Pending verification", tone: "info" },
     ] },
   },
   relations: [{ name: "lease", entity: "leases", fk: "lease_id", kind: "one" }, { name: "property", entity: "properties", fk: "property_id", kind: "one" }],
   list: {
     defaultSort: ["expires_on", "asc"],
     statusTabs: "status",
-    savedViews: [{ key: "gaps", label: "Lapsed or expiring", filters: { status: ["Lapsed", "Expiring"] }, sort: ["expires_on", "asc"] }],
+    savedViews: [{ key: "gaps", label: "Lapsed or expiring", filters: { status: ["Lapsed", "Expiring"] }, sort: ["expires_on", "asc"] }, { key: "to-verify", label: "To verify", filters: { status: "Pending verification" }, sort: ["expires_on", "asc"] }],
+    bulkActions: ["renters_insurance.verify"],
   },
   detail: { facts: ["status", "carrier", "lease_id", "liability", "starts_on", "expires_on"], tabs: [{ key: "overview", label: "Overview", fields: ["policy_number", "carrier", "lease_id", "property_id", "liability", "starts_on", "expires_on", "status"] }], related: ["lease", "property"] },
   capabilities: { notes: true, activity: true, documents: true },

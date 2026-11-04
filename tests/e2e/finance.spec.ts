@@ -64,3 +64,23 @@ test("reconciliation shows AI-suggested matches and an unexplained deposit; cape
   await expect(page.getByText(/Over budget by/)).toBeVisible();
   await expect(page.getByText("Milestones")).toBeVisible();
 });
+
+test("past-due payables lead to a payment run: select one vendor, review, pay once", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await go(page, `${BASE}/app/finance`);
+  await page.getByRole("link", { name: "Build payment run" }).click();
+  await expect(page).toHaveURL(/\/app\/finance\/payment-run/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Payment run" })).toBeVisible();
+  await page.getByRole("button", { name: "Clear" }).click();
+  // The first vendor whose bills can be selected (no payment hold).
+  const vendor = page.getByRole("checkbox", { name: /^Select all bills from / }).and(page.locator(":not([disabled])")).first();
+  await vendor.click();
+  await page.getByRole("button", { name: "Review payment run" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "Review payment run" })).toBeVisible();
+  await dialog.getByRole("button", { name: /^Pay \$/ }).dblclick();
+  await expect(dialog.getByRole("heading", { name: "Payment run sent" })).toBeVisible({ timeout: 60_000 });
+  await expect(dialog.getByText(/bills? paid/)).toBeVisible();
+  expect(errors).toEqual([]);
+});

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { staffSession } from "@/extensions/receivables/staff";
 import Link from "@/components/Link";
 import { PeekLink } from "@/components/app/peek/PeekLink";
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, Banknote, X } from "lucide-react";
 import { can } from "@/entities";
 import { Money } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { AS_OF } from "@/seed/constants";
 import { agingByProperty, BUCKETS, delinquentLeases, type AgingRow, type BucketKey } from "@/extensions/receivables/queries";
 import { PageHeader, Pager, toParams } from "@/extensions/receivables/ui/bits";
+import { recordPaymentHref, remindedToday } from "@/extensions/receivables/remind";
+import { RemindButton } from "@/extensions/receivables/ui/RemindButton";
 
 export const metadata: Metadata = { title: "Delinquency aging · Propniti" };
 
@@ -33,6 +35,9 @@ export default async function DelinquencyPage({ searchParams }: Props) {
   const page = Math.max(1, Number(sp.get("page")) || 1);
   const sort = sp.get("sort") === "days" ? "days" : "total";
   const drill = await delinquentLeases(ctx, { property, bucket, page, size: SIZE, sort }).catch((e) => (console.error("delinquent leases", e), null));
+  const canRemind = can(session.actor.role, "leases.remind", "leases");
+  const canRecord = can(session.actor.role, "charges.record_payment", "charges");
+  const reminded = canRemind && drill ? await remindedToday(ctx, drill.rows.map((r) => r.lease_id)).catch(() => new Set<string>()) : new Set<string>();
 
   const totals = props?.reduce((t, r) => ({ b0_30: t.b0_30 + r.b0_30, b31_60: t.b31_60 + r.b31_60, b61_90: t.b61_90 + r.b61_90, b90p: t.b90p + r.b90p, total: t.total + r.total, households: t.households + r.households }), { b0_30: 0, b31_60: 0, b61_90: 0, b90p: 0, total: 0, households: 0 });
   const max = Math.max(1, ...(props ?? []).flatMap((r) => COLS.map((c) => r[c.key])));
@@ -123,7 +128,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
         {!drill ? <ErrorBanner title="Residents couldn't load" message="Refresh the page to try again." /> : drill.rows.length === 0 ? <EmptyState compact kind="filtered" title="No one in this cell" description="Choose another property or age bucket." /> : (
           <>
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[760px] text-[13px]">
+              <table className="w-full min-w-[960px] text-[13px]">
                 <thead className="bg-muted/60 text-[11.5px] text-muted-foreground">
                   <tr>
                     <th scope="col" className="w-[26%] px-3 py-2 text-left font-medium">Resident</th>
@@ -131,7 +136,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
                     <th scope="col" className="px-3 py-2 text-right font-medium">Past due</th>
                     {BUCKETS.map((b) => <th key={b.key} scope="col" className="hidden px-3 py-2 text-right font-medium lg:table-cell">{b.label}</th>)}
                     <th scope="col" className="px-3 py-2 text-right font-medium">Days late</th>
-                    <th scope="col" className="px-3 py-2"><span className="sr-only">Ledger</span></th>
+                    <th scope="col" className="px-3 py-2"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -145,7 +150,13 @@ export default async function DelinquencyPage({ searchParams }: Props) {
                       <td className="px-3 text-right font-medium tabular-nums"><Link href={chargesHref({ "f.lease_id": r.lease_id })} className="hover:text-primary hover:underline"><Money value={r.total} cents tone="none" /></Link></td>
                       {COLS.map((c) => <td key={c.key} className="hidden px-3 text-right tabular-nums text-muted-foreground lg:table-cell">{r[c.key] ? <Money value={r[c.key]} cents style="whole" tone="none" /> : "—"}</td>)}
                       <td className="px-3 text-right tabular-nums">{r.days_late}</td>
-                      <td className="px-3 text-right"><Link href={`/app/receivables/ledger/${r.lease_id}`} className="whitespace-nowrap text-[12.5px] font-medium text-primary hover:underline">Ledger →</Link></td>
+                      <td className="px-3 py-1">
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                          {canRemind && <RemindButton leaseId={r.lease_id} resident={r.household} sent={reminded.has(r.lease_id)} />}
+                          {canRecord && <Button asChild size="xs" variant="outline"><Link href={recordPaymentHref(r.lease_id)} aria-label={`Record a payment for ${r.household}`}><Banknote data-icon="inline-start" />Record payment</Link></Button>}
+                          <Link href={`/app/receivables/ledger/${r.lease_id}`} className="px-1 text-[12.5px] font-medium text-primary hover:underline">Ledger →</Link>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

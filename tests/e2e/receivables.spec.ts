@@ -39,6 +39,36 @@ test("record payment: a double click records one payment", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("delinquency rows: remind once, then open record payment on that lease", async ({ page }) => {
+  const errors = await as(page, "marcus");
+  await go(page, "/app/receivables/delinquency");
+  const remind = page.getByRole("button", { name: /^Send a past-due reminder to / }).first();
+  const who = (await remind.getAttribute("aria-label"))!.replace("Send a past-due reminder to ", "");
+  await remind.click();
+  await expect(page.getByText(/Reminder emailed to/)).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: who }).first();
+  await expect(row.getByText("Reminded today")).toBeVisible();
+  await row.getByRole("link", { name: `Record a payment for ${who}` }).click();
+  await expect(page).toHaveURL(/record-payment\?q=L-/);
+  await expect(page.getByText(who).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("record payment: after recording, record another at the same property or view the ledger", async ({ page }) => {
+  const errors = await as(page, "marcus");
+  await go(page, "/app/receivables/record-payment");
+  await page.getByRole("button", { name: "Record payment" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount received").fill("10.00");
+  await dialog.getByRole("button", { name: /Record \$10\.00/ }).click();
+  await expect(dialog.getByRole("heading", { name: "Payment recorded" })).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "View ledger" })).toHaveAttribute("href", /\/app\/receivables\/ledger\/L-/);
+  await dialog.getByRole("link", { name: "Record another" }).click();
+  await expect(page).toHaveURL(/record-payment\?property=p\d+/);
+  await expect(page.getByText(/Showing .* only\./)).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("collections workbench explains each score and drafts in English or Spanish", async ({ page }) => {
   const errors = await as(page, "marcus");
   await go(page, "/app/receivables/collections?step=reminder");
