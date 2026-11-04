@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- image optimisation is off on Workers; files are pre-sized webp */
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight } from "lucide-react";
 
 // Marketing tokens. Teal matches the app's --primary (oklch 0.47 0.085 195); neutrals lean toward

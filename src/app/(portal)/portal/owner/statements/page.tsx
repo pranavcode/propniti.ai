@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/app/states";
 import { portalCtx } from "@/extensions/owners/portal/context";

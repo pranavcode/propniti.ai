@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Check } from "lucide-react";
 import { AGENTS, BOOK_HREF, DEMO_HREF, PILLARS } from "@/components/marketing/content";

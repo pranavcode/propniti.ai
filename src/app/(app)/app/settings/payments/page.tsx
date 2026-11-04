@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Lock, Percent } from "lucide-react";
 import { MANAGEMENT_FEE_RATE } from "@/lib/ledger";
 import { formatMoney } from "@/lib/format";

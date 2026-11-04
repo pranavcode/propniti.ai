@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Plus } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { Money, StatusBadge } from "@/components/app/display";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertTriangle, ArrowRight, FileText, Home, Mail, MessageSquare, Phone, ShieldCheck, Smartphone, Wrench } from "lucide-react";
 import type { TabProps } from "@/extensions/tabs";
 import { Money, RelativeDate, StatusBadge } from "@/components/app/display";

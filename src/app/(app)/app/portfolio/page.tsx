@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Briefcase, Building, FlaskConical, LayoutPanelTop, Map as MapIcon } from "lucide-react";
 import "@/entities";
 import { can } from "@/entities";

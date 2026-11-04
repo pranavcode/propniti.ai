@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useState } from "react";
 import { Bot, Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
