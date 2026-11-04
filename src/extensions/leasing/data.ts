@@ -256,3 +256,21 @@ export async function renewalDrafts(c: LeasingCtx, window: number): Promise<Prep
     };
   });
 }
+
+// Open leads created in the last 30 days with no contact in 3+ days, by assigned agent: the same
+// set as "Going stale" in leasing.agent_performance, so the counts and the bulk actions agree.
+export async function staleLeadsByAgent(c: LeasingCtx): Promise<Record<string, { id: string; property: string }[]>> {
+  const s = scope(c, "pr.property_id");
+  const rows = await all<{ id: string; agent: string | null; property_id: string }>(c, `SELECT pr.id, pr.assigned_to AS agent, pr.property_id FROM ${E(c, "prospects")} pr WHERE pr.stage IN ('Inquiry', 'Contacted', 'Toured') AND julianday(?) - julianday(coalesce(pr.last_contact_at, pr.created_at)) >= 3 AND substr(pr.created_at, 1, 10) >= date(?, '-30 days')${s.sql} ORDER BY pr.id LIMIT 1000`, [AS_OF, AS_OF, ...s.binds]);
+  const out: Record<string, { id: string; property: string }[]> = {};
+  for (const r of rows) (out[String(r.agent)] ??= []).push({ id: String(r.id), property: String(r.property_id) });
+  return out;
+}
+
+// Leasing agents and the properties their assignments cover (property, region or org), so the
+// broker only picks someone who can take the leads; the action checks coverage again per lead.
+export async function leasingAgents(c: LeasingCtx) {
+  const rows = await all<{ id: string; name: string; props: string }>(c, `SELECT s.id, s.name, (SELECT json_group_array(p.id) FROM ${E(c, "properties")} p WHERE EXISTS (SELECT 1 FROM ${E(c, "role_assignments")} ra WHERE ra.staff_id = s.id AND ra.role = 'leasing_agent' AND (ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id = p.id) OR (ra.scope_kind = 'region' AND ra.scope_id = p.region_id)))) AS props
+    FROM ${E(c, "staff")} s WHERE s.active = 1 AND EXISTS (SELECT 1 FROM ${E(c, "role_assignments")} ra WHERE ra.staff_id = s.id AND ra.role = 'leasing_agent') ORDER BY s.name LIMIT 100`, []);
+  return rows.map((r) => ({ id: String(r.id), name: String(r.name), properties: JSON.parse(String(r.props || "[]")) as string[] }));
+}

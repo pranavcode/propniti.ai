@@ -206,3 +206,30 @@ describe("fair-housing rewrite", () => {
     expect(r.href).toBe(`/app/ai/runs/${d.runId}`);
   });
 });
+
+describe("broker: reassign stale leads", () => {
+  beforeAll(async () => {
+    const db = getPlatform().db;
+    await db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 's-new', 'org1', 'Nia Brooks', 'Leasing agent', 'nia@x.example'), ('base', 's-az', 'org1', 'Hank Cole', 'Leasing agent', 'hank@x.example')").run();
+    await db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-new', 's-new', 'leasing_agent', 'region', 'r-tx'), ('base', 'ra-az', 's-az', 'leasing_agent', 'property', 'p06')").run();
+    await db.prepare("INSERT INTO prospects (workspace_id, id, property_id, name, stage, created_at, last_contact_at, assigned_to) VALUES ('base', 'pr-r1', 'p01', 'Ivy Stone', 'Contacted', '2026-10-15T15:00:00Z', '2026-10-20T15:00:00Z', 's-old'), ('base', 'pr-r2', 'p02', 'Ken Wu', 'Inquiry', '2026-10-15T15:00:00Z', NULL, 's-old')").run();
+  });
+
+  it("moves the leads to an agent who covers their property, and only that", async () => {
+    const ctx = await ctxFor("rachel");
+    const a = resolveAction("prospects", "reassign");
+    expect(a.bulk).toBe(true);
+    expect(await bulk(ctx, a, ["pr-r1", "pr-r2"], { to: "s-new" })).toEqual([200, 200]);
+    const rows = await getPlatform().db.prepare("SELECT id, assigned_to FROM prospects WHERE workspace_id = ? AND id IN ('pr-r1', 'pr-r2') ORDER BY id").bind(WS).all<{ id: string; assigned_to: string }>();
+    expect(rows.results.map((r) => r.assigned_to)).toEqual(["s-new", "s-new"]);
+    expect(await count("SELECT count(*) AS n FROM audit WHERE workspace_id = ? AND action = 'prospects.reassign'", WS)).toBe(2);
+    // An agent whose assignments don't cover the property is refused, and so is a no-op move.
+    expect((await runAction(ctx, a, "pr-r1", { to: "s-az" })).status).toBe(409);
+    expect((await runAction(ctx, a, "pr-r1", { to: "s-new" })).status).toBe(409);
+  });
+
+  it("is the broker's or a manager's call, not a leasing agent's", async () => {
+    const ctx = await ctxFor("lena");
+    await expect(runAction(ctx, resolveAction("prospects", "reassign"), "pr-r1", { to: "s-new" })).rejects.toThrow(/can't/);
+  });
+});

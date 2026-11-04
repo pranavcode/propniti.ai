@@ -190,3 +190,32 @@ test("broker desk: Rewrite with AI on a fair-housing flag, checked again before 
   await expect(page.getByText("Fair-housing language check")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("broker desk: reassign an agent's stale leads, then follow up on another agent's", async ({ page, context }) => {
+  await as(context, "rachel");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/leasing/broker`);
+  const team = page.locator("[data-tour=broker-agents]");
+  await expect(team).toBeVisible(FIRST_PAINT);
+
+  await team.getByRole("button", { name: /^Reassign .+'s stale leads$/ }).first().click();
+  const dialog = page.getByRole("dialog");
+  // Only agents whose assignments cover the leads' properties can be picked; the seed gives each
+  // property one agent, so the dialog explains how to add coverage when nobody else covers them.
+  const combo = dialog.getByRole("combobox", { name: "New agent" });
+  if (await combo.isEnabled()) {
+    await combo.click();
+    await page.getByRole("option", { disabled: false }).first().click();
+    await dialog.getByRole("button", { name: /^Reassign \d+$/ }).click();
+    await expect(dialog.getByText(/^Reassigned \d+/)).toBeVisible({ timeout: 60_000 });
+    await dialog.getByRole("button", { name: "Done" }).click();
+  } else {
+    await expect(dialog.getByText(/No other leasing agent is assigned/)).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+  }
+
+  await team.getByRole("button", { name: /^Follow up: / }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Send \d+$/ }).click();
+  await expect(page.getByRole("dialog").getByText(/^Sent \d+/)).toBeVisible({ timeout: 60_000 });
+  expect(errors).toEqual([]);
+});

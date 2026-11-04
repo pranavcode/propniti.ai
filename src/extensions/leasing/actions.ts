@@ -86,6 +86,29 @@ registerAction({
   },
 });
 
+// The broker (or a manager) moves leads to another leasing agent, e.g. stale leads off a full desk.
+// The new agent must hold a leasing-agent assignment that covers the lead's property.
+registerAction({
+  key: "prospects.reassign",
+  label: "Reassign",
+  entity: "prospects",
+  roles: [...OPS, "broker"],
+  icon: MoveRight,
+  bulk: true,
+  when: (r) => !["Leased", "Lost"].includes(String(r.stage)),
+  input: z.object({ to: z.string().trim().min(1).max(80) }),
+  help: { summary: "Gives the lead to another leasing agent who covers its property. The change is logged on the lead.", article: "leasing-pipeline-board" },
+  async handler(ctx, row, input) {
+    if (row.assigned_to === input.to) return fail(409, `${row.name} is already with that agent`);
+    const { effective } = await import("@/server/query");
+    const agent = await ctx.db.prepare(`SELECT s.name FROM ${effective("staff", ctx.ws)} s WHERE s.id = ? AND s.active = 1 AND EXISTS (SELECT 1 FROM ${effective("role_assignments", ctx.ws)} ra WHERE ra.staff_id = s.id AND ra.role = 'leasing_agent' AND (ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id = ?) OR (ra.scope_kind = 'region' AND ra.scope_id = (SELECT p.region_id FROM ${effective("properties", ctx.ws)} p WHERE p.id = ?))))`).bind(input.to, row.property_id, row.property_id).first<{ name: string }>();
+    if (!agent) return fail(409, `That agent doesn't cover ${row.property_id__label ?? "this lead's property"}`);
+    await commit(ctx, { entity: "prospects", id: String(row.id), propertyId: row.property_id, verb: "reassigned", summary: `Reassigned to ${agent.name} by ${ctx.actor.name}`, data: { from: row.assigned_to ?? null, to: input.to } },
+      [{ table: "prospects", id: String(row.id), changes: { assigned_to: input.to } }]);
+    return ok(`${row.name} reassigned to ${agent.name}`);
+  },
+});
+
 // One follow-up per lead per day: the header button, the bulk bar, "Send all", an edited draft and
 // an approved Leasing agent proposal all share the key, so a double click or a second sender is a 409.
 const FOLLOW_UP_STAGES = ["Inquiry", "Contacted", "Toured", "Tour scheduled"];
