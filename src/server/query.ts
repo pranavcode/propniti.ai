@@ -7,6 +7,7 @@ import { getPersona } from "@/auth/personas";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type Role, type Row } from "@/entities/types";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
+import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
@@ -656,6 +657,7 @@ export async function createRecord(ctx: WriteCtx, entity: string, body: Record<s
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, row), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "created", pidOf(def, row), null, row, `Created ${def.label.one.toLowerCase()}`)]);
     forgetOverlay(ctx.actor);
+    forgetInboxCounts(ctx.ws);
   } catch (e) {
     if (outOfScope(e)) throw new QueryError(403, "That record would be outside your scope");
     throw constraintError(e);
@@ -680,6 +682,7 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   try {
     await ctx.db.batch([upsert(ctx.db, def.table, after), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
     forgetOverlay(ctx.actor);
+    forgetInboxCounts(ctx.ws);
   } catch (e) {
     if (outOfScope(e)) throw new QueryError(403, "That change would move the record outside your scope");
     throw constraintError(e);
@@ -699,6 +702,7 @@ export async function deleteRecord(ctx: WriteCtx, entity: string, id: string): P
   const pid = await propertyOf(ctx, def, id);
   forgetOverlay(ctx.actor);
   await ctx.db.batch([upsert(ctx.db, def.table, { ...before, workspace_id: ctx.ws, deleted: 1 }), ...trail(ctx, def, id, "deleted", pid, before, null, `Deleted ${def.label.one.toLowerCase()} ${String(before[def.fields[def.titleField]?.column ?? def.titleField] ?? id)}`)]);
+  forgetInboxCounts(ctx.ws);
 }
 
 // ---------------------------------------------------------------------------------------------

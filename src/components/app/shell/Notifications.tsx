@@ -2,6 +2,7 @@
 import { demoNowIso } from "@/lib/clock";
 
 import Link from "@/components/Link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export type NotificationRow = { id: string; title: string; body?: string; href?:
 export type NotificationsResponse = { rows: NotificationRow[]; unread: number };
 
 export function NotificationsMenu() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<NotificationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,8 @@ export function NotificationsMenu() {
   const markAll = async () => {
     setData((d) => d && { unread: 0, rows: d.rows.map((r) => ({ ...r, read_at: r.read_at ?? demoNowIso() })) });
     await fetch("/api/notifications/read", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => {});
+    // Unread alerts feed the sidebar's Inbox count.
+    router.refresh();
   };
 
   const unread = data?.unread ?? 0;

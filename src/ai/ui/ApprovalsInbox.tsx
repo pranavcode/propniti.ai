@@ -77,6 +77,8 @@ export function ApprovalsInbox({ initial, initialQueue, focusId, missing }: { in
       const r = await api<{ message: string }>(`/api/ai/proposals/${p.id}`, "POST", { decision, payload });
       toast.success(decision === "approve" ? r.message : "Rejected");
       setData((d) => ({ ...d, counts: { ...d.counts, needs_you: Math.max(0, (d.counts.needs_you ?? 1) - 1), decided: (d.counts.decided ?? 0) + 1 } }));
+      // Re-render the server layout so the sidebar's Inbox count drops too.
+      router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
       throw e;
@@ -89,6 +91,7 @@ export function ApprovalsInbox({ initial, initialQueue, focusId, missing }: { in
       const r = await api<{ approved: number; results: { ok: boolean; message: string }[] }>("/api/ai/proposals/bulk", "POST", { ids: safe.map((p) => p.id) });
       toast.success(`Approved ${r.approved} low-risk item${r.approved === 1 ? "" : "s"}`);
       void load(queue, page);
+      router.refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }

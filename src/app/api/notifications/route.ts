@@ -1,3 +1,4 @@
+import { inApp } from "@/extensions/inbox/data";
 import { effective } from "@/server/query";
 import { handle, json, readCtx } from "../e/_lib/http";
 import { recipientIds } from "./shared";
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
       ctx.db.prepare(`SELECT count(*) AS n ${from} AND read_at IS NULL`).bind(who).first<{ n: number }>(),
     ]);
     // Stored hrefs are links into the app only.
-    const out = rows.results.map((r) => ({ ...r, href: typeof r.href === "string" && /^\/(?!\/)/.test(r.href) ? r.href : null }));
+    const out = rows.results.map((r) => ({ ...r, href: inApp(r.href) }));
     return json({ rows: out, unread: Number(unread?.n ?? 0) });
   });
 }

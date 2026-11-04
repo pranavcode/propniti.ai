@@ -7,6 +7,7 @@ import { formatMoney, formatNumber, formatTime } from "@/lib/format";
 import { useMounted } from "@/hooks/use-mounted";
 import type { RunStatus, Step, StepKind } from "@/ai/types";
 import { StatusBadge } from "../display";
+import { modelName } from "./model";
 
 // Step-by-step view of one agent run (agent_runs + agent_steps). `live` marks the run as still
 // streaming: the last step pulses and a "Running…" row follows.
@@ -54,7 +55,7 @@ export function RunTrace({ steps, agent, status, model, tokensIn, tokensOut, cos
           {agent && <span className="font-semibold">{agent}</span>}
           {status && <StatusBadge value={status === "waiting_approval" ? "Waiting approval" : status} tone={live ? "ai" : STATUS_TONE[status]} />}
           <span className="ml-auto flex flex-wrap items-center gap-x-3 text-muted-foreground tabular-nums">
-            {model && <span>{model}</span>}
+            {model && <span title={model}>{modelName(model)}</span>}
             {(tokensIn != null || tokensOut != null) && <span title="Tokens in / out">{formatNumber(tokensIn ?? 0)} in · {formatNumber(tokensOut ?? 0)} out</span>}
             {costCents != null && <span>{formatMoney(costCents / 100)}</span>}
             <span>{(totalMs / 1000).toFixed(1)}s</span>
