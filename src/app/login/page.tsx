@@ -78,14 +78,14 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
         <div className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
           <div className="flex items-center justify-between text-white">
             <Link href="/" aria-label="Propniti home"><Wordmark size={28} /></Link>
-            <Link href="/" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] text-(--mk-on-ink-muted) hover:bg-white/10 hover:text-white">
+            <Link href="/" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] text-(--mk-on-ink-muted) hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
               <ArrowLeft aria-hidden className="size-4" /> Back to site
             </Link>
           </div>
           <div className="mt-14 max-w-3xl">
             <h1 className="text-balance text-[clamp(2.25rem,5vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-white">Choose who to sign in as.</h1>
             <p className="mt-5 max-w-2xl text-pretty text-[17px] leading-relaxed text-(--mk-on-ink-muted)">
-              Each person sees Propniti through their own role and scope: 30 properties, 18 months of history and the agents working alongside them. Switch any time from the top bar.
+              Each person sees Propniti through their own role and scope: 30 properties, 18 months of history and the agents working alongside them. Switch role any time from your avatar menu in the top bar.
             </p>
             <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[13px] text-white">
               <Lock aria-hidden className="size-3.5 text-(--mk-mint)" />
