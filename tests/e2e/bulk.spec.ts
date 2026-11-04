@@ -11,7 +11,9 @@ test.beforeEach(({ context }) => as(context, "tom"));
 
 test("select all matching runs a bulk action on every matching work order", async ({ page }) => {
   const errors = watch(page);
-  await go(page, "/app/maintenance/work-orders?f.status=Completed&size=25");
+  // A match set just over one page (46 in the seed): on production each record's action pays a
+  // database round trip, so "all 500" would take minutes; two pages still need "select all matching".
+  await go(page, "/app/maintenance/work-orders?f.status=Completed&f.property_id=p01&f.category=HVAC&size=25");
   await page.getByRole("checkbox", { name: "Select all on this page" }).click();
   const bar = page.getByRole("toolbar", { name: "Bulk actions" });
   await expect(bar.getByText("25 selected")).toBeVisible();

@@ -55,21 +55,24 @@ test("a reload reopens the conversation; another persona sees only their own; Re
   await expect(asked(dock, "Who is late on rent?")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Recent conversations" }).click();
-  const menu = page.getByRole("menu");
-  await expect(menu.getByRole("menuitem", { name: /How do I post a late fee\?/ })).toBeVisible();
-  await menu.getByRole("menuitem", { name: /Who is late on rent\?/ }).click();
+  // Marcus's own threads, not his seeded samples (one has the same title).
+  const mine = page.getByRole("menu").getByRole("menuitem").filter({ hasNotText: "Sample" });
+  await expect(mine.filter({ hasText: "How do I post a late fee?" })).toBeVisible();
+  await mine.filter({ hasText: "Who is late on rent?" }).click();
   await expect(asked(dock, "Who is late on rent?")).toBeVisible();
   await expect(asked(dock, "Which work orders are open?")).toBeVisible();
   await expect(asked(dock, "How do I post a late fee?")).toHaveCount(0);
 
-  // Another persona in the same browser: their own (empty) history, not Marcus's.
+  // Another persona in the same browser: their own history (only their samples), not Marcus's.
   await as(context, "lena");
   await go(page, `${BASE}/app/today`);
   dock = await openDock(page);
   await expect(dock.getByText(/What can I help with/)).toBeVisible();
   await expect(asked(dock, "Who is late on rent?")).toHaveCount(0);
   await page.getByRole("button", { name: "Recent conversations" }).click();
-  await expect(page.getByRole("menu").getByText("No conversations yet today.")).toBeVisible();
+  const lenas = page.getByRole("menu").getByRole("menuitem");
+  await expect(lenas.first()).toBeVisible();
+  await expect(lenas.filter({ hasNotText: /Sample|New conversation|Open in Copilot/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   // Back to Marcus: his last opened thread is still there.
