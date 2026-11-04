@@ -34,4 +34,15 @@ describe("AI routes", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).source).toBe("mock");
   });
+
+  it("reads a certificate of insurance with kind=coi, without a model in tests", async () => {
+    vi.stubEnv("AI_PROVIDER", "mock");
+    const form = new FormData();
+    form.append("kind", "coi");
+    form.append("file", new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "coi.png"));
+    const res = await extract.POST(post(form));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ source: "mock", note: expect.stringMatching(/certificate/) });
+    vi.unstubAllEnvs();
+  });
 });

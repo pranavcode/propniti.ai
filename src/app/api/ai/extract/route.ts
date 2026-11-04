@@ -1,4 +1,4 @@
-import { extractInvoice } from "@/lib/llm";
+import { extractCoi, extractInvoice } from "@/lib/llm";
 import { rateLimit, readBodyLimited } from "@/lib/guard";
 import { sameOrigin } from "@/ai/session";
 
@@ -28,9 +28,11 @@ export async function POST(request: Request) {
   const body = await readBodyLimited(request, MAX_FILE_BYTES + 64 * 1024);
   if (body instanceof Response) return Response.json({ error: "File too large (max 4 MB)" }, { status: 413 });
   let file: FormDataEntryValue | null;
+  let kind: FormDataEntryValue | null;
   try {
     const form = await new Response(body, { headers: { "content-type": request.headers.get("content-type") ?? "" } }).formData();
     file = form.get("file");
+    kind = form.get("kind");
   } catch {
     return Response.json({ error: "Expected a multipart upload with a 'file' field" }, { status: 400 });
   }
@@ -39,5 +41,7 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniff(bytes);
   if (!mime) return Response.json({ error: "Upload a JPEG, PNG, WebP or PDF" }, { status: 415 });
-  return Response.json(await extractInvoice({ mime, base64: toBase64(bytes) }));
+  // kind=coi reads a certificate of insurance (vendor portal); anything else reads an invoice.
+  const doc = { mime, base64: toBase64(bytes) };
+  return Response.json(kind === "coi" ? await extractCoi(doc) : await extractInvoice(doc));
 }

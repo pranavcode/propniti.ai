@@ -124,3 +124,17 @@ describe("requesting a current certificate", () => {
     await expect(runAction(await wctx("vendor"), getAction("vendor_cois.request_certificate")!, "coi-v03", {})).rejects.toMatchObject({ status: 403 });
   });
 });
+
+describe("vendor upload with an AI read", () => {
+  it("records that AI read the file and the vendor confirmed, and still waits for staff", async () => {
+    const a = getAction("vendors.upload_coi")!;
+    const input = a.input!.parse({ carrier: "Travelers", glLimitCents: 200_000_000, workersComp: false, expiresOn: "2027-08-31", fileName: "coi.pdf", read: { source: "live", confidence: 0.93, fields: ["carrier", "glLimit", "workersComp", "expiresOn"] } });
+    expect((await runAction(await wctx("vendor"), a, "v01", input)).status).toBe(200);
+    const coi = await db().prepare("SELECT status, gl_limit_cents FROM vendor_cois WHERE workspace_id = ? AND vendor_id = 'v01' AND carrier = 'Travelers'").bind(WS).first();
+    expect(coi).toEqual({ status: "Pending verification", gl_limit_cents: 200_000_000 });
+    const ev = await db().prepare("SELECT payload FROM events WHERE workspace_id = ? AND type = 'coi.uploaded' ORDER BY created_at DESC LIMIT 1").bind(WS).first<{ payload: string }>();
+    expect(JSON.parse(ev!.payload).read).toMatchObject({ source: "live", confidence: 0.93 });
+    // A typed upload needs no read at all.
+    expect(a.input!.parse({ carrier: "Travelers", glLimitCents: 200_000_000, workersComp: false, expiresOn: "2027-08-31", fileName: "coi.pdf" })).toMatchObject({ read: { source: "manual" } });
+  });
+});

@@ -296,7 +296,10 @@ registerAction({
   label: "Upload insurance certificate",
   entity: "vendors",
   roles: ["vendor"],
-  input: z.object({ carrier: z.string().trim().min(2).max(120), glLimitCents: z.number().int().min(100_000).max(10_000_000_000), workersComp: z.boolean(), expiresOn: z.iso.date(), fileName: z.string().trim().min(1).max(120) }),
+  // `read` says where the values came from: the vendor typed them, or AI read them from the file and
+  // the vendor confirmed. Either way staff verify the certificate before it counts.
+  input: z.object({ carrier: z.string().trim().min(2).max(120), glLimitCents: z.number().int().min(100_000).max(10_000_000_000), workersComp: z.boolean(), expiresOn: z.iso.date(), fileName: z.string().trim().min(1).max(120),
+    read: z.object({ source: z.enum(["live", "manual"]), confidence: z.number().min(0).max(1).optional(), fields: z.array(z.enum(["carrier", "glLimit", "workersComp", "expiresOn"])).max(4).optional() }).default({ source: "manual" }) }),
   handler: async (ctx, row, input) => {
     if (input.expiresOn <= AS_OF) return no(400, "That certificate has already expired. Upload the current one.");
     const at = nowIso(ctx.nowMs);
@@ -307,8 +310,8 @@ registerAction({
         .bind(ctx.ws, docId, row.id, input.fileName, `/app/maintenance/vendors/${row.id}`, `Vendor ${String(row.company)} › Insurance`, at),
       ctx.db.prepare("INSERT INTO vendor_cois (workspace_id, id, vendor_id, document_id, carrier, gl_limit_cents, workers_comp, expires_on, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
         .bind(ctx.ws, uid("coi"), row.id, docId, input.carrier, input.glLimitCents, input.workersComp ? 1 : 0, input.expiresOn, "Pending verification"),
-      eventStmt(ctx.db, ctx.ws, at, "coi.uploaded", "vendors", String(row.id), null, { expires_on: input.expiresOn }),
-      notifyStmt(ctx.db, ctx.ws, at, "tom", "New insurance certificate", `${String(row.company)} uploaded a COI from ${input.carrier} (stated valid to ${input.expiresOn}). Verify it before it counts for dispatch.`, `/app/maintenance/vendors/${row.id}`, ["vendors", String(row.id)]),
+      eventStmt(ctx.db, ctx.ws, at, "coi.uploaded", "vendors", String(row.id), null, { expires_on: input.expiresOn, read: input.read }),
+      notifyStmt(ctx.db, ctx.ws, at, "tom", "New insurance certificate", `${String(row.company)} uploaded a COI from ${input.carrier} (stated valid to ${input.expiresOn}${input.read.source === "live" ? "; AI read the file and the vendor confirmed the values" : ""}). Verify it before it counts for dispatch.`, `/app/maintenance/vendors/${row.id}`, ["vendors", String(row.id)]),
     ]);
     return ok(`Received. We check it against your carrier's document before it counts for new jobs.${soon ? " It expires within 30 days, so send the renewal when you have it." : ""}`);
   },
