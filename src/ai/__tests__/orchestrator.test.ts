@@ -261,6 +261,16 @@ describe("sweep and events", () => {
     expect(run.status).not.toBe("running");
     expect(run.summary).toMatch(/time budget/);
   }, 20_000);
+
+  it("stops a model turn at the run's deadline, so the rules still propose before the hard stop", async () => {
+    // A model that answers only when its call times out, as a slow one does.
+    const timesOut = (_s: string, _t: Turn[], _x: unknown, o?: { timeoutMs?: number }) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timed out after ${o?.timeoutMs} ms`)), o?.timeoutMs));
+    setModelForTests({ info: { provider: "anthropic", model: "claude-opus-5", label: "Slow", native: true }, chat: timesOut, structured: () => new Promise(() => {}) });
+    const { raw, db } = openFixture();
+    const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "schedule" }, deadlineMs: 1_000 })).done;
+    expect(r.summary).toMatch(/^Rules: /);
+    expect(proposals(raw, r.runId).length).toBeGreaterThan(0);
+  }, 20_000);
 });
 
 describe("events reach their agents", () => {
