@@ -158,3 +158,28 @@ for (const [tool, files] of [["AppFolio", 3], ["Buildium", 3]] as const) {
     await expect(page.getByText(new RegExp(`matches the typical ${tool} `)).first()).toBeVisible();
   });
 }
+
+test("agent cards name the last run's model only when it differs, as 'Last run used'", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/agents`);
+  await expect(page.locator("[data-agent-card]").first()).toBeVisible();
+  // No bare model name in a card footer.
+  await expect(page.locator("[data-agent-card]").getByText(/^(Llama|Claude|GPT)\b/)).toHaveCount(0);
+});
+
+test("approval policy limits read as dollars and save the same value as before", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/agents`);
+  let sent: unknown = null;
+  await page.route("**/api/ai/policies/*", async (route) => { sent = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: "application/json", body: "{}" }); });
+  const limit = page.getByRole("textbox", { name: "Bill payment auto-approve limit in dollars" });
+  await expect(limit).toHaveValue(/^\d{1,3}(,\d{3})*(\.\d+)?$/);
+  await limit.click();
+  await expect(limit).not.toHaveValue(/,/);
+  await limit.fill("6000");
+  await limit.blur();
+  await expect(limit).toHaveValue("6,000");
+  await page.getByRole("row", { name: /Bill payment/ }).getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => sent).not.toBeNull();
+  expect((sent as { limit_cents: number }).limit_cents).toBe(600_000);
+});

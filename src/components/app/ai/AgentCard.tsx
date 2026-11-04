@@ -119,7 +119,7 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
       </div>
 
       <div className="mt-auto flex items-center gap-2 border-t px-4 py-2.5">
-        {model && <span className="truncate text-[11px] text-muted-foreground" title={model}>{modelName(model)}</span>}
+        {model && <span className="line-clamp-2 min-w-0 text-[11px] leading-tight text-muted-foreground" title={`The last run used ${model}`}>Last run used {modelName(model)}</span>}
         <Button size="sm" variant="outline" className="ml-auto" disabled={!on || running || !onRunNow} onClick={() => void run()}>
           {running ? <Loader2 className="animate-spin" /> : <Play />} {running ? "Running…" : "Run now"}
         </Button>
