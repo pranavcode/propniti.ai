@@ -16,6 +16,7 @@ import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery,
 import { getPlatform } from "@/lib/platform";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { fieldRows, hintsFor, valueText, type FieldHint } from "@/lib/fieldText";
 import { Term } from "@/components/app/Term";
 import { EntityList } from "./EntityList";
 import { ChartPanel, KpiTile, type ChartData, type KpiData } from "./Metrics";
@@ -155,6 +156,19 @@ function tabsFor(def: EntityDef, role: Session["actor"]["role"]): AnyTab[] {
   return out;
 }
 
+// A JSON field (a document's extracted fields): labelled values, money and dates formatted.
+function JsonValue({ value, hints }: { value: unknown; hints: Record<string, FieldHint> }) {
+  if (value == null) return <>—</>;
+  if (Array.isArray(value) || typeof value !== "object") return <span className="whitespace-normal break-words text-[12.5px]">{valueText("", value) ?? "—"}</span>;
+  const rows = fieldRows(value as Record<string, unknown>, hints);
+  if (!rows.length) return <>—</>;
+  return (
+    <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 whitespace-normal text-[12.5px]">
+      {rows.map((r) => <Fragment key={r.key}><dt className="text-muted-foreground">{r.label}</dt><dd className="break-words tabular-nums">{r.text}</dd></Fragment>)}
+    </dl>
+  );
+}
+
 function FieldGrid({ def, row, keys, role }: { def: EntityDef; row: Row; keys: string[]; role: Session["actor"]["role"] }) {
   const shown = keys.filter((k) => def.fields[k] && !def.fields[k].hiddenFor?.includes(role));
   return (
@@ -166,7 +180,9 @@ function FieldGrid({ def, row, keys, role }: { def: EntityDef; row: Row; keys: s
             <dt className="flex items-center gap-1 text-[11.5px] text-muted-foreground"><Term help={f.help}>{f.label}</Term></dt>
             <dd className="mt-0.5 min-w-0 truncate text-[13px]">
               {f.type === "json"
-                ? <span className="whitespace-normal break-words text-[12.5px]">{Array.isArray(row[k]) ? (row[k] as unknown[]).map(String).join(", ") || "—" : row[k] == null ? "—" : JSON.stringify(row[k])}</span>
+                ? <JsonValue value={row[k]} hints={hintsFor(getEntity(String(row.entity_type)) ?? def)} />
+                : k === "url" && safeHref(row[k])
+                ? <a href={safeHref(row[k])} target="_blank" rel="noreferrer" className="text-primary hover:underline">View document</a>
                 : <Cell col={{ key: k, label: f.label, kind: columnKind(k, f), enum: f.enum, href: f.type === "ref" ? refHref(f, k) : undefined }} row={row} />}
             </dd>
           </div>
@@ -341,7 +357,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
                       <li key={String(x.id)}>
                         <Link href={`${rd.route}/${encodeURIComponent(String(x.id))}`} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50">
                           {/* eslint-disable-next-line @next/next/no-img-element -- 400px thumb */}
-                          {typeof x._image === "string" && <img src={x._image} alt="" className="size-8 shrink-0 rounded object-cover" loading="lazy" />}
+                          {typeof x._image === "string" && <img src={x._image} alt="" className="size-8 shrink-0 rounded bg-muted object-cover" />}
                           <span className="min-w-0">
                             <span className="block truncate text-[13px] font-medium">{String(x._title ?? x.id)}</span>
                             {typeof x._subtitle === "string" && x._subtitle && <span className="block truncate text-[11.5px] text-muted-foreground">{x._subtitle}</span>}

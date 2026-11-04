@@ -4,8 +4,14 @@
 // templates and announcements.
 import { FileText } from "lucide-react";
 import { z } from "zod";
+import { agentName } from "@/ai/ui/labels";
 import { OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
+import { AGENT_KEYS } from "../types";
+
+// Who filed or uploaded a document, stored as a staff id or an agent key, shown as a name.
+const actorName = (col: string) =>
+  `coalesce((SELECT s.name FROM {staff} s WHERE s.id = ${col}), CASE ${col} ${AGENT_KEYS.map((k) => `WHEN '${k}' THEN '${agentName(k)}'`).join(" ")} ELSE ${col} END)`;
 
 registerEntity({
   key: "documents",
@@ -26,13 +32,13 @@ registerEntity({
     ] },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, sortable: true, list: { default: true } },
     filed_to: { type: "text", label: "Filed to", search: true, list: { default: true } },
-    classified_by: { system: true, type: "text", label: "Filed by", facet: true, list: { default: true }, editable: [],
+    classified_by: { system: true, type: "text", label: "Filed by", facet: true, list: { default: true }, editable: [], sql: actorName("documents.classified_by"),
       help: { summary: "Who filed it: a person, or the document classifier agent with its confidence.", article: "document-filing" } },
     classify_confidence: { type: "number", label: "Filing confidence", format: "pct", sortable: true, list: { default: false, align: "right" }, editable: [] },
     needs_review: { type: "bool", label: "Needs review", facet: true, list: { default: false },
       sql: "(documents.classified_by IS NOT NULL AND documents.classify_confidence IS NOT NULL AND documents.classify_confidence < 0.8)" },
     uploaded_at: { type: "datetime", label: "Uploaded", sortable: true, list: { default: true }, editable: [] },
-    uploaded_by: { system: true, type: "text", label: "Uploaded by", editable: [] },
+    uploaded_by: { system: true, type: "text", label: "Uploaded by", editable: [], sql: actorName("documents.uploaded_by") },
     mime: { type: "text", label: "File type" },
     // Only same-site paths or https links: the URL is rendered as a link.
     url: { type: "text", label: "File", required: true, editable: [], zod: z.string().max(500).regex(/^(\/(?!\/)|https:\/\/)/, "Use a /path or an https:// link") },
@@ -52,7 +58,7 @@ registerEntity({
   },
   detail: {
     facts: ["doc_type", "property_id", "filed_to", "classified_by", "classify_confidence", "uploaded_at"],
-    tabs: [{ key: "overview", label: "Overview", fields: ["name", "doc_type", "property_id", "filed_to", "entity_type", "entity_id", "classified_by", "classify_confidence", "uploaded_by", "uploaded_at", "mime", "url", "extracted"] }],
+    tabs: [{ key: "overview", label: "Overview", fields: ["name", "doc_type", "property_id", "filed_to", "classified_by", "classify_confidence", "uploaded_by", "uploaded_at", "url", "extracted"] }],
     related: ["property"],
   },
   capabilities: { notes: true, activity: true, aiSummary: true },

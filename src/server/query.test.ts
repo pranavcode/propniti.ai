@@ -281,6 +281,14 @@ describe("rows", () => {
     expect(await getRow(c, "units", "p02-u1")).toMatchObject({ rent: 1450, resident: "Household p02-u1", lease_end: "2026-12-31" });
   });
 
+  it("names who filed and uploaded a document: a person by name, an agent by its agent name", async () => {
+    await db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 'lena', 'org1', 'Lena Ortiz', 'Leasing agent', 'lena@x.example')").run();
+    await db.prepare("INSERT INTO documents (workspace_id, id, property_id, name, url, uploaded_at, classified_by, uploaded_by) VALUES ('base', 'doc-1', 'p01', 'Lease', '/docs/leases/L-1', '2026-10-01T00:00:00Z', 'document_classifier', 'lena'), ('base', 'doc-2', 'p01', 'Bill', '/x', '2026-10-01T00:00:00Z', 'lena', 'ap')").run();
+    const rows = (await list(await ctx("daniel"), "documents", {})).rows;
+    expect(rows.find((r) => r.id === "doc-1")).toMatchObject({ classified_by: "Document Classifier Agent", uploaded_by: "Lena Ortiz" });
+    expect(rows.find((r) => r.id === "doc-2")).toMatchObject({ classified_by: "Lena Ortiz", uploaded_by: "Payables Agent" });
+  });
+
   it("derives charge status from payments", async () => {
     const c = await ctx("daniel");
     expect((await getRow(c, "charges", "c-p01-u1"))!.status).toBe("Paid");
