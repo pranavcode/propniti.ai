@@ -1275,12 +1275,8 @@ class Extras {
       const jobs = c.workOrders.filter((w) => w.vendor_id === id);
       sum("vendors", id, `${company} has done ${jobs.length} jobs in 18 months; ${jobs.filter((w) => !w.completed_at && w.status !== "Cancelled").length} are open.`, { jobs: jobs.length });
     }
-    // Feedback and an assistant history for the default persona.
+    // Feedback for the default persona. Assistant history is in src/seed/samples.
     proposals.slice(0, 30).forEach((p, i) => i % 3 === 0 && add("ai_feedback", { id: `fb-${p.id}`, target_kind: "proposal", target_id: p.id, rating: i % 9 === 0 ? -1 : 1, comment: i % 9 === 0 ? "Resident had already paid by check." : "", by_id: "marcus", at: p.created_at }));
-    add("assistant_threads", { id: "at-1", user_id: "marcus", title: "Who is late on rent at Barton Creek?", context_type: "properties", context_id: "p02", created_at: ts(ASOF - 1, 560), updated_at: ts(ASOF - 1, 562) });
-    add("assistant_messages", { id: "at-1-m1", thread_id: "at-1", role: "user", content: "Who is late on rent at Barton Creek?", plan: null, citations: "[]", model: null, at: ts(ASOF - 1, 560) });
-    const p02late = late.filter((h) => h.p.id === "p02").slice(0, 5);
-    add("assistant_messages", { id: "at-1-m2", thread_id: "at-1", role: "assistant", content: `${p02late.length} households at Barton Creek Commons are more than 20 days late: ${p02late.map((h) => h.name).join(", ")}.`, plan: JSON.stringify({ entity: "charges", filters: { property_id: "p02", status: "Overdue" }, agg: "count_by_household" }), citations: JSON.stringify(p02late.map((h) => ({ entity_type: "households", entity_id: h.id, label: h.name }))), model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", at: ts(ASOF - 1, 561) });
   }
 
   // -------------------------------------------------------------------------------------------

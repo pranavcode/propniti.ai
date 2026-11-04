@@ -31,7 +31,8 @@ describe("assistant thread routes", () => {
     const { threadId } = await setup();
     const mine = await (await list.GET(get("/api/ai/assistant/threads?limit=10", "marcus"))).json();
     expect(mine.threads.map((t: { id: string }) => t.id)).toEqual([threadId]);
-    expect(Object.keys(mine.threads[0]).sort()).toEqual(["id", "title", "updated_at"]);
+    expect(Object.keys(mine.threads[0]).sort()).toEqual(["id", "sample", "title", "updated_at"]);
+    expect(mine.threads[0].sample).toBe(false);
     expect((await (await list.GET(get("/api/ai/assistant/threads", "lena"))).json()).threads).toEqual([]);
     expect((await (await list.GET(get("/api/ai/assistant/threads", "resident"))).json()).threads).toEqual([]);
     expect((await (await list.GET(get("/api/ai/assistant/threads", "marcus", null))).json()).threads).toEqual([]);
