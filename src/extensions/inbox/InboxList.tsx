@@ -6,7 +6,7 @@ import { AIBadge, Confidence, RiskBadge, type Risk } from "@/components/app/ai";
 import { Money, RelativeDate } from "@/components/app/display";
 import { PeekLink } from "@/components/app/peek/PeekLink";
 import { Button } from "@/components/ui/button";
-import { AGENT_LABEL } from "@/ai/ui/client";
+import { agentName } from "@/ai/ui/labels";
 import { cn } from "@/lib/utils";
 import type { InboxItem } from "./data";
 
@@ -47,7 +47,7 @@ export function InboxList({ items }: { items: InboxItem[] }) {
                 </div>
               ) : it.detail ? <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">{it.kind === "message" ? "Last message: " : ""}{it.detail}</p> : null}
               <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-muted-foreground [&>*+*]:before:mr-1.5 [&>*+*]:before:content-['·']">
-                <span>{it.kind === "approval" && it.agent ? AGENT_LABEL[it.agent] ?? it.agent : k.label}</span>
+                <span>{it.kind === "approval" && it.agent ? agentName(it.agent) : k.label}</span>
                 {it.kind === "message" && <span className={cn(it.needsReply && "font-medium text-foreground")}>{it.needsReply ? "Needs reply" : `Waiting on ${it.party ?? "them"}`}{it.unread ? " · unread" : ""}</span>}
                 {it.property && <span>{it.property}</span>}
                 <span><RelativeDate value={it.at} /></span>

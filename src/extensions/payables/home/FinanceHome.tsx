@@ -11,7 +11,8 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { AIBadge } from "@/components/app/ai";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
-import { AGENT_LABEL, type ProposalJson } from "@/ai/ui/client";
+import type { ProposalJson } from "@/ai/ui/client";
+import { agentName } from "@/ai/ui/labels";
 import { ApprovalQueue, HomeAsk } from "@/extensions/portfolio/home/client";
 import { financeHome, type BriefingItem } from "./data";
 
@@ -79,7 +80,7 @@ export async function FinanceHome({ session }: { session: Session }) {
                 </p>
                 <p className="text-[12.5px] text-muted-foreground">
                   <Bot className="mr-1 inline size-3.5" />
-                  {runs ? <>{runs} agent {runs === 1 ? "run" : "runs"} in 48 hours: {h.briefing.runs.map((r) => `${AGENT_LABEL[r.agent_key] ?? r.agent_key} ×${r.n}`).join(", ")}.</> : "No Payables or Reconciliation runs in the last 48 hours."}
+                  {runs ? <>{runs} agent {runs === 1 ? "run" : "runs"} in 48 hours: {h.briefing.runs.map((r) => `${agentName(r.agent_key)} ×${r.n}`).join(", ")}.</> : "No Payables or Reconciliation runs in the last 48 hours."}
                   {" "}<Link href="/app/agents" className="underline-offset-2 hover:underline">Agents</Link>
                 </p>
               </div>

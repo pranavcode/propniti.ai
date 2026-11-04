@@ -6,13 +6,13 @@ import type { Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
 import { formatMoney, formatMonth, formatPct, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { agentName } from "@/ai/ui/labels";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import type { ProposalJson } from "@/ai/ui/client";
-import { getAgent } from "@/extensions/agents";
 import { ExplainableKpi, ExplainLink } from "../ui/Explain";
 import { ApprovalQueue, CompareTable, HomeAsk } from "./client";
 import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, type CompareRow, type HomeMetrics } from "./data";
@@ -52,7 +52,7 @@ function Briefing({ b, m, rows, scope }: { b: Awaited<ReturnType<typeof briefing
             {best && best.noi! > best.noiPrev! && <>; <Link href={`/app/properties/${best.id}?tab=financials`} className="font-medium hover:underline">{best.name}</Link> added the most</>}.
           </p>
           <p className="text-[12.5px] text-muted-foreground">
-            {agentsRan ? <><Bot className="mr-1 inline size-3.5" />{agentsRan} agent {agentsRan === 1 ? "run" : "runs"}: {b.overnight.slice(0, 3).map((r) => `${getAgent(r.agent_key as never)?.name ?? r.agent_key} ×${r.n}`).join(", ")}.</> : "No agent runs in the last 48 hours in this workspace."}
+            {agentsRan ? <><Bot className="mr-1 inline size-3.5" />{agentsRan} agent {agentsRan === 1 ? "run" : "runs"}: {b.overnight.slice(0, 3).map((r) => `${agentName(r.agent_key)} ×${r.n}`).join(", ")}.</> : "No agent runs in the last 48 hours in this workspace."}
           </p>
         </div>
         <div className="flex flex-col gap-2 px-4 py-3">
