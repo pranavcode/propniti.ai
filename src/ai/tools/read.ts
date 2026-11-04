@@ -200,6 +200,21 @@ export async function searchHelp(ctx: AgentCtx, query: string) {
     .slice(0, 4);
 }
 
+// The persona's "Needs you" tab: open proposals their role may decide (decide.ts), in their scope,
+// counted and ordered exactly as the approvals page does.
+registerTool({
+  key: "approvals.needs_you",
+  description: "Proposals waiting for this person's decision: the Needs you tab of the approvals inbox, with its count.",
+  input: z.object({ size: z.number().int().min(1).max(25).optional() }),
+  output: z.any(),
+  mode: "read", roles, requiresApproval: never,
+  async run(ctx, i) {
+    const { proposalsPage } = await import("../views");
+    const r = await proposalsPage(ac(ctx).data, { queue: "needs_you", size: i.size ?? 10 });
+    return { total: r.total, rows: r.rows.map((p) => ({ id: p.id, title: p.title, agent: p.agent, risk: p.risk, property_id: p.property_id, amount_cents: p.amount_cents ?? null })) };
+  },
+});
+
 registerTool({
   key: "policy.lookup",
   description: "Approval policies (who approves what, auto-approve limits, owner approval thresholds), state rules (late-fee caps, grace days, notice periods) and late-fee policies.",

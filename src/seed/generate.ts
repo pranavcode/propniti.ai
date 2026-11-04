@@ -3,6 +3,7 @@ import { BANKS, COMMERCIAL_TENANTS, ENTITIES, FIRST, GL, LAST, METRO_STATE, ORG_
 import { AS_OF, BASE_VERSION, CURRENT_PERIOD, FIRST_PERIOD } from "./constants";
 import { generateExtras } from "./extras";
 import roster from "./roster.json";
+import samples from "./samples/conversations.json";
 import { addMonths, addMonthsDay, day, daysInMonth, hash32, iso, monthEnd, monthStart, pctOf, rng, round, ts, ym, type Rng } from "./rng";
 
 // Deterministic base dataset (plan §3). Everything is generated in memory as rows keyed by table;
@@ -103,6 +104,8 @@ export function generate(): Base {
   budgetsAndMetrics(ctx, jeMap);
   ctx.sealed = true;
   generateExtras(ctx);
+  // Sample Copilot conversations, answered by the real assistant over this data (src/seed/samples).
+  for (const [table, rows] of Object.entries(samples as Tables)) for (const r of rows) add(table, { ...r });
   storeBalances(ctx);
   capToToday(t);
 
