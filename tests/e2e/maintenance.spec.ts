@@ -1,5 +1,5 @@
 import { expect as baseExpect, test } from "@playwright/test";
-import { as, BASE, GREETING, go, reload, watch } from "./helpers";
+import { as, BASE, GREETING, go, openFull, reload, watch } from "./helpers";
 
 // Maintenance as Tom Alvarez (maintenance supervisor): home → chart drill-down → intake with the
 // Maintenance Triage agent → dispatch → board and calendar → vendor invoice approve-and-pay →
@@ -65,6 +65,7 @@ test("a submitted vendor invoice is checked against the PO and paid once", async
   const errors = watch(page);
   await go(page, `${BASE}/app/maintenance/work-orders?view=awaiting-approval`);
   await page.getByRole("row").filter({ hasText: "Submitted" }).first().getByText(/^WO-/).click();
+  await openFull(page);
   await expect(page).toHaveURL(/\/app\/maintenance\/work-orders\/WO-[^/?]+/);
   await go(page, `${page.url().split("?")[0]}?tab=wo_invoice`);
   await expect(page.getByText("PO check")).toBeVisible();
