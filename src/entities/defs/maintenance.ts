@@ -8,6 +8,7 @@ import { registerEntity } from "../registry";
 import { formatDate, formatMoney } from "@/lib/format";
 import { AS_OF as AS_OF_DATE } from "@/seed/constants";
 import type { Role } from "../types";
+import { workOrderSentence } from "@/ai/rules-sentences";
 
 const OPEN = "('Completed', 'Paid', 'Cancelled')";
 const SUP: Role[] = [...OPS, "maintenance_supervisor"];
@@ -121,7 +122,8 @@ registerEntity({
     { key: "sla_by_trade", title: "Open work orders by trade and SLA", kind: "stacked", metric: "maintenance.sla_by_trade", x: "category", series: [{ key: "on_time", label: "Within SLA", format: "count" }, { key: "breached", label: "Past SLA", format: "count" }], drill: `/app/maintenance/work-orders?f.category={category}&f.status=${encodeURIComponent(OPEN_LIST.join(","))}` },
   ],
   ai: {
-    facts: (r) => ({ work_order: String(r.id), title: String(r.title), status: String(r.status), priority: String(r.priority), trade: String(r.category), past_sla: !!r.past_sla, age_days: Number(r.age_days ?? 0), vendor: (r.vendor_id__label as string) ?? null, estimate: r.estimate == null ? null : Number(r.estimate), cost: r.cost == null ? null : Number(r.cost) }),
+    facts: (r) => ({ work_order: String(r.id), title: String(r.title), status: String(r.status), priority: String(r.priority), trade: String(r.category), past_sla: !!r.past_sla, age_days: Number(r.age_days ?? 0), vendor: (r.vendor_id__label as string) ?? null, estimate: r.estimate == null ? null : Number(r.estimate), cost: r.cost == null ? null : Number(r.cost), where: ((r.unit_id__label ?? r.property_id__label) as string) ?? null }),
+    rulesSummary: workOrderSentence,
     summaryPrompt: "Summarise this work order for the maintenance supervisor in 2 sentences: what's wrong, where it stands against SLA, and the next step. Use only the facts.",
     agents: ["maintenance_triage", "photo_check", "ap"],
   },
