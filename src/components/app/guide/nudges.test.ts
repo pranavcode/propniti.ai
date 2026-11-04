@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blockedBy, dismissNudge, GAP_MS, MAX_PER_SESSION, pickNudge, recordShown, type Gate, type GuideFacts, type NudgeInput, type TourState } from "./nudges";
 
-const NAV = ["/app", "/app/today", "/app/ai/approvals", "/app/data-health", "/app/properties"];
+const NAV = ["/app", "/app/today", "/app/ai/approvals", "/app/data-health", "/app/properties", "/app/receivables/charges"];
 const FACTS: GuideFacts = { approvals: 3, pastDue: { cents: 4_821_000, properties: 3 }, dataIssues: { critical: 4 } };
 const NONE: GuideFacts = { approvals: 0, pastDue: { cents: 0, properties: 0 }, dataIssues: { critical: 0 } };
 const basics = (status: TourState["status"], step = 0): TourState => ({ id: "app-basics", title: "Getting around Propniti", steps: 7, paths: [], status, step });
@@ -58,12 +58,13 @@ describe("selection", () => {
     expect(pickNudge(input({ nav: NAV.filter((h) => h !== "/app/ai/approvals") }))!.id).toBe("pastdue");
   });
 
-  it("states past-due rent in dollars with the property count", () => {
+  it("states balances over 30 days past due and links to the aging whose 31+ columns add up to it", () => {
     const n = pickNudge(input({ facts: { ...FACTS, approvals: 0 } }))!;
     expect(n.id).toBe("pastdue");
-    expect(n.text).toBe("$48,210 of rent is more than 30 days past due across 3 properties.");
-    expect(n.action).toMatchObject({ kind: "href", href: "/app/receivables/collections" });
-    expect(pickNudge(input({ path: "/app/receivables/collections", facts: { ...FACTS, approvals: 0 } }))!.id).not.toBe("pastdue");
+    expect(n.text).toBe("$48,210 in past-due balances is more than 30 days old, across 3 properties.");
+    expect(n.action).toMatchObject({ kind: "href", href: "/app/receivables/delinquency" });
+    expect(pickNudge(input({ path: "/app/receivables/delinquency", facts: { ...FACTS, approvals: 0 } }))!.id).not.toBe("pastdue");
+    expect(pickNudge(input({ nav: NAV.filter((h) => !h.startsWith("/app/receivables")), facts: { ...FACTS, approvals: 0 } }))!.id).not.toBe("pastdue");
   });
 
   it("points to critical data issues", () => {

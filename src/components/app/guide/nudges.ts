@@ -12,7 +12,7 @@ export const PEEK_ROW_SELECTOR = "tbody a[data-peek-id]";
 // From GET /api/guide. null = the persona can't see that area.
 export type GuideFacts = {
   approvals: number | null;                                // Approvals › Needs you
-  pastDue: { cents: number; properties: number } | null;   // rent more than 30 days past due
+  pastDue: { cents: number; properties: number } | null;   // open balances more than 30 days past due
   dataIssues: { critical: number } | null;                 // open critical data issues
 };
 
@@ -84,11 +84,12 @@ function candidates(i: NudgeInput): Nudge[] {
       action: { kind: "href", href: "/app/ai/approvals", label: "Review" },
     });
   }
-  if (f?.pastDue && f.pastDue.cents > 0 && !under(i.path, "/app/receivables")) {
+  // The aging page's 31–60, 61–90 and 90+ totals add up to this figure.
+  if (f?.pastDue && f.pastDue.cents > 0 && has("/app/receivables/charges") && !under(i.path, "/app/receivables")) {
     out.push({
       id: "pastdue", key: i.day, source: "Delinquency aging",
-      text: `${formatMoney(f.pastDue.cents / 100, "whole")} of rent is more than 30 days past due across ${plural(f.pastDue.properties, "property", "properties")}.`,
-      action: { kind: "href", href: "/app/receivables/collections", label: "Work collections" },
+      text: `${formatMoney(f.pastDue.cents / 100, "whole")} in past-due balances is more than 30 days old, across ${plural(f.pastDue.properties, "property", "properties")}.`,
+      action: { kind: "href", href: "/app/receivables/delinquency", label: "See aging" },
     });
   }
   if (f?.dataIssues?.critical && has("/app/data-health") && !under(i.path, "/app/data-health")) {

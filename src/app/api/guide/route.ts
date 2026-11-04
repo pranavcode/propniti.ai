@@ -1,14 +1,15 @@
 import { can } from "@/entities";
+import { PERMISSIONS } from "@/auth/personas";
 import { dataOf, guarded, json, staffSession } from "@/ai/http";
 import { sql } from "@/ai/data";
-import { proposalsPage } from "@/ai/views";
+import { QUEUE_SQL } from "@/ai/views";
 import { agingByProperty } from "@/extensions/receivables/queries";
 import type { GuideFacts } from "@/components/app/guide/nudges";
 
 // Counts behind the chat bubble's nudges, for the acting persona and scope. Each figure comes from
-// the same query as the page the nudge links to: Approvals › Needs you, the delinquency aging
-// (cached per workspace) and Data health's open critical issues. The bubble asks at most once
-// every two minutes.
+// the same query as the page the nudge links to: Approvals › Needs you, the delinquency aging's
+// 31+ day columns (cached per workspace) and Data health's open critical issues. The bubble asks at
+// most once every two minutes.
 export async function GET(request: Request) {
   return guarded(async () => {
     const s = await staffSession(request);
@@ -16,7 +17,10 @@ export async function GET(request: Request) {
     const data = dataOf(s);
     const role = s.actor.role;
     const [approvals, aging, issues] = await Promise.all([
-      proposalsPage(data, { queue: "needs_you", size: 1 }).then((p) => p.total).catch(() => null),
+      // Same rule as the Approvals nav item: the role has the intelligence module.
+      (PERMISSIONS[role].intelligence ?? "none") !== "none"
+        ? sql<{ n: number }>(data, `SELECT count(*) AS n FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE ${QUEUE_SQL.needs_you}`).then((r) => Number(r[0]?.n ?? 0)).catch(() => null)
+        : null,
       can(role, "read", "charges") ? agingByProperty({ db: s.db, ws: s.ws === "base" ? null : s.ws, actor: s.actor }).catch(() => null) : null,
       sql<{ n: number }>(data, "SELECT count(*) AS n FROM {data_issues} WHERE status = 'open' AND severity = 'critical'").then((r) => Number(r[0]?.n ?? 0)).catch(() => null),
     ]);

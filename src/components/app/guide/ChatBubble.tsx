@@ -35,19 +35,20 @@ function writeSession(s: GuideSession) {
 }
 
 // One small request, reused for two minutes across page views (and shared by concurrent callers).
+// A failed request is remembered for the same two minutes, so a struggling server isn't asked again.
 let inflight: Promise<GuideFacts | null> | null = null;
 function loadFacts(persona: string): Promise<GuideFacts | null> {
   try {
-    const c = JSON.parse(sessionStorage.getItem(FACTS) ?? "null") as { persona: string; at: number; facts: GuideFacts } | null;
+    const c = JSON.parse(sessionStorage.getItem(FACTS) ?? "null") as { persona: string; at: number; facts: GuideFacts | null } | null;
     if (c && c.persona === persona && Date.now() - c.at < FACTS_TTL_MS) return Promise.resolve(c.facts);
   } catch { /* fall through to the network */ }
   inflight ??= fetch("/api/guide", { cache: "no-store" })
     .then((r) => (r.ok ? (r.json() as Promise<GuideFacts>) : null))
+    .catch(() => null)
     .then((facts) => {
-      try { if (facts) sessionStorage.setItem(FACTS, JSON.stringify({ persona, at: Date.now(), facts })); } catch { /* unavailable */ }
+      try { sessionStorage.setItem(FACTS, JSON.stringify({ persona, at: Date.now(), facts })); } catch { /* unavailable */ }
       return facts;
     })
-    .catch(() => null)
     .finally(() => { inflight = null; });
   return inflight;
 }
@@ -77,7 +78,11 @@ export function ChatBubble() {
   const live = useRef({ tourActive, open: assistant.open });
   useEffect(() => { live.current = { tourActive, open: assistant.open }; }, [tourActive, assistant.open]);
 
-  const hiddenPage = pathname === "/app/copilot";
+  const hiddenPage = !showsBubble(pathname);
+  // Read inside the nudge effect; a router.refresh() hands over new nav and tour objects, which
+  // must not count as a new page view.
+  const shell = useRef({ nav: data.nav, tours: data.tours });
+  useEffect(() => { shell.current = { nav: data.nav, tours: data.tours }; }, [data.nav, data.tours]);
 
   // Hide while a dialog or drawer is open (Radix portals mount and unmount as body children).
   useEffect(() => {
@@ -143,7 +148,8 @@ export function ChatBubble() {
     const attempt = async () => {
       const session = readSession();
       const p = readLocal<GuidePrefs>(PREFS, NO_PREFS);
-      const first = data.tours[0];
+      const { nav, tours } = shell.current;
+      const first = tours[0];
       const why = blockedBy({
         now: Date.now(), prefs: p, session, shownThisView: false,
         tourActive: live.current.tourActive, firstTourPending: !!first && !localTourStore.get(first.id),
@@ -156,7 +162,7 @@ export function ChatBubble() {
       if (cancelled) return;
       if (typing() || dialogOpen() || live.current.open || live.current.tourActive) return retry();
       const n = pickNudge({
-        path: pathname, search: window.location.search, day: new Date().toLocaleDateString("en-CA"), nav: data.nav.flatMap((s) => s.items.map((i) => i.href)), facts, tours: tourStates(data.tours),
+        path: pathname, search: window.location.search, day: new Date().toLocaleDateString("en-CA"), nav: nav.flatMap((s) => s.items.map((i) => i.href)), facts, tours: tourStates(tours),
         page: { explain: !!document.querySelector(EXPLAIN_SELECTOR), peekRows: !!document.querySelector(PEEK_ROW_SELECTOR) }, prefs: p, session,
       });
       if (!n) return;
@@ -165,24 +171,27 @@ export function ChatBubble() {
     };
     timer = setTimeout(attempt, FIRST_LOOK_MS);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [pathname, hiddenPage, data.persona.id, data.nav, data.tours]);
+  }, [pathname, hiddenPage, data.persona.id]);
 
-  // A nudge never lingers: it leaves on its own unless the pointer or focus is on it.
-  const hold = useRef(false);
+  // A nudge never lingers: it leaves 30 s after it appears, or after the pointer or focus leaves it.
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const holdNudge = () => clearTimeout(hideTimer.current);
+  const releaseNudge = useCallback(() => { clearTimeout(hideTimer.current); hideTimer.current = setTimeout(() => setShown(null), AUTO_HIDE_MS); }, []);
   useEffect(() => {
     if (!nudge) return;
-    const t = setTimeout(() => { if (!hold.current) setShown(null); }, AUTO_HIDE_MS);
-    return () => clearTimeout(t);
-  }, [nudge]);
+    releaseNudge();
+    return () => clearTimeout(hideTimer.current);
+  }, [nudge, releaseNudge]);
 
-  // Esc closes the panel (when focus isn't in a field on the page) and hands focus back to the bubble.
+  // Esc closes the panel and hands focus back to the bubble, unless focus is in a field, a menu or
+  // a list box (the ask box included): there Esc belongs to that control.
   useEffect(() => {
     if (!assistant.open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || dialogOpen()) return;
       const t = e.target as HTMLElement;
+      if (typing() || t.closest?.('[role="menu"], [role="listbox"], [role="combobox"]')) return;
       const inPanel = !!t.closest?.('aside[aria-label="Ask Propniti"]');
-      if (!inPanel && t !== bubbleRef.current && typing()) return;
       const fromBubble = assistant.openedFrom === "bubble";
       assistant.setOpen(false);
       if (fromBubble || inPanel) bubbleRef.current?.focus();
@@ -191,7 +200,8 @@ export function ChatBubble() {
     return () => window.removeEventListener("keydown", onKey);
   }, [assistant]);
 
-  const dismiss = useCallback((n: Nudge) => { setPrefs((p) => dismissNudge(p, n)); setShown(null); }, [setPrefs]);
+  // Focus goes back to the bubble whenever the nudge closes, so keyboard users aren't dropped on <body>.
+  const dismiss = useCallback((n: Nudge) => { setPrefs((p) => dismissNudge(p, n)); setShown(null); bubbleRef.current?.focus(); }, [setPrefs]);
   const act = (n: Nudge) => {
     dismiss(n);
     const a = n.action;
@@ -200,7 +210,10 @@ export function ChatBubble() {
     else if (a.kind === "tour") startTour(a.tour);
     else document.querySelector<HTMLElement>(a.selector)?.click();
   };
-  const setTips = (on: boolean) => { setPrefs((p) => ({ ...p, off: !on })); if (!on) setShown(null); };
+  const setTips = (on: boolean) => {
+    setPrefs((p) => ({ ...p, off: !on }));
+    if (!on && nudge) { setShown(null); bubbleRef.current?.focus(); }
+  };
 
   if (hiddenPage) return null;
   const open = assistant.open;
@@ -208,9 +221,7 @@ export function ChatBubble() {
   const style = { "--pn-panel": `${open ? assistant.width : 0}px`, "--pn-lift": `${lift}px` } as React.CSSProperties;
 
   return (
-    <>
-      <div aria-live="polite" className="sr-only">{nudge && !hidden ? `Suggestion: ${nudge.text}` : ""}</div>
-      <div
+    <div
         data-chat-bubble-root
         style={style}
         className={cn(
@@ -220,15 +231,16 @@ export function ChatBubble() {
           open && "max-sm:hidden",
         )}
       >
+        <div aria-live="polite" className="sr-only">{nudge && !hidden && !open ? `Suggestion: ${nudge.text}` : ""}</div>
         {nudge && !open && (
           <div
             data-guide-nudge={nudge.id}
             role="group"
             aria-label="Suggestion from Propniti"
-            onPointerEnter={() => (hold.current = true)}
-            onPointerLeave={() => (hold.current = false)}
-            onFocus={() => (hold.current = true)}
-            onBlur={() => (hold.current = false)}
+            onPointerEnter={holdNudge}
+            onPointerLeave={releaseNudge}
+            onFocus={holdNudge}
+            onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) releaseNudge(); }}
             onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setShown(null); bubbleRef.current?.focus(); } }}
             className="relative w-[min(300px,calc(100vw-2rem))] rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-1 duration-300 motion-reduce:animate-none"
           >
@@ -296,7 +308,8 @@ export function ChatBubble() {
           </button>
         </div>
       </div>
-    </>
   );
 }
 
+// The full-page assistant already fills /app/copilot, so the bubble (and the room toasts leave for it) isn't there.
+export const showsBubble = (path: string) => path !== "/app/copilot";

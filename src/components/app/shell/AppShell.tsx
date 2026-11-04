@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { ChatBubble } from "../guide/ChatBubble";
+import { ChatBubble, showsBubble } from "../guide/ChatBubble";
 import { pageGuide } from "../guide/pages";
 import { SetupChecklist } from "../onboarding/SetupChecklist";
 import { TourOverlay, useTour } from "../tour/TourEngine";
@@ -150,7 +150,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
         <TourOverlay active={tour.active} go={tour.go} dismiss={tour.dismiss} />
         <ChatBubble />
         {/* Toasts sit above the chat bubble. */}
-        <Toaster theme={theme} position="bottom-right" closeButton offset={{ bottom: 76 }} mobileOffset={{ bottom: 76 }} />
+        <Toaster theme={theme} position="bottom-right" closeButton {...(showsBubble(pathname) && { offset: { bottom: 76 }, mobileOffset: { bottom: 76 } })} />
       </TooltipProvider>
     </ShellCtx.Provider>
   );

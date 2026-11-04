@@ -105,7 +105,7 @@ const hrefOf = (t: string, id: string) => {
 };
 
 export type Queue = "needs_you" | "auto_handled" | "waiting" | "decided";
-const QUEUE_SQL: Record<Queue, string> = {
+export const QUEUE_SQL: Record<Queue, string> = {
   needs_you: "p.queue_state = 'needs_you' AND d.id IS NULL",
   waiting: "p.queue_state = 'waiting' AND d.id IS NULL",
   auto_handled: "p.queue_state = 'auto_handled'",
