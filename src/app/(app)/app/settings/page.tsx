@@ -46,7 +46,7 @@ export default async function SettingsHome() {
     "/app/settings/payments": "Management fee, late fees and payment methods",
     "/app/settings/company": "Legal name, EIN, address and time zone",
     "/app/settings/ai": "Model, agent autonomy and data use",
-    "/app/settings/import": "Properties and units from a rent roll",
+    "/app/settings/import": "Portfolio, leases, owners and vendors from another tool",
   } : {};
   hint["/app/settings/notifications"] = "What reaches you, and where";
   return (
