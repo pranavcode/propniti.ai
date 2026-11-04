@@ -98,7 +98,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
   return (
     <ShellCtx.Provider value={ctx}>
       <TooltipProvider delayDuration={300}>
-        <div ref={rootRef} data-density={density} className="flex h-dvh w-full overflow-hidden bg-background">
+        <div ref={rootRef} data-density={density} className="relative flex h-dvh w-full overflow-hidden bg-background">
           <a href="#main" className="sr-only z-50 rounded bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2">Skip to content</a>
 
           <div className={cn("hidden shrink-0 border-r border-sidebar-border transition-[width] duration-200 ease-out motion-reduce:transition-none lg:block", sidebarOpen ? "w-[244px]" : "w-[52px]")}>
@@ -115,7 +115,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
             {data.viewingAs && <ViewingAsBanner />}
             <TopBar onMenu={() => setMobileNav(true)} />
             <div className="flex min-h-0 flex-1">
-              <main id="main" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]">
+              <main id="main" tabIndex={-1} className="relative min-w-0 flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]">
                 {children}
               </main>
               <AssistantPanel onResize={setAiWidth}>{assistantBody}</AssistantPanel>
