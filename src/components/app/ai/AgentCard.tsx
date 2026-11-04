@@ -81,7 +81,7 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
           </div>
           <div className={cn("mt-0.5 flex items-center gap-1.5 text-[12px]", st.text)}><span className={cn("size-1.5 rounded-full", st.dot)} />{st.label}</div>
         </div>
-        <Switch checked={on} onCheckedChange={(v) => { setOn(v); onToggle?.(v); }} aria-label={`${on ? "Pause" : "Enable"} ${name}`} />
+        <Switch className="self-center" checked={on} onCheckedChange={(v) => { setOn(v); onToggle?.(v); }} aria-label={`${on ? "Pause" : "Enable"} ${name}`} />
       </div>
       <p className="line-clamp-2 px-4 text-[12.5px] text-muted-foreground">{goal}</p>
 
