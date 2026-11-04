@@ -29,57 +29,46 @@ Propniti is an AI-native property-management SaaS demo at https://propniti.ai: 1
 | | Value |
 |---|---|
 | Production | https://propniti.ai and www, Worker `property-mgmt-ai-prototype` |
-| Live code | `main` at `75039b0` (PRs #3–#31, batch 3), Worker version `05ca6456`. Batch 4 (Improve with AI, glossary and help pages, login layout, docs): this batch |
-| Database | D1 `propniti-v2` (`b9dff387-…`): migrations 0001–0008, base `2026-11-04.16` |
-| Rollback | `npx wrangler rollback --name property-mgmt-ai-prototype` returns to the previous version (`52257beb`). The v1 code and its D1 `propniti` (`3d4ff9d5-…`) stay untouched as the last resort. |
+| Live code | `main` at `d4c55e5` (PRs #3–#32, batch 4), Worker version `10add689` |
+| Database | D1 `propniti-v2` (`b9dff387-…`): migrations 0001–0008, base `2026-11-04.17` |
+| Rollback | `npx wrangler rollback --name property-mgmt-ai-prototype` returns to the previous version (`05ca6456`, batch 3). The v1 code and its D1 `propniti` (`3d4ff9d5-…`) stay untouched as the last resort. |
 | Preview | https://propniti-v2-preview.dnyana.workers.dev (Worker `propniti-v2-preview`). It shares D1 `propniti-v2` and has no cron, so only production sweeps. |
 | Scheduled agents | Cron `*/15 * * * *` through `src/worker-entry.ts`, one agent per tick, with its own slot (`ai_cron_sweep`) so page-visit sweeps can't make it skip. Verified on production: the 03:15, 03:30 and 03:45 UTC ticks each ran an agent. |
 | Demo clock | "Today" is `AS_OF` = 2026-11-04 plus the Pacific time of day (`src/lib/clock.ts`). Visitor data resets at midnight Pacific. |
 
-Last measured (`main` at `75039b0`, 2026-11-04):
+Last measured (`main` at `d4c55e5`, 2026-11-04):
 
 | Check | Result |
 |---|---|
 | Unit tests | 1,133 / 1,133 in 120 files (one full local run) |
 | Lint and typecheck | Clean |
 | Live AI evals | 71 / 74 (96%) on the preview before #14; #14 added eval cases, not yet run live |
-| E2E | 120 tests in 28 specs; production run after the batch 4 deploy |
+| E2E | 120 tests in 28 specs; two fixes after batch 3 in flight (`fix/e2e-batch3`) |
 
 ## In flight
 
 | Workstream | Branch / worktree | Status | Next |
 |---|---|---|---|
-| Docs v2 | `docs/v2-spec-walkthrough` in `../prototype-docs` (PR #12) | `/docs` restyled in the v2 design; Spec, Walkthrough and Architecture updated for #13–#30; help articles updated | Review → merge; screenshots after the final deploy; sync the three Claude Docs |
-| Help articles re-seed | — | Help article changes from the docs branch (rewritten, edited and new articles, plus `prepare-1099s`); production keeps the old text until the base is reloaded | Owner decision: bump `BASE_VERSION` and reload the base (wipes visitor workspaces) |
-| Batch 4 | `batch/four` | Improve with AI, glossary and `/app/help/<id>` pages, compact login | Deploy; docs already describe it |
+| E2E fixes | `fix/e2e-batch3` | Two e2e fixes after batch 3 | Review → merge → production e2e run |
+| Docs screenshots | `docs/screenshots` in `../prototype-docshots` | Walkthrough screenshots from production; Claude Docs sync list | Review → merge |
 
-Shipped 2026-11-04:
+Shipped 2026-11-04, in four batches after the morning PRs (#3–#11):
 
-| PR | What |
-|---|---|
-| #13 | Data Health fixes respect approval rules; money, fraud, legal and non-low-risk fixes always queue; D1 errors masked |
-| #14 | AI quality: what-if direction checks, fair-housing checks on announcements and the assistant, assistant filters, report periods from the demo clock, fresh briefings, en-US number formats |
-| #15 | Inbox at `/app/inbox`: messages, approvals and alerts that need you, with a sidebar badge |
-| #18 | Performance: hover/focus prefetch through `@/components/Link` (lint blocks `next/link`), cheap settle check, faster overlay reads, migration 0008 indexes |
-| #20 | Record action route applies `canDecide` to agent proposals (202 queued / 403); error masking narrowed with server-side logging |
-| #22 | New logo, the Window P |
-| #24 | No blank space below the app shell |
-| #28 | Batch: demo email and password sign-in (#17), import from other tools with optional AI (#26), *Ask Propniti* chat bubble (#25), My tasks (#16), Automations page and agent-settings permissions (#19), sparkle marks (#23), clickable breadcrumbs (#27), crawl fixes (#21) |
-| #29 | Thin app scrollbars; chat inputs that grow to 10 lines |
-| #30 | Batch 2: row alignment, collapsible home sections and *Reset layout*, readable run steps, *Summarize with AI*, e2e fixes |
-| #31 | Batch 3: chat history, *Ask about this*, Do mode starts agents, *Right now*; welcome splash, tour toasts, new-feature dots, daily panel auto-open; approvals, bulk, leasing, money and operations friction fixes; one decide rule with life-safety approvals by regional manager or principal; collection rate per month's charges; Title Case agent names (base `2026-11-04.16`) |
-
-Earlier the same day: #5–#11 (auth pages, peek drawer, cron slot, approvals deep link, summaries from current figures, NOI last closed month).
+| Batch | PR | What |
+|---|---|---|
+| — | #13, #14, #15, #18, #20, #22, #24 | Data Health and action-route approval checks with D1 error masking; AI quality fixes; Inbox; performance (hover prefetch, indexes, migration 0008); new logo; app height fix |
+| 1 | #28, #29 | Demo email and password sign-in; import from AppFolio, Buildium, Yardi and more with optional AI; *Ask Propniti* chat bubble; My tasks; Automations; sparkle marks; clickable breadcrumbs; crawl fixes; thin scrollbars and growing chat inputs |
+| 2 | #30 | Row alignment, collapsible home sections and *Reset layout*, readable run steps, *Summarize with AI*, e2e fixes |
+| 3 | #31 | Chat history, *Ask about this*, Do mode starts agents, *Right now*; welcome splash, tour toasts, new-feature dots, daily panel auto-open; approvals, bulk, leasing, money and operations friction fixes; one decide rule with life-safety approvals by regional manager or principal; collection rate per month's charges; Title Case agent names |
+| 4 | #32 | *Improve with AI* on red KPIs; glossary definitions on labels and `/app/help/<id>` pages; KPI and chart card layout; compact *Pick a person* sign-in; docs restyle and v2 content; updated help articles (base `2026-11-04.17`) |
 
 ## Next
 
-1. Deploy batch 4, warm up, smoke test and run e2e against production; record its version id above.
-2. Capture the walkthrough screenshots on production and fill the `TODO: screenshot` slots in `content/docs/walkthrough.md`.
-3. Sync the three Claude Docs (Product Spec, Prototype Walkthrough, Architecture) to `content/docs/*.md`.
-4. Decide with the owner when to reload the base so the updated help articles reach production.
-5. Re-run `scripts/ai-precompute.mjs` so stored property summaries carry the new facts keys.
-6. Run the live AI evals for #14's new cases.
-7. Owner decision pending: should the broker desk also list scored applications still at Submitted?
+1. Merge `fix/e2e-batch3`, then run e2e against production.
+2. Sync the three Claude Docs (Product Spec, Prototype Walkthrough, Architecture) from `content/docs/*.md`.
+3. Re-run `scripts/ai-precompute.mjs` so stored property summaries carry the new facts keys.
+4. Run the live AI evals for #14's new cases.
+5. Owner decision pending: should the broker desk also list scored applications still at Submitted?
 
 ## Backlog (after the demo)
 
