@@ -48,7 +48,7 @@ function withView(def: EntityDef, sp: URLSearchParams): URLSearchParams {
 
 async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promise<KpiData[]> {
   return Promise.all(kpis.filter((k) => !k.roles || k.roles.includes(ctx.actor.role)).map(async (k) => {
-    const base = { key: k.key, label: k.label, format: k.format, goodWhen: k.goodWhen, drill: k.drill && property ? `${k.drill}${k.drill.includes("?") ? "&" : "?"}f.property_id=${property}` : k.drill, help: k.help?.summary };
+    const base = { key: k.key, metric: k.metric, property, label: k.label, format: k.format, goodWhen: k.goodWhen, drill: k.drill && property ? `${k.drill}${k.drill.includes("?") ? "&" : "?"}f.property_id=${property}` : k.drill, help: k.help?.summary };
     try {
       const m = await metrics(ctx, k.metric, { property });
       return { ...base, value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], asOf: m.asOf };

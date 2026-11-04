@@ -8,6 +8,7 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { fillTemplate } from "@/components/app/data-table/params";
 import { formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useImprove } from "@/components/app/ai/ImproveWithAI";
 
 // KPI tiles and chart panels fed by metrics() (plain data). Every tile and chart point links to
 // the rows behind it (KpiDef.drill / ChartDef.drill templates).
@@ -34,9 +35,15 @@ function Spark({ values, good }: { values: number[]; good: boolean | null }) {
   );
 }
 
-export type KpiData = { key: string; label: string; format: Fmt; value: number | null; previous: number | null; spark: number[]; goodWhen?: "up" | "down"; drill?: string; help?: string; asOf?: string; error?: string };
+export type KpiData = { key: string; metric?: string; property?: string; label: string; format: Fmt; value: number | null; previous: number | null; spark: number[]; goodWhen?: "up" | "down"; drill?: string; help?: string; asOf?: string; error?: string };
 
 export function KpiTile({ k }: { k: KpiData }) {
+  const imp = useImprove({ metric: k.metric ?? "", property: k.property, label: k.label, value: k.error ? null : k.value, previous: k.previous, goodWhen: k.goodWhen, format: k.format });
+  const tile = <Tile k={k} improving={imp.shown} />;
+  return imp.strip ? <div className="flex min-w-0 flex-col [&>*:first-child]:flex-1">{tile}{imp.strip}</div> : tile;
+}
+
+function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
   const delta = k.value != null && k.previous != null && k.previous !== 0 ? (k.value - k.previous) / Math.abs(k.previous) : null;
   const pctPoints = k.format === "pct" && k.value != null && k.previous != null ? (k.value - k.previous) * 100 : null;
   const up = (pctPoints ?? delta ?? 0) > 0;
@@ -44,7 +51,7 @@ export function KpiTile({ k }: { k: KpiData }) {
   const good = flat || !k.goodWhen ? null : (up && k.goodWhen === "up") || (!up && k.goodWhen === "down");
   const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
   const body = (
-    <div className="flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors hover:border-primary/40">
+    <div className={cn("flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors hover:border-primary/40", improving && "rounded-b-none")}>
       <div className="flex items-start justify-between gap-2">
         <span className="text-[12px] font-medium text-muted-foreground" title={k.help}>{k.label}</span>
         {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
@@ -66,7 +73,7 @@ export function KpiTile({ k }: { k: KpiData }) {
       )}
     </div>
   );
-  return k.drill ? <Link href={k.drill} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg">{body}</Link> : body;
+  return k.drill ? <Link href={k.drill} className={cn("block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg", improving && "rounded-b-none")}>{body}</Link> : body;
 }
 
 export type ChartData = { key: string; title: string; kind: "line" | "area" | "bar" | "stacked" | "hbar" | "funnel" | "donut"; x: string; series: { key: string; label: string; format?: Fmt }[]; drill?: string; points: Record<string, unknown>[]; asOf?: string; source?: string; error?: string };

@@ -12,6 +12,7 @@ import { AIBadge } from "@/components/app/ai";
 import { ErrorBanner } from "@/components/app/states";
 import { useShellMaybe } from "@/components/app/shell/context";
 import { KpiCard, type KpiCardProps } from "@/components/app/dashboard";
+import { useImprove } from "@/components/app/ai/ImproveWithAI";
 
 // "Explain this number": a sparkle button on any KPI opens a side sheet with the month-over-month
 // change, the properties and drivers behind it, and the AI wording, labelled with its source and
@@ -187,12 +188,17 @@ export function ExplainButton({ metric, property, label, className, children }: 
   );
 }
 
-// A KPI card with "Explain" beside its title. The card itself still drills to the rows behind it.
+// A KPI card with "Explain" beside its title, and "Improve with AI" under it when the number is red.
+// The card itself still drills to the rows behind it.
 export function ExplainableKpi({ metric, property, ...kpi }: KpiCardProps & { metric: string; property?: string }) {
+  const imp = useImprove({ metric, property, label: kpi.label, value: kpi.value, previous: kpi.previous, goodWhen: kpi.goodWhen, format: kpi.format, deltaLabel: kpi.deltaLabel });
   return (
-    <div className="relative min-w-0">
-      <KpiCard {...kpi} />
-      <ExplainButton metric={metric} property={property} label={kpi.label} className="absolute top-2.5 right-8" />
+    <div className="flex min-w-0 flex-col">
+      <div className="relative flex flex-1 flex-col">
+        <KpiCard {...kpi} className={cn("flex-1", imp.shown && "rounded-b-none", kpi.className)} />
+        <ExplainButton metric={metric} property={property} label={kpi.label} className="absolute top-2.5 right-8" />
+      </div>
+      {imp.strip}
     </div>
   );
 }

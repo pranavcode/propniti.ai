@@ -62,6 +62,7 @@ const REAL_CLOCK_OK = new Set([
   "src/ai/runtime.ts", // deadlines, latency
   "src/ai/assistant.ts", // run clock, converted where stamped
   "src/ai/datafix.ts", // run clock
+  "src/ai/improve/index.ts", // preview cache age (elapsed real time)
   "src/ai/effects.ts", // action clock, converted where stamped
   "src/ai/providers/anthropic.ts", // latency
   "src/ai/providers/openai.ts", // latency
