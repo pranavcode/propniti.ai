@@ -6,7 +6,7 @@ import { setModelForTests } from "../providers";
 import { startRun } from "../orchestrator";
 import { getAgent } from "../agents/registry";
 import { delinquency } from "../facts";
-import { clearImproveCache, executePlan, PlanConflict, planSummary, preview, REGISTRY } from "../improve";
+import { clearImproveCache, planInput, executePlan, PlanConflict, planSummary, preview, REGISTRY } from "../improve";
 import { canImprove, improveKeyFor, isRed, type ImproveKey } from "../improve/meta";
 import "../agents";
 import { DANIEL, MARCUS, openFixture, TODAY, WS } from "./fixture";
@@ -265,9 +265,22 @@ describe("improve: work orders past SLA", () => {
 });
 
 describe("improve: review fixes", () => {
+  it("stores each plan id once, and a full plan fits the trace step's size limit", async () => {
+    const steps = [0, 1, 2].map((k) => ({ action: "leases.send_reminder" as const, ids: Array.from({ length: 10 }, (_, i) => `lease-${k}-${i}-`.padEnd(40, "x")) }));
+    const input = planInput("plan-delinquency-s1abcdef-123", "delinquency", "p01", steps);
+    const json = JSON.stringify(input);
+    expect(json.length).toBeLessThan(4000);
+    expect(json.split("lease-0-0-").length - 1).toBe(1);
+    const f = setup();
+    const r = await executePlan(s(f, DANIEL), "delinquency", null);
+    const stored = JSON.parse(String(f.raw.prepare("SELECT input FROM agent_steps WHERE workspace_id = ? AND id = ?").get(WS, `${r.planId}-s0`)!.input));
+    expect(stored.ids).toBeUndefined();
+    expect(stored.steps.flatMap((x: { ids: string[] }) => x.ids).sort()).toEqual(["l1", "l2", "l3", "l4"]);
+  });
+
   it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {
     const f = setup();
-    const r = await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "event", input: { plan: "x", improve: "delinquency", steps: [{ action: "leases.send_reminder", ids: ["l4"] }], ids: ["l4"] } } })).done;
+    const r = await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "event", input: { plan: "x", improve: "delinquency", steps: [{ action: "leases.send_reminder", ids: ["l4"] }] } } })).done;
     expect(r.proposals).toBeGreaterThan(1);
   });
 });

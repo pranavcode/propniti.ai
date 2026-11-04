@@ -129,6 +129,8 @@ export async function planSummary(s: ImproveSession, key: ImproveKey, property: 
 
 export class PlanConflict extends Error {}
 
+export const planInput = (plan: string, improve: ImproveKey, property: string | null, steps: PlanInput["steps"]): PlanInput => ({ plan, improve, property, steps });
+
 // "Have agents do this": one run per agent, each limited to the plan's records, through the normal
 // runtime (policies, autonomy, one open proposal per record and action, the run trace). The first
 // run's id is the plan id; a second click racing the first collides on it and gets a 409.
@@ -150,9 +152,7 @@ export async function executePlan(s: ImproveSession, key: ImproveKey, property: 
   let i = 0;
   for (const [agent, group] of byAgent) {
     const runId = i ? `${planId}.${i}` : planId;
-    const input: PlanInput & { property: string | null; steps: { action: ActionKey; ids: string[] }[] } = {
-      plan: planId, improve: key, property, ids: group.flatMap((g) => g.ids), steps: group.map((g) => ({ action: g.action!, ids: g.ids })),
-    };
+    const input = planInput(planId, key, property, group.map((g) => ({ action: g.action!, ids: g.ids })));
     let started;
     try {
       started = await startRun({ db: s.db, ws: s.ws, actor: s.actor, agent, runId, trigger: { kind: "manual", input } });

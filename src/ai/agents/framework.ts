@@ -42,13 +42,15 @@ const sameWhy = (w: string) => w.toLowerCase().replace(/\s+/g, " ").replace(/[.!
 // "Improve with AI" plans start a run for the records a person already reviewed: the agent's own
 // rules still decide each proposal, but only for those records, without the model loop (the plan's
 // figures came from the data and the person asked for exactly this).
-export type PlanInput = { plan: string; improve: string; ids: string[] };
+// Stored in the run's opening trace step (truncated at 4,000 characters), so each id appears once.
+export type PlanInput = { plan: string; improve: string; property: string | null; steps: { action: ActionKey; ids: string[] }[] };
 export const PLAN_MAX = 30;
 // Only a person's manual start can be a plan run: an event's payload never narrows an agent's work.
-export function planOf(trigger: { kind?: string; input?: unknown }): PlanInput | null {
+export function planOf(trigger: { kind?: string; input?: unknown }): { plan: string; ids: string[] } | null {
   if (trigger.kind !== "manual") return null;
   const i = trigger.input as Partial<PlanInput> | undefined;
-  return i && typeof i.plan === "string" && Array.isArray(i.ids) ? (i as PlanInput) : null;
+  if (!i || typeof i.plan !== "string" || !Array.isArray(i.steps)) return null;
+  return { plan: i.plan, ids: i.steps.flatMap((st) => (Array.isArray(st?.ids) ? st.ids.map(String) : [])) };
 }
 
 function finalize(ctx: AgentCtx, c: Candidate, modelWhy: string[] = [], modelConfidence?: number): ProposeInput {
