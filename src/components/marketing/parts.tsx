@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export const ease = "ease-[cubic-bezier(0.32,0.72,0,1)]";
 
 export function Arrow({ className = "" }: { className?: string }) {
@@ -7,27 +5,6 @@ export function Arrow({ className = "" }: { className?: string }) {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" className={className} aria-hidden>
       <path d="M5 11 11 5M6 5h5v5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-// Pill button with the arrow nested in its own circle.
-export function PillLink({ href, children, dark = true }: { href: string; children: React.ReactNode; dark?: boolean }) {
-  return (
-    <Link
-      href={href}
-      className={`group inline-flex items-center gap-3 rounded-full py-2 pl-6 pr-2 text-sm font-medium transition-transform duration-500 ${ease} active:scale-[0.98] ${
-        dark ? "bg-[#1C1917] text-[#FBF9F4]" : "bg-white/70 text-[#1C1917] ring-1 ring-[#1C1917]/10"
-      }`}
-    >
-      {children}
-      <span
-        className={`grid h-8 w-8 place-items-center rounded-full transition-transform duration-500 ${ease} group-hover:translate-x-1 group-hover:-translate-y-[1px] group-hover:scale-105 ${
-          dark ? "bg-white/10" : "bg-[#1C1917]/5"
-        }`}
-      >
-        <Arrow className="h-4 w-4" />
-      </span>
-    </Link>
   );
 }
 
