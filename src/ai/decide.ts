@@ -8,6 +8,8 @@ import { INTERNAL_ROLES, type ModuleKey, type Role, type Row } from "@/entities/
 // waiting approval is checked in canDecide).
 //   needs_you: write access to the record's module for low-risk items with no amount; approve
 //              access for anything with money, legal or safety risk.
+//   life-safety (high-risk items in the risk module, e.g. an overdue fire inspection): only the
+//              regional manager (in scope) or the principal, whatever else the role may approve.
 //   waiting:   over the owner's limit; the owner decides in their portal, or a principal.
 
 // Anything with money, legal or safety risk needs approve access, not just write.
@@ -15,10 +17,17 @@ export const needsApprove = (p: Row) => p.risk !== "Low" || p.amount_cents != nu
 
 const moduleOf = (entityType: unknown) => getEntity(String(entityType))?.module ?? "intelligence";
 const isStaff = (role: string) => (INTERNAL_ROLES as readonly string[]).includes(role);
+const LIFE_SAFETY_ROLES: Role[] = ["principal", "regional_manager"];
+const isLifeSafety = (p: Row) => p.risk === "High" && moduleOf(p.entity_type) === "risk";
+
+// Who an agent routes a proposal to when the rule decides it: life-safety items go to the regional
+// manager of the property, or the principal when there is no property (org-level items).
+export const routeTo = (p: Row): Role | null => (isLifeSafety(p) ? (p.property_id ? "regional_manager" : "principal") : null);
 
 function allows(role: Role, p: Row) {
   if (!isStaff(role)) return false;
   if (p.queue_state === "waiting") return role === "principal";
+  if (isLifeSafety(p)) return LIFE_SAFETY_ROLES.includes(role);
   const access = PERMISSIONS[role][moduleOf(p.entity_type)] ?? "none";
   return needsApprove(p) ? access === "approve" : access === "write" || access === "approve";
 }
@@ -28,9 +37,12 @@ const orList = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -
 
 // "Approver: principal, regional manager or admin", from the rule itself (not the role the agent
 // routed it to, which may lack the access).
+// The staff roles that may decide it (the Notify approver target reads this too).
+export const approverRoles = (p: Row): Role[] => INTERNAL_ROLES.filter((r) => r !== "platform_admin" && allows(r, p));
+
 export function approverLabel(p: Row) {
   if (p.queue_state === "waiting") return "Over the owner's limit: the owner approves in their portal";
-  const roles = INTERNAL_ROLES.filter((r) => r !== "platform_admin" && allows(r, p));
+  const roles = approverRoles(p);
   return roles.length ? `Approver: ${orList(roles.map(roleName))}` : "No staff role can approve this";
 }
 
@@ -54,8 +66,8 @@ export function decidableSql(role: Role, alias = "p"): { sql: string; params: un
     return { sql: `(${alias}.entity_type IN (SELECT value FROM json_each(?))${unknown})`, params: [JSON.stringify(typesWith(level)), ...(unknown ? [JSON.stringify(known)] : [])] };
   };
   const approve = inList("approve"), write = inList("write");
-  return {
-    sql: `(${approve.sql} OR (${alias}.risk = 'Low' AND ${alias}.amount_cents IS NULL AND ${write.sql}))`,
-    params: [...approve.params, ...write.params],
-  };
+  const base = { sql: `(${approve.sql} OR (${alias}.risk = 'Low' AND ${alias}.amount_cents IS NULL AND ${write.sql}))`, params: [...approve.params, ...write.params] };
+  if (LIFE_SAFETY_ROLES.includes(role)) return base;
+  const riskTypes = known.filter((k) => getEntity(k)!.module === "risk");
+  return { sql: `(${base.sql} AND NOT (${alias}.risk = 'High' AND ${alias}.entity_type IN (SELECT value FROM json_each(?))))`, params: [...base.params, JSON.stringify(riskTypes)] };
 }

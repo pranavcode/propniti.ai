@@ -174,6 +174,12 @@ describe("seed generator", () => {
     }
   });
 
+  it("routes high-risk compliance proposals to the regional manager (the principal when org-level)", () => {
+    const high = T.ai_proposals.filter((p) => p.entity_type === "compliance_items" && p.risk === "High");
+    expect(high.length).toBeGreaterThan(0);
+    for (const p of high) expect(p.assignee_role, p.id as string).toBe(p.property_id ? "regional_manager" : "principal");
+  });
+
   it("the trial balance sums to zero", () => {
     expect(sum(T.journal_entries, (j) => cents(j, "debit_cents"))).toBe(sum(T.journal_entries, (j) => cents(j, "credit_cents")));
   });
