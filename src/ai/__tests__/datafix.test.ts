@@ -158,6 +158,25 @@ describe("Data Health in plain words", () => {
   });
 });
 
+describe("Data Health scope", () => {
+  it("counts rules within the persona's properties and leaves out record types the role can't open", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'bill_lines.gl_miscoded', 'bill_lines', 'GL miscoded', 'warn', 'x', 'computed'), ('base', 'leases.rent_outlier', 'leases', 'Rent far above market', 'warn', 'x', 'computed')").run();
+    const add = f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence) VALUES ('base', ?, ?, ?, ?, ?, '2026-11-01', 'warn', '{}')");
+    add.run("di-gl", "bill_lines.gl_miscoded", "bill_lines", "bl1", "p01");
+    add.run("di-far", "leases.rent_outlier", "leases", "l3", "p10");
+    const lena = { ...MARCUS, personaId: "lena", name: "Lena Ortiz", role: "leasing_agent" as const };
+    const data = { db: f.db, ws: WS, actor: lena };
+    const h = await dataHealth(data);
+    expect(h.rules.map((r) => r.id)).not.toContain("bill_lines.gl_miscoded");
+    expect(h.rules.find((r) => r.id === "leases.rent_outlier")?.open).toBe(1); // di-rent at p01, not di-far at p10
+    expect(h.rules.reduce((n, r) => n + r.open, 0)).toBeLessThanOrEqual(h.open);
+    expect((await issuesPage(data, {})).rows.map((r) => (r as Record<string, unknown>).id)).not.toContain("di-gl");
+    const all = await dataHealth({ db: f.db, ws: WS, actor: DANIEL });
+    expect(all.rules.find((r) => r.id === "leases.rent_outlier")?.open).toBe(2);
+  });
+});
+
 describe("Data Health filters and bulk actions across pages", () => {
   // 30 address fixes at p02 (low risk), the rent fix (money) and di1 from the fixture.
   function many() {

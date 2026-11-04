@@ -70,7 +70,7 @@ const SCAN = 500;
 // there. Fixes with nothing to apply (open the record instead) are neither. Mirrors the page's
 // per-issue button (queueReason); applyFixes re-checks every item.
 export async function issueTargets(data: DataCtx, f: IssueFilters, mode: "safe" | "send", cap = BULK_FIX_CAP) {
-  const w = issueWhere({ ...f, status: "open" });
+  const w = issueWhere({ ...f, status: "open" }, data.actor.role);
   const pending = "NOT EXISTS (SELECT 1 FROM {ai_proposals} p WHERE p.entity_type = 'data_issues' AND p.entity_id = i.id AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id))";
   const rows = await sql<Row>(data, `SELECT i.* FROM {data_issues} i WHERE ${[...w.where, ...(mode === "send" ? [pending] : [])].join(" AND ")} ORDER BY ${ISSUE_ORDER} LIMIT ${SCAN}`, w.params);
   const ids: string[] = [];

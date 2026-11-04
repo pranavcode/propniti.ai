@@ -1,5 +1,5 @@
 import { demoIsoIn, demoNow } from "@/lib/clock";
-import { can, getEntity } from "@/entities";
+import { allEntities, can, getEntity } from "@/entities";
 import { getAction } from "@/extensions/actions";
 import { effective, expand, getRow, readWs } from "@/server/query";
 import { hintsFor, humanizeKey } from "@/lib/fieldText";
@@ -343,13 +343,25 @@ async function recordCounts(data: DataCtx, entities: Table[]) {
   return v;
 }
 
+// Record types a role can't open (bill lines follow bills). Their issues stay out of that role's
+// Data Health counts, rules and lists, as their records stay out of its pages.
+export function hiddenIssueTypes(role: Role): string[] {
+  const hidden = allEntities().filter((d) => !can(role, "read", d.key)).map((d) => d.key as string);
+  return hidden.includes("bills") ? [...hidden, "bill_lines"] : hidden;
+}
+
 export async function dataHealth(data: DataCtx) {
-  const [issues, rules, props] = await Promise.all([
-    sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, "SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' GROUP BY rule_id, entity_type, property_id, severity"),
-    sql<{ id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }>(data,
-      "SELECT r.id, r.name, r.severity, r.entity_type, (SELECT count(*) FROM {data_issues} i WHERE i.rule_id = r.id AND i.status = 'open') AS open, (SELECT count(*) FROM {data_issues} i WHERE i.rule_id = r.id AND i.status IN ('fixed', 'auto-fixed')) AS fixed FROM {data_rules} r ORDER BY open DESC", [], { unscoped: true }),
+  const hidden = JSON.stringify(hiddenIssueTypes(data.actor.role));
+  const visible = "entity_type NOT IN (SELECT value FROM json_each(?))";
+  const [issues, ruleList, ruleCounts, props] = await Promise.all([
+    sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, `SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' AND ${visible} GROUP BY rule_id, entity_type, property_id, severity`, [hidden]),
+    sql<{ id: string; name: string; severity: string; entity_type: string }>(data, `SELECT r.id, r.name, r.severity, r.entity_type FROM {data_rules} r WHERE r.${visible}`, [hidden], { unscoped: true }),
+    // Counts in the persona's properties (scoped), not the whole portfolio.
+    sql<{ rule_id: string; open: number; fixed: number }>(data, "SELECT rule_id, sum(status = 'open') AS open, sum(status IN ('fixed', 'auto-fixed')) AS fixed FROM {data_issues} GROUP BY rule_id"),
     sql<{ id: string; name: string; metro: string }>(data, "SELECT id, name, metro FROM {properties} ORDER BY id"),
   ]);
+  const byRule = new Map(ruleCounts.map((r) => [r.rule_id, r]));
+  const rules = ruleList.map((r) => ({ ...r, open: Number(byRule.get(r.id)?.open ?? 0), fixed: Number(byRule.get(r.id)?.fixed ?? 0) })).sort((a, b) => b.open - a.open);
   const entities = [...new Set([...rules.map((r) => r.entity_type), ...issues.map((i) => i.entity_type)])].filter(isTable);
   const counts = await recordCounts(data, entities);
   const weightOf = (rows: typeof issues) => rows.reduce((s, r) => s + issueWeight(r.rule_id, r.severity) * r.n, 0);
@@ -379,9 +391,9 @@ export async function dataHealth(data: DataCtx) {
 }
 
 // The Data Health filters as SQL over `i` (data_issues), shared by the page and the bulk actions.
-export function issueWhere(f: IssueFilters & { status?: string }) {
-  const where = ["i.status = ?"];
-  const params: unknown[] = [f.status ?? "open"];
+export function issueWhere(f: IssueFilters & { status?: string }, role: Role) {
+  const where = ["i.status = ?", "i.entity_type NOT IN (SELECT value FROM json_each(?))"];
+  const params: unknown[] = [f.status ?? "open", JSON.stringify(hiddenIssueTypes(role))];
   if (f.severity) { where.push("i.severity = ?"); params.push(f.severity); }
   if (f.rule) { where.push("i.rule_id = ?"); params.push(f.rule); }
   if (f.property) { where.push("i.property_id = ?"); params.push(f.property); }
@@ -404,7 +416,7 @@ async function recordTitle(data: DataCtx, table: string, rec: Row | null): Promi
 }
 
 export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: string; page?: number; size?: number }) {
-  const { where, params } = issueWhere(f);
+  const { where, params } = issueWhere(f, data.actor.role);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const [rows, total] = await Promise.all([
