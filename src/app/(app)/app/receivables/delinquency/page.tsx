@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollX } from "@/components/app/ScrollX";
 import { getPlatform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
+import { formatAsOf } from "@/lib/format";
 import { AS_OF } from "@/seed/constants";
 import { agingByProperty, BUCKETS, delinquentLeases, type AgingRow, type BucketKey } from "@/extensions/receivables/queries";
 import { PageHeader, Pager, toParams } from "@/extensions/receivables/ui/bits";
@@ -54,7 +55,7 @@ export default async function DelinquencyPage({ searchParams }: Props) {
     <div className="flex flex-col gap-5 p-4 md:p-6">
       <PageHeader
         title="Delinquency aging"
-        description={<>Past-due balances by property and days late, as of {AS_OF}. Each charge ages from its own due date. Click a cell for the residents in it; click a total for the charges behind it.</>}
+        description={<>Past-due balances by property and days late, as of {formatAsOf(AS_OF)}. Each charge ages from its own due date. Click a cell for the residents in it; click a total for the charges behind it.</>}
       >
         <Button asChild><Link href="/app/receivables/collections">Work collections<ArrowRight data-icon="inline-end" /></Link></Button>
       </PageHeader>

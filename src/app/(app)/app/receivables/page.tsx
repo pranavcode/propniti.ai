@@ -66,7 +66,7 @@ export default async function ReceivablesPage() {
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
-      <PageHeader title="Receivables" description={<>What residents owe, what came in and what needs following up. {session.actor.scope.label} · as of {AS_OF}.</>}>
+      <PageHeader title="Receivables" description={<>What residents owe, what came in and what needs following up. {session.actor.scope.label} · as of {formatAsOf(AS_OF)}.</>}>
         <Button asChild variant="outline"><Link href="/app/receivables/record-payment"><Banknote data-icon="inline-start" />Record payment</Link></Button>
         <Button asChild><Link href="/app/receivables/collections"><Scale data-icon="inline-start" />Work collections</Link></Button>
       </PageHeader>

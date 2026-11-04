@@ -3,7 +3,7 @@ import Link from "@/components/Link";
 import { ArrowRight, BarChart3, Bot, ChevronRight, CircleDollarSign, FileStack, Inbox, Landmark, Sparkles } from "lucide-react";
 import type { Session } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
-import { personaGreeting } from "@/lib/format";
+import { formatAsOf, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { widgetsFor } from "@/extensions/widgets";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,7 @@ export async function FinanceHome({ session }: { session: Session }) {
             <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3 group-data-collapsed/collapse:flex-nowrap group-data-collapsed/collapse:border-b-0">
               <span className="flex size-6 items-center justify-center rounded-md bg-tone-ai/10 text-tone-ai"><Sparkles className="size-3.5" /></span>
               <h2 className="shrink-0 text-[13.5px] font-semibold">Briefing</h2>
-              <WhenExpanded><span className="text-[12px] text-muted-foreground">Payables, banking and budget as of {h.today}</span></WhenExpanded>
+              <WhenExpanded><span className="text-[12px] text-muted-foreground">Payables, banking and budget as of {formatAsOf(h.today)}</span></WhenExpanded>
               <WhenCollapsed><span className="min-w-0 truncate text-[12px] text-muted-foreground tabular-nums">{`${h.briefing.needs.length} need you · ${h.briefing.watch.length} to watch`}</span></WhenCollapsed>
               <AIBadge source="rules" className="ml-auto max-sm:group-data-collapsed/collapse:hidden" />
               <CollapseButton className="-mr-1.5 max-sm:group-data-collapsed/collapse:ml-auto" />
