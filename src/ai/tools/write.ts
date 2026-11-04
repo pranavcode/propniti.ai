@@ -102,7 +102,7 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
     entity: "data_issues", entityId: String(issue.id), action: "data_issues.apply_fix", propertyId: (issue.property_id as string) ?? null,
     title: `Fix: ${rule.replace(/^[a-z_]+\./, "").replace(/_/g, " ")} on ${table.replace(/_/g, " ")} ${id}`,
     payload: { issue_id: issue.id, rule, before: evidence, changes: fix.changes ?? null, merge_into: fix.merge_into ?? null, effects },
-    why, confidence: fix.confidence ?? 0.8, risk: human ? "High" : issue.severity === "critical" ? "Medium" : "Low", alwaysHuman: human,
+    why, confidence: fix.confidence ?? 0.8, risk: human ? "High" : issue.severity === "critical" ? "Medium" : "Low", alwaysHuman: human, ...(human ? { assignee: "accountant" as const } : {}),
     evidence: [{ entity_type: table, entity_id: id, label: `${table.replace(/_/g, " ")} ${id}` }],
   };
 }

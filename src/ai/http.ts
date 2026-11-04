@@ -47,18 +47,24 @@ export async function writeSession<S extends z.ZodType>(request: Request, schema
   return { s, body };
 }
 
-// Database errors (D1 overload, SQLite internals) never reach the browser; the log keeps the detail.
-const DB_ERROR = /D1_|D1 DB|SQLITE_|overloaded|no such (table|column)/i;
-export const isDbError = (message: string) => DB_ERROR.test(message);
+// Database errors (D1, SQLite internals) never reach the browser or a run trace; the log keeps the
+// detail. Model-provider errors ("overloaded" too) are not database errors and pass through.
+const DB_ERROR = /D1_[A-Z_]+|D1 DB|SQLITE_[A-Z]+|no such (table|column)/;
 export const DB_BUSY = "The database is busy; try again in a moment";
+export function publicError(message: string) {
+  if (!DB_ERROR.test(message)) return message;
+  console.error("[ai] database error:", message);
+  return DB_BUSY;
+}
 
 export async function guarded(fn: () => Promise<Response>) {
   try {
     return await fn();
   } catch (err) {
-    console.error("[ai] route failed:", err);
     const message = err instanceof Error ? err.message : "Something went wrong";
-    return isDbError(message) ? json({ error: DB_BUSY }, { status: 503 }) : json({ error: message }, { status: 400 });
+    const shown = publicError(message);
+    if (shown === message) console.error("[ai] route failed:", err);
+    return json({ error: shown }, { status: shown === DB_BUSY ? 503 : 400 });
   }
 }
 

@@ -4,7 +4,7 @@ import type { Row } from "@/entities/types";
 import { computeFix } from "./rules";
 import { get, insert, isTable, newId, parseJson, upsertOverlay, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
-import { canDecide } from "./http";
+import { canDecide, publicError } from "./http";
 import { openRun, runWithContext } from "./orchestrator";
 import { fixProposal } from "./tools/write";
 import "./agents";
@@ -44,8 +44,9 @@ export async function applyFixes(data: DataCtx, persona: Persona, issueIds: stri
         continue;
       }
       const r = await executeProposal(data, row, { id: persona.id, name: persona.name, role: data.actor.role }, undefined, "Applied from Data Health");
-      await ctx.step({ kind: "message", output: { issue: id, applied: r.ok, result: r.message }, ok: r.ok });
-      results.push({ id, ok: r.ok, message: r.message });
+      const message = publicError(r.message);
+      await ctx.step({ kind: "message", output: { issue: id, applied: r.ok, result: message }, ok: r.ok });
+      results.push({ id, ok: r.ok, message });
     }
     return { summary: `${persona.name} applied ${results.filter((r) => r.ok).length} of ${issueIds.length} fixes from Data Health.`, result: null };
   });

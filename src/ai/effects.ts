@@ -242,7 +242,7 @@ export async function executeProposal(data: DataCtx, proposal: Row, by: By, edit
       : isTable(String(proposal.entity_type)) ? await get(data, proposal.entity_type as Table, String(proposal.entity_id)) : null;
     const input = registered.input ? registered.input.parse((payload as { input?: unknown }).input ?? payload) : undefined;
     const r = await registered.handler({ db, ws, actor: data.actor, nowMs: Date.now() }, row ?? {}, input);
-    result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: r.error };
+    result = r.status === 200 ? { ok: true, message: r.message ?? registered.label, href: r.href } : { ok: false, status: r.status, message: "error" in r ? r.error : r.message };
   } catch (err) {
     result = { ok: false, status: 400, message: err instanceof Error ? err.message : String(err) };
   }

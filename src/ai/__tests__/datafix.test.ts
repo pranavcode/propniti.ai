@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { get } from "../data";
 import { applyFixes } from "../datafix";
+import { DB_BUSY, publicError } from "../http";
 import { fixProposal, queueReason } from "../tools/write";
 import { setModelForTests } from "../providers";
 import { DANIEL, MARCUS, openFixture, WS } from "./fixture";
@@ -37,7 +38,7 @@ describe("applying fixes from Data Health", () => {
     expect(r.applied).toBe(0);
     expect(r.results[0]).toMatchObject({ ok: false, queued: true });
     expect(r.results[0].message).toMatch(/approvals inbox/);
-    expect(raw.prepare("SELECT queue_state FROM ai_proposals WHERE workspace_id = ? AND id = ?").get(WS, r.results[0].proposalId!)).toMatchObject({ queue_state: "needs_you" });
+    expect(raw.prepare("SELECT queue_state, assignee_role FROM ai_proposals WHERE workspace_id = ? AND id = ?").get(WS, r.results[0].proposalId!)).toMatchObject({ queue_state: "needs_you", assignee_role: "accountant" });
     expect(decisions).toBe(0);
     expect((await get(data, "leases", "l1"))?.rent_cents).toBe(140000);
   });
@@ -86,5 +87,14 @@ describe("applying fixes from Data Health", () => {
         expect(queueReason(fixProposal(fix), actor.role) !== null).toBe(!r.results[0].ok);
       }
     }
+  });
+
+  it("masks database errors but not model-provider ones", () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(publicError("D1_ERROR: D1 DB is overloaded. Requests queued for too long.")).toBe(DB_BUSY);
+    expect(publicError("SQLITE_BUSY: database is locked")).toBe(DB_BUSY);
+    expect(publicError("Anthropic API: overloaded_error")).toBe("Anthropic API: overloaded_error");
+    expect(publicError("Already fixed")).toBe("Already fixed");
+    quiet.mockRestore();
   });
 });

@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { registerAction } from "@/extensions/actions";
+import { getPersona } from "@/auth/personas";
 import { INTERNAL_ROLES, type EntityKey } from "@/entities/types";
 import { eff } from "./data";
 import { AI_ACTIONS } from "./action-keys";
 import { executeProposal } from "./effects";
+import { canDecide } from "./http";
 
 // Named actions that only agents propose. Each runs its proposal's effects (messages, tasks, narrow
 // record updates), so approving through the approvals inbox or through the generic action route
@@ -27,6 +29,15 @@ for (const a of AI_ACTIONS) {
         .bind(...e.params, a.key, String(row.id), ...(input.proposal_id ? [input.proposal_id] : []))
         .first<Record<string, unknown>>();
       if (!p) return { status: 404, error: "No AI proposal for this record; this action only runs what an agent proposed" };
+      // Same rule as the approvals inbox. A money, legal or safety proposal the caller can't approve
+      // stays in the inbox for someone who can.
+      const persona = getPersona(ctx.actor.personaId);
+      const allowed = persona ? await canDecide({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, persona }, p) : { ok: false as const, error: "Unknown persona" };
+      if (!allowed.ok) {
+        return p.risk !== "Low" || p.amount_cents != null
+          ? { status: 202, message: `${allowed.error} It waits in the approvals inbox.`, proposalId: String(p.id) }
+          : { status: 403, error: allowed.error };
+      }
       const r = await executeProposal({ db: ctx.db, ws: ctx.ws, actor: ctx.actor }, p, { id: ctx.actor.personaId, name: ctx.actor.name, role: ctx.actor.role }, undefined, input.note ?? "");
       return r.ok ? { status: 200, message: r.message, href: r.href } : { status: (r.status ?? 400) as 400 | 404 | 409, error: r.message };
     },
