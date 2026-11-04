@@ -59,7 +59,7 @@ export default async function ReceivablesPage() {
   const closed = (rate?.points ?? []).filter((p) => String(p.month) < AS_OF.slice(0, 7));
   const rateNow = closed.at(-1), ratePrev = closed.at(-2);
   const pct = (p?: Record<string, unknown>) => (p && Number(p.charged) ? Number(p.collected) / Number(p.charged) : null);
-  // Red when balances over 30 days late pass 2% of the last closed month's rent charges.
+  // Red when balances over 30 days late pass 2% of the last closed month's charges.
   const over30 = (aging?.points ?? []).slice(1).reduce((s, p) => s + Number(p.amount ?? 0), 0);
   const pastDueRed = !!rateNow && Number(rateNow.charged) > 0 && over30 / Number(rateNow.charged) > THRESHOLDS.over30OfRentRoll;
 

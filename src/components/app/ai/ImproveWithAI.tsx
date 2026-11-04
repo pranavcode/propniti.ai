@@ -126,7 +126,8 @@ function ImproveSheet({ open, onOpenChange, improve, kpi }: { open: boolean; onO
   const run = async () => {
     setBusy(true);
     try {
-      const r = await call<ExecuteResult>("/api/ai/improve", { metric: improve, property: kpi.property });
+      const steps = agentSteps.map((st) => ({ action: st.action, ids: st.ids }));
+      const r = await call<ExecuteResult>("/api/ai/improve", { metric: improve, property: kpi.property, steps });
       setResult(r);
       toast.success(r.message, { action: { label: r.waiting ? "Open approvals" : "View run", onClick: () => router.push(r.waiting ? r.approvalsHref : r.runHref) } });
       load();

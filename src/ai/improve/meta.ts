@@ -83,4 +83,4 @@ export type Preview = {
   steps: PlanStep[];
   plan: PlanSummary | null;
 };
-export type ExecuteResult = { planId: string; created: number; waiting: number; auto: number; already: number; runs: { id: string; agent: string }[]; approvalsHref: string; runHref: string; message: string };
+export type ExecuteResult = { planId: string; created: number; waiting: number; auto: number; already: number; dropped: number; runs: { id: string; agent: string }[]; approvalsHref: string; runHref: string; message: string };
