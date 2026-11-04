@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/app/forms/ConfirmDialog";
 
 // Triage queue buttons on the maintenance home: dispatch one AI suggestion, or accept every
-// high-confidence one at once. Both run work_orders.dispatch_suggested, which keeps estimates over
-// the auto-approve limit in Approvals and checks insurance, scope and double clicks on the server.
+// high-confidence one at once. Both run work_orders.dispatch_suggested, which applies the approvals
+// rule, the confidence threshold, insurance, scope and double-click checks on the server.
 
 type Result = { id: string; status: number; error?: string; message?: string };
 const MAX_BULK = 25;
 
-async function dispatchSuggested(ids: string[]): Promise<Result[]> {
+async function dispatchSuggested(ids: string[], highOnly = false): Promise<Result[]> {
   if (ids.length === 1) {
     const res = await fetch(`/api/e/work_orders/${encodeURIComponent(ids[0])}/actions/dispatch_suggested`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     const out = await res.json().catch(() => ({}));
@@ -22,7 +22,7 @@ async function dispatchSuggested(ids: string[]): Promise<Result[]> {
   }
   const results: Result[] = [];
   for (let i = 0; i < ids.length; i += MAX_BULK) {
-    const res = await fetch("/api/e/work_orders/actions/dispatch_suggested", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: ids.slice(i, i + MAX_BULK) }) });
+    const res = await fetch("/api/e/work_orders/actions/dispatch_suggested", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: ids.slice(i, i + MAX_BULK), input: { high_confidence_only: highOnly } }) });
     const out = await res.json().catch(() => ({}));
     results.push(...(out.results ?? [{ id: ids[i], status: res.status, error: out.error ?? "Nothing was changed" }]));
   }
@@ -40,7 +40,7 @@ function report(results: Result[]) {
     else toast.error(r.error ?? "Nothing was changed. Try again.");
     return;
   }
-  const parts = [done.length && `${done.length} dispatched`, queued.length && `${queued.length} sent to Approvals (over the auto-approve limit)`, failed.length && `${failed.length} skipped`].filter(Boolean).join(", ");
+  const parts = [done.length && `${done.length} dispatched`, queued.length && `${queued.length} left in Approvals for an approver`, failed.length && `${failed.length} skipped`].filter(Boolean).join(", ");
   (done.length || queued.length ? toast.success : toast.error)(parts || "Nothing was changed", failed.length ? { description: failed.map((f) => f.error).filter(Boolean).slice(0, 2).join(" ") } : undefined);
 }
 
@@ -55,14 +55,14 @@ export function DispatchSuggested({ id, note }: { id: string; note?: string }) {
   );
 }
 
-export function AcceptSuggestions({ ids, overLimit }: { ids: string[]; overLimit: number }) {
+export function AcceptSuggestions({ ids, toApprovals }: { ids: string[]; toApprovals: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!ids.length) return null;
   const run = async () => {
     setBusy(true);
-    try { report(await dispatchSuggested(ids)); } finally { setBusy(false); setOpen(false); router.refresh(); }
+    try { report(await dispatchSuggested(ids, true)); } finally { setBusy(false); setOpen(false); router.refresh(); }
   };
   return (
     <>
@@ -70,7 +70,7 @@ export function AcceptSuggestions({ ids, overLimit }: { ids: string[]; overLimit
         {busy ? <Loader2 className="animate-spin" /> : <CheckCheck />}Accept {ids.length} high-confidence suggestion{ids.length === 1 ? "" : "s"}
       </Button>
       <ConfirmDialog open={open} onOpenChange={setOpen} title={`Dispatch ${ids.length} work order${ids.length === 1 ? "" : "s"} as the agent suggested?`}
-        description={`Each goes to the vendor the Maintenance Triage agent picked.${overLimit ? ` ${overLimit} ${overLimit === 1 ? "has an estimate" : "have estimates"} over the auto-approve limit and will go to Approvals instead.` : ""} Vendors without a verified, current certificate are skipped.`}
+        description={`Each goes to the vendor the Maintenance Triage agent picked.${toApprovals ? ` ${toApprovals} need${toApprovals === 1 ? "s" : ""} an approver your role isn't, and will stay in Approvals.` : ""} Vendors without a verified, current certificate are skipped.`}
         confirmLabel="Dispatch" tone="default" onConfirm={run} />
     </>
   );

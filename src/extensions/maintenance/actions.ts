@@ -7,6 +7,7 @@ import { approveAndPayWorkOrder } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { AS_OF } from "@/seed/constants";
 import { verifiedCoiExpirySql } from "@/extensions/risk/sql";
+import { routeTo, staffDecision } from "@/ai/decide";
 import { registerAction } from "../actions";
 import { checkPhoto, nextDue, PHOTO_TAGS, policyCheck, usd, validateInvoice } from "./rules";
 import { insertStmt, newId, OPEN_STATUSES, parse, row as readRow, update, updateStmt } from "./store";
@@ -120,11 +121,12 @@ const dispatch = registerAction({
 
 // "Dispatch as suggested" from the triage queue, one at a time or in bulk ("Accept N"): dispatches
 // the Maintenance Triage agent's open suggestion through work_orders.dispatch, so the insurance,
-// status and double-click guards are the same. Estimates over the auto-approve limit aren't
-// dispatched from here: the suggestion goes to the policy's approver in Approvals. Estimates over
-// the owner's limit put the job on hold for the owner, as a manual dispatch does.
+// status and double-click guards are the same. Whether this person may accept the suggestion is
+// the approvals rule (staffDecision): a suggestion with an amount needs approve access to
+// maintenance. Without it the suggestion stays in Approvals, routed as the rule says. Estimates
+// over the owner's limit put the job on hold for the owner, as a manual dispatch does. "Accept N"
+// sends high_confidence_only, and the threshold is checked here, not only in the browser.
 export const HIGH_CONFIDENCE = 0.8;
-const APPROVER_ROLES = (role: string) => ["principal", "regional_manager", role];
 
 registerAction({
   key: "work_orders.dispatch_suggested",
@@ -133,21 +135,22 @@ registerAction({
   roles: SUP,
   icon: Sparkles,
   bulk: true,
+  input: z.strictObject({ high_confidence_only: z.boolean().optional() }),
   when: (r) => ["New", "Triaged"].includes(String(r.status)),
-  help: { summary: "Dispatches the vendor the Maintenance Triage agent suggested. Estimates over the auto-approve limit go to Approvals instead; over the owner's limit, the job waits for the owner.", article: "maintenance-triage-agent" },
-  handler: async (c, r) => {
+  help: { summary: "Dispatches the vendor the Maintenance Triage agent suggested, if your role may approve it. Otherwise it stays in Approvals; over the owner's limit, the job waits for the owner.", article: "maintenance-triage-agent" },
+  handler: async (c, r, opts) => {
     const p = await latestTriage(c.db, c.ws, String(r.id));
     if (!p || p.decision || p.queue_state === "auto_handled") return conflict(`${r.id} has no open AI suggestion. Open it to dispatch.`);
+    if (opts?.high_confidence_only && !(p.confidence >= HIGH_CONFIDENCE)) return conflict(`The suggestion for ${r.id} is below ${Math.round(HIGH_CONFIDENCE * 100)}% confidence. Open it to review.`);
     const vendor = typeof p.changes.vendor_id === "string" ? p.changes.vendor_id : null;
     if (!vendor) return conflict(`The suggestion for ${r.id} is an in-house technician. Open it to pick one.`);
-    const estimateCents = p.amount_cents ?? Math.round(Number(r.estimate ?? 0) * 100);
-    const policy = await policyFor(c.db, c.ws, String(r.property_id));
-    const pol = policyCheck(estimateCents, policy);
-    if (pol.level === "approver" && !APPROVER_ROLES(policy?.approver_role ?? "property_manager").includes(c.actor.role)) {
-      const role = policy?.approver_role ?? "property_manager";
-      await c.db.batch([await updateStmt(c.db, c.ws, "ai_proposals", p.id, { assignee_role: role, queue_state: "needs_you" })]);
-      return { status: 202, message: `${r.id}: ${pol.text} It's in Approvals.`, proposalId: p.id };
+    const decision = staffDecision(c.actor.role, { entity_type: "work_orders", property_id: r.property_id, amount_cents: p.amount_cents, risk: p.risk, queue_state: "needs_you" });
+    if (!decision.ok) {
+      const role = routeTo({ entity_type: "work_orders", property_id: r.property_id, risk: p.risk });
+      if (role) await c.db.batch([await updateStmt(c.db, c.ws, "ai_proposals", p.id, { assignee_role: role })]);
+      return { status: 202, message: `${r.id} stays in Approvals. ${decision.error}`, proposalId: p.id };
     }
+    const estimateCents = p.amount_cents ?? Math.round(Number(r.estimate ?? 0) * 100);
     const input = Dispatch.safeParse({ vendor_id: vendor, priority: p.changes.priority ?? r.priority, category: p.changes.category ?? r.category, ...(estimateCents ? { estimate: estimateCents / 100 } : {}), proposal_id: p.id });
     if (!input.success) return { status: 400, error: `The suggestion for ${r.id} is incomplete. Open it to dispatch.` };
     return dispatch.handler(c, r, input.data);

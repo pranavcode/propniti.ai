@@ -107,8 +107,8 @@ test("a triage suggestion is dispatched from the home queue, and late make-readi
   const row = page.locator("#triage li", { has: page.getByRole("button", { name: "Dispatch as suggested" }) }).first();
   const id = (await row.textContent())?.match(/WO-\d+/)?.[0];
   await row.getByRole("button", { name: "Dispatch as suggested" }).click();
-  // Within the auto-approve limit it's dispatched; over it, it goes to Approvals or waits for the owner.
-  await expect(page.getByText(new RegExp(`${id}( dispatched to|: .*Approvals| is on hold)`))).toBeVisible();
+  // Tom has approve access, so it is dispatched, or waits for the owner when over their limit.
+  await expect(page.getByText(new RegExp(`${id}( dispatched to| is on hold| stays in Approvals)`))).toBeVisible();
 
   await go(page, `${BASE}/app/maintenance/turnovers?view=late`);
   await page.locator("tbody tr").first().getByRole("checkbox").check();
