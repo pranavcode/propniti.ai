@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { formatCountDelta, formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
+import { formatAsOf, formatCountDelta, formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
 
 const now = new Date("2026-11-04T12:00:00Z");
 
 describe("format", () => {
+  it("formats an as-of stamp for subtitles and footers", () => {
+    expect(formatAsOf("2026-11-04")).toBe("Nov 4, 2026");
+    expect(formatAsOf("2026-10")).toBe("Oct 2026");
+    expect(formatAsOf("Q3")).toBe("Q3");
+    expect(formatAsOf(undefined)).toBe("");
+  });
+
   it("formats money in every style", () => {
     expect(formatMoney(12450)).toBe("$12,450.00");
     expect(formatMoney(-1240)).toBe("−$1,240.00");

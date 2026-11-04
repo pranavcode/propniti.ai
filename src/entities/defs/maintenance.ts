@@ -235,7 +235,7 @@ registerEntity({
   nav: { section: "operations", group: "Maintenance", order: 41 },
   route: "/app/maintenance/inspections",
   titleField: "title",
-  subtitle: (r) => [r.unit_id__label || r.property_id__label, r.scheduled_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.unit_id__label || r.property_id__label, r.scheduled_on && formatDate(String(r.scheduled_on), "always")].filter(Boolean).join(" · "),
   scopePath: "inspections.property_id",
   fields: {
     title: { type: "text", label: "Inspection", sortable: true, list: { default: true, width: 220 },
@@ -354,7 +354,7 @@ registerEntity({
   nav: { section: "operations", group: "Maintenance", order: 43, label: "Make-ready" },
   route: "/app/maintenance/turnovers",
   titleField: "title",
-  subtitle: (r) => [r.property_id__label, r.move_out_on ? `Moved out ${r.move_out_on}` : null].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.property_id__label, r.move_out_on ? `Moved out ${formatDate(String(r.move_out_on), "always")}` : null].filter(Boolean).join(" · "),
   scopePath: "turnovers.property_id",
   fields: {
     title: { type: "text", label: "Unit", sortable: true, list: { default: true, width: 200 }, sql: "('Make-ready · ' || coalesce((SELECT p.name || ' #' || u.number FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.id = turnovers.unit_id), turnovers.unit_id))" },

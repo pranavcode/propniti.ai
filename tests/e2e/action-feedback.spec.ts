@@ -1,5 +1,5 @@
 import { expect as baseExpect, test } from "@playwright/test";
-import { as, BASE, go, reload, watch } from "./helpers";
+import { as, BASE, go, watch } from "./helpers";
 
 // Feedback after a click: a filter card lights up, says what it matched and brings the results
 // into view; an approval confirms with a toast; a chat bubble tip stands out, and a tip held back
@@ -7,6 +7,8 @@ import { as, BASE, go, reload, watch } from "./helpers";
 
 test.describe.configure({ timeout: 240_000 });
 const expect = baseExpect.configure({ timeout: 60_000 });
+// How long the chat bubble waits after a page mounts before it looks for a tip (guide/ChatBubble.tsx).
+const FIRST_LOOK_MS = 3500;
 
 test("clicking Accounting on Data Health highlights the card, says what matched and scrolls to the issues", async ({ page, context }) => {
   await as(context, "daniel");
@@ -47,9 +49,11 @@ test("approving a proposal confirms with a toast", async ({ page, context }) => 
 test("a tip stands out on a dense list, and a tip held back while typing waits as a dot on the bubble", async ({ page, context }) => {
   await as(context, "daniel");
   const errors = watch(page);
-  await go(page, `${BASE}/app/units`);
+  // Tips go back on from the Copilot page, which has no bubble: on a list page, the bubble's first
+  // look could still run before the next page replaces it, see tips on and start the 2-minute gap.
+  await go(page, `${BASE}/app/copilot`);
   await page.evaluate(() => { localStorage.removeItem("pn_guide"); sessionStorage.clear(); });
-  await reload(page);
+  await go(page, `${BASE}/app/units`);
 
   const nudge = page.locator("[data-guide-nudge]");
   await expect(nudge).toBeVisible();
@@ -59,11 +63,23 @@ test("a tip stands out on a dense list, and a tip held back while typing waits a
   expect(style.size).toBe("14px");
   await nudge.getByRole("button", { name: "Dismiss suggestion" }).click();
 
-  // A new session on another list: typing in the search box holds the tip back.
+  // A new session on another list: typing in the search box holds the tip back. The bubble takes
+  // its first look 3.5 s after it mounts; on a slow server the list can arrive later than that. A
+  // paused page clock keeps that look waiting until the search box has focus.
   await page.evaluate(() => sessionStorage.clear());
-  await go(page, `${BASE}/app/leases`);
-  await page.locator("[data-table-search]").focus();
+  await page.clock.install();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await page.goto(`${BASE}/app/leases`);
+  const search = page.locator("[data-table-search]");
+  const bubble = page.locator("[data-chat-bubble]");
+  await expect(search).toBeAttached();
+  // React reveals the streamed list on a short timer, so step the clock until it shows.
+  await expect(async () => { await page.clock.runFor(50); await expect(search).toBeVisible({ timeout: 100 }); }).toPass();
+  await expect.poll(() => bubble.evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$")))).toBe(true);
+  await search.focus();
+  await page.clock.runFor(FIRST_LOOK_MS);
   await expect(page.locator("[data-guide-pending]")).toBeVisible();
+  await page.clock.resume();
   await expect(nudge).toHaveCount(0);
   await page.getByRole("button", { name: "Show a tip from Propniti" }).click();
   await expect(nudge).toBeVisible();

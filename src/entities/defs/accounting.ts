@@ -3,6 +3,7 @@
 import { BookOpen, Gauge, HardHat, Landmark, ListChecks, NotebookTabs, PiggyBank, ScrollText, Zap } from "lucide-react";
 import { AS_OF, issuesField } from "../common";
 import { registerEntity } from "../registry";
+import { formatDate } from "@/lib/format";
 import type { Role } from "../types";
 
 const FIN: Role[] = ["principal", "regional_manager", "accountant"];
@@ -79,7 +80,7 @@ registerEntity({
   nav: { section: "finance", group: "Banking", order: 54 },
   route: "/app/banking/transactions",
   titleField: "description",
-  subtitle: (r) => [r.bank_account_id__label, r.posted_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.bank_account_id__label, r.posted_on && formatDate(String(r.posted_on), "always")].filter(Boolean).join(" · "),
   scopePath: ENTITY_PROPERTY("(SELECT a.owner_entity_id FROM {bank_accounts} a WHERE a.id = bank_transactions.bank_account_id)"),
   fields: {
     description: { type: "text", label: "Description", search: true, sortable: true, list: { default: true, width: 320 } },

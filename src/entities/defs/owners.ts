@@ -4,6 +4,7 @@
 import { Building, HandCoins, Landmark } from "lucide-react";
 import { FINANCE, LEADERS, STAFF, issuesField } from "../common";
 import { registerEntity } from "../registry";
+import { formatDate } from "@/lib/format";
 
 registerEntity({
   key: "owners",
@@ -158,7 +159,7 @@ registerEntity({
   nav: { section: "finance", group: "Owners", order: 61, label: "Distributions" },
   route: "/app/owner-distributions",
   titleField: "title",
-  subtitle: (r) => [r.owner_entity_id__label, r.paid_on && `paid ${r.paid_on}`].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.owner_entity_id__label, r.paid_on && `paid ${formatDate(String(r.paid_on), "always")}`].filter(Boolean).join(" · "),
   // Scope by the entity's first property: a manager scoped to any of its properties sees the payout.
   scopePath: "(SELECT min(p.id) FROM {properties} p WHERE p.owner_entity_id = owner_distributions.owner_entity_id)",
   fields: {

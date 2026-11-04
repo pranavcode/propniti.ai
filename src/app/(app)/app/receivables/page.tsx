@@ -10,6 +10,7 @@ import { THRESHOLDS } from "@/ai/improve/meta";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { getPlatform } from "@/lib/platform";
+import { formatAsOf } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AS_OF } from "@/seed/constants";
 import { effective, metrics, type QueryCtx } from "@/server/query";
@@ -65,7 +66,7 @@ export default async function ReceivablesPage() {
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
-      <PageHeader title="Receivables" description={<>What residents owe, what came in and what needs following up. {session.actor.scope.label} · as of {AS_OF}.</>}>
+      <PageHeader title="Receivables" description={<>What residents owe, what came in and what needs following up. {session.actor.scope.label} · as of {formatAsOf(AS_OF)}.</>}>
         <Button asChild variant="outline"><Link href="/app/receivables/record-payment"><Banknote data-icon="inline-start" />Record payment</Link></Button>
         <Button asChild><Link href="/app/receivables/collections"><Scale data-icon="inline-start" />Work collections</Link></Button>
       </PageHeader>
@@ -116,7 +117,7 @@ export default async function ReceivablesPage() {
         </section>
         <div className="flex flex-col gap-3">
           {mix && (
-            <ChartCard title="How residents paid" description={`${String(mix.asOf)}, by amount`} kind="donut" data={mix.points as never} x="method" height={180}
+            <ChartCard title="How residents paid" description={`${formatAsOf(mix.asOf)}, by amount`} kind="donut" data={mix.points as never} x="method" height={180}
               series={[{ key: "amount", label: "Amount", format: "money" }]} drill={`/app/receivables/payments?f.method={method}`} />
           )}
           {pol && (

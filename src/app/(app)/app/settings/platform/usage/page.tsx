@@ -3,7 +3,7 @@ import { Activity } from "lucide-react";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
 import { AS_OF } from "@/seed/constants";
-import { formatMoney, formatNumber } from "@/lib/format";
+import { formatAsOf, formatMoney, formatNumber } from "@/lib/format";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow } from "@/components/app/dashboard";
 import { EmptyState } from "@/components/app/states";
@@ -23,7 +23,7 @@ export default async function UsagePage() {
   const agents = u.byAgent.map((a) => ({ ...a, label: getAgent(a.agent as Parameters<typeof getAgent>[0])?.name ?? (a.agent === "copilot" ? "Assistant" : a.agent) }));
   return (
     <>
-      <PageHeader icon={<Activity />} title="AI usage" description="Agent runs, tokens and model cost across every workspace on the platform." meta={<span>Last 30 days · {u.since} to {AS_OF}</span>} />
+      <PageHeader icon={<Activity />} title="AI usage" description="Agent runs, tokens and model cost across every workspace on the platform." meta={<span>Last 30 days · {formatAsOf(u.since)} to {formatAsOf(AS_OF)}</span>} />
       <PageBody>
         <KpiRow>
           <KpiCard label="Agent runs" value={u.runs} footnote={`${formatNumber(u.failed)} failed · ${formatNumber(u.workspaces)} workspaces`} href="/app/ai/activity" />

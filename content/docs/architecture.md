@@ -38,17 +38,19 @@ Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propni
 | --- | --- | --- |
 | Marketing and docs | `/`, `/pricing`, `/product/...`, `/security`, `/docs` | Static pages |
 | Sign-in | `/login`, `/api/session` | Demo email and password form beside a compact list of the 13 people; the server checks the published password in constant time and sets the `pn_as` cookie (30 days). Works without JavaScript |
-| Staff app | `/app/...` | Static pages for homes and custom screens (Inbox, My tasks, Automations, Copilot, Data health, reports, settings); `/app/[...path]` resolves every other path to a record type's list or record page. Out-of-scope or unknown records render an in-app not-found page |
+| Staff app | `/app/...` | Static pages for homes and custom screens (Inbox, My tasks, Automations, Copilot, Data health, reports, guided setup at `/app/onboarding`, settings); `/app/[...path]` resolves every other path to a record type's list or record page. Out-of-scope or unknown records render an in-app not-found page |
 | Portals | `/portal/owner`, `/portal/resident`, `/portal/vendor`, `/portal/applicant` | Each has its own `ask` route |
 | Public site | `/listings`, `/listings/[id]`, `/apply/[listingId]` | Ask, tour and submit routes; no sign-in |
-| Records API | `/api/e/[entity]`, `/[id]`, `/actions/[action]`, notes, tasks, documents, activity, `export.csv` | Generic reads and writes, scoped by persona |
+| Records API | `/api/e/[entity]`, `/[id]`, `/actions/[action]`, notes, tasks, documents, activity, `export.csv`, `export.xlsx`, `export.pdf` | Generic reads and writes, scoped by persona |
+| Downloads | `/api/export/report`, `/api/export/statement` | A report or an owner statement as CSV, Excel or PDF |
 | Metrics and views | `/api/metrics/[key]`, `/api/views` | KPI and chart data; saved views |
 | Import | `/api/import`, `/api/import/undo`, `/api/import/ai` | Commit a checked import as one batch, undo a batch, and the optional AI pass |
+| Guided setup | `/api/onboarding`, `/api/onboarding/detect`, `/api/onboarding/check` | Save setup progress, the optional AI file detection, and Data Health over the imported records |
 | Guide and alerts | `/api/guide`, `/api/notifications`, `/api/notifications/read` | Counts behind the chat bubble's tips, *Right now* and the welcome screen; the bell's alerts and mark read |
 | Help | `/app/help/<id>` | Renders the seeded help articles that definitions and assistant citations link to |
 | AI API | `/api/ai/...` | Agents, runs (with a streaming trace), proposals, assistant, summaries, data health, policies, sweep, events, invoice reading |
 
-Old v1 routes (`/demo`, `/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`, `/onboarding`) redirect to their v2 pages, and `/app/settings/automations` redirects to `/app/automations`.
+Old v1 routes (`/demo`, `/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`, `/onboarding`) redirect to their v2 pages (`/onboarding` goes to `/app`; guided setup is `/app/onboarding`), and `/app/settings/automations` redirects to `/app/automations`.
 
 **Links.** Every in-app link uses `@/components/Link`, which prefetches a page on hover, focus or touch instead of for every visible link. A lint rule blocks importing `next/link` directly. Opening `/app` went from 29 prefetch requests to 2.
 
@@ -79,7 +81,7 @@ All rows live in one database. Every table has a `workspace_id`.
 - **Locked records.** `lockedWhen` refuses edits and deletes of paid bills, sent renewal offers, decided concessions and ended leases.
 - **Role × module matrix** (`src/auth/personas.ts`): none, read, write or approve, per role and module. A record type's own role lists narrow it.
 - **Scope.** Every list, facet, metric and export filters to the persona's properties in SQL. Portal personas get only rows tied to their own record. The scope check runs inside the write batch, and every reference must point at a record in scope.
-- **Paging.** 25, 50 or 100 rows a page (default 50), with keyset cursors where cheap. CSV exports stop at 10,000 rows.
+- **Paging.** 25, 50 or 100 rows a page (default 50), with keyset cursors where cheap. Downloads stop at 10,000 rows.
 
 ## Money
 
@@ -154,11 +156,17 @@ Every agent runs the same loop (`framework.ts`):
 - **My tasks** (`src/extensions/intelligence/tasks.ts`, `my-tasks.ts`). Tasks assigned to the persona or to `role:<role>`, in scope, bucketed by the demo date. Mark done and reopen are named actions, idempotent and audited; a new task carries an idempotency key.
 - **Import** (`src/extensions/import`). Files are parsed in the browser; the server takes only cleaned records (4 MB body, zod caps), re-matches them to existing records and creates only what the role may create at in-scope properties. The commit is one D1 batch whose first statement is a unique audit row, so a repeat writes nothing. Undo deletes only that batch's overlay rows, and is refused when any live row outside the batch points at one (the reference map is derived from the migrations and checked by a test) or any row is outside the actor's scope. The optional AI pass gets headers, 5 sample rows and up to 30 flagged cells, at most 20,000 characters, under the AI rate limit.
 
+### Guided setup and downloads
+
+- **Guided setup** (`src/extensions/onboarding`). Five steps (company, data, rules, team, check) with progress stored in the org's settings; the browser sends saves one at a time (`oneAtATime` in `state.ts`), so a quick *Continue* can't overwrite a save in flight. File detection runs rules first (`detect.ts`: header presets and file names, with a confidence and reason); the optional model pass (`ai.ts`) sees file names, header rows and 3 rows per file, cells cut to 60 characters, and may only name a tool and record kind. Suggested approval limits and agent autonomy (`suggest.ts`) are medians and percentiles computed from the workspace's work orders, bills and rents; no model is involved. The steps call the existing import, policy, agent and user routes, so their permission checks apply: the principal, a regional manager or the admin may run setup, and the principal can invite people but not grant the admin role.
+- **Downloads** (`src/extensions/export`, `src/lib/export`). One document model rendered as CSV, XLSX (a minimal zip writer, numbers and dates kept typed) or PDF (a small PDF writer), with an optional branded header and footer on XLSX and PDF. List downloads reuse the list query, so they carry the same permission, scope, filters and visible fields; reports check the report roles; statements check owner or staff access to the entity. Each route takes the write rate limit, stops at 10,000 rows, and neutralises cells that start like a spreadsheet formula.
+- **Theme.** The `pn_theme` cookie holds *light* or *dark*; with none, the OS decides. An inline script sets the class before the first paint on the app, the portals and `/docs`, so a dark page never flashes light.
+
 ### Summaries, explanations and the assistant
 
 - **Record summaries** (`src/ai/summaries.ts`). Facts come from the record type's `ai.facts`. A stored model summary is shown only while its facts equal the current facts; otherwise the rules sentence is written from the current figures. Labels: *Rules*, *Generated* or *Precomputed*. A record with no summary offers *Summarize with AI*, which calls the same summary route and stores the result in the visitor's overlay.
 - **Explain** (KPIs, statement lines, budget variances, what-if). Code computes the facts; a model words them only when every number it writes is in the facts.
-- **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools. Conversations are stored per persona and listed in the panel's history menu. *Ask about this* passes the record's facts by name; *Right now* reads the same counts as the chat bubble; Do mode can start an agent run. The *Ask Propniti* chat bubble (`src/components/app/guide`) opens it with page-aware questions and shows at most one data-backed tip at a time, from counts served by `/api/guide`. Common questions are answered by rules from tool results. Any dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes; each item waits for a person.
+- **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools. Conversations are stored per persona and listed in the panel's history menu. The base ships 28 sample conversations (ids `smp-…`), computed by the rules assistant over the base data and marked *Sample*; a follow-up writes to the visitor's overlay only. *Ask about this* passes the record's facts by name; *Right now* reads the same counts as the chat bubble; Do mode can start an agent run. The *Ask Propniti* chat bubble (`src/components/app/guide`) opens it with page-aware questions and shows at most one data-backed tip at a time, from counts served by `/api/guide`. Common questions are answered by rules from tool results. Any dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes; each item waits for a person.
 - **Prompt hygiene.** Records, documents, messages and questions are framed as data, never instructions, in every prompt. Model output is schema-validated.
 
 ## Security
@@ -209,9 +217,9 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 
 | Check | Count | What it covers |
 | --- | --- | --- |
-| Unit tests (Vitest) | 1,133 in 120 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
-| End-to-end tests (Playwright) | 110 in 26 specs | Each persona's main flows, the portals, the public site, the peek drawer, sign-in, Inbox, My tasks, Automations, import, the chat bubble, assistant history, *Ask about this*, *Right now*, the welcome screen, readable runs, summaries, collapsible sections, bulk actions and approvals; run against production after each deploy |
-| Live AI evals | 15 case files | Agent and assistant behaviour against a live model, scored by fixed-rule graders (`npm run eval`) |
+| Unit tests (Vitest) | 1,279 in 141 files (1 skipped) | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
+| End-to-end tests (Playwright) | 190 in 34 specs | Each persona's main flows, the portals, the public site, the peek drawer, sign-in, Inbox, My tasks, Automations, import, guided setup, downloads, action feedback, layout and theme, the chat bubble, assistant history, *Ask about this*, *Right now*, the welcome screen, readable runs, summaries, collapsible sections, bulk actions and approvals; the touched specs run against production after each deploy |
+| Live AI evals | 17 case files, 138 cases (86 live) | Agent and assistant behaviour against a live model, scored by fixed-rule graders (`npm run eval`) |
 
 ## Key decisions
 

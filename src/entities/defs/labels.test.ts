@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { getEntity } from "@/entities";
+import { allEntities, getEntity } from "@/entities";
 
 // Record titles and subtitles say each thing once.
 describe("record labels", () => {
@@ -24,6 +24,14 @@ describe("record labels", () => {
 
   it("names an inspection's unit once", () => {
     const sub = getEntity("inspections")!.subtitle!;
-    expect(sub({ property_id__label: "Barton Creek Commons", unit_id__label: "Barton Creek Commons #7103", scheduled_on: "2026-11-10" })).toBe("Barton Creek Commons #7103 · 2026-11-10");
+    expect(sub({ property_id__label: "Barton Creek Commons", unit_id__label: "Barton Creek Commons #7103", scheduled_on: "2026-11-10" })).toBe("Barton Creek Commons #7103 · Nov 10, 2026");
+  });
+
+  it("shows dates in subtitles as \"Nov 4, 2026\", never ISO", () => {
+    for (const def of allEntities()) {
+      if (!def.subtitle) continue;
+      const row = Object.fromEntries(Object.keys(def.fields).flatMap((k) => [[k, /(_on|_date|_at)$/.test(k) ? "2026-11-04" : "x"], [`${k}__label`, "X"]]));
+      expect(def.subtitle(row), def.key).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    }
   });
 });

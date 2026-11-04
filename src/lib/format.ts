@@ -93,6 +93,12 @@ export const formatDateTime = (v: DateInput) => { const d = toDate(v); return d 
 // Tooltip text for relative dates: "Wed, Nov 4, 2026, 9:41 AM".
 export const formatFull = (v: DateInput) => { const d = toDate(v); return d ? full.format(d) : "—"; };
 
+// An "as of" stamp in a subtitle or footer: "Nov 4, 2026" for a day, "Oct 2026" for a month.
+export const formatAsOf = (v: unknown) => {
+  const s = String(v ?? "");
+  return BARE_DATE.test(s) ? formatDate(s, "always") : /^\d{4}-\d{2}$/.test(s) ? formatMonth(`${s}-01`) : s;
+};
+
 // "just now", "5m ago", "3h ago", "yesterday", "3 days ago", "in 2 days", then the date.
 // A stamp up to 2 minutes ahead of now (a browser clock behind the server's) still reads "just now".
 export function formatRelative(v: DateInput, now = demoNow()): string {
