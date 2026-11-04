@@ -30,6 +30,15 @@ describe("rules summaries per entity", () => {
       .toBe("Active lease for Reyes household · #302, Nov 1, 2025 to month to month, at $1,775 a month. 2 residents on the lease. $1,200 is owed.");
   });
 
+  it("states money as the facts panel does: cents when there are any, whole dollars otherwise", () => {
+    expect(say("residents", { resident: "Jordan Lee", status: "Current", unit: "#412", balance: 1234.56, lease_end: null, risk_score: null, autopay: true, nsf_payments: 0 }))
+      .toBe("Jordan Lee in #412 is a current resident. Owes $1,234.56. On autopay.");
+    expect(say("bills", { bill: "BILL-1", vendor: "Green Acres Landscaping", property: null, status: "Approved", amount: 3660.5, due_on: "2026-11-30", gl: null }))
+      .toBe("Approved bill from Green Acres Landscaping: $3,660.50, due Nov 30.");
+    expect(say("leases", { lease: "Lee household · #412", status: "Active", start: "2026-01-12", end: "2027-01-11", rent: 1795, market_rent: 1850.25, balance: 0.4, residents: 1, days_to_end: 68 }))
+      .toBe("Active lease for Lee household · #412, Jan 12 to Jan 11, 2027, at $1,795 a month (market $1,850.25). 1 resident on the lease. $0.40 is owed. It ends in 68 days.");
+  });
+
   it("a lease ending today", () => {
     expect(say("leases", { lease: "Chen household · #328", status: "Active", start: "2026-05-05", end: "2026-11-04", rent: 2345, market_rent: 2345, balance: 0, residents: 1, days_to_end: 0 }))
       .toBe("Active lease for Chen household · #328, May 5 to Nov 4, at $2,345 a month. 1 resident on the lease. No balance owed. It ends today.");

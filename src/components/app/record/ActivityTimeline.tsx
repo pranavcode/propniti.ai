@@ -59,13 +59,11 @@ export function formatChange(v: unknown): string {
 }
 const isAuto = (e: ActivityEvent) => e.actor_kind === "agent" || e.actor_kind === "system";
 
-// Audit rows carry the agent's display name ("Maintenance Triage agent") as the actor; agent keys
-// ("collections") get " agent" added.
-// Agents show their Title Case name whatever name was stored with the event.
+// Agents show their Title Case name (agentName) whatever name was stored with the event, so a
+// stored "Maintenance Triage agent" or key "collections" both read as the agent's label.
 export function actorLabel(e: ActivityEvent, people?: Record<string, string>): string {
   if (e.actor_kind === "agent") return agentName(e.actor_id);
-  if (e.actor_name ?? people?.[e.actor_id]) return (e.actor_name ?? people?.[e.actor_id])!;
-  return isAuto(e) ? agentName(e.actor_id) : e.actor_id;
+  return e.actor_name ?? people?.[e.actor_id] ?? (isAuto(e) ? agentName(e.actor_id) : e.actor_id);
 }
 
 // What an agent's applied proposal did, in words. Ids, timestamps and "$by" placeholders aren't
