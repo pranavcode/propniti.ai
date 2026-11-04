@@ -46,4 +46,10 @@ describe("AI actions through the generic action route", () => {
     expect(await f.run("applications.approve", "sam", "app-new")).toMatchObject({ status: 403 });
     expect(f.decisions()).toBe(0);
   });
+
+  it("ignores an already-decided proposal instead of saying it waits in the inbox", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, decided_at) VALUES (?, 'dec-1', 'prop-legal', 'Rejected', 'marcus', '', '2026-11-04T10:00:00Z')").run(WS);
+    expect(await f.run("leases.refer_to_legal", "lena", "l1")).toMatchObject({ status: 404 });
+  });
 });

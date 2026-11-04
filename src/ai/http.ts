@@ -5,7 +5,7 @@ import { PERMISSIONS } from "@/auth/personas";
 import { INTERNAL_ROLES, type Row } from "@/entities/types";
 import { rateLimit } from "@/lib/guard";
 import { parseBody } from "@/lib/requests";
-import { sql, type DataCtx } from "./data";
+import { DB_BUSY, publicError, sql, type DataCtx } from "./data";
 import { aiSession, json, sameOrigin, type AiSession } from "./session";
 
 // HTTP glue for /api/ai/*: session, origin and rate-limit checks, background work via after()
@@ -47,15 +47,7 @@ export async function writeSession<S extends z.ZodType>(request: Request, schema
   return { s, body };
 }
 
-// Database errors (D1, SQLite internals) never reach the browser or a run trace; the log keeps the
-// detail. Model-provider errors ("overloaded" too) are not database errors and pass through.
-const DB_ERROR = /D1_[A-Z_]+|D1 DB|SQLITE_[A-Z]+|no such (table|column)/;
-export const DB_BUSY = "The database is busy; try again in a moment";
-export function publicError(message: string) {
-  if (!DB_ERROR.test(message)) return message;
-  console.error("[ai] database error:", message);
-  return DB_BUSY;
-}
+export { DB_BUSY, publicError };
 
 export async function guarded(fn: () => Promise<Response>) {
   try {
@@ -67,6 +59,9 @@ export async function guarded(fn: () => Promise<Response>) {
     return json({ error: shown }, { status: shown === DB_BUSY ? 503 : 400 });
   }
 }
+
+// Anything with money, legal or safety risk needs approve access, not just write.
+export const needsApprove = (p: Row) => p.risk !== "Low" || p.amount_cents != null;
 
 // Who may decide an agent's proposal. Agents act on other people's records (reminders to other
 // households, data fixes), so portal users never decide them; the one exception is an owner
@@ -82,9 +77,9 @@ export async function canDecide(s: Pick<AiSession, "db" | "ws" | "actor" | "pers
   if (p.queue_state === "waiting") return role === "principal" ? { ok: true } : { ok: false, error: "This one waits for the owner's approval in their portal." };
   const mod = getEntity(String(p.entity_type))?.module ?? "intelligence";
   const access = PERMISSIONS[role][mod] ?? "none";
-  const needsApprove = p.risk !== "Low" || p.amount_cents != null;
-  if (needsApprove ? access === "approve" : access === "write" || access === "approve") return { ok: true };
-  return { ok: false, error: `${s.persona.title} can't ${needsApprove ? "approve" : "act on"} ${mod} items${p.assignee_role ? `; this one goes to the ${String(p.assignee_role).replace(/_/g, " ")}` : ""}.` };
+  const approve = needsApprove(p);
+  if (approve ? access === "approve" : access === "write" || access === "approve") return { ok: true };
+  return { ok: false, error: `${s.persona.title} can't ${approve ? "approve" : "act on"} ${mod} items${p.assignee_role ? `; this one goes to the ${String(p.assignee_role).replace(/_/g, " ")}` : ""}.` };
 }
 
 // The owner persona's record is an owners row; the proposal's property must belong to one of its entities.

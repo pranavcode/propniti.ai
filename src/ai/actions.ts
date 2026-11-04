@@ -5,7 +5,7 @@ import { INTERNAL_ROLES, type EntityKey } from "@/entities/types";
 import { eff } from "./data";
 import { AI_ACTIONS } from "./action-keys";
 import { executeProposal } from "./effects";
-import { canDecide } from "./http";
+import { canDecide, needsApprove } from "./http";
 
 // Named actions that only agents propose. Each runs its proposal's effects (messages, tasks, narrow
 // record updates), so approving through the approvals inbox or through the generic action route
@@ -24,17 +24,19 @@ for (const a of AI_ACTIONS) {
     help: { summary: "Proposed by an AI agent; approving runs exactly what the proposal shows, once, and logs it to the audit trail." },
     handler: async (ctx, row, input) => {
       const e = eff("ai_proposals", ctx.ws);
+      const d = eff("ai_decisions", ctx.ws);
+      // Only open proposals: one already approved, rejected or auto-applied isn't waiting for anyone.
       const p = await ctx.db
-        .prepare(`SELECT t.* FROM ${e.sql} t WHERE t.action = ? AND t.entity_id = ? ${input.proposal_id ? "AND t.id = ?" : ""} ORDER BY t.created_at DESC LIMIT 1`)
-        .bind(...e.params, a.key, String(row.id), ...(input.proposal_id ? [input.proposal_id] : []))
+        .prepare(`SELECT t.* FROM ${e.sql} t WHERE t.action = ? AND t.entity_id = ? ${input.proposal_id ? "AND t.id = ?" : ""} AND NOT EXISTS (SELECT 1 FROM ${d.sql} d WHERE d.proposal_id = t.id) ORDER BY t.created_at DESC LIMIT 1`)
+        .bind(...e.params, a.key, String(row.id), ...(input.proposal_id ? [input.proposal_id] : []), ...d.params)
         .first<Record<string, unknown>>();
-      if (!p) return { status: 404, error: "No AI proposal for this record; this action only runs what an agent proposed" };
+      if (!p) return { status: 404, error: "No open AI proposal for this record; this action only runs what an agent proposed" };
       // Same rule as the approvals inbox. A money, legal or safety proposal the caller can't approve
       // stays in the inbox for someone who can.
       const persona = getPersona(ctx.actor.personaId);
       const allowed = persona ? await canDecide({ db: ctx.db, ws: ctx.ws, actor: ctx.actor, persona }, p) : { ok: false as const, error: "Unknown persona" };
       if (!allowed.ok) {
-        return p.risk !== "Low" || p.amount_cents != null
+        return needsApprove(p)
           ? { status: 202, message: `${allowed.error} It waits in the approvals inbox.`, proposalId: String(p.id) }
           : { status: 403, error: allowed.error };
       }

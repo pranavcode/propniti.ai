@@ -2,8 +2,7 @@ import { z } from "zod";
 import { getEntity } from "@/entities";
 import { PERMISSIONS } from "@/auth/personas";
 import { INTERNAL_ROLES, type Role } from "@/entities/types";
-import { executeProposal } from "../effects";
-import { eff, get, isTable, parseJson, type Table } from "../data";
+import { get, isTable, parseJson } from "../data";
 import type { AgentCtx, ProposeInput } from "../runtime";
 import type { RunContext } from "../types";
 import { registerTool } from "./registry";
@@ -73,9 +72,12 @@ registerTool({
   },
 });
 
-// Rules whose fixes touch money, fraud or legal status: always a person, never auto-applied.
+// Rules whose fixes touch money, fraud or legal status: always a person, never auto-applied. So are
+// payables records and any change to a GL account or an amount, whatever the rule.
 const HUMAN_RULES = /^(payments\.|owner_distributions\.|bank_transactions\.|vendors\.unverified_bank_change|leases\.rent_outlier)/;
 const LEDGER = /^(charges|payments|transfers|owner_distributions|bank_accounts|journal_entries|credits|bank_transactions)$/;
+const PAYABLES = /^(bills|bill_lines)$/;
+const MONEY_FIELD = /^gl_account_id$|_cents$/;
 
 type Fix = { changes?: Record<string, unknown>; action?: string; params?: Record<string, unknown>; why?: string[]; confidence?: number; source?: string; merge_into?: string };
 
@@ -85,11 +87,16 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
   const table = String(issue.entity_type);
   const id = String(issue.entity_id);
   const evidence = parseJson<Record<string, unknown>>(issue.evidence, {});
-  const human = HUMAN_RULES.test(rule) || LEDGER.test(table);
+  const money = HUMAN_RULES.test(rule) || LEDGER.test(table) || PAYABLES.test(table) || Object.keys(fix.changes ?? {}).some((k) => MONEY_FIELD.test(k));
+  // A fix that names an action (merge, void, hold) but no field changes has nothing to apply here.
+  const manual = !Object.keys(fix.changes ?? {}).length && !fix.merge_into && rule !== "vendors.unverified_bank_change";
+  const human = money || manual;
+  const assignee = money ? "accountant" : "property_manager";
   const why = [...(fix.why ?? [`Rule ${rule} flagged this ${table.replace(/_/g, " ")} record`]), ...(extraWhy ? [extraWhy] : [])];
-  // Ledger rows aren't edited from here: the fix becomes a task for the accountant with the evidence.
-  const effects = LEDGER.test(table) || !isTable(table)
-    ? [{ kind: "task", title: `Fix ${rule.replace(/[._]/g, " ")} on ${id}`, detail: `${why.join(" ")}\nEvidence: ${JSON.stringify(evidence)}\nSuggested: ${JSON.stringify(fix.changes ?? fix.params ?? {})}`, assignee_role: "accountant", priority: "High", property_id: issue.property_id ?? null }]
+  // Ledger rows aren't edited from here, and action-only fixes need a person to do them: either
+  // becomes a task with the evidence.
+  const effects = LEDGER.test(table) || !isTable(table) || manual
+    ? [{ kind: "task", title: `Fix ${rule.replace(/[._]/g, " ")} on ${id}`, detail: `${why.join(" ")}\nEvidence: ${JSON.stringify(evidence)}\nSuggested: ${JSON.stringify(fix.changes ?? (fix.action ? { action: fix.action, ...fix.params } : fix.params) ?? {})}`, assignee_role: assignee, priority: "High", property_id: issue.property_id ?? null }]
     : rule === "vendors.unverified_bank_change"
       ? [
           { kind: "update", table: "vendors", id, changes: { status: "Inactive" }, fix: true, issue_id: issue.id },
@@ -102,7 +109,7 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
     entity: "data_issues", entityId: String(issue.id), action: "data_issues.apply_fix", propertyId: (issue.property_id as string) ?? null,
     title: `Fix: ${rule.replace(/^[a-z_]+\./, "").replace(/_/g, " ")} on ${table.replace(/_/g, " ")} ${id}`,
     payload: { issue_id: issue.id, rule, before: evidence, changes: fix.changes ?? null, merge_into: fix.merge_into ?? null, effects },
-    why, confidence: fix.confidence ?? 0.8, risk: human ? "High" : issue.severity === "critical" ? "Medium" : "Low", alwaysHuman: human, ...(human ? { assignee: "accountant" as const } : {}),
+    why, confidence: fix.confidence ?? 0.8, risk: human ? "High" : issue.severity === "critical" ? "Medium" : "Low", alwaysHuman: human, ...(human ? { assignee } : {}),
     evidence: [{ entity_type: table, entity_id: id, label: `${table.replace(/_/g, " ")} ${id}` }],
   };
 }
@@ -110,24 +117,8 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
 // For the page's button: why applying this fix would queue it in the approvals inbox, or null when
 // this role's click applies it. Mirrors applyFixes in datafix.ts and canDecide's low-risk rule for staff.
 export function queueReason(p: ProposeInput, role: Role): string | null {
-  if (p.alwaysHuman) return "Touches money, fraud or legal status: a person reviews it in the approvals inbox";
+  if (p.alwaysHuman) return "Touches money, fraud or legal status, or needs a manual step: a person reviews it in the approvals inbox";
   if (p.risk !== "Low") return "Critical issue: a person with approval rights reviews it in the approvals inbox";
   const access = PERMISSIONS[role]?.[getEntity("data_issues")?.module ?? "intelligence"] ?? "none";
   return access === "write" || access === "approve" ? null : "Your role can't apply Data Health fixes: a person reviews it in the approvals inbox";
 }
-
-registerTool({
-  key: "actions.execute",
-  description: "Run a proposal that a person approved in this conversation, or that the approval policy allows without a person.",
-  input: z.object({ proposal_id: z.string().max(80) }),
-  output: z.any(),
-  mode: "write", roles, requiresApproval: () => true,
-  async run(ctx, i) {
-    const c = ac(ctx);
-    const e = eff("ai_proposals" as Table, c.ws);
-    const p = await c.db.prepare(`SELECT * FROM ${e.sql} p WHERE p.id = ?`).bind(...e.params, i.proposal_id).first<Record<string, unknown>>();
-    if (!p) throw new Error(`Proposal ${i.proposal_id} not found`);
-    if (p.risk !== "Low" || p.amount_cents != null || c.autonomy !== "auto_within_policy" || c.ws === "base") throw new Error("This proposal needs a person to approve it in the approvals inbox");
-    return executeProposal(c.data, p, { id: c.agent, name: `${c.agent} agent`, agent: c.agent });
-  },
-});

@@ -42,6 +42,16 @@ export async function retryBusy<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
   }
 }
 
+// Database errors (D1, SQLite internals) never reach the browser or a run trace; the log keeps the
+// detail. Model-provider errors ("overloaded" too) are not database errors and pass through.
+const DB_ERROR = /D1_[A-Z_]+|D1 DB|SQLITE_[A-Z]+|no such (table|column)/;
+export const DB_BUSY = "The database is busy; try again in a moment";
+export function publicError(message: string) {
+  if (!DB_ERROR.test(message)) return message;
+  console.error("[ai] database error:", message);
+  return DB_BUSY;
+}
+
 export const isTable = (t: string): t is Table => Object.hasOwn(TABLES, t);
 
 // Overlay rows replace base rows with the same id; tombstones (deleted = 1) hide them.
