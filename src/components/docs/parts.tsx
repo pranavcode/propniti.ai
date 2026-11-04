@@ -1,5 +1,7 @@
 import Link from "@/components/Link";
-import { SNAPSHOT_DATE, type TocEntry } from "@/lib/docs";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { DOCS, SNAPSHOT_DATE, type TocEntry } from "@/lib/docs";
+import { TocList } from "./TocList";
 
 export const snapshotLabel = new Date(`${SNAPSHOT_DATE}T00:00:00Z`).toLocaleDateString("en-US", {
   timeZone: "UTC",
@@ -8,54 +10,66 @@ export const snapshotLabel = new Date(`${SNAPSHOT_DATE}T00:00:00Z`).toLocaleDate
   year: "numeric",
 });
 
-export function BackLinks({ toIndex = false }: { toIndex?: boolean }) {
+export function Crumbs({ title }: { title?: string }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-[#57534E]">
-      <Link href="/" className="hover:text-[#1C1917]">← Back to Propniti</Link>
-      {toIndex && (
+    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
+      <Link href="/" className="hover:text-foreground">Propniti</Link>
+      <ChevronRight aria-hidden className="size-3.5 opacity-60" />
+      {title ? <Link href="/docs" className="hover:text-foreground">Docs</Link> : <span aria-current="page" className="text-foreground">Docs</span>}
+      {title && (
         <>
-          <span aria-hidden className="h-1 w-1 rounded-full bg-[#A8A29E]" />
-          <Link href="/docs" className="hover:text-[#1C1917]">All docs</Link>
+          <ChevronRight aria-hidden className="size-3.5 opacity-60" />
+          <span aria-current="page" className="text-foreground">{title}</span>
         </>
       )}
-    </div>
+    </nav>
   );
 }
 
-function TocList({ toc }: { toc: TocEntry[] }) {
+function DocList({ current }: { current: string }) {
   return (
-    <ol className="space-y-1 text-[13px] leading-snug">
-      {toc.map((t) => (
-        <li key={t.id} className={t.depth === 3 ? "pl-3" : ""}>
-          <a
-            href={`#${t.id}`}
-            className={`block rounded-lg px-2 py-1 transition-colors hover:bg-[#1C1917]/[0.04] hover:text-[#1C1917] ${t.depth === 3 ? "text-[#78716C]" : "text-[#44403C]"}`}
+    <ul className="space-y-0.5 text-[13px]">
+      {DOCS.map((d) => (
+        <li key={d.slug}>
+          <Link
+            href={`/docs/${d.slug}`}
+            aria-current={d.slug === current ? "page" : undefined}
+            className="block rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-[current=page]:bg-primary/10 aria-[current=page]:font-medium aria-[current=page]:text-primary"
           >
-            {t.text}
-          </a>
+            {d.title}
+          </Link>
         </li>
       ))}
-    </ol>
+    </ul>
   );
 }
 
-// Sticky list on wide screens; a collapsed disclosure above the text on narrow ones.
-export function Toc({ toc }: { toc: TocEntry[] }) {
+const label = "mb-2 px-2 text-[12px] font-medium text-muted-foreground";
+
+// Desktop: a sticky column with the doc switcher and this page's sections. Phone and tablet: one
+// collapsed disclosure above the text.
+export function Sidebar({ current, toc }: { current: string; toc: TocEntry[] }) {
   return (
     <>
-      <details className="group rounded-2xl bg-[#FFFDF8] ring-1 ring-[#1C1917]/[0.06] lg:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-lg border bg-card lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[14px] font-medium [&::-webkit-details-marker]:hidden">
           On this page
-          <span aria-hidden className="text-[#78716C] transition-transform group-open:rotate-180">⌄</span>
+          <ChevronDown aria-hidden className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
-        <nav aria-label="On this page" className="max-h-[60dvh] overflow-y-auto px-2 pb-3">
+        <nav aria-label="On this page" className="max-h-[60dvh] overflow-y-auto border-t px-2 py-3">
           <TocList toc={toc} />
         </nav>
       </details>
-      <nav aria-label="On this page" className="sticky top-28 hidden max-h-[calc(100dvh-8rem)] overflow-y-auto pb-8 lg:block">
-        <div className="mb-3 px-2 text-[10px] font-medium uppercase tracking-[0.2em] text-[#78716C]">On this page</div>
-        <TocList toc={toc} />
-      </nav>
+      <div className="sticky top-24 hidden max-h-[calc(100dvh-7rem)] overflow-y-auto pb-8 pr-2 lg:block">
+        <nav aria-label="Docs">
+          <div className={label}>Docs</div>
+          <DocList current={current} />
+        </nav>
+        <nav aria-label="On this page" className="mt-8 border-t pt-6">
+          <div className={label}>On this page</div>
+          <TocList toc={toc} spy />
+        </nav>
+      </div>
     </>
   );
 }

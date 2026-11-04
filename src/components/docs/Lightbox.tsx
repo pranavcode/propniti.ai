@@ -30,19 +30,19 @@ export function DocLightbox() {
       onClose={() => setImg(null)}
       onClick={() => dialog.current?.close()}
       aria-label={img?.alt || "Image"}
-      className="m-0 h-[100dvh] max-h-none w-screen max-w-none overflow-auto bg-transparent p-0 backdrop:bg-[#1C1917]/80 backdrop:backdrop-blur-sm"
+      className="m-0 h-[100dvh] max-h-none w-screen max-w-none overflow-auto bg-transparent p-0 backdrop:bg-black/80 backdrop:backdrop-blur-sm"
     >
       {img && (
         <div className="flex min-h-full min-w-fit items-center justify-center p-4 sm:p-8">
           <img
             src={img.src}
             alt={img.alt}
-            className={svg ? "w-[min(1100px,calc(100vw-4rem))] min-w-[720px] max-w-none rounded-2xl bg-[#FFFDF8] p-4" : "max-h-[92dvh] w-auto max-w-full rounded-xl"}
+            className={svg ? "w-[min(1100px,calc(100vw-4rem))] min-w-[720px] max-w-none rounded-xl bg-white p-4" : "max-h-[92dvh] w-auto max-w-full rounded-xl"}
           />
           <button
             type="button"
             onClick={() => dialog.current?.close()}
-            className="fixed right-4 top-4 rounded-full bg-[#FBF9F4] px-4 py-2 text-[13px] font-medium text-[#1C1917] shadow-lg"
+            className="fixed right-4 top-4 rounded-full bg-background px-4 py-2 text-[13px] font-medium text-foreground shadow-lg ring-1 ring-border"
           >
             Close
           </button>

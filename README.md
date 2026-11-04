@@ -9,7 +9,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sig
 
 ![Property manager dashboard](public/marketing/dashboard.png)
 
-This README describes v2 (branch `v2-saas`). Product goals and principles are in [PRODUCT.md](PRODUCT.md); code conventions are in [AGENTS.md](AGENTS.md).
+This README describes v2, the code on `main` that runs at propniti.ai. Product goals and principles are in [PRODUCT.md](PRODUCT.md); code conventions are in [AGENTS.md](AGENTS.md).
 
 ## What it does
 
@@ -91,7 +91,7 @@ For the local D1 that `dev:vinext` uses, run `npm run db:migrate:local`, then th
 - Base rows have `workspace_id = 'base'` and are read-only at runtime. A visitor's changes are rows under their own workspace id, found by the HttpOnly cookie `pn_ws`. Reads take the visitor's rows plus every base row they haven't replaced (`src/server/effective.ts`).
 - The visitor's changes are wiped at midnight Pacific time.
 - Money is stored in integer cents. Each money action is one guarded SQL batch (`src/server/money.ts`).
-- Migrations `0001`–`0006` are in `migrations/`, shared by D1 and SQLite.
+- Migrations `0001`–`0008` are in `migrations/`, shared by D1 and SQLite.
 
 ## AI
 
@@ -119,7 +119,7 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 Measured on 2026-11-04 at commit `67cc99f`.
 
 - **Vitest:** 1104 tests in 118 files, all passing. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
-- **Playwright:** 93 browser tests in 22 flows in `tests/e2e/`, one per module plus portals and public listings. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
+- **Playwright:** 120 browser tests in 28 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import, the chat bubble and the newer flows. They expect a dev server at `BASE_URL` (default `http://localhost:3201`) and have no config file yet: `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches. `src/ai` and `src/extensions` are outside that scope.
 
 | Area | Lines | Branches |
@@ -134,7 +134,7 @@ Measured on 2026-11-04 at commit `67cc99f`.
 | Model calls (`lib/llm.ts`) | 82% | 64% |
 | API routes (`app/api`) | 32% | 26% |
 
-The v1 server code (`server/repo.ts`, `route.ts`, `actions.ts`, `legacy-money.ts`) is still in the coverage scope and mostly untested, which lowers the totals.
+The v1 helpers left in `server/repo.ts` are still in the coverage scope and mostly untested, which lowers the totals.
 
 ### AI evals
 
@@ -170,7 +170,6 @@ Data is a SQLite file at `DATABASE_PATH` (default `/data/propniti.db`), migrated
 
 - Personas are demo accounts with one published password (`propniti-demo`), or a one-click card. There are no real accounts or stored passwords, and anyone can act as any persona.
 - Payments are simulated in SQL; transfers settle 8 seconds after they start. SMS, email and voice are not sent.
-- The v1 API routes (`/api/state`, `/api/work-orders/*` and others) are still mounted but read tables the v2 schema drops.
 - See [docs/security-review.md](docs/security-review.md) for the controls and known gaps.
 
 ## Security

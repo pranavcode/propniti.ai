@@ -51,6 +51,11 @@ test("admin briefing shows overnight agents, what needs you and risks", async ({
   await expect(page.getByText("What needs you")).toBeVisible();
   await expect(page.getByText("Risks and anomalies")).toBeVisible();
   await expect(page.getByText("Overnight")).toBeVisible();
+  // Tiles open the approvals inbox on their own tab (the inbox reads ?tab=).
+  await expect(page.getByRole("link", { name: /Waiting on others/ })).toHaveAttribute("href", "/app/ai/approvals?tab=waiting");
+  await page.getByRole("link", { name: /Handled by agents/ }).click();
+  await expect(page).toHaveURL(/\/app\/ai\/approvals\?tab=auto_handled/);
+  await expect(page.getByText("Low-risk actions inside your approval policies, already applied and audited.")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
