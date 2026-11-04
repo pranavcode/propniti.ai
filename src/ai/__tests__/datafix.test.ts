@@ -5,7 +5,7 @@ import { get } from "../data";
 import { applyFixes, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
 import { dataHealth, issuesPage } from "../views";
-import { fixPreviewProps, type Issue } from "../ui/IssueFix";
+import { fixPreviewProps, NEXT_STEP, type Issue } from "../ui/IssueFix";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
 import { startRun } from "../orchestrator";
@@ -155,6 +155,26 @@ describe("Data Health in plain words", () => {
     expect(p.why).toEqual(["Lease started Dec 16, 2025, matching term months"]);
     const health = await dataHealth(data);
     for (const m of health.modules) for (const e of m.entities) expect(e).not.toMatch(/_/);
+  });
+});
+
+describe("Data Health issues with no automatic fix", () => {
+  it("drop the before/after table and say what a person does next, with a link to the record", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'vendors.unverified_bank_change', 'vendors', 'Unverified vendor bank change', 'critical', 'x', 'computed')").run();
+    f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', 'di-bank', 'vendors.unverified_bank_change', 'vendors', 'v01', NULL, '2026-11-01', 'critical', '{}', ?)")
+      .run(JSON.stringify({ action: "vendors.hold_payments", why: ["Bank details changed 6 days ago", "No callback verification on file"], confidence: 0.93, source: "data_health" }));
+    const issue = (await issuesPage({ db: f.db, ws: WS, actor: DANIEL }, { issue: "di-bank" })).rows[0] as unknown as Issue;
+    const p = fixPreviewProps(issue, async () => null);
+    expect(p.title).toMatch(/^Unverified vendor bank change · Vendor /);
+    expect(p.changes).toEqual([]);
+    expect(p.onApply).toBeUndefined();
+    expect(p.needsPerson).toBeNull();
+    expect(p.nextStep).toEqual({ text: NEXT_STEP["vendors.unverified_bank_change"], href: "/app/maintenance/vendors/v01", label: "Open vendor" });
+  });
+
+  it("has a next step for every seeded rule whose fix is a named action", () => {
+    for (const rule of ["vendors.unverified_bank_change", "vendors.missing_w9", "bills.possible_duplicate", "bills.amount_outlier", "bank_transactions.unmatched_deposit", "compliance_items.overdue", "owner_distributions.rounding_cent", "documents.import_swapped_columns", "documents.misfiled"]) expect(NEXT_STEP[rule], rule).toBeTruthy();
   });
 });
 
