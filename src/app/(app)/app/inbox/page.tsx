@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { cn } from "@/lib/utils";
 import { inboxPage, type InboxFilter } from "@/extensions/inbox/data";
+import { sessionInboxCounts } from "@/extensions/inbox/server";
 import { InboxList } from "@/extensions/inbox/InboxList";
 
 export const metadata = { title: "Inbox · Propniti" };
@@ -23,11 +24,14 @@ const TABS: { key: InboxFilter; label: string; empty: string }[] = [
 export default async function InboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const tab = TABS.find((t) => t.key === sp.tab) ?? TABS[0];
-  const page = Math.max(1, Number(sp.page) || 1);
   const s = await currentSession();
   let res: Awaited<ReturnType<typeof inboxPage>> | null = null;
+  let page = 1;
   try {
-    res = await inboxPage({ db: getPlatform().db, ws: s.ws, actor: s.actor }, { filter: tab.key, page, size: PAGE });
+    const counts = await sessionInboxCounts();
+    const total = tab.key === "all" ? counts.messages + counts.approvals + counts.alerts : counts[tab.key];
+    page = Math.min(Math.max(1, Math.floor(Number(sp.page)) || 1), Math.max(1, Math.ceil(total / PAGE)));
+    res = await inboxPage({ db: getPlatform().db, ws: s.ws, actor: s.actor }, { filter: tab.key, page, size: PAGE }, counts);
   } catch (e) {
     console.error("[inbox] load failed:", e);
   }

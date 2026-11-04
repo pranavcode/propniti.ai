@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { executeProposal } from "@/ai/effects";
 import { canDecide, dataOf, guarded, json, writeSession } from "@/ai/http";
 import { proposal } from "@/ai/views";
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
       const r = await executeProposal(data, p, by, undefined, "Bulk approved (safe items)");
       results.push({ id, ok: r.ok, message: r.message });
     }
+    forgetInboxCounts(s.ws);
     return json({ approved: results.filter((r) => r.ok).length, results }, { setCookie: s.setCookie });
   });
 }

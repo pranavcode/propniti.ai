@@ -48,8 +48,9 @@ export function Composer({ threadId, channel: initialChannel, closed, suggestion
     if (!pathname.endsWith("/communications/inbox") || search.get("t") === threadId) return router.refresh();
     const sp = new URLSearchParams(search.toString());
     sp.set("t", threadId);
-    router.replace(`${pathname}?${sp}`, { scroll: false });
-    // A layout isn't re-rendered by a search-param change; refresh so the Inbox count updates.
+    // Write ?t= through the history API (the router syncs it) and re-render once: refresh also
+    // updates the layout's Inbox count, which a search-param navigation would leave alone.
+    window.history.replaceState(null, "", `${pathname}?${sp}`);
     router.refresh();
   };
   const [body, setBody] = useState("");

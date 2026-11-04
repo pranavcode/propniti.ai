@@ -26,7 +26,8 @@ export type InboxCounts = { messages: number; needsReply: number; approvals: num
 
 const KIND_OF: Record<Exclude<InboxFilter, "all">, InboxKind> = { messages: "message", approvals: "approval", alerts: "alert" };
 const json = (v: unknown) => JSON.stringify(v);
-const inApp = (href: unknown) => (typeof href === "string" && /^\/(?!\/)/.test(href) ? href : null);
+// Same-site paths only: "//host" and "/\host" are both read by browsers as another site.
+export const inApp = (href: unknown) => (typeof href === "string" && /^\/(?![/\\])/.test(href) ? href : null);
 const parse = <T,>(v: unknown, fallback: T): T => {
   try {
     return typeof v === "string" ? (JSON.parse(v) as T) : fallback;
@@ -51,7 +52,8 @@ function branches(ctx: QueryCtx, only?: InboxKind): { sql: string; params: unkno
   const scope = (col: string) => (scoped ? ` AND ${col} IN (SELECT value FROM json_each(?))` : "");
   const scopeParams = scoped ? [json(actor.propertyIds)] : [];
   const out: { sql: string; params: unknown[] }[] = [];
-  if ((!only || only === "message") && can(actor.role, "read", "message_threads")) {
+  // Conversations are listed for roles that can answer them (admins can read but not reply).
+  if ((!only || only === "message") && can(actor.role, "read", "message_threads") && can(actor.role, "message_threads.reply", "message_threads")) {
     out.push({
       sql: `SELECT 'message' AS kind, t.id, t.last_message_at AS at, t.unread AS unread, coalesce((SELECT m.direction = 'in' FROM {messages} m WHERE m.thread_id = t.id ORDER BY m.sent_at DESC LIMIT 1), 0) AS needs FROM {message_threads} t WHERE t.status = 'Open' AND (t.assigned_to = ? OR t.assigned_to IS NULL)${scope("t.property_id")}`,
       params: [actor.personaId, ...scopeParams],
@@ -98,13 +100,13 @@ export async function inboxCounts(ctx: QueryCtx, ws?: Ws): Promise<InboxCounts> 
   return { ...c, needsYou: c.needsReply + c.approvals + c.unreadAlerts };
 }
 
-export async function inboxPage(ctx: QueryCtx, f: { filter?: InboxFilter; page?: number; size?: number }) {
+export async function inboxPage(ctx: QueryCtx, f: { filter?: InboxFilter; page?: number; size?: number }, known?: InboxCounts) {
   const ws = await readWs(ctx);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const only = f.filter && f.filter !== "all" ? KIND_OF[f.filter] : undefined;
   const bs = branches(ctx, only);
-  const counts = await inboxCounts(ctx, ws);
+  const counts = known ?? (await inboxCounts(ctx, ws));
   const total = only ? { message: counts.messages, approval: counts.approvals, alert: counts.alerts }[only] : counts.messages + counts.approvals + counts.alerts;
   if (!bs.length || !total) return { items: [] as InboxItem[], total, page, size, counts };
 

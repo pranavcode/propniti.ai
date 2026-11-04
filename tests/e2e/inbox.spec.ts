@@ -60,6 +60,12 @@ test("deciding an approval lowers the sidebar Inbox count without a reload", asy
   expect(errors).toEqual([]);
 });
 
+test("an admin, who can't reply to conversations, gets none", async ({ page, context }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app/inbox?tab=messages`);
+  await expect(page.getByText("No open conversations assigned to you.")).toBeVisible();
+});
+
 test("Grace gets bills to decide and no conversations", async ({ page, context }) => {
   await as(context, "grace");
   const errors = watch(page);
@@ -83,5 +89,8 @@ test("Daniel's alerts link into the app and pages move through the list", async 
   await page.getByRole("link", { name: "Next" }).click();
   await expect(page).toHaveURL(/page=2/);
   await expect(page.getByText(/^26–\d+ of \d+/)).toBeVisible();
+  // An out-of-range or fractional page lands on a real page.
+  await go(page, `${BASE}/app/inbox?tab=alerts&page=99.5`);
+  await expect(list.locator("li[data-kind=alert]").first()).toBeVisible();
   expect(errors).toEqual([]);
 });

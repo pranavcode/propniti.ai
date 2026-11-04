@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import "@/entities";
 import { getPlatform } from "@/lib/platform";
-import { getPersona } from "@/auth/personas";
+import { getPersona, PERSONAS } from "@/auth/personas";
+import { canDecide } from "@/ai/http";
 import { actorFor } from "@/server/permissions";
 import { seed, WS } from "@/server/query.fixture";
-import { decidableTypes, inboxCounts, inboxPage } from "./data";
+import { decidableTypes, inApp, inboxCounts, inboxPage } from "./data";
 
 vi.mock("@/lib/platform", async () => {
   const db = (await import("@/server/query.fixture")).emptyDb();
@@ -52,6 +53,13 @@ beforeAll(async () => {
     "INSERT INTO notifications (workspace_id, id, user_id, title, body, href, read_at, at) VALUES ('base', 'n-m2', 'marcus', 'Old news', '', 'javascript:alert(1)', '2026-11-01T00:00:00Z', '2026-10-30T15:00:00Z')",
     "INSERT INTO notifications (workspace_id, id, user_id, title, body, href, read_at, at) VALUES ('base', 'n-g1', 'grace', 'Trust account unreconciled', '', '/app/banking', NULL, '2026-11-03T16:00:00Z')",
   ]) await db().prepare(s).run();
+});
+
+describe("inbox: links", () => {
+  it("allows only same-site paths", () => {
+    expect(inApp("/app/banking")).toBe("/app/banking");
+    for (const bad of ["//evil.com", "/\\evil.com", "javascript:alert(1)", "https://evil.com", null]) expect(inApp(bad)).toBeNull();
+  });
 });
 
 describe("inbox: who decides what", () => {
@@ -139,6 +147,26 @@ describe("inbox for a property manager (marcus, 3 Austin properties)", () => {
 });
 
 describe("inbox for other roles", () => {
+  it("gives an admin, who can read conversations but not reply, no conversations", async () => {
+    const r = await inboxPage(await ctx("sam"), { filter: "messages" });
+    expect(r.items).toEqual([]);
+    expect(r.counts.messages).toBe(0);
+  });
+
+  it("lists only approvals the persona can decide, for every internal persona (canDecide agrees)", async () => {
+    let checked = 0;
+    for (const persona of PERSONAS.filter((p) => !p.portal)) {
+      const c = await ctx(persona.id);
+      const r = await inboxPage(c, { filter: "approvals", size: 100 });
+      for (const it of r.items) {
+        const p = await db().prepare("SELECT * FROM ai_proposals WHERE workspace_id = 'base' AND id = ?").bind(it.id).first();
+        expect(await canDecide({ db: c.db, ws: WS, actor: c.actor, persona }, p!), `${persona.id} ${it.id}`).toEqual({ ok: true });
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+
   it("gives an accountant bills to decide and her alerts, and no conversations (communications isn't her module)", async () => {
     const r = await inboxPage(await ctx("grace"), {});
     expect(new Set(ids(r))).toEqual(new Set(["n-g1", "pr-bill-low", "pr-bill-high", "pr-unknown"]));
