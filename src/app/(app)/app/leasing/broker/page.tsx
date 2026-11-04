@@ -85,7 +85,10 @@ export default async function BrokerDesk() {
                       <TableCell className="px-3 py-2">
                         {a.score != null ? (
                           <span className="inline-flex items-center gap-1.5">
-                            <Sparkles className="size-3 text-tone-ai" /><span className={cn("font-medium", REC[String(a.recommendation)])}>{String(a.recommendation)}</span>
+                            <Sparkles className="size-3 text-tone-ai" />
+                            {a.proposalId
+                              ? <Link href={`/app/ai/approvals?proposal=${encodeURIComponent(a.proposalId)}`} className={cn("font-medium hover:underline", REC[String(a.recommendation)])} aria-label={`${String(a.recommendation)}: open the recommendation for ${String(a.applicant)} in approvals`}>{String(a.recommendation)}</Link>
+                              : <span className={cn("font-medium", REC[String(a.recommendation)])}>{String(a.recommendation)}</span>}
                             <span className="text-muted-foreground tabular-nums">· {Number(a.score)}</span>
                             {a.runId && <Link href={`/app/ai/runs/${a.runId}`} className="text-[11.5px] text-primary hover:underline" aria-label={`View the scoring run for ${String(a.applicant)}`}>run<ArrowUpRight className="inline size-3" /></Link>}
                           </span>

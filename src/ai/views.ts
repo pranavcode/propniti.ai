@@ -111,6 +111,9 @@ const QUEUE_SQL: Record<Queue, string> = {
   decided: "d.id IS NOT NULL AND p.queue_state <> 'auto_handled'",
 };
 
+const RANK = "CASE p.risk WHEN 'High' THEN 2 WHEN 'Medium' THEN 1 ELSE 0 END";
+const QUEUE_OF = "CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' ELSE p.queue_state END";
+
 export async function proposalsPage(data: DataCtx, f: { queue?: Queue; agent?: string; risk?: string; page?: number; size?: number }) {
   const queue = f.queue ?? "needs_you";
   const where = [QUEUE_SQL[queue]];
@@ -122,11 +125,27 @@ export async function proposalsPage(data: DataCtx, f: { queue?: Queue; agent?: s
   const page = Math.max(1, f.page ?? 1);
   const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
   const [rows, total, counts] = await Promise.all([
-    sql<Row>(data, `SELECT p.*, d.decision, d.decided_by, d.decided_at, d.note AS decision_note ${from} WHERE ${where.join(" AND ")} ORDER BY CASE p.risk WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, p.created_at DESC LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
+    sql<Row>(data, `SELECT p.*, d.decision, d.decided_by, d.decided_at, d.note AS decision_note ${from} WHERE ${where.join(" AND ")} ORDER BY ${RANK} DESC, p.created_at DESC, p.id LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n ${from} WHERE ${where.join(" AND ")}`, params),
-    sql<{ q: string; n: number }>(data, `SELECT CASE WHEN p.queue_state = 'auto_handled' THEN 'auto_handled' WHEN d.id IS NOT NULL THEN 'decided' ELSE p.queue_state END AS q, count(*) AS n ${from} GROUP BY q`),
+    sql<{ q: string; n: number }>(data, `SELECT ${QUEUE_OF} AS q, count(*) AS n ${from} GROUP BY q`),
   ]);
   return { rows: rows.map(proposalOut), total: total[0]?.n ?? 0, page, size, counts: Object.fromEntries(counts.map((c) => [c.q, c.n])) as Record<Queue, number> };
+}
+
+// Where a deep link lands: the proposal (by id, or the newest one on a record such as
+// "applications/app_123"), its queue and the inbox page that holds it, in proposalsPage's order.
+export async function proposalFocus(data: DataCtx, f: { proposal?: string; record?: string }, size = 25): Promise<{ id: string; queue: Queue; page: number } | null> {
+  const [type, id] = f.record?.split(/\/(.*)/) ?? [];
+  if (!f.proposal && !(type && id)) return null;
+  const from = "FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id";
+  const [hit] = await sql<{ id: string; q: Queue; rank: number; created_at: string }>(data,
+    `SELECT p.id, ${QUEUE_OF} AS q, ${RANK} AS rank, p.created_at ${from} WHERE ${f.proposal ? "p.id = ?" : "p.entity_type = ? AND p.entity_id = ?"} ORDER BY p.created_at DESC LIMIT 1`,
+    f.proposal ? [f.proposal] : [type, id]);
+  if (!hit) return null;
+  const [ahead] = await sql<{ n: number }>(data,
+    `SELECT count(*) AS n ${from} WHERE ${QUEUE_SQL[hit.q]} AND (${RANK} > ? OR (${RANK} = ? AND (p.created_at > ? OR (p.created_at = ? AND p.id < ?))))`,
+    [hit.rank, hit.rank, hit.created_at, hit.created_at, hit.id]);
+  return { id: hit.id, queue: hit.q, page: Math.floor((ahead?.n ?? 0) / size) + 1 };
 }
 
 export async function proposal(data: DataCtx, id: string) {

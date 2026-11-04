@@ -31,6 +31,7 @@ export type ScoringData = {
   source: AISource;
   model: string | null;
   runId: string | null;
+  proposalId: string | null;            // the undecided Leasing agent proposal, for the approvals link
   scoredAt: string | null;
   decidedBy: string | null;
   decidedAt: string | null;
@@ -143,6 +144,7 @@ export function ScoringPanel({ data }: { data: ScoringData }) {
             {d.score != null && <AIBadge source={d.source} model={d.model ?? undefined} size="xs" />}
             <div className="ml-auto flex items-center gap-2 text-[11.5px] text-muted-foreground">
               {d.scoredAt && <span>Scored <RelativeDate value={d.scoredAt} /></span>}
+              {d.proposalId && <Link href={`/app/ai/approvals?proposal=${encodeURIComponent(d.proposalId)}`} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">Open in approvals<ArrowUpRight className="size-3" /></Link>}
               {d.runId && <Link href={runHref(d.runId)!} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">View run<ArrowUpRight className="size-3" /></Link>}
               {d.canScore && d.open && (
                 <Button size="sm" variant={d.score == null ? "default" : "outline"} disabled={!!busy} onClick={() => void score()}>

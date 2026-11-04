@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { CheckCheck } from "lucide-react";
@@ -25,7 +26,9 @@ type Page = { rows: ProposalJson[]; total: number; page: number; size: number; c
 
 type MessageEffect = { kind: "message"; subject?: string; body?: string };
 
-export function ApprovalsInbox({ initial, initialQueue }: { initial: Page; initialQueue: Queue }) {
+// focusId (from a ?proposal= or ?record= deep link) opens that proposal and scrolls it into view;
+// missing says the link named a record with no proposal this persona can see yet.
+export function ApprovalsInbox({ initial, initialQueue, focusId, missing }: { initial: Page; initialQueue: Queue; focusId?: string; missing?: { href?: string } }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -36,6 +39,10 @@ export function ApprovalsInbox({ initial, initialQueue }: { initial: Page; initi
   const [page, setPage] = useState(initial.page);
   const [editing, setEditing] = useState<{ p: ProposalJson; subject: string; body: string } | null>(null);
   const agent = sp.get("agent") ?? undefined;
+
+  useEffect(() => {
+    if (focusId) document.getElementById(`proposal-${focusId}`)?.scrollIntoView({ block: "center" });
+  }, [focusId]);
 
   const load = useCallback(async (q: Queue, pg: number) => {
     setLoading(true);
@@ -60,6 +67,8 @@ export function ApprovalsInbox({ initial, initialQueue }: { initial: Page; initi
     void load(q, 1);
     const next = new URLSearchParams(sp);
     next.set("tab", q);
+    next.delete("proposal");
+    next.delete("record");
     router.replace(`${pathname}?${next}`, { scroll: false });
   };
 
@@ -102,6 +111,11 @@ export function ApprovalsInbox({ initial, initialQueue }: { initial: Page; initi
         )}
       </div>
       <p className="text-[12px] text-muted-foreground">{tab.hint}{agent ? ` Showing ${AGENT_LABEL[agent] ?? agent} only.` : ""}</p>
+      {missing && (
+        <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-[12.5px]">
+          No agent proposal for this record yet. It appears here once the agent has scored it.{missing.href && <> <Link href={missing.href} className="font-medium text-primary hover:underline">Open the record</Link></>}
+        </p>
+      )}
       {error && <ErrorBanner message={error} onRetry={() => void load(queue, page)} />}
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
@@ -110,11 +124,14 @@ export function ApprovalsInbox({ initial, initialQueue }: { initial: Page; initi
           {data.rows.map((p) => {
             const m = message(p);
             const decided = !!p.decision || queue !== "needs_you";
+            const focused = p.id === focusId;
             return (
               <ApprovalItem
                 key={p.id}
+                id={`proposal-${p.id}`}
+                className={focused ? "scroll-mt-20 ring-2 ring-inset ring-primary/60" : undefined}
                 variant={queue === "needs_you" ? "card" : "row"}
-                defaultOpen={false}
+                defaultOpen={focused}
                 agent={AGENT_LABEL[p.agent] ?? p.agent}
                 title={p.decision ? `${p.title} — ${p.decision.toLowerCase()} by ${p.decided_by}` : p.title}
                 amount={p.amount_cents != null ? p.amount_cents / 100 : null}
