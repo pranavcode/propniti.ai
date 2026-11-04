@@ -106,7 +106,7 @@ test("sidebar marks only AI-powered pages with a sparkle", async ({ context, pag
   for (const name of ["Inbox", "Copilot", "Agents", "Approvals", "AI activity", "Automations", "Data health"]) {
     await expect(nav.getByRole("link", { name: new RegExp(`^${name}.*\\(AI-powered\\)`) })).toBeVisible();
   }
-  for (const name of ["Dashboard", "Properties"]) {
+  for (const name of ["Properties"]) {
     const link = nav.getByRole("link", { name: new RegExp(`^${name}`) }).first();
     await expect(link).toBeVisible();
     await expect(link.locator("[data-ai-mark]")).toHaveCount(0);

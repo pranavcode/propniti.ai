@@ -37,7 +37,9 @@ export async function shellData(counts: Record<string, number> = {}): Promise<Sh
   const nav = navTree(role).map((g) => ({
     section: g.section,
     label: SECTION_LABEL[g.section],
-    items: g.items.filter((i) => !seen.has(i.href) && seen.add(i.href)).map((i) => ({
+    // "/app" sends personas with their own home (e.g. Today) there, so a Dashboard item would
+    // only repeat that home; show it to the personas whose home it is.
+    items: g.items.filter((i) => !(i.href === "/app" && persona.home !== "/app") && !seen.has(i.href) && seen.add(i.href)).map((i) => ({
       key: i.key, label: i.label, href: i.href, group: i.group, icon: <i.icon className={ic} />, ai: i.ai,
       count: counts[i.href], countTone: (i.href === "/app/inbox" || i.href === "/app/ai/approvals" ? "attention" : "default") as "attention" | "default",
       help: getEntity(i.key)?.help?.summary,
