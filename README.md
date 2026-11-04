@@ -7,7 +7,11 @@ Eight AI agents find routine work and propose what to do. A person approves anyt
 
 Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sign-up needed.
 
-![Property manager dashboard](public/marketing/dashboard.png)
+![Marcus Bell's Today page: briefing, conversations waiting, data health and KPIs](public/img/marketing/shots/home.webp)
+
+| AI agents | Data Health | What-if |
+| --- | --- | --- |
+| ![Agents page with eight agents and their runs](public/img/marketing/shots/agents.webp) | ![Data Health issues with suggested fixes](public/img/marketing/shots/data-health.webp) | ![What-if simulator on the portfolio](public/img/marketing/shots/what-if.webp) |
 
 This README describes v2, the code on `main` that runs at propniti.ai. Product goals and principles are in [PRODUCT.md](PRODUCT.md); code conventions are in [AGENTS.md](AGENTS.md).
 
