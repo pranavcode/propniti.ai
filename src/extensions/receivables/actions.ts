@@ -1,4 +1,4 @@
-import { Ban, Banknote, CreditCard, Gavel, MoveRight, Undo2 } from "lucide-react";
+import { Ban, Banknote, CreditCard, Gavel, MoveRight, Send, Undo2 } from "lucide-react";
 import { z } from "zod";
 import type { ActionContext, Role, Row } from "@/entities/types";
 import { registerAction } from "@/extensions/actions";
@@ -6,6 +6,7 @@ import { CURRENT_PERIOD } from "@/seed/constants";
 import { effective } from "@/server/effective";
 import { payRent, postLateFees, recordPayment } from "@/server/money";
 import { householdOf } from "./queries";
+import { remindLease } from "./remind";
 import { disposeDeposit, markPaymentReturned, movePayment } from "@/server/money";
 
 // Receivables actions. Every one that moves or re-points money goes through the guarded functions
@@ -51,6 +52,16 @@ registerAction({
     return payRent(ctx, String(row.id));
   },
   help: { summary: "Pays the charge's open balance by ACH from the resident portal.", article: "resident-pay-rent-portal" },
+});
+
+registerAction({
+  key: "leases.remind",
+  label: "Send reminder",
+  entity: "leases",
+  roles: STAFF_AR,
+  icon: Send,
+  handler: (ctx, row) => remindLease(ctx, String(row.id)),
+  help: { summary: "Emails the resident the Collections agent's past-due reminder, in their language, at most once a day per lease.", article: "delinquency-aging" },
 });
 
 // Runs a late-fee policy for the month: org default covers every property in scope without a

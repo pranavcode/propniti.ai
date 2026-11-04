@@ -39,6 +39,21 @@ test("record payment: a double click records one payment", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("delinquency rows: remind once, then open record payment on that lease", async ({ page }) => {
+  const errors = await as(page, "marcus");
+  await go(page, "/app/receivables/delinquency");
+  const remind = page.getByRole("button", { name: /^Send a past-due reminder to / }).first();
+  const who = (await remind.getAttribute("aria-label"))!.replace("Send a past-due reminder to ", "");
+  await remind.click();
+  await expect(page.getByText(/Reminder emailed to/)).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: who }).first();
+  await expect(row.getByText("Reminded today")).toBeVisible();
+  await row.getByRole("link", { name: `Record a payment for ${who}` }).click();
+  await expect(page).toHaveURL(/record-payment\?q=L-/);
+  await expect(page.getByText(who).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("collections workbench explains each score and drafts in English or Spanish", async ({ page }) => {
   const errors = await as(page, "marcus");
   await go(page, "/app/receivables/collections?step=reminder");
