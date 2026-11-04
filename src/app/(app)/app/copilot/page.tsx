@@ -10,19 +10,12 @@ import { modelInfo } from "@/ai/providers";
 
 export const metadata = { title: "Copilot · Propniti" };
 
-type Saved = { role: string; content: string; plan: { run_id?: string; mode?: string; trace?: unknown[] } | null; citations: unknown[]; model: string | null };
-
 // Full-page assistant with saved conversations. Same backend as the ⌘J dock.
 export default async function CopilotPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { data, persona } = await pageData();
   const list = data.ws === "base" ? [] : await threads(data, persona.id, 30);
-  const open = sp.thread && data.ws !== "base" ? await threadMessages(data, persona.id, sp.thread) : null;
-  const turns = ((open?.messages ?? []) as unknown as Saved[]).map((m) =>
-    m.role === "user"
-      ? { role: "user" as const, text: m.content }
-      : { role: "assistant" as const, reply: { threadId: sp.thread!, messageId: "", runId: m.plan?.run_id ?? "", mode: (m.plan?.mode ?? "chat") as "chat", answer: m.content, source: m.model === "rules" || !m.model ? "Rules (no model)" : m.model, model: m.model ?? "rules", live: false, citations: m.citations as never[], trace: (m.plan?.trace ?? []) as never[], proposals: [] } },
-  );
+  const open = sp.thread && data.ws !== "base" ? await threadMessages(data, persona.id, sp.thread, 100) : null;
   const m = modelInfo();
   return (
     <main className="flex h-full flex-col">
@@ -44,7 +37,7 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
           ) : <p className="p-3 text-[12px] text-muted-foreground">Your conversations are saved here.</p>}
         </aside>
         <section className="min-h-[60vh] overflow-hidden rounded-lg border bg-card">
-          <AssistantChat key={sp.thread ?? "new"} page threadId={open ? sp.thread : undefined} initialTurns={turns} suggestions={persona.assistantPrompts} />
+          <AssistantChat key={sp.thread ?? "new"} page threadId={open ? sp.thread : undefined} initialTurns={open?.turns} suggestions={persona.assistantPrompts} />
         </section>
       </div>
     </main>

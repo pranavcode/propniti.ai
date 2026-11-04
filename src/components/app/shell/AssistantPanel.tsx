@@ -66,6 +66,8 @@ export function AssistantPanel({ children, onResize }: { children?: React.ReactN
         <span className="font-semibold tracking-tight">Ask Propniti</span>
         <span className="rounded border border-primary/25 px-1 text-[10px] font-medium tracking-wide text-primary uppercase">Beta</span>
         <div className="ml-auto flex items-center">
+          {/* The conversation renders its history menu here. */}
+          <div id="assistant-panel-actions" className="flex items-center" />
           <Tooltip>
             <TooltipTrigger asChild><Button asChild variant="ghost" size="icon-sm"><Link href="/app/copilot" aria-label="Open full page"><Maximize2 /></Link></Button></TooltipTrigger>
             <TooltipContent>Open as a page</TooltipContent>

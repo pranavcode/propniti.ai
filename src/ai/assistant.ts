@@ -4,7 +4,7 @@ import { getEntity } from "@/entities";
 import type { ActionKey, Row } from "@/entities/types";
 import type { Persona } from "@/auth/personas";
 import { addDays, money } from "./rules";
-import { columns, insert, list, newId, parseJson, sql, type DataCtx, type Table } from "./data";
+import { columns, insert, newId, parseJson, sql, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
 import { openRun, runWithContext } from "./orchestrator";
 import { RULES } from "./providers";
@@ -28,7 +28,9 @@ export type TraceItem = { tool: string; input: unknown; summary: string; ms?: nu
 export type AssistantReply = {
   threadId: string; messageId: string; runId: string; mode: Mode; answer: string; source: string; model: string; live: boolean;
   table?: { columns: { key: string; label: string; align?: "right" }[]; rows: Row[] };
-  citations: Citation[]; trace: TraceItem[]; proposals: { id: string; title: string; why: string[]; risk: string; queue_state: string; action: string }[];
+  citations: Citation[]; trace: TraceItem[];
+  // decision: set when the proposal was approved or rejected after the reply (restored threads).
+  proposals: { id: string; title: string; why: string[]; risk: string; queue_state: string; action: string; decision?: string | null }[];
   note?: string;
 };
 
@@ -315,26 +317,58 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
     : { results: [] as Row[] };
   const proposals = proposalRows.results.map((p) => ({ id: String(p.id), title: String(p.title), why: parseJson<string[]>(p.why, []), risk: String(p.risk), queue_state: String(p.queue_state), action: String(p.action) }));
   const model = res.live && ctx ? ctx.modelUsed : RULES;
+  const note = res.note ?? (!ctx?.model ? "No AI model is configured, so answers come from rules over your data." : !res.live ? "Figures and wording computed from your data." : undefined);
   const messageId = newId("msg");
   await db.batch([
-    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
+    // The plan keeps what the reply showed (source, table, note), so a reopened thread renders the same.
+    await insert(db, ws, "assistant_messages", { id: messageId, thread_id: threadId, role: "assistant", content: res.out.answer, plan: JSON.stringify({ run_id: runId, mode, trace, live: res.live, source: model.label, note, table: res.out.table }), citations: JSON.stringify(res.out.citations), model: model.model, at: demoNowIso() }),
     ...(await Promise.all(proposals.map(async (p) => insert(db, ws, "assistant_actions", { id: newId("act"), message_id: messageId, action: p.action, params: JSON.stringify({ proposal_id: p.id }), status: "Proposed", at: demoNowIso() })))),
     db.prepare("UPDATE assistant_threads SET updated_at = ? WHERE workspace_id = ? AND id = ?").bind(demoNowIso(), ws, threadId),
   ]);
   return {
-    threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals,
-    note: res.note ?? (!ctx?.model ? "No AI model is configured, so answers come from rules over your data." : !res.live ? "Figures and wording computed from your data." : undefined),
+    threadId: threadId!, messageId, runId, mode, answer: res.out.answer, source: model.label, model: model.model, live: res.live, table: res.out.table, citations: res.out.citations, trace, proposals, note,
   };
 }
 
+// Saved conversations (⌘J panel and /app/copilot). Only the persona's own threads, in this workspace.
 export async function threads(data: DataCtx, personaId: string, size = 20) {
-  const r = await list(data, "assistant_threads", { filters: [{ field: "user_id", op: "eq", value: personaId }], sort: ["updated_at", "desc"], size });
-  return r.rows;
+  const { results } = await data.db.prepare("SELECT id, title, updated_at FROM assistant_threads WHERE workspace_id = ? AND user_id = ? AND deleted = 0 ORDER BY updated_at DESC, seq DESC LIMIT ?").bind(data.ws, personaId, Math.min(Math.max(1, size), 30)).all<{ id: string; title: string; updated_at: string }>();
+  return results;
 }
 
-export async function threadMessages(data: DataCtx, personaId: string, threadId: string) {
-  const t = await data.db.prepare("SELECT id, title FROM assistant_threads WHERE workspace_id = ? AND id = ? AND user_id = ?").bind(data.ws, threadId, personaId).first<Row>();
-  if (!t) return null;
-  const { results } = await data.db.prepare("SELECT id, role, content, plan, citations, model, at FROM assistant_messages WHERE workspace_id = ? AND thread_id = ? ORDER BY seq").bind(data.ws, threadId).all<Row>();
-  return { thread: t, messages: results.map((m) => ({ ...m, plan: parseJson(m.plan, null), citations: parseJson(m.citations, []) })) };
+export type SavedTurn = { role: "user"; text: string } | { role: "assistant"; reply: AssistantReply };
+type SavedPlan = { run_id?: string; mode?: Mode; trace?: TraceItem[]; live?: boolean; source?: string; note?: string; table?: AssistantReply["table"] };
+
+// The last `limit` messages of a thread as the chat renders them. Proposals come back with their
+// current decision; nothing is run again.
+export async function threadMessages(data: DataCtx, personaId: string, threadId: string, limit = 30) {
+  const thread = await data.db.prepare("SELECT id, title, updated_at FROM assistant_threads WHERE workspace_id = ? AND id = ? AND user_id = ? AND deleted = 0").bind(data.ws, threadId, personaId).first<{ id: string; title: string; updated_at: string }>();
+  if (!thread) return null;
+  const n = Math.min(Math.max(1, limit), 100);
+  const { results } = await data.db.prepare("SELECT id, role, content, plan, citations, model FROM assistant_messages WHERE workspace_id = ? AND thread_id = ? AND deleted = 0 ORDER BY seq DESC LIMIT ?").bind(data.ws, threadId, n + 1).all<{ id: string; role: string; content: string; plan: string | null; citations: string; model: string | null }>();
+  const more = results.length > n;
+  const messages = results.slice(0, n).reverse();
+  const answers = messages.filter((m) => m.role === "assistant").map((m) => m.id);
+  const actions = answers.length
+    ? (await data.db.prepare("SELECT message_id, params FROM assistant_actions WHERE workspace_id = ? AND deleted = 0 AND message_id IN (SELECT value FROM json_each(?)) ORDER BY seq").bind(data.ws, JSON.stringify(answers)).all<{ message_id: string; params: string }>()).results
+    : [];
+  const ids = actions.map((a) => parseJson<{ proposal_id?: string }>(a.params, {}).proposal_id).filter((x): x is string => !!x);
+  const rows = ids.length
+    ? await sql<Row>(data, "SELECT p.id, p.title, p.why, p.risk, p.queue_state, p.action, d.decision FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.id IN (SELECT value FROM json_each(?))", [JSON.stringify(ids)])
+    : [];
+  const byId = new Map(rows.map((p) => [String(p.id), { id: String(p.id), title: String(p.title), why: parseJson<string[]>(p.why, []), risk: String(p.risk), queue_state: String(p.queue_state), action: String(p.action), decision: (p.decision as string | null) ?? null }]));
+  const turns: SavedTurn[] = messages.filter((m) => m.role !== "tool").map((m) => {
+    if (m.role === "user") return { role: "user", text: m.content };
+    const plan = parseJson<SavedPlan>(m.plan, {});
+    const proposals = actions.filter((a) => a.message_id === m.id).map((a) => byId.get(parseJson<{ proposal_id?: string }>(a.params, {}).proposal_id ?? "")).filter((p) => !!p);
+    return {
+      role: "assistant",
+      reply: {
+        threadId, messageId: m.id, runId: plan.run_id ?? "", mode: plan.mode ?? "chat", answer: m.content,
+        source: plan.source ?? (!m.model || m.model === RULES.model ? RULES.label : m.model), model: m.model ?? RULES.model, live: plan.live ?? false,
+        table: plan.table, citations: parseJson<Citation[]>(m.citations, []), trace: plan.trace ?? [], proposals, note: plan.note,
+      },
+    };
+  });
+  return { thread, turns, more };
 }
