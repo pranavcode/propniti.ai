@@ -29,37 +29,56 @@ Propniti is an AI-native property-management SaaS demo at https://propniti.ai: 1
 | | Value |
 |---|---|
 | Production | https://propniti.ai and www, Worker `property-mgmt-ai-prototype` |
-| Live code | `main` at `e83c5aa` (PRs #3–#9), Worker version `ef53be4e`, deployed 2026-11-04 03:50 UTC |
-| Database | D1 `propniti-v2` (`b9dff387-…`): migrations 0001–0007, base `2026-11-04.15` |
-| Rollback | `npx wrangler rollback --name property-mgmt-ai-prototype` returns to the previous version (`c15fe668`). The v1 code and its D1 `propniti` (`3d4ff9d5-…`) stay untouched as the last resort. |
+| Live code | `main` at `<COMMIT>` (PRs #3–#30), Worker version `<VERSION_ID>`, deployed 2026-11-04 `<HH:MM>` UTC |
+| Database | D1 `propniti-v2` (`b9dff387-…`): migrations 0001–0008 (0008 must be applied before deploying #18), base `2026-11-04.15` |
+| Rollback | `npx wrangler rollback --name property-mgmt-ai-prototype` returns to the previous version (`<PREVIOUS_VERSION_ID>`). The v1 code and its D1 `propniti` (`3d4ff9d5-…`) stay untouched as the last resort. |
 | Preview | https://propniti-v2-preview.dnyana.workers.dev (Worker `propniti-v2-preview`). It shares D1 `propniti-v2` and has no cron, so only production sweeps. |
 | Scheduled agents | Cron `*/15 * * * *` through `src/worker-entry.ts`, one agent per tick, with its own slot (`ai_cron_sweep`) so page-visit sweeps can't make it skip. Verified on production: the 03:15, 03:30 and 03:45 UTC ticks each ran an agent. |
 | Demo clock | "Today" is `AS_OF` = 2026-11-04 plus the Pacific time of day (`src/lib/clock.ts`). Visitor data resets at midnight Pacific. |
 
-Last measured (production `ef53be4e`, 2026-11-04):
+Last measured (`main` after #30, 2026-11-04; production figures `<FILL AFTER DEPLOY>`):
 
 | Check | Result |
 |---|---|
-| Unit tests | 580 / 580 |
+| Unit tests | 922 in 98 files: 920 passed in a full run under heavy machine load; the other 2 (seed generator, 5-second timeouts) pass when run alone |
 | Lint and typecheck | Clean |
-| Live AI evals | 71 / 74 (96%) on the preview; not re-run since (no model-prompt changes) |
-| E2E against production | 47 / 47 (43 on the first run; 4 specs updated for the peek drawer, then passed) |
+| Live AI evals | 71 / 74 (96%) on the preview before #14; #14 added eval cases, not yet run live `<FILL>` |
+| E2E | 85 tests in 20 specs; production run `<FILL AFTER DEPLOY>` |
 
 ## In flight
 
 | Workstream | Branch / worktree | Status | Next |
 |---|---|---|---|
-| Handoff update | `docs/handoff-update` in `../prototype-handoff` | This file | PR → merge |
+| Docs v2 | `docs/v2-spec-walkthrough` in `../prototype-docs` (PR #12) | `/docs` restyled in the v2 design; Spec, Walkthrough and Architecture updated for #13–#30; help articles updated | Review → merge; screenshots after the final deploy; sync the three Claude Docs |
+| Help articles re-seed | — | 8 articles changed and 4 added in `src/seed/help*.ts`; production keeps the old text until the base is reloaded | Owner decision: bump `BASE_VERSION` and reload the base (wipes visitor workspaces) |
+| Chat history, *Improve with AI*, first-visit splash and tour toasts | `<branch>` | In progress | Docs have TODO slots for each |
 
-Shipped 2026-11-04: e2e specs updated for the drawer (this PR), auth pages in the new design (#5), record peek drawer (#7), cron slot fix (#6), approvals deep link (#8), AI summaries from current figures (#9). Each had an independent review; production e2e and smoke tests passed after deploy.
+Shipped 2026-11-04:
+
+| PR | What |
+|---|---|
+| #13 | Data Health fixes respect approval rules; money, fraud, legal and non-low-risk fixes always queue; D1 errors masked |
+| #14 | AI quality: what-if direction checks, fair-housing checks on announcements and the assistant, assistant filters, report periods from the demo clock, fresh briefings, en-US number formats |
+| #15 | Inbox at `/app/inbox`: messages, approvals and alerts that need you, with a sidebar badge |
+| #18 | Performance: hover/focus prefetch through `@/components/Link` (lint blocks `next/link`), cheap settle check, faster overlay reads, migration 0008 indexes |
+| #20 | Record action route applies `canDecide` to agent proposals (202 queued / 403); error masking narrowed with server-side logging |
+| #22 | New logo, the Window P |
+| #24 | No blank space below the app shell |
+| #28 | Batch: demo email and password sign-in (#17), import from other tools with optional AI (#26), *Ask Propniti* chat bubble (#25), My tasks (#16), Automations page and agent-settings permissions (#19), sparkle marks (#23), clickable breadcrumbs (#27), crawl fixes (#21) |
+| #29 | Thin app scrollbars; chat inputs that grow to 10 lines |
+| #30 | Batch 2: row alignment, collapsible home sections and *Reset layout*, readable run steps, *Summarize with AI*, e2e fixes |
+
+Earlier the same day: #5–#11 (auth pages, peek drawer, cron slot, approvals deep link, summaries from current figures, NOI last closed month).
 
 ## Next
 
-1. Owner decisions pending: property "NOI (month)" shows November to date (a full month of rent against a few days of expenses); show October, the last full month? And should the broker desk table also list scored applications still at Submitted?
-2. Bring the docs in line with v2:
-   - the Product Spec, the Prototype Walkthrough (retake screenshots) and the `/docs` snapshot (see the notes in the research folder);
-   - restyle `/docs` in the new design.
-3. Re-run `scripts/ai-precompute.mjs` so stored property summaries carry the new facts keys (until then every property shows the rules summary, which is accurate). Optionally drop the old seed summary rows (bump `BASE_VERSION`, re-seed; resets visitor workspaces).
+1. Deploy `main` (apply migration 0008 first), warm up, smoke test and run e2e against production; fill the placeholders above.
+2. Capture the walkthrough screenshots on production and fill the `TODO: screenshot` slots in `content/docs/walkthrough.md`.
+3. Sync the three Claude Docs (Product Spec, Prototype Walkthrough, Architecture) to `content/docs/*.md`.
+4. Decide with the owner when to reload the base so the updated help articles reach production.
+5. Re-run `scripts/ai-precompute.mjs` so stored property summaries carry the new facts keys.
+6. Run the live AI evals for #14's new cases.
+7. Owner decision pending: should the broker desk also list scored applications still at Submitted?
 
 ## Backlog (after the demo)
 
@@ -75,6 +94,9 @@ Shipped 2026-11-04: e2e specs updated for the drawer (this PR), auth pages in th
 - Peek drawer: debounce J key-repeat fetches; put row-id attributes on `<tr>` so a hidden title column doesn't break J/K; Edit sheet Cancel reloads the drawer.
 - Approvals inbox: `?agent=` filter hint shows while a deep link ignores it; paging keeps `?proposal=` in the URL.
 - A first-visit product tour opens over a `?peek=` deep link.
+- Import: `import.completed` waits for the next sweep; `/api/ai/events` could drain it right away. The stale comment in `src/app/api/ai/events/route.ts` says the wizard writes through the entity API.
+- Assistant help links point at `/app/help/<id>`, which has no page yet (404).
+- Five agent events have no source yet: `coi.expiring`, `prospect.created`, `screening.completed`, `statement.closed`, `data_issue.detected`.
 - Fields still editable until their named actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests, message threads.
 
 ## Decisions
