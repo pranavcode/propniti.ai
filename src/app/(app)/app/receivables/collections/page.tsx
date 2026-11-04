@@ -49,10 +49,10 @@ export default async function CollectionsPage({ searchParams }: Props) {
         <>
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
             {[
-              { l: "Delinquent residents", v: data.counts.all.toLocaleString(), h: "/app/receivables/delinquency" },
+              { l: "Delinquent residents", v: data.counts.all.toLocaleString("en-US"), h: "/app/receivables/delinquency" },
               { l: "Balance in this view", v: usd(data.balance), h: "/app/receivables/charges?view=overdue" },
-              { l: "High risk", v: data.counts.High.toLocaleString(), h: "/app/receivables/collections?band=High" },
-              { l: "Awaiting approval", v: data.counts.proposed.toLocaleString(), h: "/app/ai/approvals?agent=collections" },
+              { l: "High risk", v: data.counts.High.toLocaleString("en-US"), h: "/app/receivables/collections?band=High" },
+              { l: "Awaiting approval", v: data.counts.proposed.toLocaleString("en-US"), h: "/app/ai/approvals?agent=collections" },
             ].map((x) => (
               <Link key={x.l} href={x.h} className="bg-card px-3 py-2 hover:bg-muted/40">
                 <dt className="text-[11px] text-muted-foreground">{x.l}</dt>
