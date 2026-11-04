@@ -1,7 +1,7 @@
 import { demoIsoIn, demoNow } from "@/lib/clock";
 import { allEntities, can, getEntity } from "@/entities";
 import { getAction } from "@/extensions/actions";
-import { effective, expand, getRow, readWs } from "@/server/query";
+import { effective, expand, list, readWs } from "@/server/query";
 import { hintsFor, humanizeKey } from "@/lib/fieldText";
 import type { AgentKey, Role, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
@@ -404,15 +404,28 @@ export function issueWhere(f: IssueFilters & { status?: string }, role: Role) {
 }
 export const ISSUE_ORDER = "CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC, i.id";
 
-// A record's display name (its def's title field), for issue titles. Computed titles go through
-// getRow; plain ones read the row already loaded.
-async function recordTitle(data: DataCtx, table: string, rec: Row | null): Promise<string | null> {
+// Display names (each def's title field) of the page's computed-title records: one list query per
+// record type, keyed "table:id". Plain title fields are read from the row already loaded.
+async function computedTitles(data: DataCtx, issues: Row[]): Promise<Map<string, string>> {
+  const ids = new Map<string, Set<string>>();
+  for (const i of issues) {
+    const def = getEntity(String(i.entity_type));
+    if (def?.fields[def.titleField]?.sql) ids.set(def.key, (ids.get(def.key) ?? new Set()).add(String(i.entity_id)));
+  }
+  const out = new Map<string, string>();
+  await Promise.all([...ids].map(async ([key, set]) => {
+    const res = await list(data, key, { filters: { id: [...set] }, size: set.size, rowsOnly: true }).catch(() => null);
+    for (const r of res?.rows ?? []) if (r._title != null) out.set(`${key}:${r.id}`, String(r._title));
+  }));
+  return out;
+}
+
+function recordTitle(table: string, rec: Row | null, computed: Map<string, string>): string | null {
   const def = getEntity(table);
   if (!def || !rec) return null;
   const tf = def.fields[def.titleField];
   if (tf && !tf.sql) return rec[tf.column ?? def.titleField] == null ? null : String(rec[tf.column ?? def.titleField]);
-  const row = await getRow(data, def.key, String(rec.id)).catch(() => null);
-  return row?._title == null ? null : String(row._title);
+  return computed.get(`${def.key}:${rec.id}`) ?? null;
 }
 
 export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: string; page?: number; size?: number }) {
@@ -423,6 +436,7 @@ export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: str
     sql<Row>(data, `SELECT i.*, r.name AS rule_name, r.description AS rule_description, p.name AS property FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id LEFT JOIN {properties} p ON p.id = i.property_id WHERE ${where.join(" AND ")} ORDER BY ${ISSUE_ORDER} LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n FROM {data_issues} i WHERE ${where.join(" AND ")}`, params),
   ]);
+  const titles = await computedTitles(data, rows);
   const out = await Promise.all(rows.map(async (i) => {
     let fix = parseJson<Record<string, unknown> | null>(i.suggested_fix, null);
     let before: Row | null = null;
@@ -439,7 +453,7 @@ export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: str
     const hints = hintsFor(def);
     return {
       ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)),
-      entity_label: def?.label.one ?? humanizeKey(table), record: await recordTitle(data, table, rec),
+      entity_label: def?.label.one ?? humanizeKey(table), record: recordTitle(table, rec, titles),
       fields: Object.fromEntries(Object.keys(changes).filter((k) => hints[k]).map((k) => [k, hints[k]])),
     };
   }));

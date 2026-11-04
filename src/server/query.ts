@@ -214,12 +214,15 @@ const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);
 
 // Filter keys: "<field>" (equals; an array means any of), "<field>.min" / "<field>.max" (ranges
 // on numbers, money and dates), "<field>.null" ("1" = is empty, "0" = has a value).
+// Filtering by record id (a batch lookup of known rows) needs no field def.
+const ID_FIELD: FieldDef = { type: "text", label: "Id" };
+
 function filterWhere(def: EntityDef, role: Role, ws: Ws, filters: Record<string, string | string[]>, skip?: string): Where {
   const w: Where = { sql: [], params: [] };
   for (const [rawKey, rawVal] of Object.entries(filters)) {
     const [key, op] = rawKey.split(".", 2) as [string, string | undefined];
     if (key === skip) continue;
-    const f = field(def, key, role);
+    const f = key === "id" ? ID_FIELD : field(def, key, role);
     if (f.type === "json" || f.type === "image") throw new QueryError(400, `Can't filter on "${key}"`);
     const e = expr(def, key, f, ws);
     const vals = (Array.isArray(rawVal) ? rawVal : [rawVal]).filter((v) => v !== "");
