@@ -21,6 +21,7 @@ export type AgentCard = {
   key: AgentKey; name: string; goal: string; ownerRole: string; enabled: boolean; autonomy: string; schedule: string | null; events: string[];
   lastRun: { id: string; status: string; started_at: string; summary: string | null; model: string | null; trigger_kind: string } | null;
   nextRunAt: string | null; runs30: number; ok30: number; failed30: number; successRate: number | null; proposed: number; approved: number; auto: number; pending: number; tools: string[]; actions: string[];
+  statsMissing?: boolean; // a stats query failed: counts read 0 and the page says so
 };
 
 // The runs a person may open: all of them org-wide; for property-scoped roles, runs they started
@@ -39,12 +40,27 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
   const since = demoIsoIn(-30 * 86_400_000, nowMs);
   const rs = runScope(data, "r");
   const ls = runScope(data, "l");
+  // A failed or slow stats query is logged and leaves the cards with their settings and empty
+  // counts, instead of failing the whole page (D1 can time out under load).
+  let statsMissing = false;
+  const stat = async <T,>(label: string, q: Promise<T[]>): Promise<T[]> => {
+    const t0 = Date.now();
+    try {
+      const rows = await q;
+      if (Date.now() - t0 > 2_000) console.warn(`[ai] agents page: ${label} took ${Date.now() - t0} ms`);
+      return rows;
+    } catch (err) {
+      statsMissing = true;
+      console.error(`[ai] agents page: ${label} failed after ${Date.now() - t0} ms`, err);
+      return [];
+    }
+  };
   const [runs, props, last] = await Promise.all([
-    sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, `SELECT r.agent_key, count(*) AS n, sum(r.status IN ('done', 'waiting_approval')) AS ok, sum(r.status = 'failed') AS failed FROM {agent_runs} r WHERE r.started_at >= ? AND ${rs.sql} GROUP BY r.agent_key`, [since, ...rs.params], { unscoped: true }),
-    sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
+    stat("runs", sql<{ agent_key: string; n: number; ok: number; failed: number }>(data, `SELECT r.agent_key, count(*) AS n, sum(r.status IN ('done', 'waiting_approval')) AS ok, sum(r.status = 'failed') AS failed FROM {agent_runs} r WHERE r.started_at >= ? AND ${rs.sql} GROUP BY r.agent_key`, [since, ...rs.params], { unscoped: true })),
+    stat("proposals", sql<{ agent: string; n: number; approved: number; auto: number; pending: number }>(data,
       `SELECT p.agent, count(*) AS n, sum(d.decision IN ('Approved', 'Edited') AND p.queue_state <> 'auto_handled') AS approved, sum(p.queue_state = 'auto_handled') AS auto, sum(d.id IS NULL AND p.queue_state <> 'auto_handled') AS pending
-       FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`),
-    sql<Row>(data, `SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(l.seq) FROM {agent_runs} l WHERE ${ls.sql} GROUP BY l.agent_key)`, ls.params, { unscoped: true }),
+       FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id GROUP BY p.agent`)),
+    stat("last runs", sql<Row>(data, `SELECT r.* FROM {agent_runs} r WHERE r.seq IN (SELECT max(l.seq) FROM {agent_runs} l WHERE ${ls.sql} GROUP BY l.agent_key)`, ls.params, { unscoped: true })),
   ]);
   return AGENT_ORDER.map((key) => {
     const def = getAgent(key)!;
@@ -58,6 +74,7 @@ export async function agentCards(data: DataCtx, nowMs = Date.now()): Promise<Age
       lastRun: l ? { id: String(l.id), status: String(l.status), started_at: String(l.started_at), summary: (l.summary as string) ?? null, model: (l.model as string) ?? null, trigger_kind: String(l.trigger_kind) } : null,
       nextRunAt: next ? new Date(next).toISOString() : null, runs30: r?.n ?? 0, ok30: Number(r?.ok ?? 0), failed30: Number(r?.failed ?? 0), successRate: r?.n ? Math.round((Number(r.ok) / r.n) * 100) : null,
       proposed: p?.n ?? 0, approved: Number(p?.approved ?? 0), auto: Number(p?.auto ?? 0), pending: Number(p?.pending ?? 0), tools: def.tools, actions: def.actions,
+      ...(statsMissing ? { statsMissing } : {}),
     };
   });
 }
