@@ -272,6 +272,15 @@ describe("rows", () => {
     expect(res.rows.every((r) => r.label != null)).toBe(true);
   });
 
+  it("shows a unit's current lease only while it runs and the unit isn't vacant", async () => {
+    // p01-u1: lease still "Active" but ended before as_of (2026-10-28). p01-u2: lease runs, unit marked Vacant.
+    await db.prepare("UPDATE leases SET end_on = '2026-09-30' WHERE id = 'l-p01-u1'").run();
+    await db.prepare("UPDATE units SET status = 'Vacant' WHERE id = 'p01-u2'").run();
+    const c = await ctx("daniel");
+    for (const id of ["p01-u1", "p01-u2"]) expect(await getRow(c, "units", id)).toMatchObject({ rent: null, resident: null, lease_end: null });
+    expect(await getRow(c, "units", "p02-u1")).toMatchObject({ rent: 1450, resident: "Household p02-u1", lease_end: "2026-12-31" });
+  });
+
   it("derives charge status from payments", async () => {
     const c = await ctx("daniel");
     expect((await getRow(c, "charges", "c-p01-u1"))!.status).toBe("Paid");

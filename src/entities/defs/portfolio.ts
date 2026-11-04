@@ -155,6 +155,10 @@ registerEntity({
   help: { summary: "Every community, small multifamily group, commercial NNN building and single-family portfolio you manage, with live occupancy, NOI and delinquency.", article: "properties" },
 });
 
+// A unit's current lease: one still running on the demo date (month-to-month runs past its end
+// date), on a unit that isn't vacant. Seeded "Active" leases past their end are data-health issues.
+const CURRENT_LEASE = `units.status NOT IN ('Vacant', 'Make-ready', 'Down') AND (l.status = 'Month-to-month' OR (l.status IN ('Active', 'Notice') AND l.end_on >= ${AS_OF})) ORDER BY l.start_on DESC LIMIT 1`;
+
 registerEntity({
   key: "units",
   table: "units",
@@ -180,11 +184,11 @@ registerEntity({
     sqft: { type: "number", label: "Sq ft", sortable: true, list: { default: true, align: "right" } },
     market_rent: { type: "money", label: "Market rent", column: "market_rent_cents", sortable: true, list: { default: true, align: "right" }, editable: [...OPS] },
     rent: { type: "money", label: "Lease rent", sortable: true, list: { default: true, align: "right" },
-      sql: "(SELECT l.rent_cents FROM {leases} l WHERE l.unit_id = units.id AND l.status IN ('Active', 'Notice', 'Month-to-month') ORDER BY l.start_on DESC LIMIT 1)" },
+      sql: `(SELECT l.rent_cents FROM {leases} l WHERE l.unit_id = units.id AND ${CURRENT_LEASE})` },
     resident: { type: "text", label: "Resident", search: true, list: { default: true },
-      sql: "(SELECT h.name FROM {leases} l JOIN {households} h ON h.id = l.household_id WHERE l.unit_id = units.id AND l.status IN ('Active', 'Notice', 'Month-to-month') ORDER BY l.start_on DESC LIMIT 1)" },
+      sql: `(SELECT h.name FROM {leases} l JOIN {households} h ON h.id = l.household_id WHERE l.unit_id = units.id AND ${CURRENT_LEASE})` },
     lease_end: { type: "date", label: "Lease ends", sortable: true, list: { default: true },
-      sql: "(SELECT l.end_on FROM {leases} l WHERE l.unit_id = units.id AND l.status IN ('Active', 'Notice', 'Month-to-month') ORDER BY l.start_on DESC LIMIT 1)" },
+      sql: `(SELECT l.end_on FROM {leases} l WHERE l.unit_id = units.id AND ${CURRENT_LEASE})` },
     days_vacant: { type: "number", label: "Days vacant", sortable: true, list: { default: false, align: "right" },
       sql: `CASE WHEN units.status IN ('Vacant', 'Make-ready', 'Down') THEN CAST(julianday(${AS_OF}) - julianday(coalesce((SELECT max(l.move_out_on) FROM {leases} l WHERE l.unit_id = units.id), units.available_on)) AS INTEGER) END` },
     available_on: { type: "date", label: "Available", sortable: true, list: { default: false } },
