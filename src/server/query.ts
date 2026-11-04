@@ -8,6 +8,7 @@ import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type Enti
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
 import { forgetInboxCounts } from "@/extensions/inbox/counts";
+import { BULK_MATCH_CAP } from "@/lib/bulk";
 import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
@@ -448,6 +449,19 @@ const csvCell = (v: unknown) => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+// "Select all matching" on a list: the ids under the same scope, search and filters, in list
+// order, up to `cap`. Keyset pages, so it costs one query per 100 ids.
+export async function matchingIds(ctx: QueryCtx, entity: string, q: ListQuery, cap = BULK_MATCH_CAP): Promise<{ ids: string[]; capped: boolean }> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const res = await list(ctx, entity, { ...q, size: PAGE_SIZE_CAP, cursor, page: 1, rowsOnly: true });
+    ids.push(...res.rows.map((r) => String(r.id)));
+    cursor = res.nextCursor;
+  } while (cursor && ids.length < cap);
+  return { ids: ids.slice(0, cap), capped: ids.length > cap || (ids.length === cap && !!cursor) };
+}
+
 // Streams the CSV page by page (keyset cursor), so up to EXPORT_CAP rows never sit in memory.
 // Validation errors (unknown filter, no read access) throw before the stream starts.
 export async function exportCsv(ctx: QueryCtx, entity: string, q: ListQuery): Promise<ReadableStream<Uint8Array>> {
@@ -843,6 +857,19 @@ export async function deleteView(ctx: WriteCtx, id: string) {
 // ---------------------------------------------------------------------------------------------
 // URL ⇄ ListQuery (pages and the API share one encoding)
 // ---------------------------------------------------------------------------------------------
+
+// A built-in view key in the URL (?view=expiring-60, used by persona quick links) applies that
+// view's state when the URL doesn't already carry filters of its own.
+export function withView(def: EntityDef, sp: URLSearchParams): URLSearchParams {
+  const key = sp.get("view");
+  const v = key && def.list.savedViews?.find((x) => x.key === key);
+  if (!v || [...sp.keys()].some((k) => k.startsWith("f.") || k === "q" || k === "sort")) return sp;
+  const out = new URLSearchParams(sp);
+  if (v.q) out.set("q", v.q);
+  for (const [k, val] of Object.entries(v.filters ?? {})) out.set(`f.${k}`, Array.isArray(val) ? val.join(",") : val);
+  if (v.sort) out.set("sort", v.sort[1] === "desc" ? `-${v.sort[0]}` : v.sort[0]);
+  return out;
+}
 
 export function parseListQuery(sp: URLSearchParams): ListQuery {
   const filters: Record<string, string | string[]> = {};

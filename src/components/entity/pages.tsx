@@ -12,7 +12,7 @@ import { fillTemplate } from "@/components/app/data-table/params";
 import { StatusBadge } from "@/components/app/display";
 import { DataHealthBadge, type HealthIssue } from "@/components/app/ai/DataHealthBadge";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
-import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, type QueryCtx } from "@/server/query";
+import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
 import { getPlatform } from "@/lib/platform";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -32,19 +32,6 @@ const errMsg = (e: unknown) => (e instanceof QueryError ? e.message : "This list
 // Links from stored data: same-site paths and http(s) only, never javascript: or data: URLs.
 const safeHref = (u: unknown) => (typeof u === "string" && /^(\/(?!\/)|https?:\/\/)/i.test(u) ? u : undefined);
 const attempt = <T,>(p: Promise<T>) => p.then((res) => ({ res, error: null as string | null }), (e) => ({ res: null, error: errMsg(e) }));
-
-// A built-in view key in the URL (?view=expiring-60, used by persona quick links) applies that
-// view's state when the URL doesn't already carry filters of its own.
-function withView(def: EntityDef, sp: URLSearchParams): URLSearchParams {
-  const key = sp.get("view");
-  const v = key && def.list.savedViews?.find((x) => x.key === key);
-  if (!v || [...sp.keys()].some((k) => k.startsWith("f.") || k === "q" || k === "sort")) return sp;
-  const out = new URLSearchParams(sp);
-  if (v.q) out.set("q", v.q);
-  for (const [k, val] of Object.entries(v.filters ?? {})) out.set(`f.${k}`, Array.isArray(val) ? val.join(",") : val);
-  if (v.sort) out.set("sort", v.sort[1] === "desc" ? `-${v.sort[0]}` : v.sort[0]);
-  return out;
-}
 
 async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promise<KpiData[]> {
   return Promise.all(kpis.filter((k) => !k.roles || k.roles.includes(ctx.actor.role)).map(async (k) => {
