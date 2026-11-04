@@ -44,6 +44,16 @@ describe("finance entities and metrics", () => {
     expect(Number(m.previous)).toBeGreaterThan(0);
   });
 
+  it("forecasts rent from cash received (payments not returned), not from what the month's charges were paid", async () => {
+    const { cashForecast } = await import("@/extensions/accounting/metrics");
+    const asOf = String((await db.prepare("SELECT value FROM meta WHERE key = 'as_of'").first<{ value: string }>())!.value).slice(0, 7);
+    const back = (n: number) => { const [y, m] = asOf.split("-").map(Number); return new Date(Date.UTC(y, m - 1 - n, 1)).toISOString().slice(0, 7); };
+    const cash = await db.prepare("SELECT sum(amount_cents) AS c FROM payments WHERE workspace_id = 'base' AND nsf = 0 AND received_on >= ? AND received_on < ?").bind(`${back(3)}-01`, `${asOf}-01`).first<{ c: number }>();
+    const usd = `$${Math.round(Math.floor(cash!.c / 3) / 100).toLocaleString("en-US")}`;
+    const f = await cashForecast({ ...ctx, propertyIds: ctx.actor.propertyIds, asOf });
+    expect(f.assumptions[0]).toContain(`Rent: ${usd} a month (average cash received`);
+  });
+
   it("buckets open payables by age", async () => {
     const m = await metrics(ctx, "payables.aging");
     expect(m.points.map((p) => p.bucket)).toEqual(["Current", "1-30", "31-60", "61+"]);

@@ -169,12 +169,13 @@ const weekLabel = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("
 
 export async function cashForecast(ctx: MetricCtx): Promise<{ opening: number; weeks: ForecastWeek[]; low: ForecastWeek | null; assumptions: string[] }> {
   const today = await asOfDate(ctx);
-  const s = scoped(ctx, "property_id");
   const sb = scoped(ctx, "b.property_id");
   const last3 = [addMonths(ctx.asOf, -3), addMonths(ctx.asOf, -1)];
   const [opening, collected, openBills, recurring, payouts, dist] = await Promise.all([
     trustCash(ctx),
-    ctx.db.prepare(`SELECT coalesce(sum(collected_cents), 0) / 3 AS c FROM metrics_monthly WHERE workspace_id = 'base' AND month BETWEEN ? AND ?${s.sql}`).bind(...last3, ...s.binds).first<{ c: number }>(),
+    // Cash received (payments not returned), whatever charges it paid: metrics_monthly.collected_cents
+    // is what each month's own charges were paid, which is not the cash that arrived.
+    ctx.db.prepare(`SELECT coalesce(sum(p.amount_cents), 0) / 3 AS c FROM ${effective("payments", ctx.ws)} p WHERE p.nsf = 0 AND p.received_on >= ? AND p.received_on < ?${scoped(ctx, "p.property_id").sql}`).bind(`${last3[0]}-01`, `${ctx.asOf}-01`, ...scoped(ctx, "p.property_id").binds).first<{ c: number }>(),
     ctx.db.prepare(`SELECT b.due_on, b.amount_cents FROM ${effective("bills", ctx.ws)} b WHERE b.status IN ('Draft', 'Pending approval', 'Approved', 'Scheduled') AND b.due_on <= ?${sb.sql}`).bind(addDays(today, 91), ...sb.binds).all<{ due_on: string; amount_cents: number }>(),
     ctx.db.prepare(`SELECT b.day_of_month, b.amount_cents FROM ${effective("recurring_bills", ctx.ws)} b WHERE b.active = 1${sb.sql}`).bind(...sb.binds).all<{ day_of_month: number; amount_cents: number }>(),
     ctx.db.prepare(`SELECT coalesce(sum(t.amount_cents), 0) / 3 AS c FROM ${effective("transfers", ctx.ws)} t WHERE t.kind = 'Vendor payout' AND t.status <> 'Returned' AND substr(t.created, 1, 7) BETWEEN ? AND ?${scoped(ctx, "t.property_id").sql}`).bind(...last3, ...scoped(ctx, "t.property_id").binds).first<{ c: number }>(),
@@ -210,7 +211,7 @@ export async function cashForecast(ctx: MetricCtx): Promise<{ opening: number; w
     weeks,
     low,
     assumptions: [
-      `Rent: ${usd(monthlyRent)} a month (average collected, last 3 closed months), 70% in the first 5 days`,
+      `Rent: ${usd(monthlyRent)} a month (average cash received, last 3 closed months), 70% in the first 5 days`,
       `Open bills: ${openBills.results.length} due within 90 days; past-due bills are paid in week 1`,
       `Recurring bills: ${usd(recurringMonthly)} a month on their billing day`,
       `Other vendor spend: ${usd(otherWeekly)} a week (run rate less recurring)`,
