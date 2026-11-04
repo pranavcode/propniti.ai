@@ -21,7 +21,7 @@ registerTour({
   roles: "all",
   steps: [
     { title: "Welcome to Propniti", body: "A two-minute tour of the frame: where things live, how to search, and how to ask the AI. You can leave any time and restart it from Help." },
-    { target: "sidebar", title: "Everything in one sidebar", body: "Portfolio, Operations, Finance and Intelligence. Counts show what is waiting for you. Press ⌘B to collapse it.", placement: "right" },
+    { target: "sidebar", title: "Everything in one sidebar", body: "AI agents, Portfolio, Operations and Finance. Counts show what is waiting for you. Press ⌘B to collapse it.", placement: "right" },
     { target: "search", title: "Search or jump anywhere", body: "⌘K finds properties, units, residents and work orders by name, address or number, and runs commands.", placement: "bottom" },
     { target: "ask", title: "Ask Propniti", body: "⌘J opens the assistant. Ask about your data, tell it to do something, or ask how a feature works. It shows every record it looked up.", placement: "bottom" },
     { target: "notifications", title: "Notifications", body: "Approvals, mentions and agent results land here.", placement: "bottom" },
