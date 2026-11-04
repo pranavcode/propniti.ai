@@ -44,6 +44,14 @@ export function formatDelta(current: number, previous: number | null | undefined
   return `${d >= 0 ? "+" : MINUS}${s}%`;
 }
 
+// Change in a count between periods: "+121" / "−3". A percentage of a small base reads as noise
+// (30 → 151 open work orders is "+403%"), so counts show how many instead.
+export function formatCountDelta(current: number, previous: number | null | undefined): string | null {
+  if (previous == null) return null;
+  const d = current - previous;
+  return `${d >= 0 ? "+" : MINUS}${int.format(Math.abs(d))}`;
+}
+
 export function formatDays(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   return `${int.format(value)} ${Math.abs(value) === 1 ? "day" : "days"}`;

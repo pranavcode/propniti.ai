@@ -514,6 +514,19 @@ describe("metrics", () => {
     const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate", { month: "2026-10" });
     expect(after.points.at(-1)!.collected).toBe(Number(before.points.at(-1)!.collected) + 1450);
   });
+
+  it("counts a live payment toward the month of the charge it pays, and never reads above 100%", async () => {
+    // Paying down a September charge in October is not October collection.
+    await db.batch([
+      db.prepare(`INSERT INTO charges (workspace_id, id, lease_id, household_id, property_id, unit_id, gl_account_id, description, period, due_on, amount_cents, paid_cents) VALUES ('${WS}', 'c-old', 'l-p01-u2', 'h-p01-u2', 'p01', 'p01-u2', 'gl-4000', 'Rent', '2026-09', '2026-09-01', 900000, 900000)`),
+      db.prepare(`INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, charge_id, method, received_on, amount_cents) VALUES ('${WS}', 'pay-old', 'l-p01-u2', 'h-p01-u2', 'p01', 'c-old', 'ACH', '2026-10-29', 900000)`),
+    ]);
+    const before = await metrics(await ctx("marcus", null), "receivables.collections_rate", { month: "2026-10" });
+    const after = await metrics(await ctx("marcus", WS), "receivables.collections_rate", { month: "2026-10" });
+    expect(after.points.at(-1)!.collected).toBe(before.points.at(-1)!.collected);
+    expect(after.value).toBe(before.value);
+    expect(after.value).toBeLessThanOrEqual(1);
+  });
 });
 
 describe("facets", () => {

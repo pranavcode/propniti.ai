@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
+import { formatCountDelta, formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
 
 const now = new Date("2026-11-04T12:00:00Z");
 
@@ -21,6 +21,11 @@ describe("format", () => {
     expect(formatDelta(105, 100)).toBe("+5%");
     expect(formatDelta(97, 100)).toBe("−3%");
     expect(formatDelta(5, 0)).toBeNull();
+    // Counts change by how many, not by a percentage of a small base (30 → 151 is "+121", not "+403%").
+    expect(formatCountDelta(151, 30)).toBe("+121");
+    expect(formatCountDelta(4, 7)).toBe("−3");
+    expect(formatCountDelta(5, 0)).toBe("+5");
+    expect(formatCountDelta(5, null)).toBeNull();
   });
 
   it("formats dates relative to now", () => {
