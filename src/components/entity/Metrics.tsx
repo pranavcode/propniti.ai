@@ -50,11 +50,18 @@ function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
   const flat = (pctPoints ?? delta ?? 0) === 0;
   const good = flat || !k.goodWhen ? null : (up && k.goodWhen === "up") || (!up && k.goodWhen === "down");
   const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
-  const body = (
-    <div className={cn("flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors hover:border-primary/40", improving && "rounded-b-none")}>
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[12px] font-medium text-muted-foreground" title={k.help}>{k.label}</span>
-        {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
+  // The tile drills through a link stretched over it (same pattern as KpiCard).
+  return (
+    <div className={cn("group/kpi relative flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors", k.drill && "hover:border-primary/40 has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring", improving && "rounded-b-none")}>
+      {k.drill && <Link href={k.drill} aria-label={`${k.label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
+      <div className="-mt-1 flex h-6 items-center gap-1.5">
+        <span className="truncate text-[12px] font-medium text-muted-foreground" title={k.help}>{k.label}</span>
+        {(k.asOf || k.drill) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
+            {k.drill && <ArrowUpRight aria-hidden className="size-3.5 text-muted-foreground/50 transition-colors group-hover/kpi:text-foreground" />}
+          </span>
+        )}
       </div>
       {k.error ? <span className="text-[12px] text-muted-foreground">{k.error}</span> : (
         <div className="flex items-end justify-between gap-2">
@@ -73,7 +80,6 @@ function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
       )}
     </div>
   );
-  return k.drill ? <Link href={k.drill} className={cn("block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg", improving && "rounded-b-none")}>{body}</Link> : body;
 }
 
 export type ChartData = { key: string; title: string; kind: "line" | "area" | "bar" | "stacked" | "hbar" | "funnel" | "donut"; x: string; series: { key: string; label: string; format?: Fmt }[]; drill?: string; points: Record<string, unknown>[]; asOf?: string; source?: string; error?: string };
