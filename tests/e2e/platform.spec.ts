@@ -52,3 +52,17 @@ test("anyone sets their own notification preferences", async ({ context, page })
   await reload(page);
   await expect(page.getByRole("switch", { name: "Agent run results by SMS" })).toHaveAttribute("aria-checked", before === "true" ? "false" : "true");
 });
+
+test("sidebar marks only AI-powered pages with a sparkle", async ({ context, page }) => {
+  await as(context, "sam");
+  await go(page, `${BASE}/app`);
+  const nav = page.getByRole("navigation", { name: "Main" });
+  for (const name of ["Copilot", "Agents", "Approvals", "AI activity", "Data health"]) {
+    await expect(nav.getByRole("link", { name: new RegExp(`^${name}.*\\(AI-powered\\)`) })).toBeVisible();
+  }
+  for (const name of ["Dashboard", "Inbox", "Automations", "Properties"]) {
+    const link = nav.getByRole("link", { name: new RegExp(`^${name}`) }).first();
+    await expect(link).toBeVisible();
+    await expect(link.locator("[data-ai-mark]")).toHaveCount(0);
+  }
+});
