@@ -20,6 +20,7 @@ export const issueRecord = (i: Issue) => `${i.entity_label ?? humanizeKey(i.enti
 
 // What a person does for rules whose fix is a named step rather than field changes.
 export const NEXT_STEP: Record<string, string> = {
+  "residents.possible_duplicate": "Compare the two residents and merge this one into the older record if they're the same person.",
   "vendors.unverified_bank_change": "Call the vendor on a number already on file to confirm the new bank details. Payments stay on hold until then.",
   "vendors.missing_w9": "Request a W-9 from the vendor before the next payment.",
   "bills.possible_duplicate": "Compare it with the paid bill and void this one if it's the same invoice.",

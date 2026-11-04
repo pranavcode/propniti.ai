@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
+import { generate } from "@/seed/generate";
 import { get } from "../data";
 import { applyFixes, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
@@ -173,8 +174,10 @@ describe("Data Health issues with no automatic fix", () => {
     expect(p.nextStep).toEqual({ text: NEXT_STEP["vendors.unverified_bank_change"], href: "/app/maintenance/vendors/v01", label: "Open vendor" });
   });
 
-  it("has a next step for every seeded rule whose fix is a named action", () => {
-    for (const rule of ["vendors.unverified_bank_change", "vendors.missing_w9", "bills.possible_duplicate", "bills.amount_outlier", "bank_transactions.unmatched_deposit", "compliance_items.overdue", "owner_distributions.rounding_cent", "documents.import_swapped_columns", "documents.misfiled"]) expect(NEXT_STEP[rule], rule).toBeTruthy();
+  it("has a next step for every seeded rule whose fix is a named action", { timeout: 120_000 }, () => {
+    const rules = new Set(generate().tables.data_issues.filter((i) => (JSON.parse(String(i.suggested_fix ?? "null")) as { action?: string } | null)?.action).map((i) => String(i.rule_id)));
+    expect(rules.size).toBeGreaterThan(5);
+    for (const rule of rules) expect(NEXT_STEP[rule], rule).toBeTruthy();
   });
 });
 
