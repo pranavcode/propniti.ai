@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AIBadge, Confidence, type AISource } from "@/components/app/ai";
 import { Money, StatusBadge } from "@/components/app/display";
 import { ConfirmDialog } from "@/components/app/forms";
+import { DateInput } from "@/components/app/forms/DateInput";
 import { hardStop, proposeGl, runChecks, type Check, type GlOption, type VendorFacts } from "./checks";
 import { post, runBillAction } from "./actions-client";
 import type { ExtractedInvoice } from "./samples";
@@ -262,8 +263,8 @@ export function Workspace({ item, vendors, properties, gls, today, canPay }: Pro
                 </Field>
                 <Field label="Invoice #"><Input value={invoice} disabled={locked} onChange={(e) => setInvoice(e.target.value)} name="invoice_number" autoComplete="off" /></Field>
                 <Field label="Total"><div className="flex h-8 items-center justify-end rounded-lg border bg-muted/40 px-2.5 font-semibold"><Money value={total / 100} /></div></Field>
-                <Field label="Bill date"><Input type="date" value={billDate} disabled={locked} onChange={(e) => setBillDate(e.target.value)} name="bill_date" /></Field>
-                <Field label="Due"><Input type="date" value={dueOn} disabled={locked} onChange={(e) => setDueOn(e.target.value)} name="due_on" /></Field>
+                <Field label="Bill date"><DateInput value={billDate} disabled={locked} onChange={setBillDate} name="bill_date" aria-label="Bill date" /></Field>
+                <Field label="Due"><DateInput value={dueOn} disabled={locked} onChange={setDueOn} name="due_on" aria-label="Due" /></Field>
               </div>
 
               <div className="flex flex-col gap-1.5">

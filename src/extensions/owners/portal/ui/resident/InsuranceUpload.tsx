@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DateInput } from "@/components/app/forms/DateInput";
 import { usePortalAction } from "../usePortalAction";
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -121,8 +122,8 @@ export function InsuranceUpload({ me, today, label = "Upload declarations page",
                 {field("policyNumber", <Input id="ri-policyNumber" value={fields.policyNumber} onChange={set("policyNumber")} maxLength={60} autoComplete="off" />)}
                 {field("liability", <Input id="ri-liability" inputMode="numeric" value={fields.liability} onChange={set("liability")} placeholder="100000" className="tabular-nums" />)}
                 <div className="hidden sm:block" />
-                {field("startsOn", <Input id="ri-startsOn" type="date" value={fields.startsOn} onChange={set("startsOn")} />)}
-                {field("expiresOn", <Input id="ri-expiresOn" type="date" min={today} value={fields.expiresOn} onChange={set("expiresOn")} />)}
+                {field("startsOn", <DateInput id="ri-startsOn" value={fields.startsOn} onChange={(v) => setFields((f) => ({ ...f, startsOn: v }))} />)}
+                {field("expiresOn", <DateInput id="ri-expiresOn" min={today} value={fields.expiresOn} onChange={(v) => setFields((f) => ({ ...f, expiresOn: v }))} />)}
               </div>
             )}
             <DialogFooter>
