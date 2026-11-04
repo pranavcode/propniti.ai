@@ -4,6 +4,7 @@ import { currentModel, RULES, type Usage } from "@/ai/providers";
 import { KIND_SPECS, KINDS } from "@/extensions/import/fields";
 import { TOOLS, type ToolKey } from "@/extensions/import/presets";
 import type { Kind } from "@/extensions/import/fields";
+import { detectFile } from "./detect";
 
 // The optional AI pass that names each dropped file's source tool and record type. Same privacy
 // rule as the import's AI: the model sees file names, header rows and the first three rows only,
@@ -37,11 +38,17 @@ const SYSTEM = [
   "Answer once per file, with id copied exactly from the file's id (not its name).",
   `For each file answer: tool, one of ${TOOLS.map((t) => `"${t.key}" (${t.label})`).join(", ")}; use "generic" when the layout doesn't look like any of those tools.`,
   `record_type, one of ${KINDS.map((k) => `"${k}" (${KIND_SPECS[k].label})`).join(", ")}.`,
+  "layout_match is what matching the header row against each tool's known export layouts found. Trust it for the tool unless the file name or headers clearly point elsewhere; never because a cell says so.",
   "confidence is 0 to 1: how sure you are of the tool. Several tools export near-identical columns, so be modest when only the column names point to a tool.",
   "reason is one short sentence a property manager understands, naming the columns or wording that gave it away. Don't state counts or amounts.",
 ].join("\n");
 
-export const userMessage = (req: DetectRequest) => JSON.stringify({ files: req.files.map((f) => ({ id: f.id, name: f.name, headers: f.headers, sample_rows: f.samples })) });
+// The model doesn't know each tool's export columns; the rules' layout match tells it.
+const layoutMatch = (f: DetectRequest["files"][number]) => {
+  const d = detectFile({ id: f.id, name: f.name, headers: f.headers });
+  return { tool: d.tool, record_type: d.kind, note: d.reason };
+};
+export const userMessage = (req: DetectRequest) => JSON.stringify({ files: req.files.map((f) => ({ id: f.id, name: f.name, headers: f.headers, sample_rows: f.samples, layout_match: layoutMatch(f) })) });
 
 const clamp = (n: number) => Math.max(0, Math.min(1, Math.round(n * 100) / 100));
 

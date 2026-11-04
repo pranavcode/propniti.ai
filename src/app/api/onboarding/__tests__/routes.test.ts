@@ -132,7 +132,7 @@ describe("POST /api/onboarding/detect", () => {
     const out = await res.json();
     expect(out).toMatchObject({ live: true, source: "Claude Sonnet", detections: [{ id: "f1", tool: "appfolio", kind: "rent_roll", confidence: 1 }] });
     expect(out.detections).toHaveLength(1);
-    expect(JSON.parse(sent)).toEqual({ files: [{ id: "f1", name: "export.csv", headers: body.files[0]!.headers, sample_rows: body.files[0]!.samples }] });
+    expect(JSON.parse(sent)).toMatchObject({ files: [{ id: "f1", name: "export.csv", headers: body.files[0]!.headers, sample_rows: body.files[0]!.samples, layout_match: { tool: expect.any(String), record_type: "rent_roll" } }] });
   });
 
   it("falls back to rules when the model fails", async () => {
