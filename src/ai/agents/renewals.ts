@@ -1,7 +1,7 @@
 import { demoNowIso } from "@/lib/clock";
 import type { Row } from "@/entities/types";
 import { daysBetween, sql } from "../data";
-import { addDays, defineAgent, money, type Candidate } from "./framework";
+import { addDays, defineAgent, money, planOf, type Candidate } from "./framework";
 import { letterDates, renewalRent } from "../rules";
 import type { AgentCtx } from "../runtime";
 export { renewalRent } from "../rules";
@@ -10,6 +10,8 @@ export { renewalRent } from "../rules";
 // market rent, capped at +5%; never raise a resident who is behind on rent without a person.
 // Also follows up on sent offers nobody answered when the lease ends within 14 days: a reminder,
 // or, within 3 days, a notice that the lease would go month to month (legal wording, so a person decides).
+
+export const RENEWAL_WINDOW_DAYS = 90;
 
 export default defineAgent({
   key: "renewals",
@@ -22,11 +24,13 @@ export default defineAgent({
   entities: ["leases", "renewal_offers"],
   actions: ["leases.send_renewal_offer", "renewal_offers.follow_up"],
   maxProposals: 8,
-  async collect(ctx) {
-    const end = addDays(ctx.today, 90);
-    const found = await ctx.call<{ rows: Row[]; total: number }>("records.search", { entity: "leases", filters: [{ field: "status", op: "eq", value: "Active" }, { field: "end_on", op: "gte", value: ctx.today }, { field: "end_on", op: "lte", value: end }], sort: ["end_on", "asc"], size: 50 });
+  async collect(ctx, trigger) {
+    const end = addDays(ctx.today, RENEWAL_WINDOW_DAYS);
+    const plan = planOf(trigger);
+    const found = await ctx.call<{ rows: Row[]; total: number }>("records.search", { entity: "leases", filters: [{ field: "status", op: "eq", value: "Active" }, { field: "end_on", op: "gte", value: ctx.today }, { field: "end_on", op: "lte", value: end }, ...(plan ? [{ field: "id", op: "in", value: plan.ids.slice(0, 50) }] : [])], sort: ["end_on", "asc"], size: 50 });
     const ids = found.rows.map((l) => String(l.id));
-    const reminders = await unanswered(ctx);
+    // A plan names leases; follow-ups then only cover those leases' offers.
+    const reminders = (await unanswered(ctx)).filter((c) => !plan || plan.ids.includes(String(c.evidence?.[0]?.entity_id)));
     if (!ids.length) return reminders;
     const rows = await sql<Row>(ctx.data,
       `SELECT l.id, l.property_id, l.end_on, l.rent_cents, u.number AS unit, u.market_rent_cents, p.name AS property, r.id AS resident_id, r.first_name, r.last_name, r.risk_score,

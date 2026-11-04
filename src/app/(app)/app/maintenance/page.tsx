@@ -12,6 +12,7 @@ import type { ProposalJson } from "@/ai/ui/client";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
+import { ImprovableKpi } from "@/components/app/ai/ImproveWithAI";
 import { StatusBadge } from "@/components/app/display";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
@@ -157,7 +158,7 @@ export default async function MaintenanceHome() {
         </div>
 
         <KpiRow className="xl:grid-cols-6">
-          <KpiCard label="SLA met" format="pct" value={sla.v?.value ?? null} previous={sla.v?.previous ?? null} spark={sla.v?.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote={`${Number(c.past_sla ?? 0)} open past due now`} help="Work orders completed by their SLA due time, over work orders due this month. Open jobs past due count as missed. Emergency 4 h, urgent 24 h, normal 72 h." />
+          <ImprovableKpi metric="maintenance.sla" red={Number(c.past_sla ?? 0) > 0 || undefined} label="SLA met" format="pct" value={sla.v?.value ?? null} previous={sla.v?.previous ?? null} spark={sla.v?.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote={`${Number(c.past_sla ?? 0)} open past due now`} help="Work orders completed by their SLA due time, over work orders due this month. Open jobs past due count as missed. Emergency 4 h, urgent 24 h, normal 72 h." />
           <KpiCard label="Open work orders" format="count" value={Number(c.open ?? 0)} spark={open.v?.spark} goodWhen="down" href="/app/maintenance/work-orders?view=open" footnote={`${Number(c.on_hold ?? 0)} on hold`} />
           <KpiCard label="Waiting to dispatch" format="count" value={Number(c.untriaged ?? 0)} goodWhen="down" href="/app/maintenance/work-orders?f.status=New,Triaged" footnote="New and triaged" />
           <KpiCard label="Invoices to approve" format="money" value={invoiceTotal / 100} goodWhen="down" href="/app/maintenance/work-orders?view=awaiting-approval" footnote={`${h?.invoices.length ?? 0} submitted`} />

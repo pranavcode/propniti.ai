@@ -2,10 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Term } from "../Term";
 import { fillTemplate } from "../data-table/params";
 import { EmptyState } from "../states";
 import { formatValue, seriesColor } from "./fmt";
@@ -58,20 +57,16 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
   else if (!data.length) body = <EmptyState compact kind="chart" title="No data for this period" description={empty ?? "Change the date range or filters."} className="py-6" />;
   else if (kind === "funnel") body = <Funnel data={data} x={x} series={series[0]!} onPoint={onPoint} />;
   else if (kind === "heatmap" && heatmap) body = <Heatmap data={data} row={x} {...heatmap} onPoint={onPoint} />;
-  else if (kind !== "heatmap") body = <Recharts kind={kind} data={data} x={x} series={series} height={height} onPoint={onPoint} />;
+  else if (kind === "donut") body = <Recharts kind={kind} data={data} x={x} series={series} height={height} onPoint={onPoint} />;
+  // Line, area and bar charts fill the card, so cards in one grid row end level; `height` is the minimum.
+  else if (kind !== "heatmap") body = <div className="relative flex-1" style={{ minHeight: height }}><div className="absolute inset-0 overflow-hidden"><Recharts kind={kind} data={data} x={x} series={series} height={height} onPoint={onPoint} /></div></div>;
 
   return (
-    <div className={cn("flex min-w-0 flex-col rounded-lg border bg-card", className)}>
+    <div className={cn("flex h-full min-w-0 flex-col rounded-lg border bg-card", className)}>
       <div className="flex items-start gap-2 px-4 pt-3.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h3 className="truncate text-[13px] font-semibold tracking-tight">{title}</h3>
-            {help && (
-              <Tooltip>
-                <TooltipTrigger asChild><button className="text-muted-foreground/60 hover:text-foreground" aria-label={`About ${title}`}><Info className="size-3" /></button></TooltipTrigger>
-                <TooltipContent className="max-w-64">{help}</TooltipContent>
-              </Tooltip>
-            )}
+            <h3 className="min-w-0 truncate text-[13px] font-semibold tracking-tight"><Term help={help}>{title}</Term></h3>
           </div>
           {description && <p className="truncate text-[12px] text-muted-foreground">{description}</p>}
         </div>
@@ -81,12 +76,12 @@ export function ChartCard({ title, description, kind, data, x, series, drill, he
         <ul className="flex flex-wrap gap-x-3 gap-y-1 px-4 pt-2 text-[11.5px] text-muted-foreground">
           {series.map((s, i) => (
             <li key={s.key} className="flex items-center gap-1.5">
-              <span className={cn("shrink-0 rounded-[2px]", s.dashed ? "h-0.5 w-3" : "size-2")} style={{ background: seriesColor(i, s.color) }} />{s.label}
+              <span className={cn("shrink-0 rounded-[2px]", s.dashed ? "h-0.5 w-3" : "size-2")} style={{ background: seriesColor(i, s.color) }} /><Term>{s.label}</Term>
             </li>
           ))}
         </ul>
       )}
-      <div className="px-4 pt-3 pb-4">{body}</div>
+      <div className="flex flex-1 flex-col justify-center px-4 pt-3 pb-4">{body}</div>
       {footer && <div className="border-t px-4 py-2 text-[12px] text-muted-foreground">{footer}</div>}
     </div>
   );

@@ -5,6 +5,8 @@ import { ArrowRight, Banknote, Gavel, Landmark, Scale } from "lucide-react";
 import { can } from "@/entities";
 import { ChartCard } from "@/components/app/dashboard/ChartCard";
 import { KpiCard } from "@/components/app/dashboard/KpiCard";
+import { ImprovableKpi } from "@/components/app/ai/ImproveWithAI";
+import { THRESHOLDS } from "@/ai/improve/meta";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { getPlatform } from "@/lib/platform";
@@ -57,6 +59,9 @@ export default async function ReceivablesPage() {
   const closed = (rate?.points ?? []).filter((p) => String(p.month) < AS_OF.slice(0, 7));
   const rateNow = closed.at(-1), ratePrev = closed.at(-2);
   const pct = (p?: Record<string, unknown>) => (p && Number(p.charged) ? Number(p.collected) / Number(p.charged) : null);
+  // Red when balances over 30 days late pass 2% of the last closed month's charges.
+  const over30 = (aging?.points ?? []).slice(1).reduce((s, p) => s + Number(p.amount ?? 0), 0);
+  const pastDueRed = !!rateNow && Number(rateNow.charged) > 0 && over30 / Number(rateNow.charged) > THRESHOLDS.over30OfRentRoll;
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
@@ -66,7 +71,7 @@ export default async function ReceivablesPage() {
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <KpiCard label="Past due" value={aging?.value ?? null} format="money" href="/app/receivables/delinquency" footnote={aging ? `${usd(Math.round(Number(aging.points.at(-1)?.amount ?? 0) * 100))} over 90 days` : "Couldn't load"} goodWhen="down" help="Open balances on charges past their due date, live from the ledger." />
+        <ImprovableKpi metric="receivables.aging_live" red={pastDueRed} label="Past due" value={aging?.value ?? null} format="money" href="/app/receivables/delinquency" footnote={aging ? `${usd(Math.round(Number(aging.points.at(-1)?.amount ?? 0) * 100))} over 90 days` : "Couldn't load"} goodWhen="down" help="Open balances on charges past their due date, live from the ledger." />
         <KpiCard label="Collections rate" value={pct(rateNow)} previous={pct(ratePrev)} format="pct" href={rateNow ? `/app/receivables/charges?f.period=${String(rateNow.month)}` : undefined} footnote={rateNow ? `${String(rateNow.month)}, collected of charged` : "Couldn't load"} spark={closed.map((p) => pct(p) ?? 0)} help="Share of the month's rent and fees paid so far. Payments go to the oldest charge first, so paying down an older balance counts for that older month." />
         <KpiCard label="Deposits in transit" value={transit ? transit.cents / 100 : null} format="money" href="/app/receivables/payments?f.status=Processing" footnote={transit ? `${transit.count} not yet cleared to trust` : "Couldn't load"} />
         <NsfCard actor={session.actor} />

@@ -89,7 +89,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
 
   if (kind === "hbar") {
     return (
-      <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
+      <ChartContainer config={config} className={cn("size-full aspect-auto", cursor)}>
         <BarChart data={data} layout="vertical" margin={{ left: 0, right: 12 }} onClick={click} barCategoryGap="22%">
           <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis type="number" tick={tick} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatTick(v, fmt)} />
@@ -104,7 +104,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
   if (kind === "bar" || kind === "stacked") {
     const stacked = kind === "stacked";
     return (
-      <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
+      <ChartContainer config={config} className={cn("size-full aspect-auto", cursor)}>
         <BarChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click} barCategoryGap={stacked ? "28%" : "20%"}>
           {grid}{xAxis}{yAxis}{tooltip}
           {series.map((s, i) => <Bar key={s.key} dataKey={s.key} stackId={stacked ? "a" : undefined} fill={`var(--color-${s.key})`} radius={stacked ? (i === series.length - 1 ? [4, 4, 0, 0] : 0) : [4, 4, 0, 0]} stroke={stacked ? "var(--card)" : undefined} strokeWidth={stacked ? 2 : 0} isAnimationActive={false} />)}
@@ -115,7 +115,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
 
   if (kind === "area") {
     return (
-      <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
+      <ChartContainer config={config} className={cn("size-full aspect-auto", cursor)}>
         <AreaChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
           <defs>{series.map((s) => <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={`var(--color-${s.key})`} stopOpacity={0.22} /><stop offset="100%" stopColor={`var(--color-${s.key})`} stopOpacity={0.02} /></linearGradient>)}</defs>
           {grid}{xAxis}{yAxis}{tooltip}
@@ -126,7 +126,7 @@ export default function RechartsChart({ kind, data, x, series, height, onPoint }
   }
 
   return (
-    <ChartContainer config={config} className={cn("w-full", cursor)} style={{ height }}>
+    <ChartContainer config={config} className={cn("size-full aspect-auto", cursor)}>
       <LineChart data={data} margin={{ left: 0, right: 4, top: 4 }} onClick={click}>
         {/* Lines encode change, not magnitude, so the scale fits the data instead of starting at zero. */}
         {grid}{xAxis}<YAxis tick={tick} tickLine={false} axisLine={false} width={52} domain={["auto", "auto"]} tickFormatter={(v: number) => formatTick(v, fmt)} />{tooltip}

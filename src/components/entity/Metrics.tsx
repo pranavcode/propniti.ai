@@ -8,6 +8,8 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { fillTemplate } from "@/components/app/data-table/params";
 import { formatCountDelta, formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useImprove } from "@/components/app/ai/ImproveWithAI";
+import { Term } from "@/components/app/Term";
 
 // KPI tiles and chart panels fed by metrics() (plain data). Every tile and chart point links to
 // the rows behind it (KpiDef.drill / ChartDef.drill templates).
@@ -34,9 +36,15 @@ function Spark({ values, good }: { values: number[]; good: boolean | null }) {
   );
 }
 
-export type KpiData = { key: string; label: string; format: Fmt; value: number | null; previous: number | null; spark: number[]; goodWhen?: "up" | "down"; drill?: string; help?: string; asOf?: string; error?: string };
+export type KpiData = { key: string; metric?: string; property?: string; label: string; format: Fmt; value: number | null; previous: number | null; spark: number[]; goodWhen?: "up" | "down"; drill?: string; help?: string; asOf?: string; error?: string };
 
 export function KpiTile({ k }: { k: KpiData }) {
+  const imp = useImprove({ metric: k.metric ?? "", property: k.property, label: k.label, value: k.error ? null : k.value, previous: k.previous, goodWhen: k.goodWhen, format: k.format });
+  const tile = <Tile k={k} improving={imp.shown} />;
+  return imp.strip ? <div className="flex min-w-0 flex-col [&>*:first-child]:flex-1">{tile}{imp.strip}</div> : tile;
+}
+
+function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
   const delta = k.value != null && k.previous != null && k.previous !== 0 ? (k.value - k.previous) / Math.abs(k.previous) : null;
   const pctPoints = k.format === "pct" && k.value != null && k.previous != null ? (k.value - k.previous) * 100 : null;
   // Counts move by how many: a percentage of a small base ("380%") says little.
@@ -45,11 +53,18 @@ export function KpiTile({ k }: { k: KpiData }) {
   const flat = countChange != null ? k.value === k.previous : (pctPoints ?? delta ?? 0) === 0;
   const good = flat || !k.goodWhen ? null : (up && k.goodWhen === "up") || (!up && k.goodWhen === "down");
   const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
-  const body = (
-    <div className="flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors hover:border-primary/40">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[12px] font-medium text-muted-foreground" title={k.help}>{k.label}</span>
-        {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
+  // The tile drills through a link stretched over it (same pattern as KpiCard).
+  return (
+    <div className={cn("group/kpi relative flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors", k.drill && "hover:border-primary/40 has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring", improving && "rounded-b-none")}>
+      {k.drill && <Link href={k.drill} aria-label={`${k.label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
+      <div className="-mt-1 flex h-6 items-center gap-1.5">
+        <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground"><Term help={k.help} className="relative z-10">{k.label}</Term></span>
+        {(k.asOf || k.drill) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
+            {k.drill && <ArrowUpRight aria-hidden className="size-3.5 text-muted-foreground/50 transition-colors group-hover/kpi:text-foreground" />}
+          </span>
+        )}
       </div>
       {k.error ? <span className="text-[12px] text-muted-foreground">{k.error}</span> : (
         <div className="flex items-end justify-between gap-2">
@@ -68,7 +83,6 @@ export function KpiTile({ k }: { k: KpiData }) {
       )}
     </div>
   );
-  return k.drill ? <Link href={k.drill} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg">{body}</Link> : body;
 }
 
 export type ChartData = { key: string; title: string; kind: "line" | "area" | "bar" | "stacked" | "hbar" | "funnel" | "donut"; x: string; series: { key: string; label: string; format?: Fmt }[]; drill?: string; points: Record<string, unknown>[]; asOf?: string; source?: string; error?: string };
@@ -132,14 +146,14 @@ export function ChartPanel({ c }: { c: ChartData }) {
   }
 
   return (
-    <section className="flex flex-col rounded-lg border bg-card">
+    <section className="flex h-full flex-col rounded-lg border bg-card">
       <header className="flex items-baseline justify-between gap-2 px-4 pt-3">
-        <h3 className="text-[13px] font-semibold">{c.title}</h3>
+        <h3 className="text-[13px] font-semibold"><Term>{c.title}</Term></h3>
         {c.drill && <span className="text-[11px] text-muted-foreground">Click to drill in</span>}
       </header>
       {c.error || !c.points.length
         ? <p className="px-4 py-10 text-center text-[12.5px] text-muted-foreground">{c.error ?? "No data for this period yet."}</p>
-        : <ChartContainer config={config} className={cn("w-full px-2 pb-2", c.kind === "hbar" ? "h-80" : "h-56")}>{chart}</ChartContainer>}
+        : <div className={cn("relative flex-1", c.kind === "hbar" ? "min-h-80" : "min-h-56")}><ChartContainer config={config} className="absolute inset-0 aspect-auto px-2 pb-2">{chart}</ChartContainer></div>}
       {c.source && <footer className="border-t px-4 py-1.5 text-[10.5px] text-muted-foreground">Source: {c.source}{c.asOf ? ` · through ${monthLabel(c.asOf)}` : ""}</footer>}
     </section>
   );

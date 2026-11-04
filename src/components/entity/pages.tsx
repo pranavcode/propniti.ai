@@ -2,7 +2,7 @@ import "server-only";
 import Link from "@/components/Link";
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
-import { ChevronRight, CircleHelp, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import { allEntities, can, getEntity, type ChartDef, type EntityDef, type KpiDef, type ListQuery, type Row, type TabDef } from "@/entities";
 import { getTab } from "@/extensions/tabs";
 import { cachedSummary } from "@/ai/summaries";
@@ -16,6 +16,7 @@ import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery,
 import { getPlatform } from "@/lib/platform";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Term } from "@/components/app/Term";
 import { EntityList } from "./EntityList";
 import { ChartPanel, KpiTile, type ChartData, type KpiData } from "./Metrics";
 import { RecordActions } from "./RecordActions";
@@ -36,7 +37,7 @@ const attempt = <T,>(p: Promise<T>) => p.then((res) => ({ res, error: null as st
 
 async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promise<KpiData[]> {
   return Promise.all(kpis.filter((k) => !k.roles || k.roles.includes(ctx.actor.role)).map(async (k) => {
-    const base = { key: k.key, label: k.label, format: k.format, goodWhen: k.goodWhen, drill: k.drill && property ? `${k.drill}${k.drill.includes("?") ? "&" : "?"}f.property_id=${property}` : k.drill, help: k.help?.summary };
+    const base = { key: k.key, metric: k.metric, property, label: k.label, format: k.format, goodWhen: k.goodWhen, drill: k.drill && property ? `${k.drill}${k.drill.includes("?") ? "&" : "?"}f.property_id=${property}` : k.drill, help: k.help?.summary };
     try {
       const m = await metrics(ctx, k.metric, { property });
       return { ...base, value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], asOf: m.asOf };
@@ -162,7 +163,7 @@ function FieldGrid({ def, row, keys, role }: { def: EntityDef; row: Row; keys: s
         const f = def.fields[k];
         return (
           <div key={k} className="min-w-0 border-b border-dashed pb-2">
-            <dt className="flex items-center gap-1 text-[11.5px] text-muted-foreground">{f.label}{f.help && <span title={f.help.summary}><CircleHelp className="size-3" /></span>}</dt>
+            <dt className="flex items-center gap-1 text-[11.5px] text-muted-foreground"><Term help={f.help}>{f.label}</Term></dt>
             <dd className="mt-0.5 min-w-0 truncate text-[13px]">
               {f.type === "json"
                 ? <span className="whitespace-normal break-words text-[12.5px]">{Array.isArray(row[k]) ? (row[k] as unknown[]).map(String).join(", ") || "—" : row[k] == null ? "—" : JSON.stringify(row[k])}</span>
@@ -294,7 +295,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
             const f = def.fields[k];
             return (
               <div key={k} className="min-w-0 border-b border-r px-3 py-2">
-                <dt className="truncate text-[11px] text-muted-foreground">{f.label}</dt>
+                <dt className="flex min-w-0 text-[11px] text-muted-foreground"><span className="min-w-0 truncate"><Term help={f.help}>{f.label}</Term></span></dt>
                 <dd className="mt-0.5 truncate text-[13.5px] font-medium"><Cell col={{ key: k, label: f.label, kind: columnKind(k, f), enum: f.enum, href: f.type === "ref" ? refHref(f, k) : undefined, moneyStyle: "whole" }} row={row} /></dd>
               </div>
             );

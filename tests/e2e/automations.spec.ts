@@ -64,7 +64,7 @@ test("property manager sees the same automations without settings links", async 
   await expect(page.getByRole("table", { name: "Agents" }).getByRole("link", { name: "Compliance Agent", exact: true })).toBeVisible();
   // Autonomy applies to the whole org, so a property manager reads it.
   await expect(page.getByRole("combobox", { name: /Autonomy for/ })).toHaveCount(0);
-  await expect(page.getByRole("table", { name: "Agents" }).getByText("Auto within policy").first()).toBeVisible();
+  await expect(page.getByRole("table", { name: "Agents" }).getByText("Auto within policy").filter({ visible: true }).first()).toBeVisible();
   await expect(page.locator("main a[href^='/app/settings']")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -82,7 +82,7 @@ test("the old settings automations pages lead to the real page", async ({ page, 
 test("AI settings shows the two autonomy levels the runtime has", async ({ page, context }) => {
   await as(context, "sam");
   await go(page, `${BASE}/app/settings/ai`);
-  await expect(page.getByText("Approve first").first()).toBeVisible();
+  await expect(page.getByText("Approve first").filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText(/Suggest only|Act with approval/)).toHaveCount(0);
 });
 

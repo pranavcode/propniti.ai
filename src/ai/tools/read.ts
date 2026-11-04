@@ -84,12 +84,12 @@ registerTool({
 registerTool({
   key: "ledger.delinquency",
   description: "Residents who owe rent: balance, days late and aging buckets per lease, computed from charges, payments and credits. Filter by minimum days late, metro (Austin, Dallas, Atlanta, Phoenix) or property ids.",
-  input: z.object({ min_days: z.number().int().min(0).optional(), metro: z.enum(["Austin", "Dallas", "Atlanta", "Phoenix"]).optional(), property_ids: z.array(z.string()).max(30).optional(), limit: z.number().int().min(1).max(50).default(25) }),
+  input: z.object({ min_days: z.number().int().min(0).optional(), metro: z.enum(["Austin", "Dallas", "Atlanta", "Phoenix"]).optional(), property_ids: z.array(z.string()).max(30).optional(), lease_ids: z.array(z.string().max(80)).max(50).optional(), limit: z.number().int().min(1).max(50).default(25) }),
   output: z.any(),
   mode: "read", roles, requiresApproval: never,
   async run(ctx, i) {
     const c = ac(ctx);
-    return delinquency(c.data, c.today, { minDays: i.min_days, metro: i.metro, propertyIds: i.property_ids, limit: i.limit });
+    return delinquency(c.data, c.today, { minDays: i.min_days, metro: i.metro, propertyIds: i.property_ids, leaseIds: i.lease_ids, limit: i.limit });
   },
 });
 

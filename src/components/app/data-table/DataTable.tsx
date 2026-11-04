@@ -22,6 +22,7 @@ import { useShellMaybe } from "../shell/context";
 import { ConfirmDialog } from "../forms/ConfirmDialog";
 import { EmptyState, ErrorBanner } from "../states";
 import { TONE_DOT } from "../status";
+import { Term } from "../Term";
 import { Cell, isRight } from "./cells";
 import { AiFilter, FacetChip, SearchBox } from "./FilterBar";
 import { fillTemplate, filterKeys, paramsToView, PAGE_SIZES, readSort, readValues, viewToParams } from "./params";
@@ -286,15 +287,20 @@ export function DataTable(props: DataTableProps) {
                       style={{ width: c.id === "__select" ? 36 : meta?.width, minWidth: c.id === "__select" ? 36 : meta?.primary ? 220 : undefined }}
                       className={cn("h-9 border-b bg-muted/60 px-3 text-left text-[12px] font-medium whitespace-nowrap text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-muted/70", right && "text-right", c.id === "__select" && "pr-0")}
                     >
-                      {sortable ? (
-                        <button
-                          onClick={() => setPatch({ sort: dir === "asc" ? `-${meta.key}` : dir === "desc" ? null : meta.key })}
-                          className={cn("group/sort inline-flex items-center gap-1 rounded hover:text-foreground", right && "flex-row-reverse", dir && "text-foreground")}
-                        >
-                          {meta.label}
-                          {dir === "asc" ? <ArrowUp className="size-3" /> : dir === "desc" ? <ArrowDown className="size-3" /> : <ArrowUpDown className="size-3 opacity-0 group-hover/sort:opacity-60" />}
-                        </button>
-                      ) : flexRender(c.columnDef.header, table.getHeaderGroups()[0]!.headers.find((h) => h.column.id === c.id)!.getContext())}
+                      {sortable ? (() => {
+                        const sortNext = () => setPatch({ sort: dir === "asc" ? `-${meta.key}` : dir === "desc" ? null : meta.key });
+                        // The definition tip sits between the label and the sort arrow, outside the sort button.
+                        return (
+                          <span className={cn("group/sort inline-flex items-center gap-1", right && "flex-row-reverse", dir && "text-foreground")}>
+                            <button onClick={sortNext} className="rounded hover:text-foreground">{meta.label}</button>
+                            {meta.help && <Term iconOnly term={meta.label} help={meta.help} />}
+                            <span aria-hidden onClick={sortNext} className="cursor-pointer">{dir === "asc" ? <ArrowUp className="size-3" /> : dir === "desc" ? <ArrowDown className="size-3" /> : <ArrowUpDown className="size-3 opacity-0 group-hover/sort:opacity-60" />}</span>
+                          </span>
+                        );
+                      })() : <>
+                        {flexRender(c.columnDef.header, table.getHeaderGroups()[0]!.headers.find((h) => h.column.id === c.id)!.getContext())}
+                        {meta?.help && <Term iconOnly term={meta.label} help={meta.help} className="ml-1 align-middle" />}
+                      </>}
                     </th>
                   );
                 })}

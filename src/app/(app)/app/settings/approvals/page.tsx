@@ -3,6 +3,7 @@ import { ShieldCheck } from "lucide-react";
 import { INTERNAL_ROLES } from "@/entities";
 import { PERSONAS } from "@/auth/personas";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
+import { Term } from "@/components/app/Term";
 import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { list } from "@/server/query";
@@ -11,6 +12,7 @@ import { NoAccess, settingsSession } from "@/extensions/settings/pages";
 import { rows } from "@/extensions/settings/data";
 import { canSettings } from "@/extensions/settings/nav";
 import { canEditPolicies } from "@/ai/policy-editors";
+import { autonomyLevel } from "@/ai/automations";
 import { EditPolicy, type PolicyRow } from "@/extensions/settings/ui/forms";
 import { agentName } from "@/ai/ui/labels";
 
@@ -86,7 +88,7 @@ export default async function ApprovalsPage() {
               {agents.map((a) => (
                 <li key={a.id} className="rounded-lg border bg-card px-3 py-2">
                   <div className="font-medium">{agentName(a.id)}</div>
-                  <div className="text-[12px] text-muted-foreground">{a.autonomy.replace(/_/g, " ")}{a.category ? ` · ${a.category}` : ""}</div>
+                  <div className="text-[12px] text-muted-foreground"><Term term={autonomyLevel(a.autonomy).label} help={autonomyLevel(a.autonomy).help}>{autonomyLevel(a.autonomy).label}</Term>{a.category ? ` · ${a.category}` : ""}</div>
                 </li>
               ))}
             </ul>
