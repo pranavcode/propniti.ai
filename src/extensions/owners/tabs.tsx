@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight } from "lucide-react";
 import { can } from "@/entities";
 import { getPlatform } from "@/lib/platform";

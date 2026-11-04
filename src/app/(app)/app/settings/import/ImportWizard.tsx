@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, ArrowRightLeft, Check, CircleAlert, FileUp, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";

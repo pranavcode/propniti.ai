@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { CheckCircle2, ChevronDown, Clock, DoorOpen, Loader2, MapPin, Pause, Play, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RelativeDate, StatusBadge } from "@/components/app/display";

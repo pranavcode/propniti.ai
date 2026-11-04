@@ -42,15 +42,26 @@ export async function retryBusy<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
   }
 }
 
+// Database errors (D1, SQLite internals) never reach the browser or a run trace; the log keeps the
+// detail. Model-provider errors ("overloaded" too) are not database errors and pass through.
+const DB_ERROR = /D1_[A-Z_]+|D1 DB|SQLITE_[A-Z]+|no such (table|column)/;
+export const DB_BUSY = "The database is busy; try again in a moment";
+export function publicError(message: string) {
+  if (!DB_ERROR.test(message)) return message;
+  console.error("[ai] database error:", message);
+  return DB_BUSY;
+}
+
 export const isTable = (t: string): t is Table => Object.hasOwn(TABLES, t);
 
 // Overlay rows replace base rows with the same id; tombstones (deleted = 1) hide them.
 // Every placeholder is a plain `?`; eff() returns the params it needs in order.
 export function eff(table: Table, ws: string): { sql: string; params: unknown[] } {
   if (ws === "base") return { sql: `(SELECT * FROM ${table} WHERE workspace_id = 'base' AND deleted = 0)`, params: [] };
+  // One SELECT, not a UNION ALL, so SQLite can flatten it into joins and use the (workspace_id, id) index.
   return {
-    sql: `(SELECT * FROM (SELECT * FROM ${table} WHERE workspace_id = ? UNION ALL SELECT * FROM ${table} b WHERE b.workspace_id = 'base' AND NOT EXISTS (SELECT 1 FROM ${table} o WHERE o.workspace_id = ? AND o.id = b.id)) WHERE deleted = 0)`,
-    params: [ws, ws],
+    sql: `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ?) AND deleted = 0 AND (workspace_id = ? OR NOT EXISTS (SELECT 1 FROM ${table} o WHERE o.workspace_id = ? AND o.id = ${table}.id)))`,
+    params: [ws, ws, ws],
   };
 }
 
@@ -78,7 +89,7 @@ function readRules(ctx: DataCtx, table: Table) {
   return hidden.length ? (r: Row) => Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))) : (r: Row) => r;
 }
 
-export type Filter = { field: string; op: "eq" | "ne" | "in" | "gt" | "gte" | "lt" | "lte" | "like" | "null" | "notnull"; value?: unknown };
+export type Filter = { field: string; op: "eq" | "ne" | "in" | "nin" | "gt" | "gte" | "lt" | "lte" | "like" | "null" | "notnull"; value?: unknown };
 
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const columnsCache = new Map<string, Set<string>>();
@@ -104,6 +115,7 @@ function filterSql(f: Filter, params: unknown[]): string {
     case "lte": params.push(f.value); return `${c} <= ?`;
     case "like": params.push(`%${String(f.value)}%`); return `${c} LIKE ?`;
     case "in": params.push(JSON.stringify(Array.isArray(f.value) ? f.value : [f.value])); return `${c} IN (SELECT value FROM json_each(?))`;
+    case "nin": params.push(JSON.stringify(Array.isArray(f.value) ? f.value : [f.value])); return `${c} NOT IN (SELECT value FROM json_each(?))`;
     case "null": return `${c} IS NULL`;
     case "notnull": return `${c} IS NOT NULL`;
   }

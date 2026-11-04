@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { History } from "lucide-react";
 import { AskBox } from "@/components/app/ai";
 import { RelativeDate } from "@/components/app/display";

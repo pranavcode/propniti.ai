@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/app/page";
 import { RelativeDate } from "@/components/app/display";

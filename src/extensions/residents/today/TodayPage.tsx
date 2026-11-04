@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { AlertTriangle, ArrowRight, Bot, CalendarClock, CircleDollarSign, HeartPulse, MessageSquare, ShieldAlert, Sparkles, Wrench, Zap } from "lucide-react";
 import { ApprovalsInbox } from "@/ai/ui/ApprovalsInbox";
 import { pageData } from "@/ai/ui/server";

@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: Ctx) {
     for (const id of new Set(w.body.ids)) {
       try {
         const r = await runAction(w.ctx, a, id, w.body.input ?? {});
-        results.push(r.status === 200 ? { id, status: 200, message: r.message } : { id, status: r.status, error: r.error });
+        results.push(r.status === 200 || r.status === 202 ? { id, status: r.status, message: r.message } : { id, status: r.status, error: r.error });
       } catch (e) {
         if (!(e instanceof QueryError)) throw e;
         results.push({ id, status: e.status, error: e.message });

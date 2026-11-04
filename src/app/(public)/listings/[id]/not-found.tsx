@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { PublicFooter, PublicHeader } from "@/components/public/chrome";
 import { Button } from "@/components/ui/button";
 
