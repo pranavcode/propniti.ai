@@ -75,3 +75,14 @@ describe("collections drafts", () => {
     expect(planMessage(d).body).toContain("two of $416.66 and a final one of $416.68");
   });
 });
+
+describe("draft dates", () => {
+  it("become letter style before the check, in English and Spanish", async () => {
+    const { letterDates } = await import("../rules");
+    const model = "Hi Ana, your lease ends on 2026-11-07. We can renew at $1,250.";
+    expect(checkDraft(model, { offer_rent_cents: 125000 })).not.toEqual([]);
+    expect(letterDates(model)).toBe("Hi Ana, your lease ends on Nov 7, 2026. We can renew at $1,250.");
+    expect(checkDraft(letterDates(model), { offer_rent_cents: 125000 })).toEqual([]);
+    expect(letterDates("vence el 2026-11-07.", "es")).toBe("vence el 7 de noviembre de 2026.");
+  });
+});

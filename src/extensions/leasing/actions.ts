@@ -401,7 +401,7 @@ registerAction({
   input: SendInput.passthrough(),
   help: { summary: "Sends the offer to the primary resident and records the message, the offer and who sent it.", article: "renewal-workflow" },
   async handler(ctx, row, input) {
-    const { checkDraft } = await import("@/ai/tools/write");
+    const { checkDraft, letterDates } = await import("@/ai/rules");
     if (row.status !== "Draft") return fail(409, `This offer was already ${String(row.status).toLowerCase()}`);
     const rent = cents(row, "rent");
     const { effective } = await import("@/server/query");
@@ -409,7 +409,7 @@ registerAction({
     if (!lease?.resident_id) return fail(409, "No primary resident on this lease to send the offer to");
     // Approved from the inbox without an edited message: the standard wording, with the offer's own figures.
     const subject = input.subject ?? `Your renewal offer at ${lease.property}`;
-    const body = input.body ?? `Hi ${lease.first_name},\n\nYour lease at ${lease.property} #${lease.unit} ends on ${lease.end_on}. We can renew for ${row.term_months} months at $${(rent / 100).toLocaleString("en-US")} a month.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${ctx.actor.name}`;
+    const body = letterDates(input.body ?? `Hi ${lease.first_name},\n\nYour lease at ${lease.property} #${lease.unit} ends on ${lease.end_on}. We can renew for ${row.term_months} months at $${(rent / 100).toLocaleString("en-US")} a month.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${ctx.actor.name}`);
     const problems = [...checkDraft(body, { offer_rent_cents: rent, current_rent_cents: cents(row, "current_rent") }), ...checkFairHousing(body).map((f) => `"${f.phrase}" (${f.category})`)];
     if (problems.length) return fail(409, `Check the message: ${problems[0]}`);
     const at = now(ctx);

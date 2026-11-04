@@ -5,7 +5,7 @@ import { eff, get, isTable, parseJson, type Table } from "../data";
 import type { AgentCtx, ProposeInput } from "../runtime";
 import type { RunContext } from "../types";
 import { registerTool } from "./registry";
-import { checkDraft } from "../rules";
+import { checkDraft, letterDates } from "../rules";
 export { amountsIn, checkDraft } from "../rules";
 
 // Write tools. None of them changes records directly: they create proposals for a person, store a
@@ -36,7 +36,7 @@ registerTool({
 
 registerTool({
   key: "messages.draft",
-  description: "Write a message to a resident, vendor, owner or applicant about a record. Use only figures from the record's facts. Never promise waivers. The draft is attached to the proposal for that record.",
+  description: "Write a message to a resident, vendor, owner or applicant about a record. Use only figures from the record's facts. Write dates like \"Nov 7, 2026\", never 2026-11-07. Never promise waivers. The draft is attached to the proposal for that record.",
   input: z.object({
     entity_id: z.string().max(80), channel: z.enum(["Email", "SMS", "Portal"]).default("Email"), language: z.enum(["en", "es"]).default("en"),
     subject: z.string().max(160), body: z.string().min(10).max(2000),
@@ -47,9 +47,10 @@ registerTool({
     const c = ac(ctx);
     const facts = c.facts.get(i.entity_id);
     if (!facts) throw new Error(`No facts for ${i.entity_id}; draft only for records you are proposing on`);
-    const problems = checkDraft(i.body, facts);
+    const body = letterDates(i.body, i.language);
+    const problems = checkDraft(body, facts);
     if (problems.length) throw new Error(`Draft rejected: ${problems.join(" ")} Rewrite it.`);
-    c.drafts.set(i.entity_id, { subject: i.subject, body: i.body, channel: i.channel, language: i.language });
+    c.drafts.set(i.entity_id, { subject: letterDates(i.subject, i.language), body, channel: i.channel, language: i.language });
     return { saved: true, entity_id: i.entity_id };
   },
 });

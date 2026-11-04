@@ -2,6 +2,7 @@ import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { getAction } from "@/extensions/actions";
 import { isAiAction } from "./action-keys";
+import { letterDates } from "./rules";
 import { can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
 import { INTERNAL_ROLES, type ActionKey, type AgentKey, type Row } from "@/entities/types";
@@ -64,7 +65,7 @@ async function planEffect(data: DataCtx, e: Effect, by: By, proposal: Row, gate:
     return {
       stmts: [
         await insertGated(db, ws, "message_threads", { id: threadId, property_id: e.property_id ?? null, party_kind: e.party_kind, party_id: e.party_id, subject: e.subject, entity_type: e.entity_type ?? proposal.entity_type, entity_id: e.entity_id ?? proposal.entity_id, status: "Waiting", last_message_at: now, unread: 0 }, gate),
-        await insertGated(db, ws, "messages", { id: newId("msg"), thread_id: threadId, channel: e.channel, direction: "out", sender_kind: by.agent ? "agent" : "staff", sender_id: by.id, body: e.body, drafted_by_agent: proposal.agent ?? null, sent_at: now }, gate),
+        await insertGated(db, ws, "messages", { id: newId("msg"), thread_id: threadId, channel: e.channel, direction: "out", sender_kind: by.agent ? "agent" : "staff", sender_id: by.id, body: letterDates(e.body), drafted_by_agent: proposal.agent ?? null, sent_at: now }, gate),
       ],
       note: `${e.channel} sent: "${e.subject}"`,
     };

@@ -58,6 +58,12 @@ export function dateLabel(iso: string, language = "en") {
   return language === "es" ? `${d} de ${MONTHS_ES[m - 1]}` : `${new Date(Date.UTC(2000, m - 1, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${d}`;
 }
 
+// Model drafts often write dates the way the data stores them; residents get letter-style dates.
+// Applied to every draft before it is checked or sent: "2026-11-07" → "Nov 7, 2026".
+export function letterDates(text: string, language = "en") {
+  return text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (iso, y: string) => `${dateLabel(iso, language)}${language === "es" ? " de" : ","} ${y}`);
+}
+
 // Three payments that add up to the balance to the cent: two equal ones and a final one that takes
 // the remainder.
 export function planSplit(balance: number) {

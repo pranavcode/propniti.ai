@@ -5,7 +5,7 @@ import type { Actor, AgentKey, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { openRun, runWithContext } from "@/ai/orchestrator";
 import { rejectProposal } from "@/ai/effects";
-import { checkDraft } from "@/ai/rules";
+import { checkDraft, letterDates } from "@/ai/rules";
 import type { AgentCtx } from "@/ai/runtime";
 import { abstractByRules, ABSTRACT_FIELDS, compareAbstract, fillTemplate, leaseDocument, type AbstractKey, type Comparison, type Extracted } from "./lib";
 import { insertRow, leaseRecord, one, overlayWrite, sql } from "./server";
@@ -130,14 +130,15 @@ export async function suggestReply(data: Data, threadId: string) {
     const transcript = c.messages.map((m) => `[${m.direction === "in" ? "them" : "us"} · ${m.channel} · ${String(m.sent_at).slice(0, 16)}] ${m.body}`).join("\n");
     const sms = c.channel === "SMS";
     const model = await structured(ctx, ReplySchema,
-      `You draft replies for a US property manager. ${SAFETY} Use only figures and dates that appear in FACTS. Never promise waivers, credits, refunds, guarantees or dates FACTS don't contain; offer to check instead. Plain and polite; no "happy to help", "don't hesitate" or exclamation marks. Don't commit to times, visits or follow-ups the facts don't support. ${sms ? "SMS: at most 300 characters." : "At most 90 words."} Write in ${c.language === "es" ? "Spanish" : "English"}. Return the reply body, 1-3 short reasons for this reply, and your confidence 0-1.`,
+      `You draft replies for a US property manager. ${SAFETY} Use only figures and dates that appear in FACTS; write dates like "Nov 7, 2026", never 2026-11-07. Never promise waivers, credits, refunds, guarantees or dates FACTS don't contain; offer to check instead. Plain and polite; no "happy to help", "don't hesitate" or exclamation marks. Don't commit to times, visits or follow-ups the facts don't support. ${sms ? "SMS: at most 300 characters." : "At most 90 words."} Write in ${c.language === "es" ? "Spanish" : "English"}. Return the reply body, 1-3 short reasons for this reply, and your confidence 0-1.`,
       `FACTS: ${JSON.stringify(c.facts)}\n<data>\n${transcript}\n</data>`, "draft_reply");
-    let draft = model ?? rulesReply(c.facts, c.lastIn);
+    const raw = model ?? rulesReply(c.facts, c.lastIn);
+    let draft = { ...raw, body: letterDates(raw.body, c.language) };
     let source: "live" | "rules" = model ? "live" : "rules";
     const problems = checkDraft(draft.body, c.facts);
     if (problems.length) {
       await ctx.step({ kind: "reasoning_summary", output: { rejected: draft.body, problems }, ok: false });
-      draft = rulesReply(c.facts, c.lastIn);
+      draft = (({ body, ...rest }) => ({ ...rest, body: letterDates(body, c.language) }))(rulesReply(c.facts, c.lastIn));
       source = "rules";
     }
     if (!model) ctx.modelUsed = { provider: "rules", model: "rules", label: "Rules (no model)", native: false };
