@@ -34,7 +34,9 @@ export function effective(table: string, ws = "?1") {
   if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${ws}))`;
   if (table === "metrics_monthly")
     return `(SELECT * FROM metrics_monthly WHERE workspace_id = ${ws} UNION ALL SELECT * FROM metrics_monthly AS b WHERE b.workspace_id = 'base' AND NOT EXISTS (SELECT 1 FROM metrics_monthly AS o WHERE o.workspace_id = ${ws} AND o.property_id = b.property_id AND o.month = b.month))`;
-  return `(SELECT * FROM ${table} WHERE workspace_id = ${ws} AND deleted = 0 UNION ALL SELECT * FROM ${table} AS b WHERE b.workspace_id = 'base' AND b.deleted = 0 AND NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${ws} AND o.id = b.id))`;
+  // One SELECT, not a UNION ALL: SQLite flattens it into the outer query, so a join on id uses the
+  // (workspace_id, id) index instead of scanning a materialised copy for every outer row.
+  return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${ws}) AND deleted = 0 AND (workspace_id = ${ws} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${ws} AND o.id = ${table}.id)))`;
 }
 
 // Copy-on-write: moves the row into the overlay (copying the base row the first time) and applies

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, CalendarCheck, Sparkles } from "lucide-react";
 import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { Money, StatusBadge } from "@/components/app/display";

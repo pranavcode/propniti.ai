@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Check, ImagePlus, Loader2, Save, ShieldCheck, Sparkles, Star, Upload, X } from "lucide-react";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Settings } from "lucide-react";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { settingsSession } from "@/extensions/settings/pages";

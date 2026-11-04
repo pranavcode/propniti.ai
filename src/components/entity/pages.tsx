@@ -1,5 +1,5 @@
 import "server-only";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { ChevronRight, CircleHelp, Sparkles } from "lucide-react";

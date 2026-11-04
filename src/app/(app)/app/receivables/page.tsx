@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { staffSession } from "@/extensions/receivables/staff";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, Banknote, Gavel, Landmark, Scale } from "lucide-react";
 import { can } from "@/entities";
 import { ChartCard } from "@/components/app/dashboard/ChartCard";
