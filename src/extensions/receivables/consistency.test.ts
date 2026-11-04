@@ -4,6 +4,9 @@ import type { Actor } from "@/entities/types";
 import { openSqlite } from "@/lib/platform/sqlite";
 import type { Db } from "@/lib/platform/types";
 import { AS_OF } from "@/seed/constants";
+import { homeMetrics } from "@/extensions/portfolio/home/data";
+import { metrics } from "@/server/query";
+import "@/extensions";
 import { workbench } from "./collections";
 import { agingByProperty, delinquentLeases } from "./queries";
 
@@ -52,5 +55,13 @@ describe.each([["one Austin property", ["p02"]], ["org-wide", "all"]] as const)(
     for (const r of leases.rows) expect([r.lease_id, r.total]).toEqual([r.lease_id, perLease.get(r.lease_id)]);
     expect(wb.total).toBe(agent.total);
     expect(wb.balance).toBe(ag.total);
+  });
+
+  it("the home Delinquent KPI and Finance's delinquency aging card show the same past-due total", { timeout: 120_000 }, async () => {
+    const ctx = { db, ws: null, actor: actor(scope === "all" ? "all" : [...scope]) };
+    const [home, aging, pages] = await Promise.all([homeMetrics(ctx), metrics(ctx, "receivables.aging_live"), agingByProperty(ctx)]);
+    expect(home.kpis.delinquency.value).toBeGreaterThan(0);
+    expect(home.kpis.delinquency.value).toBe(aging.value);
+    expect(Math.round(home.kpis.delinquency.value! * 100)).toBe(pages.reduce((s, r) => s + r.total, 0));
   });
 });

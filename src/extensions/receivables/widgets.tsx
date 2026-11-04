@@ -5,6 +5,7 @@ import { ChartCard } from "@/components/app/dashboard/ChartCard";
 import { KpiCard } from "@/components/app/dashboard/KpiCard";
 import { ErrorBanner } from "@/components/app/states";
 import { getPlatform } from "@/lib/platform";
+import { formatDate } from "@/lib/format";
 import { AS_OF } from "@/seed/constants";
 import { metrics, type QueryCtx } from "@/server/query";
 import { depositsInTransit } from "./queries";
@@ -39,7 +40,7 @@ export async function AgingCard({ actor }: { actor: Actor }) {
   return (
     <ChartCard
       title="Delinquency aging"
-      description={`${money(Math.round(Number(m.value ?? 0) * 100))} past due as of ${m.asOf}`}
+      description={`${money(Math.round(Number(m.value ?? 0) * 100))} past due as of ${formatDate(m.asOf, "always")}`}
       kind="bar" data={m.points as never} x="label" height={220}
       series={[{ key: "amount", label: "Past due", format: "money" }]}
       drill="/app/receivables/delinquency?bucket={bucket}"

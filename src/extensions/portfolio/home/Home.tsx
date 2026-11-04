@@ -4,11 +4,11 @@ import { ArrowRight, Bot, Calculator, ChevronRight, CircleAlert, FlaskConical, I
 import type { Session } from "@/auth/session";
 import type { Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatPct, personaGreeting } from "@/lib/format";
+import { formatMoney, formatMonth, formatPct, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
-import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/components/app/dashboard";
+import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import type { ProposalJson } from "@/ai/ui/client";
@@ -94,6 +94,7 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
   const k = m.kpis;
   const foot = `${monthLong(LAST_CLOSED)}`;
   const noAi = !k.aiHours.spark.some((v) => v > 0);
+  const delinquent = <KpiCard label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel={`vs ${formatMonth(`${LAST_CLOSED}-01`)} close`} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
   return (
     <KpiRow className="xl:grid-cols-5">
       <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
@@ -101,9 +102,9 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
       <ExplainableKpi deltaLabel="" metric="receivables.collections_rate" label="Collections rate" format="pct" value={k.collections.value} previous={k.collections.previous} spark={k.collections.spark} goodWhen="up" href="/app/receivables/payments" footnote="Collected over charged" help="Share of the month's rent and fees paid so far. Payments go to the oldest charge first, so paying down an older balance counts for that older month." />
       {regional
         ? <ExplainableKpi deltaLabel="" metric="maintenance.sla" label="Within SLA" format="pct" value={k.sla.value} previous={k.sla.previous} spark={k.sla.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote="Of work orders due" help="Work orders completed by their SLA due time, over work orders due in the month. Open jobs past due count as missed." />
-        : <ExplainableKpi deltaLabel="" metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />}
+        : delinquent}
       {regional
-        ? <ExplainableKpi deltaLabel="" metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />
+        ? delinquent
         : <ExplainableKpi deltaLabel="" metric="intelligence.ai_minutes_saved" label="AI hours saved" format="count" value={k.aiHours.value} previous={k.aiHours.previous} spark={k.aiHours.spark} goodWhen="up" href="/app/ai/activity" footnote={noAi ? "No agent actions recorded yet" : "Staff time agents took on"} help="Estimated staff hours saved by agent actions people approved or that ran inside policy, using a fixed minutes-per-action table." />}
     </KpiRow>
   );

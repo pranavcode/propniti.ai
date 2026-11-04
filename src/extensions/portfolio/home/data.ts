@@ -21,15 +21,23 @@ const safe = (p: Promise<MetricResult>) => p.catch((e: unknown) => ({ points: []
 export type Kpi = { value: number | null; previous: number | null; spark: number[]; error?: string };
 const kpi = (m: MetricResult & { error?: string }): Kpi => ({ value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], error: m.error });
 
+// Delinquent is what is past due today (open charges past their due date, every aging bucket): the
+// figure Finance, Residents and the delinquency page show. It compares with the month-end balance
+// at the last close, and the month-end history leads the sparkline.
+const delinquentNow = (closed: MetricResult & { error?: string }, live: MetricResult & { error?: string }): Kpi => ({
+  value: live.value ?? null, previous: closed.value ?? null, spark: live.value == null ? [] : [...(closed.spark ?? []), live.value], error: live.error,
+});
+
 // KPIs read the last closed month, so rates (collections, NOI) compare whole months.
 export async function homeMetrics(q: QueryCtx) {
   const closed = { month: LAST_CLOSED, months: 12 };
-  const [noi, occ, econ, coll, delinq, sla, ai, byProp, byPropPrev, aging, agingByProp, slaByProp, incomeExpense, byRegion] = await Promise.all([
+  const [noi, occ, econ, coll, delinq, live, sla, ai, byProp, byPropPrev, aging, agingByProp, slaByProp, incomeExpense, byRegion] = await Promise.all([
     safe(metrics(q, "portfolio.noi", closed)),
     safe(metrics(q, "portfolio.occupancy", closed)),
     safe(metrics(q, "portfolio.economic_occupancy", closed)),
     safe(metrics(q, "receivables.collections_rate", closed)),
     safe(metrics(q, "receivables.delinquency", closed)),
+    safe(metrics(q, "receivables.aging_live")),
     safe(metrics(q, "maintenance.sla", closed)),
     safe(metrics(q, "intelligence.ai_minutes_saved", closed)),
     safe(metrics(q, "portfolio.by_property", { month: LAST_CLOSED })),
@@ -42,7 +50,7 @@ export async function homeMetrics(q: QueryCtx) {
   ]);
   return {
     month: LAST_CLOSED,
-    kpis: { noi: kpi(noi), occupancy: kpi(occ), economic: kpi(econ), collections: kpi(coll), delinquency: kpi(delinq), sla: kpi(sla), aiHours: kpi(ai) },
+    kpis: { noi: kpi(noi), occupancy: kpi(occ), economic: kpi(econ), collections: kpi(coll), delinquency: delinquentNow(delinq, live), sla: kpi(sla), aiHours: kpi(ai) },
     series: { noi: noi.points, occupancy: occ.points, collections: coll.points, ai: ai.points, incomeExpense: incomeExpense.points, delinquency: delinq.points, wo: sla.points },
     byProperty: byProp.points, byPropertyPrev: byPropPrev.points, aging: aging.points, agingByProperty: agingByProp.points, slaByProperty: slaByProp.points, byRegion: byRegion.points,
   };
