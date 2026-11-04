@@ -48,8 +48,13 @@ test("leasing agent: day, board move and the broker-only column", async ({ page,
   await expect(page.getByText(`${name} moved to Tour`)).toBeVisible();
 
   // Approval belongs to the broker: the menu item is disabled for a leasing agent.
-  await board.openMoveMenu("Screening");
-  await expect(page.getByRole("menuitem", { name: /^Approved/ })).toBeDisabled();
+  // The move refreshes the board from the server, and a menu open when that lands closes, so reopen
+  // it until the item can be checked (an enabled item still fails every attempt).
+  await expect(async () => {
+    await page.keyboard.press("Escape");
+    await board.openMoveMenu("Screening");
+    await expect(page.getByRole("menuitem", { name: /^Approved/ })).toBeDisabled({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
   await page.keyboard.press("Escape");
 
   expect(errors).toEqual([]);

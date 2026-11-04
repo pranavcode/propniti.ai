@@ -13,6 +13,10 @@ Propniti is property management software for US residential and commercial portf
 | Public site | Listings, tour booking and applications at `/listings` and `/apply/...`, with no sign-in |
 | Sample data | 30 properties (3,318 units) in Austin, Dallas, Atlanta and Phoenix, with 18 closed months of history |
 
+![System architecture: browsers reach one Cloudflare Worker at propniti.ai, which serves pages and APIs, checks scope, runs the AI runtime, reads a D1 database with a shared base and per-visitor overlays, and calls models through one provider layer; a Cron Trigger starts the sweep every 15 minutes](/docs/architecture/system-architecture.svg#1000x560)
+
+*System architecture. One Worker serves everything; data is a shared read-only base plus a private overlay per visitor; models sit behind one provider layer, with rules as the fallback.*
+
 **Product principles.**
 
 - **AI is visible and accountable.** Every AI output shows its source (a live model, a stored earlier result, or rules) and links to the run that produced it.
@@ -216,6 +220,10 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 ## Agent behaviour
 
 Each agent has a goal, a tool allow-list, triggers, a default autonomy level and the actions its proposals may run.
+
+![Agent run flow: six triggers start a run in the orchestrator; the agent collects candidates with read tools and an optional model; each proposal is routed by autonomy, policy limits and always-a-person rules; it applies on its own or waits for a person allowed by the decide rule; the registered action re-checks the record and runs once](/docs/architecture/agent-run-flow.svg#1000x622)
+
+*How an agent run turns into a change. Agents only propose; every change runs through a registered action that re-checks scope and the record first.*
 
 | Agent | Owner role | Watches for | Schedule (UTC) | Events | Default autonomy |
 | --- | --- | --- | --- | --- | --- |
