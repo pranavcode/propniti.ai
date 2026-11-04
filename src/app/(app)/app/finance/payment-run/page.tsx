@@ -17,14 +17,14 @@ const usd = (cents: number) => `$${Math.round(cents / 100).toLocaleString("en-US
 export default async function PaymentRunPage() {
   const session = await currentSession();
   if (!can(session.actor.role, "bills.pay", "bills")) {
-    return <main className="p-6"><EmptyState kind="table" title="Payment runs aren't part of your role" description="Accountants, regional managers and principals pay bills. Switch role from your avatar menu." action={{ label: "Go to your home", href: "/app" }} /></main>;
+    return <div className="p-6"><EmptyState kind="table" title="Payment runs aren't part of your role" description="Accountants, regional managers and principals pay bills. Switch role from your avatar menu." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
   const run = await paymentRunCandidates({ db: getPlatform().db, ws: session.ws ?? "~", actor: session.actor }).catch((e) => (console.error("payment run", e), null));
   const bills = run?.vendors.flatMap((v) => v.bills) ?? [];
   const total = bills.reduce((s, b) => s + b.amount_cents, 0);
 
   return (
-    <main className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       <PageHeader
         icon={<CircleDollarSign />}
         title="Payment run"
@@ -39,6 +39,6 @@ export default async function PaymentRunPage() {
           {bills.length ? <PaymentRunBuilder vendors={run.vendors} approvers={run.approvers} /> : <EmptyState kind="table" title="Nothing to pay" description="Every approved bill is paid or not yet due." action={{ label: "Open payables", href: "/app/payables/bills" }} />}
         </>
       )}
-    </main>
+    </div>
   );
 }

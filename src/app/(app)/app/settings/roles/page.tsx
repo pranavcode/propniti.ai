@@ -35,7 +35,7 @@ export default async function RolesPage() {
   const rows = permissionMatrix();
   const roles = [...ROLES];
   return (
-    <main className="space-y-8 p-6">
+    <div className="space-y-8 p-6">
       <header>
         <h1 className="text-xl font-semibold">Roles and permissions</h1>
         <p className="mt-1 max-w-3xl text-muted-foreground">
@@ -100,6 +100,6 @@ export default async function RolesPage() {
           </table>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

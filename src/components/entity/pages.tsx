@@ -88,7 +88,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
   ]);
   const createFields = can(role, "create", def.key) ? formFields(def, role, "create") : null;
   return (
-    <main className="space-y-4 p-4 md:p-6">
+    <div className="space-y-4 p-4 md:p-6">
       <PageHeader def={def} />
       {kpis.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{kpis.map((k) => <KpiTile key={k.key} k={k} />)}</div>}
       <EntityList
@@ -114,15 +114,15 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
         error={error}
         create={createFields ? { fields: createFields } : undefined}
       />
-    </main>
+    </div>
   );
 }
 
 function Denied({ def }: { def: EntityDef }) {
   return (
-    <main className="p-6">
+    <div className="p-6">
       <EmptyState kind="table" title={`${def.label.many} aren't part of your role`} description="Switch role from your avatar menu to see this page as someone who works with it." action={{ label: "Go to your home", href: "/app" }} />
-    </main>
+    </div>
   );
 }
 
@@ -271,7 +271,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
 
 
   return (
-    <main className="space-y-4 p-4 md:p-6">
+    <div className="space-y-4 p-4 md:p-6">
       <div className="flex flex-wrap items-start gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public; the Workers build has no image optimizer */}
         {hero && <img src={hero} alt="" className="h-24 w-36 shrink-0 rounded-lg object-cover ring-1 ring-border" />}
@@ -356,7 +356,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
           })}
         </aside>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -376,7 +376,7 @@ export async function ModuleIndex({ path, session }: { path: string; session: Se
   const defs = moduleDefs(path, session.actor.role);
   if (!all.length) notFound();
   const title = path.split("/").pop()!.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-  if (!defs.length) return <main className="p-6"><EmptyState title={`${title} isn't part of your role`} description="Switch role from your avatar menu to see this area." action={{ label: "Go to your home", href: "/app" }} /></main>;
+  if (!defs.length) return <div className="p-6"><EmptyState title={`${title} isn't part of your role`} description="Switch role from your avatar menu to see this area." action={{ label: "Go to your home", href: "/app" }} /></div>;
   const seenK = new Set<string>(), seenC = new Set<string>();
   const kpiDefs = defs.flatMap((d) => d.kpis ?? []).filter((k) => !seenK.has(k.metric) && seenK.add(k.metric)).slice(0, 4);
   const chartDefs = defs.flatMap((d) => d.charts ?? []).filter((c) => !seenC.has(c.metric + c.x) && seenC.add(c.metric + c.x)).slice(0, 4);
@@ -386,7 +386,7 @@ export async function ModuleIndex({ path, session }: { path: string; session: Se
     Promise.all(defs.map(async (d) => ({ d, res: await list(ctx, d.key, { size: 6 }).catch(() => null) }))),
   ]);
   return (
-    <main className="space-y-5 p-4 md:p-6">
+    <div className="space-y-5 p-4 md:p-6">
       <header>
         <h1 className="text-[18px] font-semibold tracking-tight">{title}</h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">{session.actor.scope.label} · {defs.map((d) => d.label.many).join(", ")}</p>
@@ -421,6 +421,6 @@ export async function ModuleIndex({ path, session }: { path: string; session: Se
           );
         })}
       </div>
-    </main>
+    </div>
   );
 }

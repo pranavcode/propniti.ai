@@ -34,7 +34,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
     : [];
   const filters = [["", "All agents"], ...Object.entries(AGENT_LABEL)];
   return (
-    <main>
+    <div>
       <PageHeader icon={<Activity />} title="AI activity" description="Every agent run with what triggered it, the model, tokens and cost, and every AI decision in the audit log.">
         <div className="flex flex-wrap items-center gap-1 border-b">
           {(["runs", "audit"] as const).map((t) => <Link key={t} href={qs({ tab: t, page: undefined })} className={cn("-mb-px border-b-2 px-3 py-2 text-[13px] font-medium", tab === t ? "border-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>{t === "runs" ? "Runs" : "Audit log"}</Link>)}
@@ -99,6 +99,6 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
           ) : <EmptyState kind="table" title="No AI decisions yet" description="Approvals, rejections, auto-applied actions and agent setting changes are logged here." />
         )}
       </div>
-    </main>
+    </div>
   );
 }
