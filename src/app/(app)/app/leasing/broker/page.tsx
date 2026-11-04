@@ -5,7 +5,7 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { EmptyState } from "@/components/app/states";
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
-import { AGENT_NAME, fairHousingFlags, kpis, leasingAgents, leasingCtx, leasingProposals, sourceOf, staleLeadsByAgent, waitingApplications } from "@/extensions/leasing/data";
+import { AGENT_NAME, DECIDE_ACTIONS, fairHousingFlags, kpis, leasingAgents, leasingCtx, leasingProposals, sourceOf, staleLeadsByAgent, waitingApplications } from "@/extensions/leasing/data";
 import { ReassignLeads, SendFollowUps } from "@/extensions/leasing/ui/BulkLeads";
 import { AskPanel, ProposalQueue, type ProposalView } from "@/extensions/leasing/ui/HomeBits";
 import { formatMoney, formatPct } from "@/lib/format";
@@ -28,7 +28,7 @@ export default async function BrokerDesk() {
   const c = await leasingCtx();
   const [apps, proposals, flags, k, perf, stale, team] = await Promise.all([
     waitingApplications(c, 12),
-    leasingProposals(c, { actions: ["applications.decide"], limit: 6 }),
+    leasingProposals(c, { actions: DECIDE_ACTIONS, limit: 6 }),
     fairHousingFlags(c),
     kpis(c, KPIS.map((x) => x.key)),
     kpis(c, ["leasing.agent_performance"]),
