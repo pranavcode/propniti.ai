@@ -68,8 +68,14 @@ export async function readWs(ctx: QueryCtx): Promise<Ws> {
   if (!id) return { id: "", overlay: new Set() };
   let p = overlayCache.get(ctx.actor);
   if (!p) {
-    const sql = TABLES.map((t) => `SELECT '${t}' AS t WHERE EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1)`).join(" UNION ALL ");
-    p = ctx.db.prepare(sql).bind(id).all<{ t: string }>().then((r) => new Set(r.results.map((x) => x.t)));
+    // Rows of EXISTS columns, not a UNION: D1 allows only 5 terms in a compound SELECT and 100
+    // columns per result, so the probes go in chunks of 60 columns, in one batch.
+    const chunks = Array.from({ length: Math.ceil(TABLES.length / 60) }, (_, k) => TABLES.slice(k * 60, k * 60 + 60));
+    const stmts = chunks.map((c, k) => ctx.db.prepare(`SELECT ${c.map((t, i) => `EXISTS (SELECT 1 FROM ${t} WHERE workspace_id = ?1) AS c${k * 60 + i}`).join(", ")}`).bind(id));
+    p = ctx.db.batch(stmts).then((rs) => {
+      const row = Object.assign({}, ...rs.map((r) => (r.results?.[0] ?? {}) as Record<string, number>));
+      return new Set(TABLES.filter((_, i) => row[`c${i}`]));
+    });
     overlayCache.set(ctx.actor, p);
   }
   return { id, overlay: await p };
