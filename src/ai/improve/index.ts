@@ -153,6 +153,25 @@ export const planInput = (plan: string, improve: ImproveKey, property: string | 
 // runtime (policies, autonomy, one open proposal per record and action, the run trace). The first
 // run's id is the plan id; a second click racing the first collides on it and gets a 409.
 export async function executePlan(s: ImproveSession, key: ImproveKey, property: string | null): Promise<ExecuteResult> {
+  // One plan at a time per card and scope: a click in another tab while agents are still proposing
+  // would otherwise race the open-proposal check. A lock older than LOCK_MS (a crashed request) expires.
+  const lock = `improve-lock:${s.ws}:${planPrefix(key, s.actor, property)}`;
+  const token = String(Date.now());
+  const claimed = await s.db
+    .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value WHERE CAST(meta.value AS INTEGER) < ?")
+    .bind(lock, token, Date.now() - LOCK_MS)
+    .run();
+  if (!claimed.meta.changes) throw new PlanConflict("Agents are already running a plan for this number; it will show here in a moment.");
+  try {
+    return await runPlan(s, key, property);
+  } finally {
+    await s.db.prepare("DELETE FROM meta WHERE key = ? AND value = ?").bind(lock, token).run();
+  }
+}
+
+const LOCK_MS = 2 * 60_000;
+
+async function runPlan(s: ImproveSession, key: ImproveKey, property: string | null): Promise<ExecuteResult> {
   // The plan number is read first, so two clicks racing each other pick the same id.
   const planId = `${planPrefix(key, s.actor, property)}${(await planTotals(s, key, property)).last + 1}`;
   const pv = await analyze(s, key, property);

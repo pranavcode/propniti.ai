@@ -304,6 +304,18 @@ describe("improve: review fixes", () => {
     expect(plan).toMatchObject({ id: "plan-delinquency-all-45", plans: 46, since: "2026-11-03T00:00:00Z", records: 4 });
   });
 
+  it("refuses a second plan while one for the same card and scope is still running, and frees it after", async () => {
+    const f = setup();
+    const key = `improve-lock:${WS}:plan-delinquency-all-`;
+    f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(key, String(Date.now()));
+    await expect(executePlan(s(f, DANIEL), "delinquency", null)).rejects.toThrow(/already running/);
+    expect(proposals(f.raw)).toHaveLength(0);
+    // A lock left by a crashed request expires.
+    f.raw.prepare("UPDATE meta SET value = ? WHERE key = ?").run(String(Date.now() - 10 * 60_000), key);
+    await executePlan(s(f, DANIEL), "delinquency", null);
+    expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
+  });
+
   it("only a person's manual run is limited to a plan's records, never an event's payload", async () => {
     const f = setup();
     const r = await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "collections", trigger: { kind: "event", input: { plan: "x", improve: "delinquency", steps: [{ action: "leases.send_reminder", ids: ["l4"] }] } } })).done;
