@@ -153,3 +153,24 @@ test("follow-ups: AI draft edited and sent, then Send all, and Send follow-up on
   await expect(page.getByText(/Follow-up sent to|already got a follow-up today/)).toBeVisible(FIRST_PAINT);
   expect(errors).toEqual([]);
 });
+
+test("renewals: prepare all drafts as proposals, then send the selected ones", async ({ page, context }) => {
+  await as(context, "lena");
+  const errors = watch(page);
+  await go(page, `${BASE}/app/leasing/renewals?window=30`);
+  const card = page.locator("[data-tour=renewals-prepare]");
+  await expect(card).toBeVisible(FIRST_PAINT);
+  const prepare = card.getByRole("button", { name: /^Prepare all drafts \(\d+\)/ });
+  if (await prepare.isVisible()) {
+    await prepare.click();
+    await expect(card.getByText(/^Prepared \d+/)).toBeVisible({ timeout: 120_000 });
+  }
+  // Each prepared offer shows its rent change, reasons and message, and links to its run.
+  await expect(card.getByRole("link", { name: "View run" }).first()).toHaveAttribute("href", /\/app\/ai\/runs\//);
+  const sendSelected = card.getByRole("button", { name: /^Send selected \(\d+\)/ });
+  await expect(sendSelected).toBeEnabled({ timeout: 30_000 });
+  await sendSelected.click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Send \d+$/ }).click();
+  await expect(card.getByText(/^Sent \d+/)).toBeVisible({ timeout: 120_000 });
+  expect(errors).toEqual([]);
+});

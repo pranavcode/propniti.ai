@@ -105,3 +105,52 @@ describe("follow-ups", () => {
     expect(await count("SELECT count(*) AS n FROM messages WHERE workspace_id = ?", WS)).toBe(before);
   });
 });
+
+describe("prepare all renewal drafts", () => {
+  beforeAll(async () => {
+    const db = getPlatform().db;
+    for (const [id, lease, prop] of [["ro-p1", "l-p01-u1", "p01"], ["ro-p2", "l-p01-u2", "p01"], ["ro-far", "l-p06-u1", "p06"]]) {
+      await db.prepare("INSERT INTO renewal_offers (workspace_id, id, lease_id, property_id, version, term_months, rent_cents, current_rent_cents, status) VALUES ('base', ?, ?, ?, 1, 12, 145000, 145000, 'Draft')").bind(id, lease, prop).run();
+    }
+  });
+  const openProposals = (id: string) => getPlatform().db.prepare("SELECT p.* FROM ai_proposals p WHERE p.workspace_id = ? AND p.entity_id = ? AND p.action = 'renewal_offers.send' AND NOT EXISTS (SELECT 1 FROM ai_decisions d WHERE d.workspace_id = p.workspace_id AND d.proposal_id = p.id)").bind(WS, id).all<Record<string, unknown>>();
+
+  it("prices the draft and drafts its message as one proposal for a person, sending nothing", async () => {
+    const ctx = await ctxFor("lena");
+    const r = await runAction(ctx, resolveAction("renewal_offers", "prepare"), "ro-p1", {});
+    if (r.status !== 200) throw new Error(JSON.stringify(r));
+    const out = JSON.parse(String(r.message)) as { rentCents: number; subject: string; body: string; proposalId: string; risk: string };
+    const offer = await getPlatform().db.prepare("SELECT status, rent_cents FROM renewal_offers WHERE workspace_id = ? AND id = 'ro-p1'").bind(WS).first<{ status: string; rent_cents: number }>();
+    expect(offer).toEqual({ status: "Draft", rent_cents: out.rentCents });
+    const [p] = (await openProposals("ro-p1")).results;
+    expect(p.id).toBe(out.proposalId);
+    const payload = JSON.parse(String(p.payload));
+    expect(payload).toMatchObject({ subject: out.subject, body: out.body, ai_drafted: true });
+    expect(out.body).toContain(`$${(out.rentCents / 100).toLocaleString("en-US")}`);
+    expect(await count("SELECT count(*) AS n FROM messages WHERE workspace_id = ? AND body = ?", WS, out.body)).toBe(0);
+  });
+
+  it("is idempotent: preparing again keeps the one proposal", async () => {
+    const ctx = await ctxFor("lena");
+    const r = await runAction(ctx, resolveAction("renewal_offers", "prepare"), "ro-p1", {});
+    expect(r.status).toBe(200);
+    expect((await openProposals("ro-p1")).results).toHaveLength(1);
+  });
+
+  it("runs in bulk only on drafts in scope", async () => {
+    const ctx = await ctxFor("lena");
+    expect(await bulk(ctx, resolveAction("renewal_offers", "prepare"), ["ro-p2", "ro-far"])).toEqual([200, 404]);
+    expect((await openProposals("ro-far")).results).toHaveLength(0);
+  });
+
+  it("approving a prepared proposal sends the drafted message at the proposed rent", async () => {
+    const { executeProposal } = await import("@/ai/effects");
+    const ctx = await ctxFor("lena");
+    const [p] = (await openProposals("ro-p2")).results;
+    const r = await executeProposal({ db: ctx.db, ws: WS, actor: ctx.actor }, p, { id: "lena", name: "Lena Ortiz", role: "leasing_agent" });
+    expect(r).toMatchObject({ ok: true });
+    const offer = await getPlatform().db.prepare("SELECT status FROM renewal_offers WHERE workspace_id = ? AND id = 'ro-p2'").bind(WS).first<{ status: string }>();
+    expect(offer?.status).toBe("Sent");
+    expect(await count("SELECT count(*) AS n FROM messages WHERE workspace_id = ? AND body = ? AND drafted_by_agent = 'renewals'", WS, JSON.parse(String(p.payload)).body)).toBe(1);
+  });
+});

@@ -428,6 +428,33 @@ registerAction({
   },
 });
 
+// Bulk "Prepare all drafts" on the renewals page. Skips a draft that already has a prepared
+// proposal waiting, so a re-run or a double click doesn't stack proposals.
+registerAction({
+  key: "renewal_offers.prepare",
+  ai: true,
+  bulk: true,
+  label: "Prepare with AI",
+  entity: "renewal_offers",
+  roles: LEASING,
+  icon: Sparkles,
+  when: (r) => r.status === "Draft",
+  help: { summary: "The Renewals agent prices the draft and writes its message, then leaves it as a proposal. A person approves before anything is sent.", article: "renewal-workflow" },
+  input: NO_INPUT,
+  async handler(ctx, row) {
+    const { effective } = await import("@/server/query");
+    const open = await ctx.db.prepare(`SELECT p.id, p.payload FROM ${effective("ai_proposals", ctx.ws)} p WHERE p.agent = 'renewals' AND p.entity_type = 'renewal_offers' AND p.entity_id = ? AND p.action = 'renewal_offers.send' AND NOT EXISTS (SELECT 1 FROM ${effective("ai_decisions", ctx.ws)} d WHERE d.proposal_id = p.id) ORDER BY p.created_at DESC LIMIT 1`).bind(row.id).first<{ id: string; payload: string }>();
+    if (open && JSON.parse(open.payload || "{}").body) return ok(JSON.stringify({ skipped: true, proposalId: open.id }));
+    // An older price-only proposal carries no message; this one replaces it.
+    if (open) await closeProposals(ctx, "renewal_offers", String(row.id), "Edited", `Replaced by a prepared offer (${ctx.actor.name})`);
+    const { prepareOffer } = await ai();
+    const r = await prepareOffer(ctx, { ...row, rent_cents: cents(row, "rent") }, (rentCents, runId) =>
+      commit(ctx, { entity: "renewal_offers", id: String(row.id), propertyId: row.property_id, verb: "priced", summary: `Renewals agent prepared $${rentCents / 100} with a message, waiting for approval`, data: { run_id: runId } },
+        [{ table: "renewal_offers", id: String(row.id), changes: { rent_cents: rentCents } }]));
+    return aiResult({ ...r.result, source: r.source, model: r.model, runId: r.runId }, r.runId);
+  },
+});
+
 const SendInput = z.object({
   subject: z.string().trim().min(3).max(200).optional(),
   body: z.string().trim().min(20).max(4000).optional(),

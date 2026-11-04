@@ -234,3 +234,25 @@ export function suggestedCents(payload: Record<string, unknown> | null | undefin
   const v = facts.offer_rent_cents ?? p.rent_cents;
   return v == null ? null : Number(v);
 }
+
+export type PreparedDraft = { offerId: string; leaseId: string; resident: string; property: string; unit: string; endOn: string; rent: number; offerRent: number; proposal: { id: string; title: string; risk: string; why: string[]; subject: string; body: string; runId: string | null; canApprove: boolean } | null };
+
+// Draft offers for leases ending in the window, with the prepared proposal (rent and message) still
+// waiting on each, for "Prepare all drafts" and "Send selected". Capped: the page works in batches.
+export async function renewalDrafts(c: LeasingCtx, window: number): Promise<PreparedDraft[]> {
+  const s = scope(c, "l.property_id");
+  const end = new Date(Date.parse(AS_OF) + window * 86_400_000).toISOString().slice(0, 10);
+  const rows = await all(c, `SELECT o.id, o.lease_id, o.rent_cents, l.end_on, l.rent_cents AS current_cents, p.name AS property, u.number AS unit, coalesce(r.first_name || ' ' || r.last_name, 'Resident') AS resident,
+      (SELECT json_object('id', x.id, 'title', x.title, 'risk', x.risk, 'amount', x.amount_cents, 'queue', x.queue_state, 'why', json(x.why), 'payload', json(x.payload), 'run', x.run_id) FROM ${E(c, "ai_proposals")} x WHERE x.agent = 'renewals' AND x.entity_type = 'renewal_offers' AND x.entity_id = o.id AND x.action = 'renewal_offers.send' AND NOT EXISTS (SELECT 1 FROM ${E(c, "ai_decisions")} d WHERE d.proposal_id = x.id) ORDER BY x.created_at DESC LIMIT 1) AS proposal
+    FROM ${E(c, "renewal_offers")} o JOIN ${E(c, "leases")} l ON l.id = o.lease_id JOIN ${E(c, "properties")} p ON p.id = l.property_id JOIN ${E(c, "units")} u ON u.id = l.unit_id
+    LEFT JOIN ${E(c, "residents")} r ON r.household_id = l.household_id AND r.is_primary = 1
+    WHERE o.status = 'Draft' AND l.status IN ('Active', 'Month-to-month') AND (l.end_on IS NULL OR l.end_on BETWEEN ? AND ?)${s.sql} ORDER BY coalesce(l.end_on, '0000') LIMIT 200`, [AS_OF, end, ...s.binds]);
+  return rows.map((r) => {
+    const x = r.proposal ? JSON.parse(String(r.proposal)) as { id: string; title: string; risk: string; amount: number | null; queue: string; why: string[] | null; payload: Record<string, unknown> | null; run: string | null } : null;
+    const body = x?.payload?.body;
+    return {
+      offerId: String(r.id), leaseId: String(r.lease_id), resident: String(r.resident), property: String(r.property), unit: String(r.unit), endOn: String(r.end_on ?? ""), rent: Number(r.current_cents) / 100, offerRent: Number(r.rent_cents) / 100,
+      proposal: x && typeof body === "string" ? { id: x.id, title: x.title, risk: x.risk, why: x.why ?? [], subject: String(x.payload?.subject ?? ""), body, runId: x.run, canApprove: mayDecide(c.actor.role, { risk: x.risk, amount_cents: x.amount, queue_state: x.queue, entity_type: "renewal_offers" }) } : null,
+    };
+  });
+}

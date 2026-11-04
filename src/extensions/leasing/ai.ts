@@ -192,17 +192,25 @@ export async function renewalFacts(ctx: AgentCtx, leaseId: string): Promise<Rene
 
 export type RenewalSuggestion = { rentCents: number; changePct: number; reasons: Reason[]; confidence: number; facts: RenewalFacts; proposalId: string };
 
+// The rules price: market rent for the unit type, tenure and 12 months of payments.
+async function priceOffer(ctx: AgentCtx, offer: Row) {
+  await ctx.call("records.get", { entity: "leases", id: String(offer.lease_id) });
+  const f = await renewalFacts(ctx, String(offer.lease_id));
+  await ctx.step({ kind: "tool_result", toolKey: "ledger.lookup", output: { tenure_months: f.tenure_months, late_payments_12m: f.late_12, returned_payments_12m: f.nsf_12, open_balance_cents: f.balance_cents, market_rent_cents: f.market_rent_cents, in_place_avg_cents: f.in_place_avg_cents }, ok: true });
+  const p = proposeRenewal({ currentCents: f.current_rent_cents, marketCents: f.market_rent_cents, tenureMonths: f.tenure_months, late12: f.late_12, nsf12: f.nsf_12, balanceCents: f.balance_cents });
+  if (f.in_place_avg_cents) p.reasons.splice(1, 0, { direction: "=", text: `Other ${f.unit_type || "same-type"} homes here rent for ${dollars(f.in_place_avg_cents)} on average today` });
+  await ctx.step({ kind: "reasoning_summary", output: { offer_rent_cents: p.rentCents, change_pct: p.changePct, cap_pct: p.capPct, reasons: p.reasons.map((r) => r.text) }, ok: true });
+  return { f, p };
+}
+
+const offerTitle = (f: RenewalFacts, offer: Row, rentCents: number, changePct: number) => `Offer ${f.resident} a ${offer.term_months ?? 12}-month renewal at ${dollars(rentCents)} (${changePct > 0 ? `+${changePct}%` : "flat"})`;
+
 export async function proposeOffer(actx: ActionContext, offer: Row): Promise<RunOut<RenewalSuggestion>> {
   return run(actx, "renewals", { task: "price_renewal", renewal_offer_id: offer.id, lease_id: offer.lease_id }, async (ctx) => {
-    await ctx.call("records.get", { entity: "leases", id: String(offer.lease_id) });
-    const f = await renewalFacts(ctx, String(offer.lease_id));
-    await ctx.step({ kind: "tool_result", toolKey: "ledger.lookup", output: { tenure_months: f.tenure_months, late_payments_12m: f.late_12, returned_payments_12m: f.nsf_12, open_balance_cents: f.balance_cents, market_rent_cents: f.market_rent_cents, in_place_avg_cents: f.in_place_avg_cents }, ok: true });
-    const p = proposeRenewal({ currentCents: f.current_rent_cents, marketCents: f.market_rent_cents, tenureMonths: f.tenure_months, late12: f.late_12, nsf12: f.nsf_12, balanceCents: f.balance_cents });
-    if (f.in_place_avg_cents) p.reasons.splice(1, 0, { direction: "=", text: `Other ${f.unit_type || "same-type"} homes here rent for ${dollars(f.in_place_avg_cents)} on average today` });
-    await ctx.step({ kind: "reasoning_summary", output: { offer_rent_cents: p.rentCents, change_pct: p.changePct, cap_pct: p.capPct, reasons: p.reasons.map((r) => r.text) }, ok: true });
+    const { f, p } = await priceOffer(ctx, offer);
     const proposed = await ctx.proposeFull({
       entity: "renewal_offers", entityId: String(offer.id), action: "renewal_offers.send", propertyId: String(offer.property_id),
-      title: `Offer ${f.resident} a ${offer.term_months ?? 12}-month renewal at ${dollars(p.rentCents)} (${p.changePct > 0 ? `+${p.changePct}%` : "flat"})`,
+      title: offerTitle(f, offer, p.rentCents, p.changePct),
       why: p.reasons.map((r) => r.text).slice(0, 6), confidence: p.confidence, risk: p.needsPerson ? "Medium" : "Low", assignee: "leasing_agent",
       evidence: [{ entity_type: "leases", entity_id: String(offer.lease_id), label: `${f.resident} · ${f.property} #${f.unit}` }],
       payload: { facts: { ...f, offer_rent_cents: p.rentCents } },
@@ -213,19 +221,47 @@ export async function proposeOffer(actx: ActionContext, offer: Row): Promise<Run
 
 export type MessageDraft = { subject: string; body: string };
 
+async function offerMessage(ctx: AgentCtx, actx: ActionContext, f: RenewalFacts, offer: Row, rentCents: number): Promise<MessageDraft & { drafted: boolean }> {
+  const facts = { first_name: f.first_name, property: f.property, unit: f.unit, end_on: f.end_on, offer_rent_cents: rentCents, current_rent_cents: f.current_rent_cents, term_months: Number(offer.term_months ?? 12), reply_by: String(offer.expires_on ?? "") };
+  await ctx.step({ kind: "tool_result", toolKey: "records.get", output: { facts }, ok: true });
+  const template: MessageDraft = {
+    subject: `Your renewal offer at ${f.property}`,
+    body: `Hi ${f.first_name},\n\nYour lease at ${f.property} #${f.unit} ends on ${letterDates(String(f.end_on))}. We can renew for ${facts.term_months} months at ${dollars(rentCents)} a month${rentCents === f.current_rent_cents ? ", the same as today" : ""}.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${actx.actor.name}`,
+  };
+  const drafted = await prose(ctx, z.object({ subject: z.string().min(5).max(120), body: z.string().min(60).max(1500) }),
+    `You write a short, warm renewal offer email from a US property manager to a resident. State the new monthly rent and term from the facts, invite a reply, and sign with the sender's name. Never promise waivers, discounts or anything not in the facts. ${PLAIN}`,
+    JSON.stringify({ ...facts, sender: actx.actor.name }),
+    (v) => [...checkDraft(v.body, facts), ...checkFairHousing(v.body).map((x) => `Fair-housing: "${x.phrase}"`)]);
+  return { ...(drafted ?? template), drafted: !!drafted };
+}
+
 export async function draftOfferMessage(actx: ActionContext, offer: Row): Promise<RunOut<MessageDraft>> {
   return run(actx, "renewals", { task: "draft_renewal_message", renewal_offer_id: offer.id }, async (ctx) => {
     const f = await renewalFacts(ctx, String(offer.lease_id));
-    const facts = { first_name: f.first_name, property: f.property, unit: f.unit, end_on: f.end_on, offer_rent_cents: Number(offer.rent_cents), current_rent_cents: f.current_rent_cents, term_months: Number(offer.term_months ?? 12), reply_by: String(offer.expires_on ?? "") };
-    await ctx.step({ kind: "tool_result", toolKey: "records.get", output: { facts }, ok: true });
-    const template: MessageDraft = {
-      subject: `Your renewal offer at ${f.property}`,
-      body: `Hi ${f.first_name},\n\nYour lease at ${f.property} #${f.unit} ends on ${letterDates(String(f.end_on))}. We can renew for ${facts.term_months} months at ${dollars(facts.offer_rent_cents)} a month${facts.offer_rent_cents === f.current_rent_cents ? ", the same as today" : ""}.\n\nReply to this message to accept, or if you'd like to talk about a different term.\n\nThank you,\n${actx.actor.name}`,
-    };
-    const drafted = await prose(ctx, z.object({ subject: z.string().min(5).max(120), body: z.string().min(60).max(1500) }),
-      `You write a short, warm renewal offer email from a US property manager to a resident. State the new monthly rent and term from the facts, invite a reply, and sign with the sender's name. Never promise waivers, discounts or anything not in the facts. ${PLAIN}`,
-      JSON.stringify({ ...facts, sender: actx.actor.name }),
-      (v) => [...checkDraft(v.body, facts), ...checkFairHousing(v.body).map((x) => `Fair-housing: "${x.phrase}"`)]);
-    return { summary: drafted ? "Drafted the renewal message." : "Wrote the renewal message from the template.", result: drafted ?? template };
+    const { drafted, ...m } = await offerMessage(ctx, actx, f, offer, Number(offer.rent_cents));
+    return { summary: drafted ? "Drafted the renewal message." : "Wrote the renewal message from the template.", result: m };
+  });
+}
+
+// "Prepare all drafts": price the draft, save that rent on it, draft the message for that rent, and
+// leave one proposal (renewal_offers.send, carrying the message) for a person. Nothing is sent here;
+// approving the proposal sends it, and the approval policy decides who may approve which rent.
+export type PreparedOffer = MessageDraft & { rentCents: number; changePct: number; reasons: Reason[]; confidence: number; risk: "Low" | "Medium"; proposalId: string };
+
+export async function prepareOffer(actx: ActionContext, offer: Row, saveRent: (rentCents: number, runId: string) => Promise<void>): Promise<RunOut<PreparedOffer>> {
+  return run(actx, "renewals", { task: "prepare_renewal", renewal_offer_id: offer.id, lease_id: offer.lease_id }, async (ctx) => {
+    const { f, p } = await priceOffer(ctx, offer);
+    // Saved before proposing, so the proposal's snapshot already has the rent it will send.
+    await saveRent(p.rentCents, ctx.runId);
+    const m = await offerMessage(ctx, actx, f, offer, p.rentCents);
+    const risk = p.needsPerson ? "Medium" as const : "Low" as const;
+    const proposed = await ctx.proposeFull({
+      entity: "renewal_offers", entityId: String(offer.id), action: "renewal_offers.send", propertyId: String(offer.property_id),
+      title: offerTitle(f, offer, p.rentCents, p.changePct),
+      why: p.reasons.map((r) => r.text).slice(0, 6), confidence: p.confidence, risk, assignee: "leasing_agent",
+      evidence: [{ entity_type: "leases", entity_id: String(offer.lease_id), label: `${f.resident} · ${f.property} #${f.unit}` }],
+      payload: { facts: { ...f, offer_rent_cents: p.rentCents }, subject: m.subject, body: m.body, channel: "Email", ai_drafted: true },
+    });
+    return { summary: `Prepared ${dollars(p.rentCents)} (${p.changePct}%) with a ${m.drafted ? "drafted" : "template"} message; waiting for a person.`, result: { subject: m.subject, body: m.body, rentCents: p.rentCents, changePct: p.changePct, reasons: p.reasons, confidence: p.confidence, risk, proposalId: proposed.id } };
   });
 }
