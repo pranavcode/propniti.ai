@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "@/components/Link";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -50,6 +50,17 @@ export function SetupPill({ collapsed, onClick }: { collapsed?: boolean; onClick
   return collapsed ? <Tooltip><TooltipTrigger asChild>{btn}</TooltipTrigger><TooltipContent side="right">Finish setup · {done}/{total}</TooltipContent></Tooltip> : btn;
 }
 
+// The AI-guided flow at /app/onboarding that covers company, import, rules and team in one place.
+export function GuidedSetupLink({ onClick }: { onClick?: () => void }) {
+  return (
+    <Link href="/app/onboarding" onClick={onClick} className="flex items-center gap-2.5 rounded-lg border border-primary/25 bg-primary/[0.035] px-3 py-2.5 text-[12.5px] transition-colors hover:bg-primary/[0.07]">
+      <Sparkles className="size-3.5 shrink-0 text-tone-ai" aria-hidden />
+      <span className="min-w-0 flex-1"><span className="font-medium">Guided setup</span><span className="text-muted-foreground"> · company, data, rules, team and a data check in one flow</span></span>
+      <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+    </Link>
+  );
+}
+
 export function SetupChecklist({ items: given, onNavigate, className }: { items?: SetupItem[]; onNavigate?: () => void; className?: string }) {
   const { items, done, total, setDone } = useSetupProgress(given);
   const next = items.find((i) => !i.done);
@@ -62,6 +73,7 @@ export function SetupChecklist({ items: given, onNavigate, className }: { items?
           <div className="text-[12px] text-muted-foreground">{done} of {total} done · most teams finish in under an hour</div>
         </div>
       </div>
+      <GuidedSetupLink onClick={onNavigate} />
       <ol className="divide-y overflow-hidden rounded-lg border">
         {items.map((i) => (
           <li key={i.key} className={cn("flex items-start gap-3 px-3 py-2.5", i === next && "bg-primary/[0.035]")}>

@@ -105,7 +105,7 @@ export default async function PortfolioDashboard() {
                 );
               })}
             </ul>
-          ) : <EmptyState kind="table" title="No properties in your scope" description="Properties you manage appear here with photos, occupancy and NOI." />}
+          ) : <EmptyState kind="table" title="No properties in your scope" description="Properties you manage appear here with photos, occupancy and NOI." action={{ label: "Set up your portfolio", href: "/app/onboarding" }} />}
         </Section>
       </PageBody>
     </main>
