@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getEntity } from "@/entities";
 import type { ActionKey, Row } from "@/entities/types";
 import type { Persona } from "@/auth/personas";
-import { addDays, money } from "./rules";
+import { addDays, money, monthName, total } from "./rules";
 import { columns, eff, insert, newId, parseJson, sql, upsertOverlay, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
 import { openRun, runNow, runWithContext } from "./orchestrator";
@@ -17,6 +17,7 @@ import type { ToolKey } from "./types";
 import "./agents";
 import { agentName } from "@/ai/ui/labels";
 import { formatDate } from "@/lib/format";
+import { humanizeKey } from "@/lib/fieldText";
 
 // The assistant (⌘J and /app/copilot). Three modes over the same tools the agents use:
 //   chat    answers about your data; the model plans the lookups, figures come from tool results
@@ -70,8 +71,9 @@ async function catalog(db: DataCtx["db"]) {
 // Every dollar figure in a model answer must appear in what the tools returned.
 export function unverified(answer: string, outputs: string[]) {
   const seen = new Set<number>();
-  for (const o of outputs) for (const m of o.matchAll(/"[a-z_]*cents":(-?\d+)/g)) seen.add(Math.abs(Number(m[1])));
-  for (const o of outputs) for (const m of o.matchAll(/"total_balance_cents":(\d+)/g)) seen.add(Number(m[1]));
+  // Totals are stated in whole dollars like the KPI tiles, so a looked-up amount also counts rounded.
+  const see = (c: number) => { seen.add(c); seen.add(Math.round(c / 100) * 100); };
+  for (const o of outputs) for (const m of o.matchAll(/"[a-z_]*cents":(-?\d+)/g)) see(Math.abs(Number(m[1])));
   return amountsIn(answer).filter((a) => !seen.has(a) && !seen.has(Math.round(a / 100) * 100));
 }
 
@@ -97,7 +99,7 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     if (!r.total) return { answer: `Nobody${where} is ${days ? `${days}+ days ` : ""}late on rent right now.`, citations: [] };
     const top = r.rows.slice(0, 5).map((d) => `${d.resident} (${d.property} #${d.unit}) owes ${money(d.balance_cents)}, ${fmtDays(d)}`);
     return {
-      answer: `${r.total} resident${r.total === 1 ? " is" : "s are"} ${days ? `${days}+ days` : ""} late${where}, owing ${money(r.total_balance_cents)} in total. ${top.join("; ")}${r.total > 5 ? `; and ${r.total - 5} more in the table` : ""}.`.replace("  ", " "),
+      answer: `${r.total} resident${r.total === 1 ? " is" : "s are"} ${days ? `${days}+ days` : ""} late${where}, owing ${total(r.total_balance_cents)} in total. ${top.join("; ")}${r.total > 5 ? `; and ${r.total - 5} more in the table` : ""}.`.replace("  ", " "),
       table: lateTable(r.rows), citations: r.rows.slice(0, 10).map((d) => ({ entity_type: "leases", entity_id: d.lease_id, label: `${d.resident} · ${d.property} #${d.unit}`, href: hrefFor("leases", d.lease_id) })),
     };
   }
@@ -111,7 +113,7 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     const r = await ctx.call<{ total: number; rows: Row[] }>("records.search", { entity: "leases", filters: [{ field: "status", op: "eq", value: "Active" }, { field: "end_on", op: "gte", value: ctx.today }, { field: "end_on", op: "lte", value: end }, ...(offered.length ? [{ field: "id", op: "nin", value: offered }] : [])], sort: ["end_on", "asc"], size: 25 });
     const what = `active lease${r.total === 1 ? "" : "s"}${noOffer ? " without a renewal offer" : ""}`;
     return {
-      answer: r.total ? `${r.total} ${what} end${r.total === 1 ? "s" : ""} by ${end}. The first: ${r.rows.slice(0, 5).map((l) => `${l.id} on ${formatDate(String(l.end_on), "always")}`).join(", ")}.` : `No ${what} end by ${end}.`,
+      answer: r.total ? `${r.total} ${what} end${r.total === 1 ? "s" : ""} by ${formatDate(end, "always")}. The first: ${r.rows.slice(0, 5).map((l) => `${l.id} on ${formatDate(String(l.end_on), "always")}`).join(", ")}.` : `No ${what} end by ${formatDate(end, "always")}.`,
       table: { columns: [{ key: "id", label: "Lease" }, { key: "end_on", label: "Ends" }, { key: "rent", label: "Rent", align: "right" }], rows: r.rows.map((l) => ({ id: l.id, end_on: l.end_on, rent: money(Number(l.rent_cents)), href: hrefFor("leases", String(l.id)) })) },
       citations: r.rows.slice(0, 10).map((l) => ({ entity_type: "leases", entity_id: String(l.id), label: `Lease ${l.id}`, href: hrefFor("leases", String(l.id)) })),
     };
@@ -129,14 +131,14 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     const x = await ctx.call<NoiExplanation | { error: string }>("metrics.explain_noi", { metro });
     if ("error" in x) return { answer: "There isn't enough monthly history to compare NOI yet.", citations: [] };
     const { explainText } = await import("./rules");
-    return { answer: `${metro ?? "Portfolio"}: ${explainText(x)}`, citations: x.by_property.slice(0, 5).map((p) => ({ entity_type: "properties", entity_id: p.property_id, label: `${p.property}: ${money(p.change_cents)}`, href: hrefFor("properties", p.property_id) })) };
+    return { answer: `${metro ?? "Portfolio"}: ${explainText(x)}`, citations: x.by_property.slice(0, 5).map((p) => ({ entity_type: "properties", entity_id: p.property_id, label: `${p.property}: ${total(p.change_cents)}`, href: hrefFor("properties", p.property_id) })) };
   }
   if (/\b(occupan\w*|vacan\w*)\b/i.test(q)) {
     const rows = (await ctx.call<{ rows: Row[] }>("metrics.monthly", { metro, months: 1 })).rows;
     const ranked = [...rows].sort((a, b) => Number(a.occupancy_econ) - Number(b.occupancy_econ));
     if (!ranked.length) return { answer: "No occupancy figures yet.", citations: [] };
     return {
-      answer: `Economic occupancy for ${ranked[0].month}${metro ? ` in ${metro}` : ""}, lowest first: ${ranked.slice(0, 5).map((r) => `${r.property} ${(Number(r.occupancy_econ) * 100).toFixed(1)}%`).join(", ")}.`,
+      answer: `Economic occupancy for ${monthName(String(ranked[0].month))}${metro ? ` in ${metro}` : ""}, lowest first: ${ranked.slice(0, 5).map((r) => `${r.property} ${(Number(r.occupancy_econ) * 100).toFixed(1)}%`).join(", ")}.`,
       table: { columns: [{ key: "property", label: "Property" }, { key: "phys", label: "Physical", align: "right" }, { key: "econ", label: "Economic", align: "right" }], rows: ranked.map((r) => ({ property: r.property, phys: `${(Number(r.occupancy_phys) * 100).toFixed(1)}%`, econ: `${(Number(r.occupancy_econ) * 100).toFixed(1)}%`, href: hrefFor("properties", String(r.property_id)) })) },
       citations: [],
     };
@@ -152,7 +154,7 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
   }
   if (/\b(data (issue|health|quality)|bad data|duplicates?)\b/i.test(q)) {
     const r = await ctx.call<{ total: number; rows: Row[] }>("data.issues", { status: "open", size: 10 });
-    return { answer: `${r.total} open data issue${r.total === 1 ? "" : "s"}. ${r.rows.slice(0, 5).map((i) => `${i.rule_id} on ${i.entity_type} ${i.entity_id}`).join("; ")}.`, citations: [{ label: "Data health", href: "/app/data-health" }] };
+    return { answer: `${r.total} open data issue${r.total === 1 ? "" : "s"}. ${r.rows.slice(0, 5).map((i) => `${humanizeKey(String(i.rule_id).split(".").pop()!)} on ${getEntity(String(i.entity_type))?.label.one.toLowerCase() ?? String(i.entity_type).replace(/_/g, " ")} ${i.entity_id}`).join("; ")}.`, citations: [{ label: "Data health", href: "/app/data-health" }] };
   }
   if (/\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
     const runs = await sql<{ agent_key: string; n: number; proposals: number }>(ctx.data, "SELECT r.agent_key, count(*) AS n, (SELECT count(*) FROM {ai_proposals} p WHERE p.agent = r.agent_key) AS proposals FROM {agent_runs} r GROUP BY r.agent_key ORDER BY n DESC", [], { unscoped: true });

@@ -1,7 +1,7 @@
 import { sql } from "../data";
 import { monthly, type NoiExplanation } from "../facts";
 import { defineAgent, money, type Candidate } from "./framework";
-import { explainText } from "../rules";
+import { explainText, monthName } from "../rules";
 export { explainText } from "../rules";
 
 // Variance explanations for owners: when an owner entity's NOI moved more than 3% month over month,
@@ -39,8 +39,8 @@ export default defineAgent({
       const text = explainText(x);
       out.push({
         entity: "owner_entities", entityId: e.id, action: "owner_entities.send_explanation", propertyId: ids.length === 1 ? ids[0] : null,
-        title: `Explain ${e.name}'s ${x.change_pct < 0 ? "NOI drop" : "NOI rise"} of ${Math.abs(x.change_pct)}% in ${x.month}`,
-        why: [text, x.budget_noi_cents != null ? `Budget NOI for ${x.month} was ${money(x.budget_noi_cents)}` : "No budget on file for this month"].slice(0, 2),
+        title: `Explain ${e.name}'s ${x.change_pct < 0 ? "NOI drop" : "NOI rise"} of ${Math.abs(x.change_pct)}% in ${monthName(x.month)}`,
+        why: [text, x.budget_noi_cents != null ? `Budget NOI for ${monthName(x.month)} was ${money(x.budget_noi_cents)}` : "No budget on file for this month"].slice(0, 2),
         confidence: 0.85, risk: "Low",
         facts: { owner_entity: e.name, month: x.month, noi_cents: x.noi_cents, prior_noi_cents: x.prior_noi_cents, change_pct: x.change_pct, ...Object.fromEntries(x.drivers.map((d, i) => [`driver_${i + 1}_cents`, Math.abs(d.delta_cents)])), ...(x.expense_lines[0] ? { top_expense_delta_cents: Math.abs(x.expense_lines[0].delta_cents) } : {}) },
         extra: { explanation: x },

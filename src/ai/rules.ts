@@ -4,7 +4,13 @@ import type { Delinquent, NoiExplanation } from "./facts";
 // Pure rules the agents use and other modules reuse (scoring, triage, drafts, fixes, wording). This
 // module imports types only, so importing it never loads the agent runtime (no import cycles).
 
-export const money = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+// Exact amounts (a balance, a rent): "$1,450", "$1,127.50", "−$6,379.86".
+export const money = (cents: number) => `${cents < 0 ? "−" : ""}$${(Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+// Totals and changes, as the KPI tiles show them: whole dollars from $1,000 up ("$5,855,696",
+// "−$6,380"), cents below.
+export const total = (cents: number) => (Math.abs(cents) >= 100_000 ? `${cents < 0 ? "−" : ""}$${Math.round(Math.abs(cents) / 100).toLocaleString("en-US")}` : money(cents));
+// "2026-10" → "Oct 2026".
+export const monthName = (ym: string) => (/^\d{4}-\d{2}$/.test(ym) ? new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : ym);
 export const addDays = (date: string, n: number) => new Date(Date.parse(date) + n * 86_400_000).toISOString().slice(0, 10);
 
 export type Factor = { factor: string; direction: "+" | "-"; weight: number; detail: string };
@@ -181,14 +187,14 @@ export function computeFix(rule: string, row: Row): { changes: Record<string, un
 export function explainText(x: NoiExplanation) {
   const dir = x.noi_cents < x.prior_noi_cents ? "fell" : "rose";
   const top = x.drivers.filter((d) => d.delta_cents !== 0).slice(0, 3);
-  const lines = top.map((d) => `${d.label} ${d.delta_cents < 0 ? "lowered" : "raised"} NOI by ${money(Math.abs(d.delta_cents))}`);
+  const lines = top.map((d) => `${d.label} ${d.delta_cents < 0 ? "lowered" : "raised"} NOI by ${total(Math.abs(d.delta_cents))}`);
   const prop = x.by_property[0];
   const gl = x.expense_lines[0];
   return (
-    `NOI ${dir} ${Math.abs(x.change_pct)}% in ${x.month}, from ${money(x.prior_noi_cents)} to ${money(x.noi_cents)}. ` +
+    `NOI ${dir} ${Math.abs(x.change_pct)}% in ${monthName(x.month)}, from ${total(x.prior_noi_cents)} to ${total(x.noi_cents)}. ` +
     (lines.length ? `${lines.join("; ")}. ` : "") +
-    (prop && prop.change_cents < 0 ? `${prop.property} moved most (${money(prop.change_cents)}). ` : "") +
-    (gl && gl.delta_cents > 0 ? `The largest expense increase was ${gl.gl} (+${money(gl.delta_cents)}).` : "")
+    (prop && prop.change_cents < 0 ? `${prop.property} moved most (${total(prop.change_cents)}). ` : "") +
+    (gl && gl.delta_cents > 0 ? `The largest expense increase was ${gl.gl} (+${total(gl.delta_cents)}).` : "")
   ).trim();
 }
 
