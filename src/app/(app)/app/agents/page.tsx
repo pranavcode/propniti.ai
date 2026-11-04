@@ -7,13 +7,11 @@ import { AgentsCenter } from "@/ai/ui/AgentsCenter";
 import { pageData } from "@/ai/ui/server";
 import { agentCards, aiStatus } from "@/ai/views";
 import { canEditPolicies } from "@/ai/policy-editors";
-import { describeCron, eventLabel, sweepTiming } from "@/ai/automations";
+import { describeCron, eventLabel, sweepNow } from "@/ai/automations";
 
 // "Daily at 14:00 UTC · on Payment returned, Rent overdue", the same words as the Automations page.
 const runsText = (schedule: string | null, events: string[]) =>
   [schedule ? `${describeCron(schedule)} UTC` : null, events.length ? `on ${events.map(eventLabel).join(", ")}` : null].filter(Boolean).join(" · ") || "Only when run by hand";
-// The sweep runs on real 15-minute boundaries, so it is timed by the real clock, not the demo day.
-const sweepNow = (last: string | null) => sweepTiming(Date.now(), last ? Date.parse(last) : null);
 
 export const metadata = { title: "Agents · Propniti" };
 

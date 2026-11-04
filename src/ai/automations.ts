@@ -83,6 +83,9 @@ export function sweepTiming(nowMs: number, lastMs: number | null) {
   };
 }
 
+// The sweep timing as of now, from the last sweep's stamp (the Agents page).
+export const sweepNow = (lastIso: string | null) => sweepTiming(Date.now(), lastIso ? Date.parse(lastIso) : null);
+
 export type AutomationAgent = {
   key: AgentKey; name: string; goal: string; href: string; enabled: boolean;
   schedule: string | null; scheduleText: string | null; events: { type: string; label: string }[]; scope: string;
