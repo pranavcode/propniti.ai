@@ -9,21 +9,21 @@ export const DOCS = [
   {
     slug: "spec",
     title: "Product Specification",
-    description: "What Propniti V1 does and for whom: personas, use cases, requirements, the agent's confidence policy and the release plan.",
+    description: "What Propniti v2 does and for whom: 13 personas, requirements with their build status, how the eight agents are triggered and routed, the data model and the release plan.",
     artifactIds: ["DXDBSKYjgKugTihapBFiwi", "65657bb1-596a-48d3-8a7d-2adb8ddbcb99"],
     markdown: spec,
   },
   {
     slug: "architecture",
     title: "Solution Architecture & Design",
-    description: "How Propniti is built: portable domain services, an agent that acts only through their APIs, and the prototype on one Cloudflare Worker.",
+    description: "How Propniti v2 is built: one Cloudflare Worker, a shared base with a private overlay per visitor, record types defined once, and an agent runtime that proposes through named actions.",
     artifactIds: ["NhiYprgrxfwewnvc8NPjCX", "afbf4499-1e14-4619-99cb-37329da487e4"],
     markdown: architecture,
   },
   {
     slug: "walkthrough",
     title: "Prototype Walkthrough",
-    description: "A step-by-step tour of the live prototype, one section per role, with screenshots from propniti.ai.",
+    description: "A step-by-step tour of propniti.ai: one section per staff persona, the four portals and the public listings site.",
     artifactIds: ["ENmSvNwUzX8WzaeaTCti8p", "6c50d029-0dd8-499c-992f-96ca296d3e31"],
     markdown: walkthrough,
   },
@@ -31,8 +31,8 @@ export const DOCS = [
 
 export type DocSlug = (typeof DOCS)[number]["slug"];
 
-// Date the snapshots were taken from Claude Docs.
-export const SNAPSHOT_DATE = "2026-10-29";
+// Date the docs were last brought in line with the code.
+export const SNAPSHOT_DATE = "2026-11-04";
 
 export function getDoc(slug: string) {
   return DOCS.find((d) => d.slug === slug);

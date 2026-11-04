@@ -14,8 +14,7 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 - **⌘J** opens the assistant, *Ask Propniti*. Pick *Ask*, *Do* or *Help*, or leave it on *Auto*. Each answer shows "Looked up N things" and a *Full trace* link to the run.
 - **Agents and approvals.** `/app/agents` lists the eight agents. `/app/ai/approvals` holds what they proposed. `/app/ai/activity` lists every run.
 
-![Record peek drawer open beside a work-order list](screens/marcus-peek-drawer.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Record peek drawer open beside a work-order list](screens/marcus-peek-drawer.png) -->
 
 ## 2. Daniel Reyes, principal
 
@@ -29,14 +28,11 @@ Daniel sees all 30 properties. He lands on `/app`, the portfolio home.
 
 AI here: *Explain* (facts computed, wording by a model or by rules), the what-if narration, and agent proposals.
 
-![Daniel's portfolio home with briefing, KPIs and Explain buttons](screens/daniel-home.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Daniel's portfolio home with briefing, KPIs and Explain buttons](screens/daniel-home.png) -->
 
-![Explain NOI sheet with drivers and a View run link](screens/daniel-explain-noi.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Explain NOI sheet with drivers and a View run link](screens/daniel-explain-noi.png) -->
 
-![What-if simulator with Rent +3% applied](screens/daniel-what-if.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![What-if simulator with Rent +3% applied](screens/daniel-what-if.png) -->
 
 ## 3. Priya Shah, regional manager
 
@@ -49,8 +45,7 @@ Priya sees 14 Texas properties. She lands on `/app`, the regional version.
 
 AI here: per-property *Explain*, AI column matching in the import, and concession proposals routed to her by the approval policy (concessions over $500 need a regional manager).
 
-![Priya's regional home with the property comparison table](screens/priya-home.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Priya's regional home with the property comparison table](screens/priya-home.png) -->
 
 ## 4. Marcus Bell, property manager
 
@@ -65,14 +60,11 @@ Marcus runs three Austin communities. He lands on `/app/today`.
 
 AI here: the Collections and Renewals agents' proposals, suggested replies, lease abstraction and announcement drafts. Each draft links to its run.
 
-![Marcus's Today page with briefing, KPIs and approvals](screens/marcus-today.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Marcus's Today page with briefing, KPIs and approvals](screens/marcus-today.png) -->
 
-![Approval item expanded with reasons, evidence and confidence](screens/marcus-approval-why.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Approval item expanded with reasons, evidence and confidence](screens/marcus-approval-why.png) -->
 
-![Inbox with a suggested reply ready to edit](screens/marcus-inbox-reply.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Inbox with a suggested reply ready to edit](screens/marcus-inbox-reply.png) -->
 
 ## 5. Lena Ortiz, leasing agent
 
@@ -86,11 +78,9 @@ Lena handles leasing for the same three Austin properties. She lands on `/app/le
 
 AI here: the Leasing and Renewals agents, listing drafts, and the fair-housing check.
 
-![Lena's leasing day with tours and follow-ups](screens/lena-leasing-today.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Lena's leasing day with tours and follow-ups](screens/lena-leasing-today.png) -->
 
-![Listing editor with an AI draft and the fair-housing check](screens/lena-listing-draft.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Listing editor with an AI draft and the fair-housing check](screens/lena-listing-draft.png) -->
 
 ## 6. Rachel Moore, managing broker
 
@@ -103,11 +93,9 @@ Rachel decides applications. She lands on `/app/leasing/broker`, the *Broker des
 
 Criminal history is never scored; it routes to a person. An application from the public site is scored moments after it is submitted, and the recommendation lands in her approvals inbox (see [section 15](#15-public-listings-site)).
 
-![Broker desk with applications and AI recommendations](screens/rachel-broker-desk.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Broker desk with applications and AI recommendations](screens/rachel-broker-desk.png) -->
 
-![Application scoring tab with reasons for and against](screens/rachel-application-score.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Application scoring tab with reasons for and against](screens/rachel-application-score.png) -->
 
 ## 7. Grace Kim, senior accountant
 
@@ -123,14 +111,11 @@ Grace works across all owner entities. She lands on `/app/finance`.
 
 AI here: invoice reading (a vision model when configured), the Payables agent, statement and variance explanations, and the report builder.
 
-![Grace's finance home](screens/grace-finance-home.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Grace's finance home](screens/grace-finance-home.png) -->
 
-![AP inbox with fields read from an invoice and payables checks](screens/grace-ap-inbox.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![AP inbox with fields read from an invoice and payables checks](screens/grace-ap-inbox.png) -->
 
-![Owner statement with an Explain popover](screens/grace-owner-statement-explain.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Owner statement with an Explain popover](screens/grace-owner-statement-explain.png) -->
 
 ## 8. Tom Alvarez, maintenance supervisor
 
@@ -146,14 +131,11 @@ Tom oversees maintenance for 14 Texas properties. He lands on `/app/maintenance`
 
 AI here: the Maintenance triage and Compliance agents. The PO check is rules.
 
-![Tom's maintenance home with triage queue](screens/tom-maintenance-home.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Tom's maintenance home with triage queue](screens/tom-maintenance-home.png) -->
 
-![Work order Invoice and PO tab with the PO check](screens/tom-invoice-po.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Work order Invoice and PO tab with the PO check](screens/tom-invoice-po.png) -->
 
-![Compliance dashboard with expiries timeline](screens/tom-compliance.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Compliance dashboard with expiries timeline](screens/tom-compliance.png) -->
 
 ## 9. Sam Okafor, administrator
 
@@ -165,14 +147,11 @@ Sam manages the org's settings. He lands on `/app/admin`.
 4. Open *Audit log* to see every human and agent action.
 5. Open *Data health*. It shows a score, open issues by rule and by property, and each suggested fix as before and after. *Apply fix* and *Apply N safe fixes* correct the records. Fixes that touch money, fraud or legal status go to the approvals inbox instead.
 
-![Sam's admin briefing](screens/sam-admin-briefing.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Sam's admin briefing](screens/sam-admin-briefing.png) -->
 
-![Approval policy edit with change history](screens/sam-approval-policy.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Approval policy edit with change history](screens/sam-approval-policy.png) -->
 
-![Data health with before and after for a fix](screens/sam-data-health.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Data health with before and after for a fix](screens/sam-data-health.png) -->
 
 ## 10. Nadia Brooks, platform admin
 
@@ -183,11 +162,9 @@ Nadia looks after every customer org. She lands on `/app/admin`, with platform q
 3. Open *AI usage*: runs per day, runs by agent, tokens and cost by model and by organization.
 4. Unlike Sam, Nadia can approve agent proposals from her briefing.
 
-![Platform console with customer organizations](screens/nadia-platform-orgs.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Platform console with customer organizations](screens/nadia-platform-orgs.png) -->
 
-![AI usage by agent and model](screens/nadia-ai-usage.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![AI usage by agent and model](screens/nadia-ai-usage.png) -->
 
 ## 11. Agents, approvals and runs
 
@@ -202,14 +179,11 @@ Any staff persona with AI access can follow these steps. Marcus is a good choice
 
 Agents also run without anyone: every 15 minutes on a schedule, on events such as an overdue charge or a new application, and on the first visit after a missed sweep.
 
-![Agents page with cards and Run now](screens/marcus-agents.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Agents page with cards and Run now](screens/marcus-agents.png) -->
 
-![Live run sheet streaming steps](screens/marcus-run-live.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Live run sheet streaming steps](screens/marcus-run-live.png) -->
 
-![Approvals inbox, Needs you tab](screens/marcus-approvals.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Approvals inbox, Needs you tab](screens/marcus-approvals.png) -->
 
 ## 12. Owner portal (Helen Carter)
 
@@ -220,11 +194,9 @@ Helen owns Bluebonnet Residential Fund II. She lands on `/portal/owner`.
 3. Open *Approvals*. Repairs over her approval limit wait here with *Why this needs you*. Click *Approve $…*, add an optional note, and confirm. The property manager is notified.
 4. Click *Ask AI* and choose "Why was my distribution lower this month?".
 
-![Owner portal home with the monthly briefing](screens/owner-home.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Owner portal home with the monthly briefing](screens/owner-home.png) -->
 
-![Owner repair approval with reasons](screens/owner-approvals.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Owner repair approval with reasons](screens/owner-approvals.png) -->
 
 ## 13. Resident portal (Jordan Lee)
 
@@ -236,11 +208,9 @@ Jordan rents #412 at The Lofts at Riverside. He lands on `/portal/resident`.
 
 The first read is rules. *Ask AI* answers from Jordan's own records.
 
-![Resident pay page](screens/resident-pay.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Resident pay page](screens/resident-pay.png) -->
 
-![New request with the AI first read](screens/resident-request-triage.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![New request with the AI first read](screens/resident-request-triage.png) -->
 
 ## 14. Vendor portal (Luis Ramirez) and applicant portal (Priyanka Rao)
 
@@ -258,11 +228,9 @@ You can test invoice reading with the sample files: [clean invoice](https://prop
 2. Open *Documents* to upload. Only the file name is kept.
 3. Open *Fee* and pay $55. No real card is charged.
 
-![Vendor invoice read from an uploaded file](screens/vendor-invoice.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Vendor invoice read from an uploaded file](screens/vendor-invoice.png) -->
 
-![Applicant status timeline and checklist](screens/applicant-status.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Applicant status timeline and checklist](screens/applicant-status.png) -->
 
 ## 15. Public listings site
 
@@ -276,11 +244,9 @@ No sign-in is needed. Open [propniti.ai/listings](https://propniti.ai/listings).
 
 Tours and applications stay in your private copy and reset at midnight Pacific.
 
-![Public listing with pricing, fees and Ask about this unit](screens/public-listing.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Public listing with pricing, fees and Ask about this unit](screens/public-listing.png) -->
 
-![Application status with the AI screening summary](screens/public-application-status.png)
-<!-- TODO: screenshot -->
+<!-- TODO: screenshot ![Application status with the AI screening summary](screens/public-application-status.png) -->
 
 ## 16. Known limits
 
@@ -290,7 +256,7 @@ Tours and applications stay in your private copy and reset at midnight Pacific.
 - **Owner approvals.** The owner portal lists repairs over the owner's limit. Agent proposals waiting on an owner appear in the staff *Waiting on others* tab, not in the portal.
 - **Approvals filters.** The approvals inbox has no filter controls; `?agent=` in the URL filters by agent.
 - **Locked records** still show *Edit*. Saving is refused.
-- **Automations** at `/app/automations` is a placeholder.
+- **Automations, inbox and tasks.** The pages at `/app/automations`, `/app/inbox` and `/app/tasks` are still being built. <!-- TODO: add walkthrough steps when these pages merge -->
 - **Import** creates properties and units only, not residents or leases.
 
 More detail: [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).

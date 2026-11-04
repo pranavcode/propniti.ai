@@ -149,7 +149,7 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Assistant (⌘J and `/app/copilot`): Ask, Do and Help modes; each turn is a traced run; saved conversations | Built | Do mode turns rent-reminder requests into proposals |
 | AI summaries on records, computed from the record's current figures | Built | See [Source labels](#source-labels) |
 | Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* | Built | Fixes that touch money, fraud or legal status go to the approvals inbox |
-| Automations builder | Not built | `/app/automations` is a placeholder |
+| Automations, inbox and tasks pages | In progress | `/app/automations`, `/app/inbox` and `/app/tasks` are being built; this spec will describe them once merged <!-- TODO: update when these pages merge --> |
 
 ### Portals and public site
 
