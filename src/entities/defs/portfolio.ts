@@ -6,7 +6,6 @@ import { AS_OF, issuesField, LEADERS, OPS, propertyPhoto, STAFF, thumb } from ".
 import { getEntity, registerEntity } from "../registry";
 import type { Facts, Role } from "../types";
 import { formatMoney, formatPct } from "@/lib/format";
-import { AS_OF as TODAY } from "@/seed/constants";
 
 const OWNER_PORTAL: Role[] = ["owner"];
 
@@ -17,8 +16,7 @@ const latest = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE 
 const lastClosed = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id AND mm.month < substr(${AS_OF}, 1, 7) ORDER BY mm.month DESC LIMIT 1)`;
 
 function monthName(period: string) {
-  const name = new Date(`${period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-  return period === TODAY.slice(0, 7) ? `${name} to date` : name;
+  return new Date(`${period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 function propertySummary(f: Facts) {
