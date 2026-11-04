@@ -4,7 +4,7 @@ import { ArrowRight, Bot, Calculator, ChevronRight, CircleAlert, FlaskConical, I
 import type { Session } from "@/auth/session";
 import type { Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatMonth, formatPct, personaGreeting } from "@/lib/format";
+import { formatMoney, formatPct, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { agentName } from "@/ai/ui/labels";
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,7 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
   const k = m.kpis;
   const foot = `${monthLong(LAST_CLOSED)}`;
   const noAi = !k.aiHours.spark.some((v) => v > 0);
-  const delinquent = <KpiCard label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel={`vs ${formatMonth(`${LAST_CLOSED}-01`)} close`} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
+  const delinquent = <KpiCard label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel="vs month end" spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
   return (
     <KpiRow className="xl:grid-cols-5">
       <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
