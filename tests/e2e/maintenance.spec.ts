@@ -5,7 +5,7 @@ import { as, BASE, GREETING, go, reload, watch } from "./helpers";
 // Maintenance Triage agent → dispatch → board and calendar → vendor invoice approve-and-pay →
 // technician view. Run against a dev server: BASE_URL=http://localhost:3201.
 
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+test.describe.configure({ timeout: 240_000 });
 // The shared dev server compiles each route on first visit, which can take a while.
 const expect = baseExpect.configure({ timeout: 60_000 });
 
