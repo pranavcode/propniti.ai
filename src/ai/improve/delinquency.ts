@@ -69,7 +69,7 @@ export const delinquencyImprover: Improver = {
     const late90 = rows.filter((d) => d.aging.d90p > 0);
     const b90 = late90.reduce((s, d) => s + d.aging.d90p, 0);
     const p = onProperty(c, "c");
-    // The last closed month's charges, the same rent roll the receivables page compares against.
+    // The last closed month's charges, the same total the receivables page compares against.
     const lastMonth = new Date(Date.UTC(Number(c.today.slice(0, 4)), Number(c.today.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
     const [roll] = await sql<{ cents: number }>(c.data, `SELECT coalesce(sum(c.amount_cents), 0) AS cents FROM {charges} c WHERE c.period = ?${p.sql}`, [lastMonth, ...p.params]);
     const rentRoll = Number(roll?.cents ?? 0);
@@ -94,7 +94,7 @@ export const delinquencyImprover: Improver = {
     }
     if (b90) drivers.push({ text: `${usd(b90)} is over 90 days late across ${plural(late90.length, "household")}.`, share: total ? b90 / total : null, href: "/app/receivables/delinquency" });
 
-    const reasons = rentRoll ? [`Balances over 30 days late are ${(b30 / rentRoll * 100).toFixed(1)}% of last month's rent charges; the alert line is ${THRESHOLDS.over30OfRentRoll * 100}%.`] : [];
+    const reasons = rentRoll ? [`Balances over 30 days late are ${(b30 / rentRoll * 100).toFixed(1)}% of last month's charges; the alert line is ${THRESHOLDS.over30OfRentRoll * 100}%.`] : [];
 
     // The plan: the Collections agent's own rule decides each lease's follow-up.
     const eligible = rows.filter((d) => d.days_late >= MIN_DAYS_LATE);

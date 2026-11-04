@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return guarded(async () => {
-    const w = await writeSession(request, Body, "write", { staff: true });
+    const w = await writeSession(request, Body, "ai", { staff: true });
     if (w instanceof Response) return w;
     const { s, body } = w;
     const r = resolve(s, body.metric, body.property);
