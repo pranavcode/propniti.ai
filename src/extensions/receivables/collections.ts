@@ -6,6 +6,7 @@ import type { Role } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
 import { effective, type QueryCtx } from "@/server/query";
 import { isSelfScope } from "./queries";
+import { formatDate } from "@/lib/format";
 
 // Collections workbench data: delinquent leases (the Collections Agent's own facts, first-in
 // first-out aging), a risk score with plain reasons, the next step the agent's rules would take, a
@@ -33,7 +34,7 @@ export function scoreRisk(d: Delinquent, rentCents: number, nsf12: number) {
   let score = 0;
   const pts = d.days_late > 90 ? 40 : d.days_late > 60 ? 30 : d.days_late > 30 ? 20 : 8;
   score += pts;
-  why.push(`${d.days_late} days late (oldest unpaid charge due ${d.oldest_due_on})`);
+  why.push(`${d.days_late} days late (oldest unpaid charge due ${formatDate(d.oldest_due_on, "always")})`);
   const months = rentCents > 0 ? d.balance_cents / rentCents : 0;
   const add = (pts: number, reason: string) => {
     score += pts;

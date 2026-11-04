@@ -295,7 +295,7 @@ Every AI output says where it came from.
 
 | Where | Labels |
 | --- | --- |
-| Badges on proposals, answers and drafts | **AI** (a live model call), **AI · saved** (stored from an earlier run), **Rule-based fallback** (no model, so fixed rules wrote it; figures still come from the data) |
+| Badges on proposals, answers and drafts | **AI** (a live model call), **AI · saved** (stored from an earlier run), **Rules** (no model, so fixed rules wrote it; figures still come from the data) |
 | AI summaries on record pages and in the peek drawer | **Rules · from this record's current figures**, **Generated · model · time**, **Precomputed · model · time** |
 
 A stored model summary is shown only while the facts it was written from still match the record. When the figures change, the rules sentence is written from the current figures instead.

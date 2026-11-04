@@ -115,7 +115,7 @@ async function main() {
       return postJson("/api/ai/import-map", { headers: table[0], samples: table.slice(1, 6) });
     }, gradeMap],
     ["Pasted notes", "import-parse", (c) => postJson("/api/ai/import-parse", { text: c.text }), gradeParse],
-    ["Onboarding file detection", "onboarding-detect", (c) => postJson("/api/onboarding/detect", { files: [{ id: "f1", name: "export.csv", headers: c.headers, samples: c.samples }] }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeDetect],
+    ["Onboarding file detection", "onboarding-detect", (c) => postJson("/api/onboarding/detect", { files: [{ id: "f1", name: "export.csv", headers: c.headers, samples: c.samples.map((r) => r.map((x) => x.slice(0, 60))) }] }, "daniel").then((r) => ({ ...r, source: r.live ? r.model : "mock" })), gradeDetect],
   ];
 
   const results = [];

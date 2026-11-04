@@ -105,13 +105,16 @@ function expr(def: EntityDef, key: string, f: FieldDef, ws: Ws) {
   return f.sql ? `(${expand(f.sql, ws)})` : `${def.table}.${ident(f.column ?? key)}`;
 }
 
-// Label of a referenced record: its def's titleField (computed or a column).
+// Label of a referenced record: its def's titleField (computed or a column). A reference whose
+// case is wrong ("P01" for "p01", a data-health issue) still shows the record's name.
 function refLabel(def: EntityDef, key: string, f: FieldDef, ws: Ws) {
   const ref = f.ref && getEntity(f.ref);
   if (!ref) return null;
   const tf = ref.fields[ref.titleField];
   const title = tf?.sql ? `(${expand(tf.sql, ws)})` : `${ref.table}.${ident(tf?.column ?? ref.titleField)}`;
-  return `(SELECT ${title} FROM ${effective(ref.table, ws)} AS ${ref.table} WHERE ${ref.table}.id = ${expr(def, key, f, ws)})`;
+  const by = (id: string) => `(SELECT ${title} FROM ${effective(ref.table, ws)} AS ${ref.table} WHERE ${ref.table}.id = ${id})`;
+  const v = expr(def, key, f, ws);
+  return `coalesce(${by(v)}, ${by(`lower(${v})`)})`;
 }
 
 function selectList(def: EntityDef, role: Role, ws: Ws) {
@@ -211,12 +214,15 @@ const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);
 
 // Filter keys: "<field>" (equals; an array means any of), "<field>.min" / "<field>.max" (ranges
 // on numbers, money and dates), "<field>.null" ("1" = is empty, "0" = has a value).
+// Filtering by record id (a batch lookup of known rows) needs no field def.
+const ID_FIELD: FieldDef = { type: "text", label: "Id" };
+
 function filterWhere(def: EntityDef, role: Role, ws: Ws, filters: Record<string, string | string[]>, skip?: string): Where {
   const w: Where = { sql: [], params: [] };
   for (const [rawKey, rawVal] of Object.entries(filters)) {
     const [key, op] = rawKey.split(".", 2) as [string, string | undefined];
     if (key === skip) continue;
-    const f = field(def, key, role);
+    const f = key === "id" ? ID_FIELD : field(def, key, role);
     if (f.type === "json" || f.type === "image") throw new QueryError(400, `Can't filter on "${key}"`);
     const e = expr(def, key, f, ws);
     const vals = (Array.isArray(rawVal) ? rawVal : [rawVal]).filter((v) => v !== "");

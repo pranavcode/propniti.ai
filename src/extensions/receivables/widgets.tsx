@@ -5,6 +5,7 @@ import { ChartCard } from "@/components/app/dashboard/ChartCard";
 import { KpiCard } from "@/components/app/dashboard/KpiCard";
 import { ErrorBanner } from "@/components/app/states";
 import { getPlatform } from "@/lib/platform";
+import { formatDate, formatMonth } from "@/lib/format";
 import { AS_OF } from "@/seed/constants";
 import { metrics, type QueryCtx } from "@/server/query";
 import { depositsInTransit } from "./queries";
@@ -24,7 +25,7 @@ export async function ScheduledVsCollected({ actor }: { actor: Actor }) {
   return (
     <ChartCard
       title="Charged vs collected"
-      description={last ? `${String(last.month)}: ${((Number(last.collected) / Number(last.charged || 1)) * 100).toFixed(1)}% collected` : "Trailing 12 months"}
+      description={last ? `${formatMonth(`${String(last.month)}-01`)}: ${((Number(last.collected) / Number(last.charged || 1)) * 100).toFixed(1)}% collected` : "Trailing 12 months"}
       kind="bar" data={m.points as never} x="month" height={220}
       series={[{ key: "charged", label: "Charged", format: "money" }, { key: "collected", label: "Collected", format: "money" }]}
       drill="/app/receivables/charges?f.period={month}"
@@ -39,7 +40,7 @@ export async function AgingCard({ actor }: { actor: Actor }) {
   return (
     <ChartCard
       title="Delinquency aging"
-      description={`${money(Math.round(Number(m.value ?? 0) * 100))} past due as of ${m.asOf}`}
+      description={`${money(Math.round(Number(m.value ?? 0) * 100))} past due as of ${formatDate(m.asOf, "always")}`}
       kind="bar" data={m.points as never} x="label" height={220}
       series={[{ key: "amount", label: "Past due", format: "money" }]}
       drill="/app/receivables/delinquency?bucket={bucket}"
@@ -58,7 +59,7 @@ export async function NsfCard({ actor }: { actor: Actor }) {
   const m = await metrics(await ctxFor(actor), "receivables.nsf", { months: 12 }).catch(() => null);
   if (!m) return failed("Returned payments");
   const month = m.points.find((p) => p.month === m.asOf);
-  return <KpiCard label="Returned payments (NSF)" value={m.value ?? 0} previous={m.previous} goodWhen="down" spark={m.spark} footnote={`${String(m.asOf)}${month ? ` · ${money(Math.round(Number(month.amount) * 100))}` : ""}`} href="/app/receivables/payments?view=nsf" help="Payments the bank returned unpaid in the last closed month. Each one reopens the charge and adds an NSF fee." />;
+  return <KpiCard label="Returned payments (NSF)" value={m.value ?? 0} previous={m.previous} goodWhen="down" spark={m.spark} footnote={`${formatMonth(`${String(m.asOf)}-01`)}${month ? ` · ${money(Math.round(Number(month.amount) * 100))}` : ""}`} href="/app/receivables/payments?view=nsf" help="Payments the bank returned unpaid in the last closed month. Each one reopens the charge and adds an NSF fee." />;
 }
 
 registerWidget({ key: "receivables.scheduled_vs_collected", title: "Charged vs collected", roles: ROLES, size: "md", component: ScheduledVsCollected });

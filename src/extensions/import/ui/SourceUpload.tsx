@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Download, FileSpreadsheet, FileUp, Loader2, Lock, Sparkles, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,22 +16,31 @@ import { PRESETS, presetsFor, TOOLS, toolLabel, type ToolKey } from "../presets"
 import type { RecentImport } from "../server";
 import type { WizardOptions } from "./ImportWizard";
 
-export function SourceStep({ tool, setTool, recent, onUndo, busy, onNext }: { tool: ToolKey | null; setTool: (t: ToolKey) => void; recent: RecentImport[]; onUndo: (batch: string) => Promise<boolean>; busy: string | null; onNext: () => void }) {
+export function SourceStep({ tool, setTool, recent, onUndo, busy, onNext, onSamples }: { tool: ToolKey | null; setTool: (t: ToolKey) => void; recent: RecentImport[]; onUndo: (batch: string) => Promise<boolean>; busy: string | null; onNext: () => void; onSamples: (t: ToolKey) => void }) {
   const presets = tool ? presetsFor(tool) : [];
+  // Sized by the space the wizard has, not the window, so the Ask panel can be open beside it.
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="flex flex-col gap-4 rounded-lg border bg-card p-4">
+    <div className="@container">
+    <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-[minmax(0,1fr)_300px]">
+      <section className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4">
         <div>
           <h2 className="text-[14px] font-semibold">Where is your portfolio today?</h2>
-          <p className="text-[12.5px] text-muted-foreground">Pick the tool you&apos;re moving from. Its usual export columns are matched for you; anything else can be matched by hand.</p>
+          <p className="text-[12.5px] text-muted-foreground">Pick the tool you&apos;re moving from. Its usual export columns are matched for you; anything else can be matched by hand. No files handy? Each tool has sample files: choose <span className="font-medium text-foreground">Try samples</span>.</p>
         </div>
-        <div role="radiogroup" aria-label="Source tool" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {/* A group, not a radiogroup: each tile also holds its own "Try samples" button. */}
+        <div role="group" aria-label="Source tool" className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
           {TOOLS.map((t) => (
-            <button key={t.key} type="button" role="radio" aria-checked={tool === t.key} onClick={() => setTool(t.key)}
-              className={cn("flex h-16 flex-col items-start justify-center rounded-md border px-3 text-left text-[13px] font-medium transition-colors hover:bg-muted/60", tool === t.key && "border-primary bg-primary/[0.06] ring-1 ring-primary")}>
-              {t.label}
-              <span className="text-[11.5px] font-normal text-muted-foreground">{presetsFor(t.key).length} {presetsFor(t.key).length === 1 ? "report" : "reports"}</span>
-            </button>
+            <div key={t.key} data-tool-tile className={cn("flex min-w-0 flex-col rounded-md border transition-colors", tool === t.key && "border-primary bg-primary/[0.06] ring-1 ring-primary")}>
+              <button type="button" role="radio" aria-checked={tool === t.key} onClick={() => setTool(t.key)}
+                className="flex min-h-14 flex-col items-start justify-center rounded-t-md px-3 pt-2 pb-1 text-left text-[13px] font-medium outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/60">
+                {t.label}
+                <span className="text-[11.5px] font-normal text-muted-foreground">{presetsFor(t.key).length} {presetsFor(t.key).length === 1 ? "report" : "reports"} · samples available</span>
+              </button>
+              <button type="button" onClick={() => onSamples(t.key)} aria-label={`Try ${t.label} sample files`}
+                className="flex items-center gap-1 rounded-b-md border-t px-3 py-1.5 text-left text-[12px] font-medium text-primary outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/60">
+                <FileSpreadsheet className="size-3.5 shrink-0" aria-hidden />Try samples
+              </button>
+            </div>
           ))}
         </div>
         {tool && (
@@ -77,6 +86,7 @@ export function SourceStep({ tool, setTool, recent, onUndo, busy, onNext }: { to
         )}
       </aside>
     </div>
+    </div>
   );
 }
 
@@ -89,9 +99,10 @@ export async function toFile(name: string, bytes: Uint8Array, tool?: ToolKey): P
   return { id: `f${++seq}`, name, kind: d.kind, sheet, mapping: d.mapping, preset: d.preset?.id, excluded: [] };
 }
 
-export function UploadStep({ tool, files, setFiles, assembled, aiOn, setAiOn, ai, busy, onBack, onNext }: {
+export function UploadStep({ tool, files, setFiles, assembled, aiOn, setAiOn, ai, busy, onBack, onNext, autoSamples, onAutoSamples }: {
   tool: ToolKey; files: ImportFile[]; setFiles: (f: ImportFile[] | ((f: ImportFile[]) => ImportFile[])) => void; assembled: Assembled;
   aiOn: boolean; setAiOn: (v: boolean) => void; ai: WizardOptions["ai"]; busy: string | null; onBack: () => void; onNext: () => void;
+  autoSamples?: boolean; onAutoSamples?: () => void;     // "Try samples" on the first step: load them on arrival
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -117,6 +128,13 @@ export function UploadStep({ tool, files, setFiles, assembled, aiOn, setAiOn, ai
   }
   const samples = (tool === "generic" ? PRESETS.filter((p) => p.tool === "generic") : presetsFor(tool).filter((p) => ["rent_roll", "residents", "balances"].includes(p.kind))).slice(0, 3);
   const loadSamples = () => add(samples.map((p) => ({ name: p.file, bytes: async () => new Uint8Array(await (await fetch(`/samples/${p.file}`)).arrayBuffer()) })));
+  const autoLoaded = useRef(false);
+  useEffect(() => {
+    if (!autoSamples || autoLoaded.current) return;
+    autoLoaded.current = true;
+    onAutoSamples?.();
+    void loadSamples();
+  });
   const setKind = (id: string, kind: Kind) => setFiles((fs) => fs.map((f) => {
     if (f.id !== id) return f;
     const preset = PRESETS.find((p) => p.id === f.preset && p.kind === kind);

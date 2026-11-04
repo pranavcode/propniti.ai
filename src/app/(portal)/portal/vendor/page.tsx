@@ -25,7 +25,7 @@ export default async function VendorHome() {
         <KpiCard label="Awaiting payment" value={inv.unpaid_cents / 100} format="money" href="/portal/vendor/invoices" />
         <KpiCard label={`Paid in ${pay.year}`} value={pay.ytd_cents / 100} format="money" href="/portal/vendor/payments" footnote={pay.pending_cents ? <span>{`$${(pay.pending_cents / 100).toLocaleString("en-US")} on its way`}</span> : undefined} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section aria-labelledby="todo-h" className="rounded-xl border bg-card">
           <div className="flex items-center justify-between border-b px-4 py-3"><h2 id="todo-h" className="text-[14px] font-semibold">Needs you</h2><Link href="/portal/vendor/jobs" className="inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:underline">All jobs<ArrowRight className="size-3.5" /></Link></div>
           {list.length ? <ul className="divide-y">{list.map((j) => <JobRow key={j.id} j={j} me={c.me} />)}</ul> : <div className="p-4"><EmptyState kind="tasks" title="Nothing needs you right now" description="New assignments show up here first." compact /></div>}

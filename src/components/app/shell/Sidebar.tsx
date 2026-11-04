@@ -27,6 +27,22 @@ export function activeHref(pathname: string, sections: ShellNavSection[]) {
   return best;
 }
 
+// The section and group that hold the current page, so they open even if the visitor closed them.
+// A page with no item of its own (e.g. /app/receivables/delinquency) opens the group of the item
+// sharing the most path segments with it.
+export function activeArea(pathname: string, sections: ShellNavSection[], href = activeHref(pathname, sections)): { href: string; section?: string; group?: string } {
+  const segs = pathname.split("/");
+  let best: { section: string; group?: string; n: number } | undefined;
+  for (const s of sections) for (const i of s.items) {
+    if (href) { if (i.href === href) return { href, section: s.section, group: i.group }; continue; }
+    const other = i.href.split("/");
+    let n = 0;
+    while (n < segs.length && segs[n] === other[n]) n++;
+    if (n >= 3 && (!best || n > best.n)) best = { section: s.section, group: i.group, n };
+  }
+  return best ? { href, section: best.section, group: best.group } : { href };
+}
+
 type Entry = { kind: "item"; item: ShellNavItem } | { kind: "group"; label: string; items: ShellNavItem[] };
 function entries(items: ShellNavItem[]): Entry[] {
   const out: Entry[] = [];
@@ -45,6 +61,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
   // The clicked item lights up at once; the pathname only changes once the next page arrives.
   const [clicked, setClicked] = useState<{ href: string; from: string } | null>(null);
   const active = clicked?.from === pathname ? clicked.href : activeHref(pathname, data.nav);
+  const area = activeArea(clicked?.from === pathname ? clicked.href : pathname, data.nav, active);
   // A navigation that never lands (cancelled, failed) gives the highlight back to the current page.
   useEffect(() => {
     if (!clicked) return;
@@ -64,7 +81,12 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
     onNavigate?.();
   };
   const [closed, setClosed] = useLocalStorage<string[]>("pn_nav_closed", []);
-  const toggleSection = (key: string) => setClosed((c) => (c.includes(key) ? c.filter((k) => k !== key) : [...c, key]));
+  // The section holding the current page opens even if saved closed; closing it by hand sticks until you move on.
+  const [shut, setShut] = useState<string | null>(null);
+  const toggleSection = (key: string, isClosed: boolean) => {
+    setClosed((c) => (isClosed ? c.filter((k) => k !== key) : [...c.filter((k) => k !== key), key]));
+    setShut(isClosed ? null : `${pathname}|${key}`);
+  };
   // A closed AI agents section keeps pending decisions in view: Approvals › Needs you (the bubble's cached count).
   const [approvals, setApprovals] = useState<number | null>(null);
   const aiClosed = closed.includes("intelligence");
@@ -97,7 +119,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
 
       <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3", collapsed ? "px-2" : "px-2.5")}>
         {data.nav.map((section) => {
-          const isClosed = closed.includes(section.section);
+          const isClosed = closed.includes(section.section) && (area.section !== section.section || shut === `${pathname}|${section.section}`);
           const ai = section.section === "intelligence";
           const waiting = ai ? section.items.reduce((a, i) => a + (i.count ?? 0), 0) || (approvals ?? 0) : 0;
           return (
@@ -105,7 +127,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
               {collapsed ? (
                 <div className="mx-auto mb-1 h-px w-5 bg-sidebar-border first:hidden" />
               ) : section.section !== "home" && (
-                <button onClick={() => toggleSection(section.section)} aria-expanded={!isClosed} className="group/sec mb-0.5 flex h-6 w-full items-center gap-1 rounded px-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">
+                <button onClick={() => toggleSection(section.section, isClosed)} aria-expanded={!isClosed} className="group/sec mb-0.5 flex h-6 w-full items-center gap-1 rounded px-2 text-[12px] font-medium text-muted-foreground hover:text-foreground">
                   {ai && <Sparkles className="size-3 text-tone-ai" aria-hidden />}
                   {section.label}
                   <ChevronDown className={cn("size-3 opacity-0 transition-transform group-hover/sec:opacity-100", isClosed && "-rotate-90 opacity-100")} />
@@ -118,7 +140,7 @@ export function Sidebar({ collapsed, onToggle, className, onNavigate }: { collap
                     ? <li key={e.item.key}><NavLink item={e.item} active={active === e.item.href} collapsed={collapsed} onNavigate={navigate} /></li>
                     : collapsed
                       ? e.items.map((i) => <li key={i.key}><NavLink item={i} active={active === i.href} collapsed onNavigate={navigate} /></li>)
-                      : <NavGroup key={e.label} label={e.label} items={e.items} active={active} onNavigate={navigate} />)}
+                      : <NavGroup key={e.label} label={e.label} items={e.items} active={active} current={area.section === section.section && area.group === e.label} onNavigate={navigate} />)}
                 </ul>
               )}
             </div>
@@ -173,15 +195,17 @@ function NavLink({ item, active, collapsed, nested, onNavigate }: { item: ShellN
   return collapsed ? <RailTip label={item.label} extra={count ?? undefined} ai={item.ai}>{link}</RailTip> : link;
 }
 
-function NavGroup({ label, items, active, onNavigate }: { label: string; items: ShellNavItem[]; active: string; onNavigate: (e: React.MouseEvent, href: string) => void }) {
-  const hasActive = items.some((i) => i.href === active);
+function NavGroup({ label, items, active, current, onNavigate }: { label: string; items: ShellNavItem[]; active: string; current: boolean; onNavigate: (e: React.MouseEvent, href: string) => void }) {
+  const hasActive = current || items.some((i) => i.href === active);
   const [openGroups, setOpenGroups] = useLocalStorage<string[]>("pn_nav_groups", []);
-  const open = hasActive || openGroups.includes(label);
+  const pathname = usePathname();
+  const [shut, setShut] = useState<string | null>(null);
+  const open = (hasActive && shut !== pathname) || openGroups.includes(label);
   const total = items.reduce((a, i) => a + (i.count ?? 0), 0);
   return (
     <li>
       <button
-        onClick={() => setOpenGroups((g) => (g.includes(label) ? g.filter((x) => x !== label) : [...g, label]))}
+        onClick={() => { setOpenGroups((g) => (open ? g.filter((x) => x !== label) : [...g, label])); setShut(open ? pathname : null); }}
         aria-expanded={open}
         className={cn("group/nav flex h-7 w-full items-center gap-2 rounded-md px-2 text-[13px] text-sidebar-foreground/85 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground", hasActive && "text-sidebar-accent-foreground")}
       >

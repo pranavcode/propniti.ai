@@ -50,13 +50,56 @@ export function Sparkline({ data, tone = "neutral", className, width = 96, heigh
   );
 }
 
+// The one KPI tile layout, shared by KpiCard and the entity Metrics tile. Fixed rows: a label that
+// wraps to two lines (the row is always two lines tall), the value, an optional footnote, and the
+// delta with its sparkline pinned to the bottom. Values sit at the same height in every tile, and
+// tiles in a grid row stretch to one height.
+// The full text of a truncated value or footnote, on hover.
+const plain = (n: React.ReactNode) => (typeof n === "string" || typeof n === "number" ? String(n) : undefined);
+
+export function KpiFrame({ label, linkLabel, href, onClick, aside, value, footnote, delta, spark, className }: {
+  label: React.ReactNode;
+  linkLabel: string;                   // accessible name of the drill link
+  href?: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  aside?: React.ReactNode;             // header extras beside the drill arrow
+  value: React.ReactNode;
+  footnote?: React.ReactNode;
+  delta?: React.ReactNode;
+  spark?: React.ReactNode;
+  className?: string;
+}) {
+  // The whole tile drills through a link stretched over it, so header buttons (Explain, the
+  // definition tip) can sit in the same row without nesting interactive elements in a link.
+  return (
+    <div data-kpi className={cn("group/kpi @container/kpi relative flex h-full min-w-0 flex-col rounded-lg border bg-card p-4 transition-[border-color,box-shadow]", href && "hover:border-foreground/20 hover:shadow-[0_1px_3px_oklch(0_0_0/0.06)] has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/60", className)}>
+      {href && <Link href={href} onClick={onClick} aria-label={linkLabel} className="absolute inset-0 rounded-lg outline-none" />}
+      <div className="-mt-1 flex h-8 items-start gap-1.5 text-[12px] leading-4 font-medium text-muted-foreground">
+        <span className="line-clamp-2 min-w-0 pt-px [&_[data-term]>span]:whitespace-normal">{label}</span>
+        {(aside || href) && (
+          <span className="ml-auto flex h-4 shrink-0 items-center gap-1">
+            {aside && <span className="relative z-10 flex items-center">{aside}</span>}
+            {href && <ArrowUpRight aria-hidden className="size-3.5 text-muted-foreground/50 transition-colors group-hover/kpi:text-foreground" />}
+          </span>
+        )}
+      </div>
+      <div data-kpi-value title={plain(value)} className="mt-1 truncate text-[22px] leading-7 font-semibold tracking-[-0.015em] tabular-nums">{value}</div>
+      {footnote && <div title={plain(footnote)} className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{footnote}</div>}
+      <div className="mt-auto flex min-h-9 items-end justify-between gap-2 pt-2">
+        {delta ?? <span />}
+        {spark}
+      </div>
+    </div>
+  );
+}
+
 export function KpiCard({ label, value, format = "count", previous, deltaLabel = "vs last month", goodWhen = "up", spark, help, href, loading, footnote, actions, className }: KpiCardProps) {
   if (loading) {
     return (
-      <div className={cn("rounded-lg border bg-card p-4", className)} aria-busy>
+      <div className={cn("flex h-full flex-col rounded-lg border bg-card p-4", className)} aria-busy>
         <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-3 h-6 w-28" />
-        <div className="mt-3 flex items-end justify-between"><Skeleton className="h-3 w-20" /><Skeleton className="h-6 w-24" /></div>
+        <Skeleton className="mt-6 h-6 w-28" />
+        <div className="mt-auto flex items-end justify-between pt-3"><Skeleton className="h-3 w-20" /><Skeleton className="h-6 w-24" /></div>
       </div>
     );
   }
@@ -65,33 +108,24 @@ export function KpiCard({ label, value, format = "count", previous, deltaLabel =
   const good = delta ? (up ? goodWhen === "up" : goodWhen === "down") : null;
   const flat = value != null && previous != null && value === previous;
 
-  // The whole card drills through a link stretched over it, so header buttons (Explain, the
-  // definition tip) can sit in the same row without nesting interactive elements in a link.
   return (
-    <div className={cn("group/kpi @container/kpi relative flex flex-col rounded-lg border bg-card p-4 transition-[border-color,box-shadow]", href && "hover:border-foreground/20 hover:shadow-[0_1px_3px_oklch(0_0_0/0.06)] has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/60", className)}>
-      {href && <Link href={href} aria-label={`${label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
-      <div className="-mt-1 flex h-6 items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
-        <span className="min-w-0 truncate"><Term help={help} className="relative z-10">{label}</Term></span>
-        {(actions || href) && (
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            {actions && <span className="relative z-10 flex items-center">{actions}</span>}
-            {href && <ArrowUpRight aria-hidden className="size-3.5 text-muted-foreground/50 transition-colors group-hover/kpi:text-foreground" />}
+    <KpiFrame
+      className={className}
+      label={<Term help={help} className="relative z-10">{label}</Term>}
+      linkLabel={`${label}: open the records behind this number`}
+      href={href}
+      aside={actions}
+      value={formatValue(value, format)}
+      footnote={footnote}
+      delta={delta ? (
+        <span className="flex min-w-0 items-center gap-1 text-[12px]">
+          <span className={cn("inline-flex shrink-0 items-center rounded px-1 font-medium whitespace-nowrap tabular-nums", flat ? "bg-muted text-muted-foreground" : good ? "bg-tone-success/10 text-tone-success" : "bg-tone-danger/10 text-tone-danger")}>
+            {flat ? "▬" : up ? "▲" : "▼"} {delta.replace(/^[+−]/, "")}
           </span>
-        )}
-      </div>
-      <div className="mt-1 text-[22px] leading-7 font-semibold tracking-[-0.015em] tabular-nums">{formatValue(value, format)}</div>
-      {footnote && <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground">{footnote}</div>}
-      <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-        {delta ? (
-          <span className="flex min-w-0 items-center gap-1 text-[12px]">
-            <span className={cn("inline-flex shrink-0 items-center rounded px-1 font-medium whitespace-nowrap tabular-nums", flat ? "bg-muted text-muted-foreground" : good ? "bg-tone-success/10 text-tone-success" : "bg-tone-danger/10 text-tone-danger")}>
-              {flat ? "▬" : up ? "▲" : "▼"} {delta.replace(/^[+−]/, "")}
-            </span>
-            <span className="truncate text-muted-foreground">{deltaLabel}</span>
-          </span>
-        ) : <span />}
-        {spark && <Sparkline className="shrink-0 @max-[10rem]/kpi:hidden" data={spark} tone={good == null || flat ? "neutral" : good ? "good" : "bad"} />}
-      </div>
-    </div>
+          <span className="truncate text-muted-foreground">{deltaLabel}</span>
+        </span>
+      ) : undefined}
+      spark={spark ? <Sparkline className="shrink-0 @max-[10rem]/kpi:hidden" data={spark} tone={good == null || flat ? "neutral" : good ? "good" : "bad"} /> : undefined}
+    />
   );
 }

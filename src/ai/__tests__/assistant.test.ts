@@ -56,7 +56,7 @@ describe("assistant lookups (production QA)", () => {
     expect(all.table?.rows.map((r) => r.id)).toEqual(["l4", "l1"]);
     const r = await ask({ data, persona: getPersona("marcus")!, question: "Which leases expire in the next 60 days without a renewal offer?" });
     expect(r.table?.rows.map((x) => x.id)).toEqual(["l4"]);
-    expect(r.answer).toMatch(/^1 active lease without a renewal offer ends by 2027-01-03/);
+    expect(r.answer).toMatch(/^1 active lease without a renewal offer ends by Jan 3, 2027/);
   });
 
   it("finds the scoring article for 'how does scoring work', not work-order articles", async () => {

@@ -108,7 +108,7 @@ registerEntity({
   subtitle: (r) => [r.lease_id__label, r.received_on].filter(Boolean).join(" · "),
   scopePath: "payments.property_id",
   fields: {
-    label: { type: "text", label: "Payment", sortable: true, list: { default: true, width: 200 }, sql: "payments.method || ' · ' || CASE WHEN payments.reference = '' THEN payments.id ELSE payments.reference END" },
+    label: { type: "text", label: "Payment", sortable: true, list: { default: true, width: 200 }, sql: "CASE WHEN payments.reference = '' THEN payments.method || ' · ' || payments.id WHEN payments.reference LIKE payments.method || ' %' THEN payments.reference ELSE payments.method || ' · ' || payments.reference END" },
     received_on: { type: "date", label: "Received", sortable: true, list: { default: true } },
     amount: { type: "money", label: "Amount", column: "amount_cents", sortable: true, list: { default: true, align: "right" } },
     method: { type: "enum", label: "Method", facet: true, sortable: true, list: { default: true }, enum: [

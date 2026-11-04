@@ -5,7 +5,7 @@ import "@/entities";
 import { can } from "@/entities";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatPct } from "@/lib/format";
+import { formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { list, metrics } from "@/server/query";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/c
 import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { ExplainableKpi, ExplainLink } from "@/extensions/portfolio/ui/Explain";
 import { LAST_CLOSED } from "@/extensions/portfolio/home/data";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // Portfolio module dashboard: the asset view of everything in scope. KPIs explain themselves,
 // charts drill to filtered lists, and every property shows as a photo card.
@@ -21,7 +22,7 @@ import { LAST_CLOSED } from "@/extensions/portfolio/home/data";
 export const metadata: Metadata = { title: "Portfolio · Propniti" };
 
 const monthLong = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-const label = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const label = monthTick;
 const STATUS_ORDER = ["Occupied", "Notice", "Vacant", "Make-ready", "Down", "Model"];
 const STATUS_COLOR: Record<string, string> = { Occupied: "var(--tone-success)", Notice: "var(--tone-warning)", Vacant: "var(--muted-foreground)", "Make-ready": "var(--tone-info)", Down: "var(--tone-danger)", Model: "var(--tone-ai)" };
 
@@ -93,7 +94,7 @@ export default async function PortfolioDashboard() {
                       </div>
                       <div className="px-3 py-2.5">
                         <div className="truncate text-[13.5px] font-semibold group-hover:text-primary">{String(p.name)}</div>
-                        <div className="truncate text-[12px] text-muted-foreground">{String(p.type)}{p.class ? ` · Class ${p.class}` : ""} · {Number(p.units ?? 0)} units</div>
+                        <div className="truncate text-[12px] text-muted-foreground">{String(p.type)}{p.class ? ` · Class ${p.class}` : ""} · {formatNumber(Number(p.units ?? 0))} units</div>
                         <dl className="mt-2 grid grid-cols-3 gap-2 border-t pt-2 text-[12px] tabular-nums">
                           <div><dt className="text-[11px] text-muted-foreground">Occupancy</dt><dd className={cn("font-medium", occupancy != null && occupancy < 0.9 && "text-tone-warning")}>{occupancy == null ? "—" : formatPct(occupancy, 1)}</dd></div>
                           <div><dt className="text-[11px] text-muted-foreground">NOI</dt><dd className="font-medium">{p.noi_month == null ? "—" : formatMoney(Number(p.noi_month), "compact")}</dd></div>

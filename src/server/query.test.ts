@@ -262,6 +262,42 @@ describe("rows", () => {
     expect(unit).toMatchObject({ market_rent: 1500, rent: 1450, property_id: "p01", property_id__label: "The Lofts at Riverside", label: "The Lofts at Riverside #101" });
   });
 
+  it("names a unit whose property id has the wrong case, for an org-wide actor, and sorts it with its property", async () => {
+    await db.prepare("UPDATE units SET property_id = 'P01' WHERE id = 'p01-u2'").run();
+    const res = await list(await ctx("daniel"), "units", { size: 100 });
+    const bad = res.rows.find((r) => r.id === "p01-u2")!;
+    expect(bad).toMatchObject({ property_id: "P01", property_id__label: "The Lofts at Riverside", label: "The Lofts at Riverside #102" });
+    const lofts = res.rows.filter((r) => String(r.label).startsWith("The Lofts")).map((r) => r.id);
+    expect(lofts).toEqual(["p01-u1", "p01-u2", "p01-u3"]);
+    expect(res.rows.every((r) => r.label != null)).toBe(true);
+  });
+
+  it("shows a unit's current lease only while it runs and the unit isn't vacant", async () => {
+    // p01-u1: lease still "Active" but ended before as_of (2026-10-28). p01-u2: lease runs, unit marked Vacant.
+    await db.prepare("UPDATE leases SET end_on = '2026-09-30' WHERE id = 'l-p01-u1'").run();
+    await db.prepare("UPDATE units SET status = 'Vacant' WHERE id = 'p01-u2'").run();
+    const c = await ctx("daniel");
+    for (const id of ["p01-u1", "p01-u2"]) expect(await getRow(c, "units", id)).toMatchObject({ rent: null, resident: null, lease_end: null });
+    expect(await getRow(c, "units", "p02-u1")).toMatchObject({ rent: 1450, resident: "Household p02-u1", lease_end: "2026-12-31" });
+  });
+
+  it("names who filed and uploaded a document: a person by name, an agent by its agent name", async () => {
+    await db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 'lena', 'org1', 'Lena Ortiz', 'Leasing agent', 'lena@x.example')").run();
+    await db.prepare("INSERT INTO documents (workspace_id, id, property_id, name, url, uploaded_at, classified_by, uploaded_by) VALUES ('base', 'doc-1', 'p01', 'Lease', '/docs/leases/L-1', '2026-10-01T00:00:00Z', 'document_classifier', 'lena'), ('base', 'doc-2', 'p01', 'Bill', '/x', '2026-10-01T00:00:00Z', 'lena', 'ap')").run();
+    const rows = (await list(await ctx("daniel"), "documents", {})).rows;
+    expect(rows.find((r) => r.id === "doc-1")).toMatchObject({ classified_by: "Document Classifier Agent", uploaded_by: "Lena Ortiz" });
+    expect(rows.find((r) => r.id === "doc-2")).toMatchObject({ classified_by: "Lena Ortiz", uploaded_by: "Payables Agent" });
+  });
+
+  it("names a vendor or applicant who uploaded a document", async () => {
+    await db.prepare("INSERT INTO vendors (workspace_id, id, company, trade, bank_last4, tin_last4) VALUES ('base', 'v9', 'Lone Star Plumbing', 'Plumbing', '1111', '2222')").run();
+    await db.prepare("INSERT INTO applicants (workspace_id, id, first_name, last_name, email, created_at) VALUES ('base', 'apl-0001', 'Ana', 'Ruiz', 'ana@x.example', '2026-10-01T00:00:00Z')").run();
+    await db.prepare("INSERT INTO documents (workspace_id, id, property_id, name, url, uploaded_at, classified_by, uploaded_by) VALUES ('base', 'doc-v', 'p01', 'COI', '/x', '2026-10-01T00:00:00Z', 'v9', 'v9'), ('base', 'doc-a', 'p01', 'Pay stub', '/y', '2026-10-01T00:00:00Z', 'apl-0001', 'apl-0001')").run();
+    const rows = (await list(await ctx("daniel"), "documents", {})).rows;
+    expect(rows.find((r) => r.id === "doc-v")).toMatchObject({ classified_by: "Lone Star Plumbing", uploaded_by: "Lone Star Plumbing" });
+    expect(rows.find((r) => r.id === "doc-a")).toMatchObject({ classified_by: "Ana Ruiz", uploaded_by: "Ana Ruiz" });
+  });
+
   it("derives charge status from payments", async () => {
     const c = await ctx("daniel");
     expect((await getRow(c, "charges", "c-p01-u1"))!.status).toBe("Paid");

@@ -45,6 +45,7 @@ export function ImportWizard({ options, start, onImported }: { options: WizardOp
   const { setDone } = useSetupProgress();
   const [step, setStep] = useState(start ? 2 : 0);
   const [tool, setTool] = useState<ToolKey | null>(start?.tool ?? null);
+  const [autoSamples, setAutoSamples] = useState(false);
   const [aiOn, setAiOn] = useState(start?.aiOn ?? options.ai.available);
   const [files, setFiles] = useState<ImportFile[]>(start?.files ?? []);
   const [edits, setEdits] = useState<Edit[]>([]);
@@ -156,8 +157,8 @@ export function ImportWizard({ options, start, onImported }: { options: WizardOp
       </ol>
       {error && <p role="alert" className="rounded-md border border-tone-danger/30 bg-tone-danger/[0.05] px-3 py-2 text-[12.5px] text-tone-danger">{error}</p>}
 
-      {step === 0 && <SourceStep tool={tool} setTool={setTool} recent={recent} onUndo={undo} busy={busy} onNext={() => setStep(1)} />}
-      {step === 1 && tool && <UploadStep tool={tool} files={files} setFiles={setFiles} assembled={assembled} aiOn={aiOn} setAiOn={setAiOn} ai={options.ai} busy={busy} onBack={() => setStep(0)} onNext={toColumns} />}
+      {step === 0 && <SourceStep tool={tool} setTool={setTool} recent={recent} onUndo={undo} busy={busy} onNext={() => setStep(1)} onSamples={(t) => { setTool(t); setFiles([]); setEdits([]); setDecided({}); setAi(null); setPreview(null); setAutoSamples(true); setStep(1); }} />}
+      {step === 1 && tool && <UploadStep tool={tool} files={files} setFiles={setFiles} assembled={assembled} aiOn={aiOn} setAiOn={setAiOn} ai={options.ai} busy={busy} onBack={() => setStep(0)} onNext={toColumns} autoSamples={autoSamples} onAutoSamples={() => setAutoSamples(false)} />}
       {step === 2 && <MapStep files={files} setFiles={setFiles} ai={ai} aiMappings={aiMappings} acceptMappings={acceptMappings} dismiss={dismiss} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
       {step === 3 && <ReviewStep files={files} setFiles={setFiles} assembled={assembled} suggestions={suggestions} ai={ai} accept={accept} dismiss={dismiss} busy={busy} onBack={() => setStep(2)} onNext={toPreview} />}
       {step === 4 && preview && <PreviewStep preview={preview} options={options} settings={settings} setSettings={setSettings} ai={ai} busy={busy} onBack={() => setStep(3)} onRefresh={toPreview} onImport={runImport} />}

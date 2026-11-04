@@ -104,22 +104,24 @@ export default async function LeasingToday() {
           <div className="grid grid-cols-2 gap-3 self-start xl:peer-data-collapsed/brief:col-span-full xl:peer-data-collapsed/brief:grid-cols-4">{KPIS.map((d, i) => <KpiTile key={d.key} k={{ ...d, value: k[i].value, previous: k[i].previous, spark: k[i].spark, asOf: k[i].asOf }} />)}</div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Section title={<span id="tours" className="flex scroll-mt-16 items-center gap-1.5"><CalendarDays className="size-4 text-muted-foreground" />Today’s tours</span>} description={`${tours.length} booked · ${scheduled} still to run`} actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/showings?view=upcoming">Upcoming</Link></Button>}>
-            <div className={card} data-tour="leasing-tours">
-              <TourList canAct tours={tours.map((t) => ({ id: String(t.id), at: String(t.scheduled_at), time: localTime(t.scheduled_at, t.metro) ?? "—", status: String(t.status), kind: String(t.kind), prospect: String(t.prospect), prospectId: String(t.prospect_id), unit: (t.unit as string) ?? null, property: String(t.property), beds: t.desired_beds == null ? null : Number(t.desired_beds), budget: t.budget_cents == null ? null : Number(t.budget_cents) / 100, agent: (t.agent as string) ?? null, feedback: String(t.feedback ?? "") }))} />
-            </div>
-          </Section>
+        {/* Tours are few; the agents' proposals sit under them so the left column isn't left empty. */}
+        <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+          <div className="flex min-w-0 flex-col gap-5">
+            <Section title={<span id="tours" className="flex scroll-mt-16 items-center gap-1.5"><CalendarDays className="size-4 text-muted-foreground" />Today’s tours</span>} description={`${tours.length} booked · ${scheduled} still to run`} actions={<Button asChild size="sm" variant="ghost"><Link href="/app/leasing/showings?view=upcoming">Upcoming</Link></Button>}>
+              <div className={card} data-tour="leasing-tours">
+                <TourList canAct tours={tours.map((t) => ({ id: String(t.id), at: String(t.scheduled_at), time: localTime(t.scheduled_at, t.metro) ?? "—", status: String(t.status), kind: String(t.kind), prospect: String(t.prospect), prospectId: String(t.prospect_id), unit: (t.unit as string) ?? null, property: String(t.property), beds: t.desired_beds == null ? null : Number(t.desired_beds), budget: t.budget_cents == null ? null : Number(t.budget_cents) / 100, agent: (t.agent as string) ?? null, feedback: String(t.feedback ?? "") }))} />
+              </div>
+            </Section>
+            <Section title={<span id="proposals" className="scroll-mt-16">Waiting on you from the agents</span>} description="Follow-ups and renewal offers the Leasing and Renewals Agents prepared. Approving sends exactly what's shown; every one links to its run." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">All approvals</Link></Button>}>
+              <ProposalQueue items={items} empty="When the Leasing or Renewals Agent drafts a follow-up or an offer for you, it waits here with its reasons." />
+            </Section>
+          </div>
           <Section title="Follow-ups due" description={`${follow.total} lead${follow.total === 1 ? "" : "s"} with no contact in 3 to 30 days`} actions={<><SendFollowUps ids={follow.ids} label={`Send all ${follow.ids.length}`} who="these leads" /><Button asChild size="sm" variant="ghost"><Link href="/app/leasing/prospects?view=follow-up">All {follow.total}</Link></Button></>}>
             <div className={card} data-tour="leasing-followups">
               <FollowUpList rows={follow.rows.map((r) => ({ id: String(r.id), name: String(r.name), stage: String(r.stage), property: String(r.property), days: Number(r.days), beds: r.desired_beds == null ? null : Number(r.desired_beds), budget: r.budget_cents == null ? null : Number(r.budget_cents) / 100, source: String(r.source ?? "") }))} />
             </div>
           </Section>
         </div>
-
-        <Section title={<span id="proposals" className="scroll-mt-16">Waiting on you from the agents</span>} description="Follow-ups and renewal offers the Leasing and Renewals Agents prepared. Approving sends exactly what's shown; every one links to its run." actions={<Button asChild size="sm" variant="ghost"><Link href="/app/ai/approvals">All approvals</Link></Button>}>
-          <ProposalQueue items={items} empty="When the Leasing or Renewals Agent drafts a follow-up or an offer for you, it waits here with its reasons." />
-        </Section>
       </PageBody>
     </>
   );

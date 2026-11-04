@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MANAGEMENT_FEE_RATE } from "@/lib/ledger";
 import { newKey, runAction, usd } from "./client";
+import { formatDate } from "@/lib/format";
 
 const METHODS = ["Check", "Money order", "Cash", "ACH", "Card"] as const;
 
@@ -80,7 +81,7 @@ export function RecordPaymentButton({ charge, size = "sm", variant = "outline", 
           <form onSubmit={submit} className="flex flex-col gap-4">
             <DialogHeader>
               <DialogTitle>Record payment</DialogTitle>
-              <DialogDescription>{charge.description} · {usd(charge.open)} open{charge.due_on ? ` · due ${charge.due_on}` : ""}</DialogDescription>
+              <DialogDescription>{charge.description} · {usd(charge.open)} open{charge.due_on ? ` · due ${formatDate(charge.due_on, "always")}` : ""}</DialogDescription>
             </DialogHeader>
             <FieldGroup>
             <Field data-invalid={!!invalid || undefined}>

@@ -6,6 +6,7 @@ import { registerAction } from "../actions";
 import { abstractLease, draftAnnouncement, suggestReply } from "./ai";
 import { MERGE_FIELDS, normalizeContact, type Contact } from "./lib";
 import { insertRow, newId, one, overlayWrite, sql } from "./server";
+import { formatDate } from "@/lib/format";
 
 // Named actions for the residents lane. runAction (src/app/api/e/_lib/actions.ts) has already
 // checked role, scope and `when`, and writes the audit row after a 200.
@@ -105,7 +106,7 @@ registerAction({
     const at = nowIso(ctx);
     const channel = ["Email", "SMS", "Portal"].includes(res.preferred_channel) ? res.preferred_channel : "Email";
     const thread = `thr-ins-${row.id}`;
-    const body = `Hi ${res.first_name}, our records show your renters insurance policy ${row.policy_number} ${row.status === "Lapsed" ? "has lapsed" : `expires on ${row.expires_on}`}. Your lease requires active coverage. Please upload your current policy in the resident portal.`;
+    const body = `Hi ${res.first_name}, our records show your renters insurance policy ${row.policy_number} ${row.status === "Lapsed" ? "has lapsed" : `expires on ${formatDate(String(row.expires_on), "always")}`}. Your lease requires active coverage. Please upload your current policy in the resident portal.`;
     // One reminder per policy per day: the message id carries the date, so a double click or a
     // repeat in a bulk run conflicts instead of sending twice.
     const msgId = `msg-ins-${row.id}-${at.slice(0, 10)}`;

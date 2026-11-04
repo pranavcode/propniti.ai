@@ -6,7 +6,7 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 
 **About the data.** Names, companies and figures are sample data: 30 properties in Austin, Dallas, Atlanta and Phoenix. "Today" is 4 November 2026, and the books are closed through October. Your changes go into a private copy that only you see. It resets at midnight Pacific time. No real payments or messages are sent.
 
-**About the AI.** Every AI output carries a label. **AI** means a live model wrote it just now. **AI · saved** means it was stored from an earlier run. **Rule-based fallback** means fixed rules wrote it. Record summaries say **Rules · from this record's current figures**, **Generated** or **Precomputed**. The figures always come from the data, never from the model, so answers can differ in wording between runs but not in numbers.
+**About the AI.** Every AI output carries a label. **AI** means a live model wrote it just now. **AI · saved** means it was stored from an earlier run. **Rules** means fixed rules wrote it. Record summaries say **Rules · from this record's current figures**, **Generated** or **Precomputed**. The figures always come from the data, never from the model, so answers can differ in wording between runs but not in numbers.
 
 ## 1. Things every staff page shares
 

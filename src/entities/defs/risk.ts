@@ -7,6 +7,7 @@ import { registerEntity } from "../registry";
 import type { Role } from "../types";
 import { COI_STATUS_SQL, COMPLIANCE_STATUS_SQL, POLICY_STATUS_SQL } from "@/extensions/risk/sql";
 import { complianceSentence } from "@/ai/rules-sentences";
+import { formatDate } from "@/lib/format";
 
 const RISK_WRITE: Role[] = [...OPS, "maintenance_supervisor"];
 const WO_OPEN = "('Completed', 'Paid', 'Cancelled')";
@@ -27,13 +28,13 @@ registerEntity({
   fields: {
     name: { type: "text", label: "Policy", sortable: true, list: { default: true, width: 260 }, sql: "insurance_policies.kind || ' · ' || insurance_policies.carrier" },
     property_id: { type: "ref", ref: "properties", label: "Property", required: true, facet: true, sortable: true, list: { default: true }, editable: [] },
-    kind: { type: "enum", label: "Coverage", required: true, facet: true, sortable: true, list: { default: true }, enum: [
+    kind: { type: "enum", label: "Coverage", required: true, facet: true, sortable: true, list: { default: false }, enum: [
       { value: "Property", tone: "neutral" }, { value: "General liability", tone: "neutral" }, { value: "Umbrella", tone: "neutral" }, { value: "Flood", tone: "neutral" },
     ] },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, sql: POLICY_STATUS_SQL, enum: [
       { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Expired", tone: "danger" },
     ], help: { summary: "Expiring means the policy ends within 60 days, the usual lead time for a renewal quote.", article: "property-insurance" } },
-    carrier: { type: "text", label: "Carrier", required: true, search: true, facet: true, sortable: true, list: { default: true } },
+    carrier: { type: "text", label: "Carrier", required: true, search: true, facet: true, sortable: true, list: { default: false } },
     policy_number: { type: "text", label: "Policy number", required: true, search: true, list: { default: false } },
     coverage: { type: "money", label: "Coverage", column: "coverage_cents", required: true, format: "compact", sortable: true, list: { default: true, align: "right" } },
     premium: { type: "money", label: "Annual premium", column: "premium_cents", required: true, sortable: true, list: { default: true, align: "right" } },
@@ -80,7 +81,7 @@ registerEntity({
   nav: { section: "operations", group: "Compliance", order: 72, label: "Vendor COIs" },
   route: "/app/compliance/cois",
   titleField: "name",
-  subtitle: (r) => [r.carrier, r.expires_on ? `expires ${r.expires_on}` : null].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.carrier, r.expires_on ? `expires ${formatDate(String(r.expires_on), "always")}` : null].filter(Boolean).join(" · "),
   scopePath: null,
   fields: {
     name: { type: "text", label: "Certificate", sortable: true, list: { default: true, width: 260 },

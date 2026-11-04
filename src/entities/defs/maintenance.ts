@@ -26,7 +26,7 @@ registerEntity({
   nav: { section: "operations", group: "Maintenance", order: 40 },
   route: "/app/maintenance/work-orders",
   titleField: "title",
-  subtitle: (r) => [r.id, r.property_id__label, r.unit_id__label].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.id, r.unit_id__label || r.property_id__label].filter(Boolean).join(" · "), // unit labels carry the property name
   scopePath: "work_orders.property_id",
   fields: {
     title: { type: "text", label: "Work order", required: true, search: true, sortable: true, list: { default: true, width: 280 } },
@@ -40,8 +40,8 @@ registerEntity({
       { value: "Emergency", tone: "danger" }, { value: "Urgent", tone: "warning" }, { value: "Normal", tone: "neutral" }, { value: "Low", tone: "neutral" },
     ] },
     category: { type: "text", label: "Trade", facet: true, required: true, sortable: true, list: { default: true }, editable: WO_STAFF },
-    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: true }, editable: [] },
-    unit_id: { type: "ref", ref: "units", label: "Unit", list: { default: true }, editable: [...OPS, "maintenance_supervisor"] },
+    property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: false }, editable: [] },
+    unit_id: { type: "ref", ref: "units", label: "Unit", list: { default: false }, editable: [...OPS, "maintenance_supervisor"] },
     vendor_id: { type: "ref", ref: "vendors", label: "Vendor", facet: true, list: { default: true }, editable: [...OPS, "maintenance_supervisor"] },
     assignee_id: { type: "ref", ref: "staff", label: "Technician", facet: true, list: { default: false }, editable: [...OPS, "maintenance_supervisor"] },
     opened_at: { type: "datetime", label: "Opened", required: true, sortable: true, list: { default: true }, editable: [] },
@@ -52,7 +52,7 @@ registerEntity({
     age_days: { type: "number", label: "Age (days)", sortable: true, list: { default: false, align: "right" }, sql: `CAST(julianday(coalesce(work_orders.completed_at, ${AS_OF})) - julianday(work_orders.opened_at) AS INTEGER)` },
     // Payment amounts derive from estimates, costs and submitted invoices: staff only.
     estimate: { type: "money", label: "Estimate", column: "estimate_cents", sortable: true, list: { default: false, align: "right" }, editable: SUP },
-    cost: { type: "money", label: "Cost", column: "cost_cents", sortable: true, list: { default: true, align: "right" }, editable: [...OPS, "maintenance_supervisor"] },
+    cost: { type: "money", label: "Cost", column: "cost_cents", sortable: true, list: { default: false, align: "right" }, editable: [...OPS, "maintenance_supervisor"] },
     source: { type: "enum", label: "Source", facet: true, enum: [
       { value: "Resident", tone: "neutral" }, { value: "Staff", tone: "neutral" }, { value: "Inspection", tone: "neutral" }, { value: "Preventive", tone: "neutral" }, { value: "Turnover", tone: "neutral" },
     ] },
@@ -235,7 +235,7 @@ registerEntity({
   nav: { section: "operations", group: "Maintenance", order: 41 },
   route: "/app/maintenance/inspections",
   titleField: "title",
-  subtitle: (r) => [r.property_id__label, r.unit_id__label, r.scheduled_on].filter(Boolean).join(" · "),
+  subtitle: (r) => [r.unit_id__label || r.property_id__label, r.scheduled_on].filter(Boolean).join(" · "),
   scopePath: "inspections.property_id",
   fields: {
     title: { type: "text", label: "Inspection", sortable: true, list: { default: true, width: 220 },

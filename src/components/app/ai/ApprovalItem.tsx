@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Money, RelativeDate } from "../display";
 import { AIBadge, Confidence, type AISource } from "./AIBadge";
 import type { Evidence } from "./AISuggestion";
+import { readableText } from "@/lib/fieldText";
 
 export type Risk = "Low" | "Medium" | "High";
 
@@ -128,7 +129,7 @@ function Details({ why, evidence, confidence, policy, runHref, recordHref, class
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <ul className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
-        {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{w}</li>)}
+        {why.map((w) => <li key={w} className="flex gap-1.5"><CornerDownRight className="mt-0.5 size-3 shrink-0 opacity-60" />{readableText(w)}</li>)}
       </ul>
       {policy && <div className="flex items-center gap-1.5 rounded-md bg-tone-warning/[0.08] px-2 py-1 text-[12px] text-tone-warning"><Lock className="size-3" />{policy}</div>}
       <div className="flex flex-wrap items-center gap-1.5">

@@ -47,7 +47,7 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
   await ask.getByRole("button", { name: "What's the total to move in?" }).click();
   await slow(sources.first()).toBeVisible();
   await expect(ask).toContainText(moveIn);
-  await expect(ask).toContainText(/Rule-based fallback|AI/);
+  await expect(ask).toContainText(/Rules|AI/);
   await ask.getByLabel("Your question about this home").fill("Is this a safe neighborhood for families?");
   await ask.getByLabel("Your question about this home").press("Enter");
   await slow(sources.nth(1)).toBeVisible();

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, Loader2, Printer, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -121,7 +121,7 @@ export function StatementView({ st, explainUrl, mode, canDistribute, canFix }: {
       <footer className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-[11.5px] text-muted-foreground">
         <p>
           {st.totals.items.toLocaleString("en-US")} trust account movements
-          {st.distribution ? `, paid ${st.distribution.paid_on} (transfer ${st.distribution.transfer_id})` : " since the last distribution"}.
+          {st.distribution ? `, paid ${formatDate(st.distribution.paid_on, "always")} (transfer ${st.distribution.transfer_id})` : " since the last distribution"}.
           {" "}Every figure comes from the operating trust ledger.
         </p>
         {canDistribute && !st.closed && <DistributeButton entityId={st.entity.id} entityName={st.entity.name} amount={payout?.amount_cents ?? 0} />}

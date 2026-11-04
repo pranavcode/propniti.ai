@@ -2,6 +2,7 @@ import { AS_OF } from "@/entities/common";
 import type { MetricKey, Row } from "@/entities/types";
 import { effective } from "@/server/query";
 import { registerMetric, type MetricCtx, type MetricParams, type MetricResult } from "../metrics";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // Residents, leases and messaging metrics. Live over effective rows (base plus the visitor's
 // overlay), always inside the persona's property scope.
@@ -97,7 +98,7 @@ registerMetric({
       const month = d.toISOString().slice(0, 7);
       const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
       const hit = res.find((r) => r.month === month);
-      const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+      const label = monthTick(month);
       return { month, label, from: `${month}-01`, to: last, count: Number(hit?.count ?? 0), notice: Number(hit?.notice ?? 0) };
     });
     return { value: points.slice(0, 2).reduce((a, p) => a + p.count, 0), points, source: "live" };

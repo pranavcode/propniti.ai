@@ -4,23 +4,24 @@ import { ArrowRight, Bot, Calculator, ChevronRight, CircleAlert, FlaskConical, I
 import type { Session } from "@/auth/session";
 import type { Row } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
-import { formatMoney, formatPct, personaGreeting } from "@/lib/format";
+import { formatMoney, formatNumber, formatPct, personaGreeting } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { agentName } from "@/ai/ui/labels";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
-import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/components/app/dashboard";
+import { ChartCard, DashboardGrid, GridItem, KpiCard, KpiRow, type ChartPoint } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, CollapsibleSection, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import type { ProposalJson } from "@/ai/ui/client";
-import { getAgent } from "@/extensions/agents";
 import { ExplainableKpi, ExplainLink } from "../ui/Explain";
 import { ApprovalQueue, CompareTable, HomeAsk } from "./client";
 import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, type CompareRow, type HomeMetrics } from "./data";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // AI-first homes for the principal (org-wide) and the regional manager (one region). Briefing and
 // approvals first, then explainable KPIs, then charts that drill to the rows behind them.
 
-const label = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const label = monthTick;
 const monthLong = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const pts = (rows: Row[]): ChartPoint[] => rows.map((r) => ({ ...(r as ChartPoint), label: label(String(r.month)) }));
 
@@ -52,16 +53,16 @@ function Briefing({ b, m, rows, scope }: { b: Awaited<ReturnType<typeof briefing
             {best && best.noi! > best.noiPrev! && <>; <Link href={`/app/properties/${best.id}?tab=financials`} className="font-medium hover:underline">{best.name}</Link> added the most</>}.
           </p>
           <p className="text-[12.5px] text-muted-foreground">
-            {agentsRan ? <><Bot className="mr-1 inline size-3.5" />{agentsRan} agent {agentsRan === 1 ? "run" : "runs"}: {b.overnight.slice(0, 3).map((r) => `${getAgent(r.agent_key as never)?.name ?? r.agent_key} ×${r.n}`).join(", ")}.</> : "No agent runs in the last 48 hours in this workspace."}
+            {agentsRan ? <><Bot className="mr-1 inline size-3.5" />{agentsRan} agent {agentsRan === 1 ? "run" : "runs"}: {b.overnight.slice(0, 3).map((r) => `${agentName(r.agent_key)} ×${r.n}`).join(", ")}.</> : "No agent runs in the last 48 hours in this workspace."}
           </p>
         </div>
         <div className="flex flex-col gap-2 px-4 py-3">
           <h3 className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">Needs you</h3>
           <Link href="/app/ai/approvals" className="group flex items-baseline gap-2">
-            <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{b.queue.total}</span>
+            <span className="text-[28px] leading-8 font-semibold tracking-tight tabular-nums">{formatNumber(b.queue.total)}</span>
             <span className="text-[12.5px] text-muted-foreground group-hover:text-foreground">{b.queue.total === 1 ? "proposal waits" : "proposals wait"} for a decision{highRisk ? `, ${highRisk} high risk` : ""} <ArrowRight className="inline size-3" /></span>
           </Link>
-          <p className="text-[12.5px] text-muted-foreground">{Number(b.queue.counts.auto_handled ?? 0)} handled automatically inside policy · {Number(b.queue.counts.waiting ?? 0)} waiting on owners</p>
+          <p className="text-[12.5px] text-muted-foreground">{formatNumber(Number(b.queue.counts.auto_handled ?? 0))} handled automatically inside policy · {formatNumber(Number(b.queue.counts.waiting ?? 0))} waiting on owners</p>
         </div>
         <div className="flex flex-col gap-2 px-4 py-3">
           <h3 className="text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">Watch</h3>
@@ -85,7 +86,7 @@ function QuickActions({ actions, extra }: { actions: { label: string; href: stri
   return (
     <div className="flex flex-wrap gap-1.5">
       {extra.map((a) => <Button key={a.href} asChild size="sm" variant="outline"><Link href={a.href}><a.icon />{a.label}</Link></Button>)}
-      {actions.map((a) => <Button key={a.href} asChild size="sm" variant="ghost"><Link href={a.href}>{a.label}</Link></Button>)}
+      {actions.map((a) => <Button key={a.href} asChild size="sm" variant="outline"><Link href={a.href}>{a.label}</Link></Button>)}
     </div>
   );
 }
@@ -94,6 +95,7 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
   const k = m.kpis;
   const foot = `${monthLong(LAST_CLOSED)}`;
   const noAi = !k.aiHours.spark.some((v) => v > 0);
+  const delinquent = <KpiCard label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel="vs month end" spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
   return (
     <KpiRow className="xl:grid-cols-5">
       <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
@@ -101,9 +103,9 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
       <ExplainableKpi deltaLabel="" metric="receivables.collections_rate" label="Collections rate" format="pct" value={k.collections.value} previous={k.collections.previous} spark={k.collections.spark} goodWhen="up" href="/app/receivables/payments" footnote="Collected over charged" help="Share of the month's rent and fees paid so far. Payments go to the oldest charge first, so paying down an older balance counts for that older month." />
       {regional
         ? <ExplainableKpi deltaLabel="" metric="maintenance.sla" label="Within SLA" format="pct" value={k.sla.value} previous={k.sla.previous} spark={k.sla.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote="Of work orders due" help="Work orders completed by their SLA due time, over work orders due in the month. Open jobs past due count as missed." />
-        : <ExplainableKpi deltaLabel="" metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />}
+        : delinquent}
       {regional
-        ? <ExplainableKpi deltaLabel="" metric="receivables.delinquency" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/charges?f.status=Overdue" footnote="All aging buckets" help="Resident balances past due at month end." />
+        ? delinquent
         : <ExplainableKpi deltaLabel="" metric="intelligence.ai_minutes_saved" label="AI hours saved" format="count" value={k.aiHours.value} previous={k.aiHours.previous} spark={k.aiHours.spark} goodWhen="up" href="/app/ai/activity" footnote={noAi ? "No agent actions recorded yet" : "Staff time agents took on"} help="Estimated staff hours saved by agent actions people approved or that ran inside policy, using a fixed minutes-per-action table." />}
     </KpiRow>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "@/components/Link";
 import { pickFilter } from "@/components/app/ResultsSummary";
 import { useRouter } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
@@ -8,9 +7,11 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAx
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { fillTemplate } from "@/components/app/data-table/params";
 import { formatCountDelta, formatMoney, formatNumber, formatPct } from "@/lib/format";
+import { monthTick } from "@/components/app/dashboard/fmt";
 import { cn } from "@/lib/utils";
 import { useImprove } from "@/components/app/ai/ImproveWithAI";
 import { Term } from "@/components/app/Term";
+import { KpiFrame } from "@/components/app/dashboard/KpiCard";
 
 // KPI tiles and chart panels fed by metrics() (plain data). Every tile and chart point links to
 // the rows behind it (KpiDef.drill / ChartDef.drill templates).
@@ -23,7 +24,7 @@ const fmt = (v: number | null | undefined, f: Fmt | undefined, compact = false) 
 const monthLabel = (v: unknown) => {
   const s = String(v ?? "");
   if (!/^\d{4}-\d{2}$/.test(s)) return s;
-  return new Date(`${s}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+  return monthTick(s);
 };
 
 function Spark({ values, good }: { values: number[]; good: boolean | null }) {
@@ -31,7 +32,7 @@ function Spark({ values, good }: { values: number[]; good: boolean | null }) {
   const min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
   const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${28 - ((v - min) / span) * 26}`).join(" ");
   return (
-    <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-8 w-24" aria-hidden>
+    <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-7 w-24 shrink-0 @max-[10rem]/kpi:hidden" aria-hidden>
       <polyline points={pts} fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" className={good === false ? "stroke-tone-danger" : "stroke-primary"} />
     </svg>
   );
@@ -54,35 +55,25 @@ function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
   const flat = countChange != null ? k.value === k.previous : (pctPoints ?? delta ?? 0) === 0;
   const good = flat || !k.goodWhen ? null : (up && k.goodWhen === "up") || (!up && k.goodWhen === "down");
   const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
-  // The tile drills through a link stretched over it (same pattern as KpiCard).
+  const hasDelta = delta != null || pctPoints != null || countChange != null;
   return (
-    <div className={cn("group/kpi relative flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors", k.drill && "hover:border-primary/40 has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring", improving && "rounded-b-none")}>
-      {k.drill && <Link href={k.drill} onClick={pickFilter} aria-label={`${k.label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
-      <div className="-mt-1 flex h-6 items-center gap-1.5">
-        <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground"><Term help={k.help} className="relative z-10">{k.label}</Term></span>
-        {(k.asOf || k.drill) && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            {k.asOf && <span className="text-[10.5px] text-muted-foreground/70">{monthLabel(k.asOf)}</span>}
-            {k.drill && <ArrowUpRight aria-hidden className="size-3.5 text-muted-foreground/50 transition-colors group-hover/kpi:text-foreground" />}
-          </span>
-        )}
-      </div>
-      {k.error ? <span className="text-[12px] text-muted-foreground">{k.error}</span> : (
-        <div className="flex items-end justify-between gap-2">
-          <div>
-            <div className="text-[22px] font-semibold leading-none tracking-tight tabular-nums">{fmt(k.value, k.format, true)}</div>
-            {(delta != null || pctPoints != null || countChange != null) && (
-              <div className={cn("mt-1.5 inline-flex items-center gap-0.5 text-[11.5px] font-medium tabular-nums", good == null ? "text-muted-foreground" : good ? "text-tone-success" : "text-tone-danger")}>
-                <Icon className="size-3.5" />
-                {pctPoints != null ? `${Math.abs(pctPoints).toFixed(1)} pts` : countChange != null ? countChange.replace(/^[+−]/, "") : `${Math.abs(delta! * 100).toFixed(1)}%`}
-                <span className="font-normal text-muted-foreground">vs last month</span>
-              </div>
-            )}
-          </div>
-          <Spark values={k.spark} good={good} />
-        </div>
-      )}
-    </div>
+    <KpiFrame
+      className={cn(improving && "rounded-b-none")}
+      label={<Term help={k.help} className="relative z-10">{k.label}</Term>}
+      linkLabel={`${k.label}: open the records behind this number`}
+      href={k.drill}
+      onClick={pickFilter}
+      aside={k.asOf ? <span className="text-[10.5px] font-normal text-muted-foreground/70">{monthLabel(k.asOf)}</span> : undefined}
+      value={k.error ? <span className="block truncate text-[12px] font-normal tracking-normal text-muted-foreground">{k.error}</span> : fmt(k.value, k.format, true)}
+      delta={!k.error && hasDelta ? (
+        <span className={cn("inline-flex min-w-0 items-center gap-0.5 text-[11.5px] font-medium tabular-nums", good == null ? "text-muted-foreground" : good ? "text-tone-success" : "text-tone-danger")}>
+          <Icon className="size-3.5 shrink-0" />
+          <span className="whitespace-nowrap">{pctPoints != null ? `${Math.abs(pctPoints).toFixed(1)} pts` : countChange != null ? countChange.replace(/^[+−]/, "") : `${Math.abs(delta! * 100).toFixed(1)}%`}</span>
+          <span className="truncate font-normal text-muted-foreground">vs last month</span>
+        </span>
+      ) : undefined}
+      spark={!k.error && k.spark.length > 1 ? <Spark values={k.spark} good={good} /> : undefined}
+    />
   );
 }
 

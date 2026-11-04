@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { Nav } from "@/components/marketing/Nav";
 import { SiteFooter } from "@/components/marketing/Footer";
 import { DocsTheme } from "@/components/docs/Theme";
+import { ThemePreload } from "@/components/app/ThemePreload";
+import { themeMode } from "@/lib/theme";
 
 // Public but unlisted: never indexed, and not in any sitemap.
 export const metadata: Metadata = {
@@ -12,14 +14,12 @@ export const metadata: Metadata = {
 // Docs use the app's tokens (data-surface="app": neutral greys, deep teal, Geist) so they read as the
 // same product. Theme follows the app's pn_theme cookie; with no choice made, it follows the OS.
 export default async function DocsLayout({ children }: LayoutProps<"/docs">) {
-  const theme = (await cookies()).get("pn_theme")?.value;
-  const mode = theme === "light" || theme === "dark" ? theme : "system";
-  // Runs while the page is parsed, before the first paint: the app surface and the theme are set
-  // up front, so the page doesn't draw once in the marketing colours or light and then switch.
-  const preload = `(function(){try{var d=document,h=d.documentElement,r=d.currentScript&&d.currentScript.parentElement,m=${JSON.stringify(mode)},k=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);d.body.dataset.surface="app";h.classList.toggle("dark",k);r&&r.classList.toggle("dark",k);h.style.colorScheme=k?"dark":"light"}catch(e){}})()`;
+  const mode = themeMode((await cookies()).get("pn_theme")?.value);
+  // The surface and theme are set before the first paint, so the page doesn't draw once in the
+  // marketing colours or light and then switch.
   return (
-    <div data-surface="app" data-docs className={`relative overflow-x-clip bg-background text-[15px] text-foreground antialiased ${theme === "dark" ? "dark" : ""}`}>
-      <script dangerouslySetInnerHTML={{ __html: preload }} />
+    <div data-surface="app" data-docs suppressHydrationWarning className={`relative overflow-x-clip bg-background text-[15px] text-foreground antialiased ${mode === "dark" ? "dark" : ""}`}>
+      <ThemePreload mode={mode} />
       <DocsTheme theme={mode} />
       <Nav />
       <main className="px-4 pb-24 pt-24 sm:px-6 sm:pt-28">{children}</main>

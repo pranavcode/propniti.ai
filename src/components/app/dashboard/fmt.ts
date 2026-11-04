@@ -1,4 +1,4 @@
-import { formatDays, formatMoney, formatNumber, formatPct } from "@/lib/format";
+import { formatDate, formatDays, formatMoney, formatNumber, formatPct } from "@/lib/format";
 import type { ValueFormat } from "./types";
 
 // Full value for tooltips and KPI values; compact form for axis ticks.
@@ -20,3 +20,14 @@ export const formatTick = (v: number, format?: ValueFormat) => (format === "pct"
 export const SERIES_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 // Fixed order, never cycled: a sixth series and beyond share the neutral "Other" ink.
 export const seriesColor = (i: number, override?: string) => override ?? SERIES_COLORS[i] ?? "var(--muted-foreground)";
+
+// Month on a chart axis: "2025-12" → "Dec ’25". Every month chart uses this one form.
+export const monthTick = (ym: string) => new Date(`${ym.slice(0, 7)}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+
+// Category labels on chart axes and tooltips: "2025-12" → "Dec ’25", "2026-11-04" → "Nov 4, 2026".
+export function categoryLabel(v: unknown): string {
+  const s = String(v ?? "");
+  if (/^\d{4}-\d{2}$/.test(s)) return monthTick(s);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatDate(s, "always");
+  return s;
+}

@@ -3,11 +3,14 @@ import { AS_OF } from "@/seed/constants";
 import type { Answer, Lookup } from "../ask";
 import type { PortalCtx } from "../context";
 import { currentLease, daysUntil, insurance, me, offers, OPEN_WO, openCharges, requests } from "../resident-data";
+import { formatDate, formatMonth } from "@/lib/format";
 
 // The resident's AI help, answered from their own lease, ledger and requests.
 
 const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+// "Rent 2026-11" reads "Rent Nov 2026".
+const chargeName = (s: string) => s.replace(/\b(\d{4}-\d{2})\b(?!-)/g, (m) => formatMonth(`${m}-01`));
 const nextFirst = () => {
   const [y, m] = AS_OF.split("-").map(Number);
   return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
@@ -26,12 +29,12 @@ export async function answerResident(c: PortalCtx, q: string): Promise<Answer> {
     const total = open.reduce((a, x) => a + x.balance_cents, 0);
     const overdue = open.filter((x) => x.status === "Overdue");
     const processing = open.filter((x) => x.status === "Processing");
-    trace.push({ label: "Open charges", detail: open.length ? open.map((x) => `${x.description} ${usd(x.balance_cents)} (${x.status.toLowerCase()}, due ${x.due_on})`).join("; ") : "None" });
+    trace.push({ label: "Open charges", detail: open.length ? open.map((x) => `${chargeName(x.description)} ${usd(x.balance_cents)} (${x.status.toLowerCase()}, due ${formatDate(x.due_on, "always")})`).join("; ") : "None" });
     let answer: string;
     if (!open.length) answer = `You're all paid up. Your next rent of ${lease ? usd(lease.rent_cents) : "your monthly rent"} is due on ${day(nextFirst())}.`;
     else {
       answer = `You owe ${usd(total)} right now across ${open.length} charge${open.length === 1 ? "" : "s"}.`;
-      if (overdue.length) answer += ` ${overdue.map((x) => `${x.description} (${usd(x.balance_cents)})`).join(", ")} ${overdue.length === 1 ? "was" : "were"} due on ${day(overdue[0].due_on)} and ${overdue.length === 1 ? "is" : "are"} now past due.`;
+      if (overdue.length) answer += ` ${overdue.map((x) => `${chargeName(x.description)} (${usd(x.balance_cents)})`).join(", ")} ${overdue.length === 1 ? "was" : "were"} due on ${day(overdue[0].due_on)} and ${overdue.length === 1 ? "is" : "are"} now past due.`;
       if (processing.length) answer += ` A payment of ${usd(processing.reduce((a, x) => a + x.balance_cents, 0))} is already processing.`;
       answer += " You can pay by ACH on the Pay page.";
     }
@@ -72,7 +75,7 @@ export async function answerResident(c: PortalCtx, q: string): Promise<Answer> {
 
   if (/\b(insurance|renters|policy|liability)\b/.test(text) && lease) {
     const i = await insurance(c, lease.id);
-    trace.push({ label: "Renters insurance", detail: i ? `${i.carrier} ${i.policy_number}, ${usd(i.liability_cents)} liability, expires ${i.expires_on} (${i.status})` : "No policy on file" });
+    trace.push({ label: "Renters insurance", detail: i ? `${i.carrier} ${i.policy_number}, ${usd(i.liability_cents)} liability, expires ${formatDate(i.expires_on, "always")} (${i.status})` : "No policy on file" });
     const answer = !i
       ? "We don't have a renters insurance policy on file for you. Your lease requires one. Message the office and they'll tell you how to send your declarations page."
       : `Your policy with ${i.carrier} has ${usd(i.liability_cents)} of liability cover and expires on ${day(i.expires_on)}.${daysUntil(i.expires_on) <= 30 ? " That's soon: send us the renewal so you stay covered." : ""}`;

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
+import { generate } from "@/seed/generate";
 import { get } from "../data";
 import { applyFixes, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
-import { issuesPage } from "../views";
+import { dataHealth, issuesPage } from "../views";
+import { fixPreviewProps, NEXT_STEP, type Issue } from "../ui/IssueFix";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
 import { startRun } from "../orchestrator";
@@ -136,6 +138,65 @@ describe("applying fixes from Data Health", () => {
     const failing = { prepare: (q: string) => f.db.prepare(q), batch: async () => { throw new Error("D1_ERROR: D1 DB is overloaded. Requests queued for too long."); } };
     expect(await executeProposal({ ...data, db: failing }, row, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: false, message: DB_BUSY });
     quiet.mockRestore();
+  });
+});
+
+describe("Data Health in plain words", () => {
+  it("names the record and its fields, and formats cents and dates, never rule keys or snake_case", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'leases.rent_outlier', 'leases', 'Rent far above market', 'warn', 'Rent over 3× market', 'computed')").run();
+    f.raw.prepare("UPDATE data_issues SET suggested_fix = ? WHERE id = 'di-rent'").run(JSON.stringify({ changes: { rent_cents: 150000 }, why: ["Lease started 2025-12-16, matching term_months"] }));
+    const data = { db: f.db, ws: WS, actor: DANIEL };
+    const issue = (await issuesPage(data, { issue: "di-rent" })).rows[0] as unknown as Issue;
+    expect(issue).toMatchObject({ record: "Lee household · #412", entity_label: "Lease" });
+    const p = fixPreviewProps(issue, async () => null);
+    expect(p.rule).toBeUndefined();
+    expect(p.title).toBe("Rent far above market · Lease Lee household · #412 · The Lofts at Riverside");
+    expect(p.changes).toEqual([{ field: "rent_cents", label: "Rent", before: "$1,400.00", after: "$1,500.00" }]);
+    expect(p.why).toEqual(["Lease started Dec 16, 2025, matching term months"]);
+    const health = await dataHealth(data);
+    for (const m of health.modules) for (const e of m.entities) expect(e).not.toMatch(/_/);
+  });
+});
+
+describe("Data Health issues with no automatic fix", () => {
+  it("drop the before/after table and say what a person does next, with a link to the record", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'vendors.unverified_bank_change', 'vendors', 'Unverified vendor bank change', 'critical', 'x', 'computed')").run();
+    f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', 'di-bank', 'vendors.unverified_bank_change', 'vendors', 'v01', NULL, '2026-11-01', 'critical', '{}', ?)")
+      .run(JSON.stringify({ action: "vendors.hold_payments", why: ["Bank details changed 6 days ago", "No callback verification on file"], confidence: 0.93, source: "data_health" }));
+    const issue = (await issuesPage({ db: f.db, ws: WS, actor: DANIEL }, { issue: "di-bank" })).rows[0] as unknown as Issue;
+    const p = fixPreviewProps(issue, async () => null);
+    expect(p.title).toMatch(/^Unverified vendor bank change · Vendor /);
+    expect(p.changes).toEqual([]);
+    expect(p.onApply).toBeUndefined();
+    expect(p.needsPerson).toBeNull();
+    expect(p.nextStep).toEqual({ text: NEXT_STEP["vendors.unverified_bank_change"], href: "/app/maintenance/vendors/v01", label: "Open vendor" });
+  });
+
+  it("has a next step for every seeded rule whose fix is a named action", { timeout: 120_000 }, () => {
+    const rules = new Set(generate().tables.data_issues.filter((i) => (JSON.parse(String(i.suggested_fix ?? "null")) as { action?: string } | null)?.action).map((i) => String(i.rule_id)));
+    expect(rules.size).toBeGreaterThan(5);
+    for (const rule of rules) expect(NEXT_STEP[rule], rule).toBeTruthy();
+  });
+});
+
+describe("Data Health scope", () => {
+  it("counts rules within the persona's properties and leaves out record types the role can't open", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'bill_lines.gl_miscoded', 'bill_lines', 'GL miscoded', 'warn', 'x', 'computed'), ('base', 'leases.rent_outlier', 'leases', 'Rent far above market', 'warn', 'x', 'computed')").run();
+    const add = f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence) VALUES ('base', ?, ?, ?, ?, ?, '2026-11-01', 'warn', '{}')");
+    add.run("di-gl", "bill_lines.gl_miscoded", "bill_lines", "bl1", "p01");
+    add.run("di-far", "leases.rent_outlier", "leases", "l3", "p10");
+    const lena = { ...MARCUS, personaId: "lena", name: "Lena Ortiz", role: "leasing_agent" as const };
+    const data = { db: f.db, ws: WS, actor: lena };
+    const h = await dataHealth(data);
+    expect(h.rules.map((r) => r.id)).not.toContain("bill_lines.gl_miscoded");
+    expect(h.rules.find((r) => r.id === "leases.rent_outlier")?.open).toBe(1); // di-rent at p01, not di-far at p10
+    expect(h.rules.reduce((n, r) => n + r.open, 0)).toBeLessThanOrEqual(h.open);
+    expect((await issuesPage(data, {})).rows.map((r) => (r as Record<string, unknown>).id)).not.toContain("di-gl");
+    const all = await dataHealth({ db: f.db, ws: WS, actor: DANIEL });
+    expect(all.rules.find((r) => r.id === "leases.rent_outlier")?.open).toBe(2);
   });
 });
 

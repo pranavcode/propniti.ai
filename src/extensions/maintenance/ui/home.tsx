@@ -7,7 +7,8 @@ import { Inbox } from "lucide-react";
 import { ApprovalItem, AskBox } from "@/components/app/ai";
 import { EmptyState } from "@/components/app/states";
 import { useShellMaybe } from "@/components/app/shell/context";
-import { AGENT_LABEL, sourceOf, type ProposalJson } from "@/ai/ui/client";
+import { sourceOf, type ProposalJson } from "@/ai/ui/client";
+import { agentName } from "@/ai/ui/labels";
 
 export function MxAsk({ suggestions }: { suggestions: string[] }) {
   const shell = useShellMaybe();
@@ -32,7 +33,7 @@ export function MxApprovals({ rows, more }: { rows: ProposalJson[]; more: number
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       {rows.map((p) => (
-        <ApprovalItem key={p.id} variant="row" agent={AGENT_LABEL[p.agent] ?? p.agent} title={p.title} amount={p.amount_cents == null ? null : p.amount_cents / 100} risk={p.risk}
+        <ApprovalItem key={p.id} variant="row" agent={agentName(p.agent)} title={p.title} amount={p.amount_cents == null ? null : p.amount_cents / 100} risk={p.risk}
           why={p.why} evidence={p.evidence.map((e) => ({ label: e.label, href: e.href }))} confidence={p.confidence} runHref={p.run_id ? `/app/ai/runs/${p.run_id}` : undefined}
           recordHref={p.agent === "maintenance_triage" ? `/app/maintenance/intake/${encodeURIComponent(p.entity_id)}` : p.href} createdAt={p.created_at}
           source={sourceOf(p)} model={p.model ?? undefined} policy={p.queue_state === "waiting" ? "Waiting on the owner's approval" : p.decide_reason ?? undefined}

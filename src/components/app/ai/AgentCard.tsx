@@ -31,6 +31,8 @@ export type AgentCardProps = {
   model?: string;
   onToggle?: (enabled: boolean) => void;
   onRunNow?: () => void | Promise<unknown>;
+  autonomyControl?: React.ReactNode;     // an editable autonomy picker, shown instead of the meter
+  runs?: string;                         // when it runs, in plain words: "Daily at 14:00 UTC · on Payment returned"
   className?: string;
 };
 
@@ -64,7 +66,9 @@ export function AutonomyMeter({ value, className }: { value: Autonomy; className
   );
 }
 
-export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successRate, proposed = 0, approved = 0, autoApplied = 0, autonomy, enabled = true, href, model, onToggle, onRunNow, className }: AgentCardProps) {
+const AUTONOMY_HELP = AUTONOMY.map((a) => `${a.label}: ${a.tip}`).join(" ");
+
+export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successRate, proposed = 0, approved = 0, autoApplied = 0, autonomy, enabled = true, href, model, onToggle, onRunNow, autonomyControl, runs, className }: AgentCardProps) {
   const [on, setOn] = useState(enabled);
   const [running, setRunning] = useState(false);
   const st = STATUS[running ? "running" : on ? status : "paused"];
@@ -72,7 +76,7 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
   const pct = successRate != null ? Math.round(successRate * 100) : null;
 
   return (
-    <article className={cn("flex flex-col rounded-lg border bg-card transition-colors", !on && "bg-muted/30", className)}>
+    <article data-agent-card className={cn("flex h-full flex-col rounded-lg border bg-card transition-colors", !on && "bg-muted/30", className)}>
       <div className="flex items-start gap-3 p-4 pb-3">
         <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset [&_svg]:size-4", on ? "bg-tone-ai/[0.08] text-tone-ai ring-tone-ai/20" : "bg-muted text-muted-foreground ring-border")}>{icon ?? <Bot />}</span>
         <div className="min-w-0 flex-1">
@@ -83,7 +87,7 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
         </div>
         <Switch className="self-center" checked={on} onCheckedChange={(v) => { setOn(v); onToggle?.(v); }} aria-label={`${on ? "Pause" : "Enable"} ${name}`} />
       </div>
-      <p className="line-clamp-2 px-4 text-[12.5px] text-muted-foreground">{goal}</p>
+      <p className="line-clamp-2 min-h-[2lh] px-4 text-[12.5px] text-muted-foreground">{goal}</p>
 
       <dl className="mt-3 grid grid-cols-3 border-y text-center">
         {[["Proposed", proposed], ["Approved", approved], ["Auto-applied", autoApplied]].map(([l, v]) => (
@@ -95,20 +99,27 @@ export function AgentCard({ name, goal, icon, status, lastRun, nextRun, successR
       </dl>
 
       <div className="flex flex-col gap-2.5 p-4 pt-3 text-[12px]">
-        {pct != null && (
-          <div className="flex items-center gap-2">
-            <span className="w-20 text-muted-foreground">Success</span>
+        <div className="flex h-5 items-center gap-2">
+          <span className="w-16 shrink-0 text-muted-foreground">Success</span>
+          {pct != null ? <>
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><span className={cn("block h-full rounded-full", pct >= 90 ? "bg-tone-success" : pct >= 75 ? "bg-tone-warning" : "bg-tone-danger")} style={{ width: `${pct}%` }} /></span>
             <span className="w-9 text-right font-medium tabular-nums">{pct}%</span>
-          </div>
-        )}
-        <div className="flex items-center gap-2"><span className="w-20 text-muted-foreground">Autonomy</span><AutonomyMeter value={autonomy} /></div>
-        <div className="flex items-center gap-2"><span className="w-20 text-muted-foreground">Last run</span>{lastRun ? <RelativeDate value={lastRun} /> : <span className="text-muted-foreground">Never</span>}</div>
-        <div className="flex items-center gap-2"><span className="w-20 text-muted-foreground">Next run</span>{on && nextRun ? <RelativeDate value={nextRun} /> : <span className="text-muted-foreground">{on ? "On events" : "Paused"}</span>}</div>
+          </> : <span className="text-muted-foreground">No runs in 30 days</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild><span tabIndex={0} className="w-16 shrink-0 cursor-help text-muted-foreground underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/60">Autonomy</span></TooltipTrigger>
+            <TooltipContent className="max-w-xs">{AUTONOMY_HELP}</TooltipContent>
+          </Tooltip>
+          {autonomyControl ?? <AutonomyMeter value={autonomy} />}
+        </div>
+        {runs !== undefined && <div className="flex items-start gap-2"><span className="w-16 shrink-0 text-muted-foreground">Runs</span><span className="line-clamp-2 min-h-[2lh] min-w-0" title={runs}>{runs}</span></div>}
+        <div className="flex items-center gap-2"><span className="w-16 shrink-0 text-muted-foreground">Last run</span>{lastRun ? <RelativeDate value={lastRun} /> : <span className="text-muted-foreground">Never</span>}</div>
+        <div className="flex items-center gap-2"><span className="w-16 shrink-0 text-muted-foreground">Next run</span>{on && nextRun ? <RelativeDate value={nextRun} /> : <span className="text-muted-foreground">{on ? "On events" : "Paused"}</span>}</div>
       </div>
 
       <div className="mt-auto flex items-center gap-2 border-t px-4 py-2.5">
-        {model && <span className="truncate text-[11px] text-muted-foreground" title={model}>{modelName(model)}</span>}
+        {model && <span className="line-clamp-2 min-w-0 text-[11px] leading-tight text-muted-foreground" title={`The last run used ${model}`}>Last run used {modelName(model)}</span>}
         <Button size="sm" variant="outline" className="ml-auto" disabled={!on || running || !onRunNow} onClick={() => void run()}>
           {running ? <Loader2 className="animate-spin" /> : <Play />} {running ? "Running…" : "Run now"}
         </Button>

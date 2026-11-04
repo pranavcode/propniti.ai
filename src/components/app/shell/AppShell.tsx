@@ -135,7 +135,8 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
             {data.viewingAs && <ViewingAsBanner />}
             <TopBar onMenu={() => setMobileNav(true)} />
             <div className="flex min-h-0 flex-1">
-              <main id="main" tabIndex={-1} className="relative min-w-0 flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]">
+              {/* Bottom padding clears the chat bubble (44px, 16px up) so it never sits on a last-row action. */}
+              <main id="main" tabIndex={-1} className="relative min-w-0 flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] outline-none [scrollbar-gutter:stable]">
                 {children}
               </main>
               <AssistantPanel onResize={setAiWidth}>{assistantBody}</AssistantPanel>
@@ -161,7 +162,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
         <WhatsNew />
         <AskAutoOpen />
         {/* Toasts sit above the chat bubble. */}
-        <Toaster theme={theme} position="bottom-right" closeButton {...(showsBubble(pathname) && { offset: { bottom: 76 }, mobileOffset: { bottom: 76 } })} />
+        <Toaster theme={theme} position="bottom-right" closeButton offset={{ left: 8, ...(showsBubble(pathname) && { bottom: 76 }) }} {...(showsBubble(pathname) && { mobileOffset: { bottom: 76 } })} />
       </TooltipProvider>
     </ShellCtx.Provider>
   );

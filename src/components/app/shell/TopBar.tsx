@@ -27,6 +27,9 @@ export function useCrumbs(): Crumb[] {
   return useMemo(() => crumbsFor(pathname, data.nav, crumbTitle, data.persona.home), [pathname, data.nav, crumbTitle, data.persona.home]);
 }
 
+// Record ids: a short letter prefix, then digit-bearing parts ("WO-10423", "p01", "gl-4000").
+const RECORD_ID = /^(?=.*\d)[a-z]{1,5}\d*(?:-[a-z0-9]+)*$/i;
+
 export function crumbsFor(pathname: string, nav: ShellNavSection[], title: string | null, home = "/app"): Crumb[] {
   const href = activeHref(pathname, nav);
   const section = nav.find((s) => s.items.some((i) => i.href === href));
@@ -41,7 +44,8 @@ export function crumbsFor(pathname: string, nav: ShellNavSection[], title: strin
   const out: Crumb[] = [{ label: section.label, href: here(section.section === "home" ? home : section.items[0].href) }];
   if (item.group) out.push({ label: item.group, href: here(section.items.find((i) => i.group === item.group)!.href) });
   out.push({ label: item.label, href: rest.length ? item.href : undefined });
-  rest.forEach((seg, i) => out.push({ label: i === rest.length - 1 && title ? title : humanize(decodeURIComponent(seg)) }));
+  // A record id ("L-10601", "res-p01-0001") stays as written; a sub-page slug ("state-rules", "1099-filings") reads as words.
+  rest.forEach((seg, i) => { const s = decodeURIComponent(seg); out.push({ label: i === rest.length - 1 && title ? title : RECORD_ID.test(s) ? s : humanize(s) }); });
   // A section and its item can share a name ("Settings › Settings"); keep the later, linked one.
   return out.filter((c, i) => c.label !== out[i + 1]?.label);
 }

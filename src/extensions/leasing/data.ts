@@ -71,6 +71,10 @@ export async function followUps(c: LeasingCtx, limit = 8) {
 }
 
 // Proposals from the Leasing and Renewals Agents still waiting on a person, newest risk first.
+// The Leasing Agent's decision on an application: live runs propose applications.decide, earlier
+// runs (and the seed) approve or deny directly. The broker desk lists all three.
+export const DECIDE_ACTIONS = ["applications.decide", "applications.approve", "applications.deny"];
+
 export async function leasingProposals(c: LeasingCtx, opts: { actions?: string[]; limit?: number } = {}) {
   const acts = opts.actions ?? [];
   const rows = await sql<Row>(aiData(c),

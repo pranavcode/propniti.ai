@@ -30,6 +30,7 @@ import { listScope, resultsSummary } from "../results";
 import { fillTemplate, filterKeys, paramsToView, PAGE_SIZES, readSort, readValues, viewToParams } from "./params";
 import { serverViews, type SavedViewsAdapter } from "./views";
 import { PeekLink } from "../peek/PeekLink";
+import { EdgeFades, useScrollEdges } from "../ScrollX";
 import { DownloadMenu } from "@/extensions/export/DownloadMenu";
 import { usePeek, usePeekPageEntity } from "../peek/usePeek";
 import type { AiFilterFn, AiFilterResult, BulkAction, DataColumn, EmptyCopy, Facet, Row, SavedView, StatusTabs } from "./types";
@@ -201,6 +202,13 @@ export function DataTable(props: DataTableProps) {
 
   // ---- status tabs
   const tabValue = statusTabs ? readValues(params, statusTabs.field) : [];
+  // The clicked tab reads as selected at once, while its rows load (the URL changes when they arrive).
+  const [clickedTab, setClickedTab] = useState<string | null>(null);
+  // Forget the click once the load ends, so a later Back/Forward or filter change shows the URL's tab.
+  if (!pending && clickedTab != null) setClickedTab(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const tabEdges = useScrollEdges(tabsRef);
+  const tableEdges = useScrollEdges(scrollRef);
   const tabTotal = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : undefined;
 
   const pages = Math.max(1, Math.ceil(total / size));
@@ -231,16 +239,17 @@ export function DataTable(props: DataTableProps) {
   return (
     <div className={cn("flex min-w-0 flex-col", className)} data-entity={entity}>
       {statusTabs && (
-        <div role="tablist" aria-label="Status" className="-mb-px flex items-end gap-0.5 overflow-x-auto border-b [scrollbar-width:none]">
+        <div className="relative">
+        <div ref={tabsRef} role="tablist" aria-label="Status" className="-mb-px flex items-end gap-0.5 overflow-x-auto border-b [scrollbar-width:none]">
           {[{ value: "", label: statusTabs.allLabel ?? "All", tone: undefined }, ...statusTabs.options].map((o) => {
-            const on = o.value ? tabValue.length === 1 && tabValue[0] === o.value : tabValue.length === 0;
+            const on = pending && clickedTab != null ? clickedTab === o.value : o.value ? tabValue.length === 1 && tabValue[0] === o.value : tabValue.length === 0;
             const n = o.value ? counts?.[o.value] : tabTotal;
             return (
               <button
                 key={o.value || "all"}
                 role="tab"
                 aria-selected={on}
-                onClick={() => setPatch({ [`f.${statusTabs.field}`]: o.value || null })}
+                onClick={(e) => { setClickedTab(o.value); e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" }); setPatch({ [`f.${statusTabs.field}`]: o.value || null }); }}
                 className={cn("relative flex h-9 shrink-0 items-center gap-1.5 px-2.5 text-[13px] transition-colors", on ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}
               >
                 {o.tone && <span className={cn("size-1.5 rounded-full", TONE_DOT[o.tone])} />}
@@ -250,6 +259,8 @@ export function DataTable(props: DataTableProps) {
               </button>
             );
           })}
+        </div>
+        <EdgeFades {...tabEdges} onPage className="bottom-px" />
         </div>
       )}
 
@@ -333,7 +344,7 @@ export function DataTable(props: DataTableProps) {
                       const meta = cell.column.columnDef.meta as DataColumn | undefined;
                       const content = flexRender(cell.column.columnDef.cell, cell.getContext());
                       return (
-                        <td key={cell.id} className={cn("max-w-[360px] px-3 align-middle", meta && isRight(meta) && "text-right", cell.column.id === "__select" && "w-9 pr-0")}>
+                        <td key={cell.id} style={meta?.width ? { maxWidth: meta.width } : undefined} className={cn("max-w-[360px] px-3 align-middle", meta && isRight(meta) && "text-right", cell.column.id === "__select" && "w-9 pr-0")}>
                           <div className={cn("flex min-w-0 items-center", meta && isRight(meta) && "justify-end")}>
                             {meta?.primary && rowHref && r.original.id != null
                               ? <PeekLink entity={entity} id={String(r.original.id)} href={fillTemplate(rowHref, r.original)} className="min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{content}</PeekLink>
@@ -371,6 +382,7 @@ export function DataTable(props: DataTableProps) {
               : <EmptyState kind="table" title={empty?.title ?? `No ${label.many.toLowerCase()} yet`} description={empty?.description} action={empty?.action} />
           )}
         </div>
+        <EdgeFades {...tableEdges} />
       </div>
 
       {total > 0 && (

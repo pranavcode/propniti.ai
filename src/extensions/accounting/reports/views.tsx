@@ -16,11 +16,12 @@ import { runSpec, type Ctx } from "./run";
 import { arAging, noiByProperty, pnl, rentRoll } from "./standard";
 import { COMPARE_LABEL, describeSpec, GROUP_LABEL, measureOf, periodLabel, type ScopeProperty } from "./spec";
 import type { AskResult } from "./ask";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 // Server-rendered report bodies. Each pairs a chart (one axis) with the table behind it and a
 // Download menu (CSV, Excel, PDF) that re-runs the same report on the server.
 
-const monthShort = (ym: string) => new Date(`${ym}-15T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " ’");
+const monthShort = monthTick;
 const dl = (params: Record<string, string | undefined>) => <DownloadMenu hrefs={downloadHrefs("/api/export/report", params)} what="Downloads this report: same period, property and your scope." />;
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : "−"}${Math.abs(n * 100).toFixed(1)}%`);
 

@@ -11,6 +11,7 @@ import { Gallery } from "./Gallery";
 import { FloorPlan } from "./FloorPlan";
 import { UnitStack, type StackUnit } from "./UnitStack";
 import { ACTIVE, asOf, days, inScope, one, parseList, photosOf, rows, tabCtx } from "./data";
+import { monthTick } from "@/components/app/dashboard/fmt";
 
 const Card = ({ title, meta, children, className }: { title: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode; className?: string }) => (
   <section className={cn("min-w-0 rounded-lg border bg-card", className)}>
@@ -266,7 +267,7 @@ export async function PropertyFinancials({ id, actor }: TabProps) {
       "SELECT month, gpr_cents, collected_cents, opex_cents, noi_cents, budget_noi_cents, occupancy_phys, vacancy_loss_cents FROM metrics_monthly WHERE workspace_id = 'base' AND property_id = ? AND month < ? ORDER BY month DESC LIMIT 12",
       id, today.slice(0, 7)),
   ]);
-  const label = (m: string) => new Date(`${m}-15T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+  const label = monthTick;
   const pts = (r: typeof noi) => (r.ok ? r.m.points.map((p) => ({ ...p, label: label(String(p.month)) })) as Record<string, string | number | null>[] : []);
   const sum = (k: keyof (typeof months)[number]) => months.reduce((s, m) => s + Number(m[k] ?? 0), 0);
   const budget = months.some((m) => m.budget_noi_cents != null) ? sum("budget_noi_cents") : null;

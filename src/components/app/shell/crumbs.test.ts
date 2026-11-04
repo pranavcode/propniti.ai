@@ -29,4 +29,12 @@ describe("breadcrumb links", () => {
     const c = crumbsFor("/app/residents/r1", nav, "Jordan Lee", "/app/today");
     expect(c.map((x) => x.href)).toEqual(["/app/leasing/pipeline", "/app/residents", undefined]);
   });
+  it("shows a record id as written until the record's title arrives", () => {
+    expect(crumbsFor("/app/residents/L-10601", nav, null, "/app/today").at(-1)).toEqual({ label: "L-10601" });
+    expect(crumbsFor("/app/residents/L-10601", nav, "Wilson household", "/app/today").at(-1)).toEqual({ label: "Wilson household" });
+  });
+  it("keeps record-id shapes as written but reads digit-bearing slugs as words", () => {
+    for (const id of ["res-p01-0001", "gl-4000", "WO-10423", "p01"]) expect(crumbsFor(`/app/residents/${id}`, nav, null, "/app/today").at(-1)).toEqual({ label: id });
+    for (const slug of ["1099-filings", "prepare-1099s", "resident-360"]) expect(crumbsFor(`/app/residents/${slug}`, nav, null, "/app/today").at(-1)!.label).not.toBe(slug);
+  });
 });

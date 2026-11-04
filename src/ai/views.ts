@@ -1,7 +1,8 @@
 import { demoIsoIn, demoNow } from "@/lib/clock";
-import { can, getEntity } from "@/entities";
+import { allEntities, can, getEntity } from "@/entities";
 import { getAction } from "@/extensions/actions";
-import { effective, expand, readWs } from "@/server/query";
+import { effective, expand, list, readWs } from "@/server/query";
+import { hintsFor, humanizeKey } from "@/lib/fieldText";
 import type { AgentKey, Role, Row } from "@/entities/types";
 import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
@@ -342,13 +343,25 @@ async function recordCounts(data: DataCtx, entities: Table[]) {
   return v;
 }
 
+// Record types a role can't open (bill lines follow bills). Their issues stay out of that role's
+// Data Health counts, rules and lists, as their records stay out of its pages.
+export function hiddenIssueTypes(role: Role): string[] {
+  const hidden = allEntities().filter((d) => !can(role, "read", d.key)).map((d) => d.key as string);
+  return hidden.includes("bills") ? [...hidden, "bill_lines"] : hidden;
+}
+
 export async function dataHealth(data: DataCtx) {
-  const [issues, rules, props] = await Promise.all([
-    sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, "SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' GROUP BY rule_id, entity_type, property_id, severity"),
-    sql<{ id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }>(data,
-      "SELECT r.id, r.name, r.severity, r.entity_type, (SELECT count(*) FROM {data_issues} i WHERE i.rule_id = r.id AND i.status = 'open') AS open, (SELECT count(*) FROM {data_issues} i WHERE i.rule_id = r.id AND i.status IN ('fixed', 'auto-fixed')) AS fixed FROM {data_rules} r ORDER BY open DESC", [], { unscoped: true }),
+  const hidden = JSON.stringify(hiddenIssueTypes(data.actor.role));
+  const visible = "entity_type NOT IN (SELECT value FROM json_each(?))";
+  const [issues, ruleList, ruleCounts, props] = await Promise.all([
+    sql<{ rule_id: string; entity_type: string; property_id: string | null; severity: string; n: number }>(data, `SELECT rule_id, entity_type, property_id, severity, count(*) AS n FROM {data_issues} WHERE status = 'open' AND ${visible} GROUP BY rule_id, entity_type, property_id, severity`, [hidden]),
+    sql<{ id: string; name: string; severity: string; entity_type: string }>(data, `SELECT r.id, r.name, r.severity, r.entity_type FROM {data_rules} r WHERE r.${visible}`, [hidden], { unscoped: true }),
+    // Counts in the persona's properties (scoped), not the whole portfolio.
+    sql<{ rule_id: string; open: number; fixed: number }>(data, "SELECT rule_id, sum(status = 'open') AS open, sum(status IN ('fixed', 'auto-fixed')) AS fixed FROM {data_issues} GROUP BY rule_id"),
     sql<{ id: string; name: string; metro: string }>(data, "SELECT id, name, metro FROM {properties} ORDER BY id"),
   ]);
+  const byRule = new Map(ruleCounts.map((r) => [r.rule_id, r]));
+  const rules = ruleList.map((r) => ({ ...r, open: Number(byRule.get(r.id)?.open ?? 0), fixed: Number(byRule.get(r.id)?.fixed ?? 0) })).sort((a, b) => b.open - a.open);
   const entities = [...new Set([...rules.map((r) => r.entity_type), ...issues.map((i) => i.entity_type)])].filter(isTable);
   const counts = await recordCounts(data, entities);
   const weightOf = (rows: typeof issues) => rows.reduce((s, r) => s + issueWeight(r.rule_id, r.severity) * r.n, 0);
@@ -372,15 +385,15 @@ export async function dataHealth(data: DataCtx) {
   return {
     score: healthScore(counts.map((c) => ({ weighted: weightOf(issues.filter((i) => i.entity_type === c.entity)), records: c.total })), ORG_FLOOR),
     open: count(issues), formula: HEALTH_FORMULA, properties,
-    modules: [...modules.values()].filter((m) => m.open).map((m) => ({ module: m.module, open: m.open, entities: m.entities, score: healthScore(m.parts, ORG_FLOOR) })).sort((a, b) => a.score - b.score),
+    modules: [...modules.values()].filter((m) => m.open).map((m) => ({ module: m.module, open: m.open, entities: m.entities, labels: m.entities.map((e) => getEntity(e)?.label.many ?? humanizeKey(e)), score: healthScore(m.parts, ORG_FLOOR) })).sort((a, b) => a.score - b.score),
     rules,
   };
 }
 
 // The Data Health filters as SQL over `i` (data_issues), shared by the page and the bulk actions.
-export function issueWhere(f: IssueFilters & { status?: string }) {
-  const where = ["i.status = ?"];
-  const params: unknown[] = [f.status ?? "open"];
+export function issueWhere(f: IssueFilters & { status?: string }, role: Role) {
+  const where = ["i.status = ?", "i.entity_type NOT IN (SELECT value FROM json_each(?))"];
+  const params: unknown[] = [f.status ?? "open", JSON.stringify(hiddenIssueTypes(role))];
   if (f.severity) { where.push("i.severity = ?"); params.push(f.severity); }
   if (f.rule) { where.push("i.rule_id = ?"); params.push(f.rule); }
   if (f.property) { where.push("i.property_id = ?"); params.push(f.property); }
@@ -391,14 +404,39 @@ export function issueWhere(f: IssueFilters & { status?: string }) {
 }
 export const ISSUE_ORDER = "CASE i.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, i.detected_at DESC, i.id";
 
+// Display names (each def's title field) of the page's computed-title records: one list query per
+// record type, keyed "table:id". Plain title fields are read from the row already loaded.
+async function computedTitles(data: DataCtx, issues: Row[]): Promise<Map<string, string>> {
+  const ids = new Map<string, Set<string>>();
+  for (const i of issues) {
+    const def = getEntity(String(i.entity_type));
+    if (def?.fields[def.titleField]?.sql) ids.set(def.key, (ids.get(def.key) ?? new Set()).add(String(i.entity_id)));
+  }
+  const out = new Map<string, string>();
+  await Promise.all([...ids].map(async ([key, set]) => {
+    const res = await list(data, key, { filters: { id: [...set] }, size: set.size, rowsOnly: true }).catch(() => null);
+    for (const r of res?.rows ?? []) if (r._title != null) out.set(`${key}:${r.id}`, String(r._title));
+  }));
+  return out;
+}
+
+function recordTitle(table: string, rec: Row | null, computed: Map<string, string>): string | null {
+  const def = getEntity(table);
+  if (!def || !rec) return null;
+  const tf = def.fields[def.titleField];
+  if (tf && !tf.sql) return rec[tf.column ?? def.titleField] == null ? null : String(rec[tf.column ?? def.titleField]);
+  return computed.get(`${def.key}:${rec.id}`) ?? null;
+}
+
 export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: string; page?: number; size?: number }) {
-  const { where, params } = issueWhere(f);
+  const { where, params } = issueWhere(f, data.actor.role);
   const size = Math.min(100, Math.max(1, f.size ?? 25));
   const page = Math.max(1, f.page ?? 1);
   const [rows, total] = await Promise.all([
     sql<Row>(data, `SELECT i.*, r.name AS rule_name, r.description AS rule_description, p.name AS property FROM {data_issues} i LEFT JOIN {data_rules} r ON r.id = i.rule_id LEFT JOIN {properties} p ON p.id = i.property_id WHERE ${where.join(" AND ")} ORDER BY ${ISSUE_ORDER} LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
     sql<{ n: number }>(data, `SELECT count(*) AS n FROM {data_issues} i WHERE ${where.join(" AND ")}`, params),
   ]);
+  const titles = await computedTitles(data, rows);
   const out = await Promise.all(rows.map(async (i) => {
     let fix = parseJson<Record<string, unknown> | null>(i.suggested_fix, null);
     let before: Row | null = null;
@@ -411,7 +449,13 @@ export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: str
     const changes = (fix?.changes ?? {}) as Record<string, unknown>;
     if (rec) before = Object.fromEntries(Object.keys(changes).map((k) => [k, rec[k] ?? null]));
     const needsPerson = queueReason(fixProposal({ ...i, suggested_fix: JSON.stringify(fix ?? {}) }), data.actor.role);
-    return { ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)) };
+    const def = getEntity(table);
+    const hints = hintsFor(def);
+    return {
+      ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)),
+      entity_label: def?.label.one ?? humanizeKey(table), record: recordTitle(table, rec, titles),
+      fields: Object.fromEntries(Object.keys(changes).filter((k) => hints[k]).map((k) => [k, hints[k]])),
+    };
   }));
   return { rows: out, total: total[0]?.n ?? 0, page, size };
 }

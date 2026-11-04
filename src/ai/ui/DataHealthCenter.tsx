@@ -17,12 +17,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import type { IssueFilters } from "@/ai/filters";
 import { cn } from "@/lib/utils";
 import { api } from "./client";
-import { actOnIssue, fixPreviewProps, type Issue } from "./IssueFix";
+import { actOnIssue, fixPreviewProps, issueRecord, type Issue } from "./IssueFix";
+import { humanizeKey } from "@/lib/fieldText";
 
 type Health = {
   score: number; open: number; formula: string;
   properties: { id: string; name: string; metro: string; open: number; critical: number; score: number }[];
-  modules: { module: string; open: number; entities: string[]; score: number }[];
+  modules: { module: string; open: number; entities: string[]; labels: string[]; score: number }[];
   rules: { id: string; name: string; severity: string; entity_type: string; open: number; fixed: number }[];
 };
 type Mode = "safe" | "send";
@@ -104,7 +105,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           <div className="text-[12px] text-muted-foreground">Portfolio data health</div>
           <div className="absolute right-3 bottom-3"><UpdatedStamp value={`${health.score}:${health.open}`} /></div>
           <div className={cn("mt-1 text-[34px] leading-none font-semibold tabular-nums", TEXT[tone(health.score)])}>{health.score}</div>
-          <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" />
+          <Meter value={health.score / 100} tone={tone(health.score)} className="mt-3" bare />
           <p className="mt-2 text-[12px] text-muted-foreground">
             {health.open.toLocaleString("en-US")} open issues.{" "}
             <Tooltip>
@@ -119,8 +120,8 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             return (
             <Link key={m.module} href={qs({ entity: on ? undefined : m.entities[0], page: undefined })} scroll={false} onClick={pickFilter} aria-current={on || undefined} className={cn("rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40", on && "border-primary bg-primary/[0.06] ring-1 ring-primary hover:bg-primary/[0.08]")}>
               <div className="flex items-center justify-between text-[12px]"><span className="font-medium capitalize">{m.module.replace(/_/g, " ")}</span><span className={cn("font-semibold tabular-nums", TEXT[tone(m.score)])}>{m.score}</span></div>
-              <Meter value={m.score / 100} tone={tone(m.score)} className="mt-2" />
-              <div className="mt-1.5 text-[11.5px] text-muted-foreground">{m.open} open · {m.entities.map((e) => e.replace(/_/g, " ")).join(", ")}</div>
+              <Meter value={m.score / 100} tone={tone(m.score)} className="mt-2" bare />
+              <div className="mt-1.5 text-[11.5px] text-muted-foreground">{m.open.toLocaleString("en-US")} open · {m.labels.join(", ").toLowerCase()}</div>
             </Link>
             );
           })}
@@ -134,7 +135,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             {["", "critical", "warn", "info"].map((s) => <Link key={s} href={qs({ severity: s || undefined, page: undefined })} scroll={false} onClick={pickFilter} aria-current={(filters.severity ?? "") === s || undefined} className={cn("rounded-full border px-2.5 py-0.5 capitalize", (filters.severity ?? "") === s ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>{s || "All severities"}</Link>)}
             {PILL.filter((x) => filters[x.key]).map((x) => (
               <span key={x.key} className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 py-0.5 pr-1 pl-2.5 text-primary">
-                {x.label}: {x.key === "rule" ? health.rules.find((r) => r.id === filters.rule)?.name ?? filters.rule : x.key === "property" ? health.properties.find((p) => p.id === filters.property)?.name ?? filters.property : String(filters[x.key]).replace(/_/g, " ")}
+                {x.label}: {x.key === "rule" ? health.rules.find((r) => r.id === filters.rule)?.name ?? filters.rule : x.key === "property" ? health.properties.find((p) => p.id === filters.property)?.name ?? filters.property : x.key === "entity" ? health.modules.flatMap((m) => m.entities.map((e, k) => [e, m.labels[k]])).find(([e]) => e === filters.entity)?.[1] ?? humanizeKey(String(filters.entity)) : String(filters[x.key])}
                 <Link href={qs({ [x.key]: undefined, page: undefined })} scroll={false} onClick={pickFilter} aria-label={`Remove ${x.label.toLowerCase()} filter`} className="rounded-full p-0.5 hover:bg-primary/15"><X className="size-3" /></Link>
               </span>
             ))}
@@ -145,7 +146,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             </span>
           </div>
           {issues.rows.length ? issues.rows.map((i) => done[i.id] ? (
-            <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? i.rule_id} on {i.entity_type.replace(/_/g, " ")} {i.entity_id}: {done[i.id]}.</div>
+            <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? "Data issue"} on {issueRecord(i)}: {done[i.id]}.</div>
           ) : (
             <FixPreview key={i.id} {...fixPreviewProps(i, (a) => act(i.id, a))} />
           )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health Agent re-checks the rules every morning." />}
@@ -160,7 +161,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             <h2 className="border-b px-3 py-2 text-[13px] font-semibold">By property</h2>
             <ul className="max-h-[420px] overflow-y-auto">
               {[...health.properties].sort((a, b) => a.score - b.score).map((p) => (
-                <li key={p.id}><Link href={qs({ property: p.id, page: undefined })} scroll={false} onClick={pickFilter} aria-current={filters.property === p.id || undefined} className={cn("flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40", filters.property === p.id && "bg-primary/[0.08] font-medium text-primary")}><span className="min-w-0 flex-1 truncate">{p.name}</span><span className="text-[11px] text-muted-foreground">{p.open}</span><span className={cn("w-8 text-right font-semibold tabular-nums", TEXT[tone(p.score)])}>{p.score}</span></Link></li>
+                <li key={p.id}><Link href={qs({ property: p.id, page: undefined })} scroll={false} onClick={pickFilter} aria-current={filters.property === p.id || undefined} className={cn("flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40", filters.property === p.id && "bg-primary/[0.08] font-medium text-primary")}><span className="min-w-0 flex-1 truncate">{p.name}</span><span className="text-[11px] text-muted-foreground">{p.open.toLocaleString("en-US")}</span><span className={cn("w-8 text-right font-semibold tabular-nums", TEXT[tone(p.score)])}>{p.score}</span></Link></li>
               ))}
             </ul>
           </div>
@@ -168,7 +169,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
             <h2 className="border-b px-3 py-2 text-[13px] font-semibold">Rules</h2>
             <ul>
               {health.rules.map((r) => (
-                <li key={r.id}><Link href={qs({ rule: r.id, page: undefined })} scroll={false} onClick={pickFilter} aria-current={filters.rule === r.id || undefined} className={cn("flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40", filters.rule === r.id && "bg-primary/[0.08] font-medium text-primary")}><span className="min-w-0 flex-1 truncate">{r.name}</span><span className="text-[11px] text-muted-foreground">{r.fixed} fixed</span><span className="w-6 text-right font-medium tabular-nums">{r.open}</span></Link></li>
+                <li key={r.id}><Link href={qs({ rule: r.id, page: undefined })} scroll={false} onClick={pickFilter} aria-current={filters.rule === r.id || undefined} className={cn("flex items-center gap-2 px-3 py-1.5 text-[12.5px] hover:bg-muted/40", filters.rule === r.id && "bg-primary/[0.08] font-medium text-primary")}><span className="min-w-0 flex-1 truncate">{r.name}</span><span className="text-[11px] text-muted-foreground">{r.fixed.toLocaleString("en-US")} fixed</span><span className="min-w-6 text-right font-medium tabular-nums">{r.open.toLocaleString("en-US")}</span></Link></li>
               ))}
             </ul>
           </div>
