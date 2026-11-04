@@ -55,11 +55,13 @@ export function formatDays(value: number | null | undefined): string {
 
 export type DateInput = string | number | Date | null | undefined;
 
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function toDate(v: DateInput): Date | null {
   if (v == null || v === "") return null;
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
   // Bare dates are calendar days: parse as local midnight, not UTC, so "Nov 4" never shows as Nov 3.
-  const d = typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
+  const d = typeof v === "string" && BARE_DATE.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -84,7 +86,7 @@ export const formatFull = (v: DateInput) => { const d = toDate(v); return d ? fu
 
 // "just now", "5m ago", "3h ago", "yesterday", "3 days ago", "in 2 days", then the date.
 export function formatRelative(v: DateInput, now = demoNow()): string {
-  const d = toDate(v);
+  const d = demoInstant(v);
   if (!d) return "—";
   const diff = d.getTime() - now.getTime();
   const past = diff < 0;
@@ -97,28 +99,27 @@ export function formatRelative(v: DateInput, now = demoNow()): string {
   if (days === -1) return "yesterday";
   if (days === 1) return "tomorrow";
   if (Math.abs(days) < 7) return past ? `${-days} days ago` : `in ${days} days`;
-  return formatDate(d, "auto", now);
+  return formatDate(v, "auto", now);
 }
 
 // Due-date wording: "Due today", "Due in 3 days", "Late by 2 days" (red in the UI when late).
 export function formatDue(v: DateInput, now = demoNow()): { text: string; late: boolean; soon: boolean } {
-  const d = toDate(v);
+  const d = demoInstant(v);
   if (!d) return { text: "—", late: false, soon: false };
   const days = calendarDays(d, now);
   if (days < 0) return { text: `Late by ${-days} ${days === -1 ? "day" : "days"}`, late: true, soon: false };
   if (days === 0) return { text: "Due today", late: false, soon: true };
   if (days <= 7) return { text: `Due in ${days} ${days === 1 ? "day" : "days"}`, late: false, soon: true };
-  return { text: formatDate(d, "auto", now), late: false, soon: false };
+  return { text: formatDate(v, "auto", now), late: false, soon: false };
 }
 
-function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-function calendarDays(d: Date, now: Date) {
-  const a = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  const b = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((a - b) / 86_400_000);
-}
+// Relative wording counts calendar days in the demo's frame, never the viewer's time zone: the demo
+// clock and stored timestamps are demo wall time written as UTC (clock.ts), so their UTC date is the
+// demo date, and a bare date is that day. Kolkata and Los Angeles read the same "Due today".
+const demoInstant = (v: DateInput) => (typeof v === "string" && BARE_DATE.test(v) ? new Date(`${v}T00:00:00Z`) : toDate(v));
+const dayNumber = (d: Date) => Math.floor(d.getTime() / 86_400_000);
+const sameDay = (a: Date, b: Date) => dayNumber(a) === dayNumber(b);
+const calendarDays = (d: Date, now: Date) => dayNumber(d) - dayNumber(now);
 
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 

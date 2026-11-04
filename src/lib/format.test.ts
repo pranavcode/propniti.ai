@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatDate, formatDelta, formatDue, formatMoney, formatNumber, formatPct, formatRelative, greeting, initials, personaGreeting, personaTimeZone } from "./format";
 
-const now = new Date("2026-11-04T12:00:00");
+const now = new Date("2026-11-04T12:00:00Z");
 
 describe("format", () => {
   it("formats money in every style", () => {
@@ -26,9 +26,9 @@ describe("format", () => {
   it("formats dates relative to now", () => {
     expect(formatDate("2026-11-04", "auto", now)).toBe("Nov 4");
     expect(formatDate("2025-03-09", "auto", now)).toBe("Mar 9, 2025");
-    expect(formatRelative("2026-11-04T11:55:00", now)).toBe("5m ago");
-    expect(formatRelative("2026-11-03T09:00:00", now)).toBe("yesterday");
-    expect(formatRelative("2026-11-01T09:00:00", now)).toBe("3 days ago");
+    expect(formatRelative("2026-11-04T11:55:00Z", now)).toBe("5m ago");
+    expect(formatRelative("2026-11-03T09:00:00Z", now)).toBe("yesterday");
+    expect(formatRelative("2026-11-01T09:00:00Z", now)).toBe("3 days ago");
     expect(formatDue("2026-11-02", now)).toEqual({ text: "Late by 2 days", late: true, soon: false });
     expect(formatDue("2026-11-04", now).text).toBe("Due today");
   });
