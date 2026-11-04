@@ -3,13 +3,14 @@
 import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { Fragment, useMemo } from "react";
-import { BookOpen, Check, ChevronRight, CircleHelp, Compass, House, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";
+import { BookOpen, Check, ChevronRight, CircleHelp, Compass, House, Keyboard, ListChecks, LogOut, Menu, Monitor, Moon, RotateCcw, Rows3, Search, Sparkles, Sun, UserRoundCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Kbd, PersonAvatar } from "../display";
 import { humanize } from "../status";
+import { resetLayout } from "../collapsible/prefs";
 import { useShell } from "./context";
 import { showWelcome } from "../welcome/WelcomeSplash";
 import { resetWhatsNew } from "../welcome/WhatsNew";
@@ -187,6 +188,11 @@ function ProfileMenu() {
         </DropdownMenuSub>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setDensity(density === "compact" ? "comfortable" : "compact"); }}>
           <Rows3 /> Compact tables {density === "compact" && <Check className="ml-auto" />}
+        </DropdownMenuItem>
+        {/* Reloads so the sidebar and panels pick up their defaults too. */}
+        <DropdownMenuItem onSelect={() => { resetLayout(); window.location.reload(); }} className="items-start">
+          <RotateCcw className="mt-0.5" />
+          <span className="flex flex-col">Reset layout<span className="text-[11.5px] text-muted-foreground">Collapsed sections, sidebar and panel sizes, saved in this browser only</span></span>
         </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

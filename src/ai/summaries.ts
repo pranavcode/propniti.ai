@@ -64,10 +64,10 @@ export async function factsFor(data: DataCtx, entity: string, id: string, known?
 
 export function rulesSummary(title: string, facts: Facts): string {
   const parts = Object.entries(facts)
-    .filter(([k, v]) => v != null && v !== "" && k !== "resident" && k !== "name")
+    .filter(([k, v]) => v != null && v !== "" && v !== title && k !== "resident" && k !== "name")
     .slice(0, 6)
     .map(([k, v]) => `${k.replace(/_/g, " ")}: ${typeof v === "boolean" ? (v ? "yes" : "no") : v}`);
-  return `${title}. ${parts.join("; ")}.`;
+  return parts.length ? `${title}. ${parts.join("; ")}.` : `${title}.`;
 }
 
 const Out = z.object({ summary: z.string() });

@@ -26,6 +26,7 @@ export type ShellData = {
   theme: Theme;
   density: Density;
   sidebarOpen: boolean;
+  collapsed: string[];                // collapsed home sections ("<persona>.<section>", pn_layout cookie)
 };
 
 export type Theme = "light" | "dark" | "system";
