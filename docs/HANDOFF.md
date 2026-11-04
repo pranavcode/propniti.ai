@@ -29,29 +29,29 @@ Propniti is an AI-native property-management SaaS demo at https://propniti.ai: 1
 | | Value |
 |---|---|
 | Production | https://propniti.ai and www, Worker `property-mgmt-ai-prototype` |
-| Live code | `main` at `<COMMIT>` (PRs #3–#30), Worker version `<VERSION_ID>`, deployed 2026-11-04 `<HH:MM>` UTC |
-| Database | D1 `propniti-v2` (`b9dff387-…`): migrations 0001–0008 (0008 must be applied before deploying #18), base `2026-11-04.15` |
-| Rollback | `npx wrangler rollback --name property-mgmt-ai-prototype` returns to the previous version (`<PREVIOUS_VERSION_ID>`). The v1 code and its D1 `propniti` (`3d4ff9d5-…`) stay untouched as the last resort. |
+| Live code | `main` at `75039b0` (PRs #3–#31, batch 3), Worker version `05ca6456`. Batch 4 (Improve with AI, glossary and help pages, login layout, docs): this batch |
+| Database | D1 `propniti-v2` (`b9dff387-…`): migrations 0001–0008, base `2026-11-04.16` |
+| Rollback | `npx wrangler rollback --name property-mgmt-ai-prototype` returns to the previous version (`52257beb`). The v1 code and its D1 `propniti` (`3d4ff9d5-…`) stay untouched as the last resort. |
 | Preview | https://propniti-v2-preview.dnyana.workers.dev (Worker `propniti-v2-preview`). It shares D1 `propniti-v2` and has no cron, so only production sweeps. |
 | Scheduled agents | Cron `*/15 * * * *` through `src/worker-entry.ts`, one agent per tick, with its own slot (`ai_cron_sweep`) so page-visit sweeps can't make it skip. Verified on production: the 03:15, 03:30 and 03:45 UTC ticks each ran an agent. |
 | Demo clock | "Today" is `AS_OF` = 2026-11-04 plus the Pacific time of day (`src/lib/clock.ts`). Visitor data resets at midnight Pacific. |
 
-Last measured (`main` after #30, 2026-11-04; production figures `<FILL AFTER DEPLOY>`):
+Last measured (`main` at `75039b0`, 2026-11-04):
 
 | Check | Result |
 |---|---|
-| Unit tests | 922 in 98 files: 920 passed in a full run under heavy machine load; the other 2 (seed generator, 5-second timeouts) pass when run alone |
+| Unit tests | 1,104 / 1,104 in 118 files (one full local run) |
 | Lint and typecheck | Clean |
-| Live AI evals | 71 / 74 (96%) on the preview before #14; #14 added eval cases, not yet run live `<FILL>` |
-| E2E | 85 tests in 20 specs; production run `<FILL AFTER DEPLOY>` |
+| Live AI evals | 71 / 74 (96%) on the preview before #14; #14 added eval cases, not yet run live |
+| E2E | 110 tests in 26 specs; production run after the batch 4 deploy |
 
 ## In flight
 
 | Workstream | Branch / worktree | Status | Next |
 |---|---|---|---|
 | Docs v2 | `docs/v2-spec-walkthrough` in `../prototype-docs` (PR #12) | `/docs` restyled in the v2 design; Spec, Walkthrough and Architecture updated for #13–#30; help articles updated | Review → merge; screenshots after the final deploy; sync the three Claude Docs |
-| Help articles re-seed | — | 8 articles changed and 4 added in `src/seed/help*.ts`; production keeps the old text until the base is reloaded | Owner decision: bump `BASE_VERSION` and reload the base (wipes visitor workspaces) |
-| Chat history, *Improve with AI*, first-visit splash and tour toasts | `<branch>` | In progress | Docs have TODO slots for each |
+| Help articles re-seed | — | Help article changes from the docs branch (rewritten, edited and new articles, plus `prepare-1099s`); production keeps the old text until the base is reloaded | Owner decision: bump `BASE_VERSION` and reload the base (wipes visitor workspaces) |
+| Batch 4 | `batch/four` | Improve with AI, glossary and `/app/help/<id>` pages, compact login | Deploy; docs already describe it |
 
 Shipped 2026-11-04:
 
@@ -67,12 +67,13 @@ Shipped 2026-11-04:
 | #28 | Batch: demo email and password sign-in (#17), import from other tools with optional AI (#26), *Ask Propniti* chat bubble (#25), My tasks (#16), Automations page and agent-settings permissions (#19), sparkle marks (#23), clickable breadcrumbs (#27), crawl fixes (#21) |
 | #29 | Thin app scrollbars; chat inputs that grow to 10 lines |
 | #30 | Batch 2: row alignment, collapsible home sections and *Reset layout*, readable run steps, *Summarize with AI*, e2e fixes |
+| #31 | Batch 3: chat history, *Ask about this*, Do mode starts agents, *Right now*; welcome splash, tour toasts, new-feature dots, daily panel auto-open; approvals, bulk, leasing, money and operations friction fixes; one decide rule with life-safety approvals by regional manager or principal; collection rate per month's charges; Title Case agent names (base `2026-11-04.16`) |
 
 Earlier the same day: #5–#11 (auth pages, peek drawer, cron slot, approvals deep link, summaries from current figures, NOI last closed month).
 
 ## Next
 
-1. Deploy `main` (apply migration 0008 first), warm up, smoke test and run e2e against production; fill the placeholders above.
+1. Deploy batch 4, warm up, smoke test and run e2e against production; record its version id above.
 2. Capture the walkthrough screenshots on production and fill the `TODO: screenshot` slots in `content/docs/walkthrough.md`.
 3. Sync the three Claude Docs (Product Spec, Prototype Walkthrough, Architecture) to `content/docs/*.md`.
 4. Decide with the owner when to reload the base so the updated help articles reach production.
@@ -95,7 +96,6 @@ Earlier the same day: #5–#11 (auth pages, peek drawer, cron slot, approvals de
 - Approvals inbox: `?agent=` filter hint shows while a deep link ignores it; paging keeps `?proposal=` in the URL.
 - A first-visit product tour opens over a `?peek=` deep link.
 - Import: `import.completed` waits for the next sweep; `/api/ai/events` could drain it right away. The stale comment in `src/app/api/ai/events/route.ts` says the wizard writes through the entity API.
-- Assistant help links point at `/app/help/<id>`, which has no page yet (404).
 - Five agent events have no source yet: `coi.expiring`, `prospect.created`, `screening.completed`, `statement.closed`, `data_issue.detected`.
 - Fields still editable until their named actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests, message threads.
 

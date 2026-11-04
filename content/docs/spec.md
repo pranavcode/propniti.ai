@@ -38,9 +38,9 @@ Propniti is property management software for US residential and commercial portf
 
 ## Personas
 
-All names and companies are fictional. A visitor signs in on [propniti.ai/login](https://propniti.ai/login) with a demo account, or picks a person's card, and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). The old `/demo` link now goes to `/login`.
+All names and companies are fictional. A visitor signs in on [propniti.ai/login](https://propniti.ai/login) with a demo account, or picks a person from the list beside the form, and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). The old `/demo` link now goes to `/login`.
 
-**Demo accounts.** Each persona has the email `<id>@propniti.demo` (for example `marcus@propniti.demo`), and every account uses the published password `propniti-demo`. Clicking a card fills the form; double-clicking a card, or its *Sign in now* button, signs in straight away. `/login?as=<id>` prefills a person, and a `next` link to an `/app` or `/portal` page is kept. The browser remembers the last person, and a visitor who is already signed in sees *Continue as …* and *Switch person*. The form also works without JavaScript.
+**Demo accounts.** Each persona has the email `<id>@propniti.demo` (for example `marcus@propniti.demo`), and every account uses the published password `propniti-demo`. Beside the form, *Pick a person* lists all 13 people: click one (or move with the arrow keys) to fill the form, then *Sign in as …*; double-click signs in straight away. *What each person sees*, below, describes each persona. `/login?as=<id>` prefills a person, and a `next` link to an `/app` or `/portal` page is kept. The browser remembers the last person, and a visitor who is already signed in sees *Continue as …* and *Switch person*. The form also works without JavaScript.
 
 | Persona | Role | Scope | Lands on |
 | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Sign-in at `/login` with a demo email and password, or a compact list of the 13 people beside the form (descriptions in *What each person sees* below); role switch from the avatar menu or the banner's *Switch* | Built | One published password, checked on the server in constant time; a cookie holds the chosen persona. Not an account system |
+| Sign-in at `/login` with a demo email and password, or the *Pick a person* list beside the form (click fills, arrow keys move, double-click signs in); role switch from the avatar menu or the banner's *Switch* | Built | One published password, checked on the server in constant time; a cookie holds the chosen persona. Not an account system |
 | A home page per role | Built | See [Personas](#personas) for each landing page |
 | List pages for every record type, with search, filters, status tabs, saved and shared views, CSV export and server-side paging (25, 50 or 100 rows) | Built | Generated from each record type's definition |
 | *Select all N matching* for bulk actions, real bulk labels, *New* forms prefilled from the current filter, *View* links in toasts | Built | Bulk selection is rate limited |
@@ -330,12 +330,12 @@ Model providers are live. Everything else is simulated.
 | Money | No double payments; nothing paid that isn't held | Guarded SQL batches, one live transfer per idempotency key, trust balance recomputed in SQL, bank-change hold |
 | AI safety | Model output can't act or invent figures | Untrusted text framed as data; schema-checked output; proposals must match a rules candidate; unsupported figures rejected |
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
-| Abuse | Bounded writes | Same-origin check on writes; 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
+| Abuse | Bounded writes | Same-origin check on writes and on the AI routes the app calls (the read-only status and run-stream routes excepted); 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
 | Reliability | AI failure doesn't block work | Rules take over and the label says so |
-| Tests | Regressions caught before deploy | 922 unit tests in 98 files; 85 end-to-end tests in 20 specs, run against production after each deploy |
+| Tests | Regressions caught before deploy | 1,104 unit tests in 118 files; 110 end-to-end tests in 26 specs, run against production after each deploy |
 | Errors | No database internals shown to people | AI routes, Data Health results and run steps show "The database is busy; try again in a moment" for database errors; the detail goes to the server log |
 
-**Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. Six AI routes have no origin check (they are rate limited and size capped). There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
+**Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
 
 ## Release plan
 

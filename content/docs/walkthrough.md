@@ -1,6 +1,6 @@
 This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai). It has one section for each staff persona, one for each portal and one for the public listings site. Each section says where the person lands, what they do and which AI shows up.
 
-**Start here.** Open [propniti.ai/login](https://propniti.ai/login). Sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (every demo account uses it), or pick one of the 13 people in the list beside the form. *What each person sees*, below, describes each one. To switch later, open the avatar menu in the top bar and choose *Switch role (demo)*, or use *Switch* in the banner.
+**Start here.** Open [propniti.ai/login](https://propniti.ai/login). Sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (every demo account uses it), or pick one of the 13 people in the *Pick a person* list beside the form: click a person (or use the arrow keys) to fill the form, then *Sign in as …*, or double-click to sign in straight away. *What each person sees*, below, describes each one. To switch later, open the avatar menu in the top bar and choose *Switch role (demo)*, or use *Switch* in the banner.
 
 **First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for that role, what's new and up to three things waiting. *Help › Show welcome screen* brings it back. A dot in the sidebar marks a feature you haven't opened yet, and a small toast offers its tour the first time you meet it. The *Ask Propniti* panel also opens on its own once a day.
 
@@ -26,7 +26,7 @@ This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai)
 
 <!-- TODO: screenshot ![Record peek drawer open beside a work-order list](screens/marcus-peek-drawer.png) -->
 
-<!-- TODO: screenshot ![Sign-in form with demo accounts above the persona cards](screens/login-form.png) -->
+<!-- TODO: screenshot ![Sign-in form beside the Pick a person list](screens/login-form.png) -->
 
 <!-- TODO: screenshot ![Ask Propniti bubble with a tip](screens/marcus-chat-bubble.png) -->
 

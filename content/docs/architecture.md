@@ -162,7 +162,7 @@ The app has no real accounts and moves no real money. Main controls:
 | Imports | Role and scope checks per record type, payload caps, one locked batch, undo refused when other records depend on the batch |
 | Invented figures | Figures from rules; unsupported model figures rejected |
 | AI cost | 20 AI calls a minute per IP; per-run deadline, step limit and budget |
-| Cross-site writes | Same-origin check; HttpOnly, SameSite=Lax, Secure workspace cookie |
+| Cross-site writes | Same-origin check on writes and on the AI routes the app calls (read-only status and run-stream excepted; precompute needs a token); HttpOnly, SameSite=Lax, Secure workspace cookie |
 | Request abuse | 60 writes a minute per IP; streamed body caps (64 KB records, 16 KB AI, 4 MB uploads) |
 | Uploads | File type from its signature (JPEG, PNG, WebP, PDF); read in memory and discarded |
 | Cron route | Per-isolate token compared in constant time, or an admin session |
@@ -173,7 +173,6 @@ The app has no real accounts and moves no real money. Main controls:
 
 - **No authentication.** The demo password is published; anyone can sign in as any persona, and the `pn_as` cookie is not HttpOnly and not a security boundary.
 - **One key.** The workspace cookie is the only key to a visitor's changes.
-- **Origin checks.** Six AI routes (`extract`, `validate`, `import-map`, `import-parse`, `nl-filter`, `report-spec`) have no origin check. They are rate limited and size capped.
 - **Quotas.** There is no per-org AI quota.
 - **Approval policies.** Only the owner threshold on maintenance spend is enforced in the money code; the other limits route proposals.
 - **Generic edits.** Some fields are still editable through generic edits until their actions exist.
@@ -196,8 +195,8 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 
 | Check | Count | What it covers |
 | --- | --- | --- |
-| Unit tests (Vitest) | 922 in 98 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
-| End-to-end tests (Playwright) | 85 in 20 specs | Each persona's main flows, the portals, the public site, the peek drawer, sign-in, Inbox, My tasks, Automations, import and the chat bubble; run against production after each deploy |
+| Unit tests (Vitest) | 1,104 in 118 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes, including double-click tests for money actions |
+| End-to-end tests (Playwright) | 110 in 26 specs | Each persona's main flows, the portals, the public site, the peek drawer, sign-in, Inbox, My tasks, Automations, import, the chat bubble, assistant history, *Ask about this*, *Right now*, the welcome screen, readable runs, summaries, collapsible sections, bulk actions and approvals; run against production after each deploy |
 | Live AI evals | 15 case files | Agent and assistant behaviour against a live model, scored by fixed-rule graders (`npm run eval`) |
 
 ## Key decisions

@@ -526,7 +526,7 @@ Good to know: legal and safety actions, and anything high risk, always wait for 
 3. **Help**: "how do I post a late fee?" It answers from these help articles.
 4. Each answer links to its **Full trace**. **/app/copilot** opens the assistant full page and lists your 30 most recent conversations.
 
-Good to know: the assistant only sees and acts within your role's scope. Any text you paste in is treated as data to reason about, never as an instruction. Figures come from the data; if a model's answer states a number the data doesn't contain, the rules answer is shown instead. The side panel keeps a conversation for this session; long questions grow the input box up to 10 lines.`,
+Good to know: the assistant only sees and acts within your role's scope. Any text you paste in is treated as data to reason about, never as an instruction. Figures come from the data; if a model's answer states a number the data doesn't contain, the rules answer is shown instead. Conversations are kept across reloads: the panel's history button lists your recent ones, and *New* starts another; long questions grow the input box up to 10 lines.`,
     tags: ["assistant", "copilot", "chat"],
     entity_type: null,
     route: "/app/copilot",
@@ -615,7 +615,7 @@ Good to know: you see your own tasks and your role's unassigned tasks, never oth
     body: `The demo has an account for every persona. Open **/login**.
 
 1. Type a demo email, for example **marcus@propniti.demo**, and the password **propniti-demo**. Every demo account uses the same password, shown on the page. The form shows who the email belongs to as you type.
-2. Or pick a person below the form: click a card to fill the form, or double-click it (or choose *Sign in now*) to sign in straight away.
+2. Or use **Pick a person** beside the form: click a person (or move with the arrow keys) to fill the form, or double-click to sign in straight away. *What each person sees*, below, describes each one.
 3. Choose **Sign in as …**. You land on that persona's home page.
 4. Next time, the page remembers the last person. If you're already signed in, choose **Continue as …** or **Switch person**.
 
