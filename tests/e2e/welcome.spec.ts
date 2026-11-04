@@ -95,9 +95,10 @@ test("Inbox is marked new until its first visit, which offers its tour once", as
 });
 
 test("a page tour offer sits over the sidebar's foot, comes once a session, and never as a toast on a phone", async ({ page, browser }) => {
+  // Undo the run's dismissed tours before any page loads: clearing them after a first view races
+  // that view's offer, which would spend the session's one offer before the view under test.
+  await page.addInitScript(() => localStorage.removeItem("pn_tours"));
   await go(page, `${BASE}/app/units`);
-  await page.evaluate(() => localStorage.removeItem("pn_tours"));
-  await reload(page);
   const toast = page.locator("[data-feature-toast]");
   await expect(toast).toBeVisible();
   const box = (await toast.boundingBox())!;
@@ -110,6 +111,7 @@ test("a page tour offer sits over the sidebar's foot, comes once a session, and 
 
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await as(phone, "daniel");
+  await phone.addInitScript(() => localStorage.removeItem("pn_tours"));
   const p = await phone.newPage();
   await go(p, `${BASE}/app/units`);
   await p.waitForTimeout(4000);
