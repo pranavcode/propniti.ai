@@ -32,6 +32,7 @@ export type ApprovalItemProps = {
   variant?: "card" | "row";
   defaultOpen?: boolean;
   className?: string;
+  id?: string;
 };
 
 const RISK: Record<Risk, string> = {
@@ -46,7 +47,7 @@ export function RiskBadge({ risk }: { risk: Risk }) {
 
 // One proposed action in the approvals queue. People approve; agents only propose.
 export function ApprovalItem(p: ApprovalItemProps) {
-  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, variant = "card", defaultOpen, className } = p;
+  const { agent, title, amount, risk, why, evidence = [], confidence, policy, runHref, recordHref, createdAt, source = "precomputed", model, canApprove = true, onApprove, onEdit, onReject, variant = "card", defaultOpen, className, id } = p;
   const [open, setOpen] = useState(defaultOpen ?? variant === "card");
   const [state, setState] = useState<"open" | "approved" | "rejected">("open");
   const [busy, setBusy] = useState(false);
@@ -81,7 +82,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
 
   if (variant === "row") {
     return (
-      <div className={cn("border-b last:border-0", state !== "open" && "opacity-70", className)}>
+      <div id={id} className={cn("border-b last:border-0", state !== "open" && "opacity-70", className)}>
         <div className="flex items-center gap-3 px-3 py-2">
           <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-2 text-left">
             <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")} />
@@ -99,7 +100,7 @@ export function ApprovalItem(p: ApprovalItemProps) {
   }
 
   return (
-    <article className={cn("rounded-lg border bg-card", state !== "open" && "opacity-75", className)}>
+    <article id={id} className={cn("rounded-lg border bg-card", state !== "open" && "opacity-75", className)}>
       <div className="flex items-start gap-3 p-3.5 pb-2">
         <div className="min-w-0 flex-1 flex flex-col gap-1">
           <h3 className="font-semibold leading-snug">{title}</h3>

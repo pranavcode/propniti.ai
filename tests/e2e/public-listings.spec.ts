@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BASE, go, reload, watch } from "./helpers";
+import { as, BASE, go, reload, watch } from "./helpers";
 
 // The renter's path through the public site, signed out: search → listing → ask about the unit →
 // book a tour → apply in five steps → status page. Run against a dev server:
@@ -124,7 +124,28 @@ test("a renter searches, asks, books a tour and applies without signing in", asy
   }).toPass({ timeout: 300_000 });
   await expect(page.getByRole("button", { name: "See the agent's steps" })).toBeVisible();
 
+  // The broker's approvals open on this application's proposal: its queue and page, expanded and
+  // scrolled into view, even when newer items fill page 1.
+  const appId = new URL(page.url()).searchParams.get("app")!;
+  await page.getByRole("button", { name: "Open the broker's approvals" }).click();
+  await slow(page).toHaveURL(new RegExp(`/app/ai/approvals\\?record=applications/${appId}`));
+  const focused = page.locator('[id^="proposal-"].ring-2');
+  await slow(focused).toContainText(/Jordan Avery .* score \d+/);
+  await expect(focused).toBeInViewport();
+  await expect(focused.getByRole("button", { name: "Hide details" })).toBeVisible();
+
+  // The application record links to the same proposal.
+  await go(page, `${BASE}/app/leasing/applications/${appId}?tab=leasing.scoring`);
+  await page.getByRole("link", { name: "Open in approvals" }).click();
+  await slow(page).toHaveURL(/\/app\/ai\/approvals\?proposal=/);
+  await slow(page.locator('[id^="proposal-"].ring-2')).toContainText(/Jordan Avery .* score \d+/);
+
   expect(errors).toEqual([]);
+
+  // A portal persona following the same link stays in its portal.
+  await as(page.context(), "applicant");
+  await page.goto(`${BASE}/app/ai/approvals?record=applications/${appId}`);
+  await slow(page).toHaveURL(/\/portal\/applicant/);
 });
 
 test("another visitor can't open someone else's application status", async ({ browser }) => {

@@ -78,7 +78,7 @@ export default async function Page({ params, searchParams }: Props) {
           <div className="mt-4 flex flex-wrap gap-2">
             <form action="/api/session" method="post">
               <input type="hidden" name="persona" value="rachel" />
-              <input type="hidden" name="next" value="/app/ai/approvals" />
+              <input type="hidden" name="next" value={`/app/ai/approvals?record=applications/${a.id}`} />
               <Button type="submit" className="h-10 px-4">Open the broker&apos;s approvals</Button>
             </form>
             {(a.proposal?.run_id ?? a.run?.id) && (

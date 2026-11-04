@@ -93,7 +93,7 @@ export async function waitingApplications(c: LeasingCtx, limit = 10) {
   const [rows, total] = await Promise.all([
     all(c, `SELECT a.id, a.rent_cents, a.income_to_rent, a.submitted_at, a.score, a.recommendation, ap.first_name || ' ' || ap.last_name AS applicant, p.name AS property, u.number AS unit,
         (SELECT s.decision FROM ${E(c, "screening_results")} s WHERE s.application_id = a.id LIMIT 1) AS screening,
-        (SELECT json_object('score', json_extract(x.payload, '$.facts.score'), 'rec', json_extract(x.payload, '$.facts.recommendation'), 'run', x.run_id, 'model', x.model, 'confidence', x.confidence) FROM ${E(c, "ai_proposals")} x WHERE x.entity_type = 'applications' AND x.entity_id = a.id AND x.agent = 'leasing' ORDER BY x.created_at DESC LIMIT 1) AS ai,
+        (SELECT json_object('id', x.id, 'score', json_extract(x.payload, '$.facts.score'), 'rec', json_extract(x.payload, '$.facts.recommendation'), 'run', x.run_id, 'model', x.model, 'confidence', x.confidence) FROM ${E(c, "ai_proposals")} x WHERE x.entity_type = 'applications' AND x.entity_id = a.id AND x.agent = 'leasing' ORDER BY x.created_at DESC LIMIT 1) AS ai,
         CAST(julianday(?) - julianday(a.submitted_at) AS INTEGER) AS waiting
       FROM ${E(c, "applications")} a JOIN ${E(c, "applicants")} ap ON ap.id = a.applicant_id JOIN ${E(c, "properties")} p ON p.id = a.property_id LEFT JOIN ${E(c, "units")} u ON u.id = a.unit_id
       WHERE ${where} ORDER BY a.submitted_at LIMIT ?`, [AS_OF, ...s.binds, limit]),
@@ -101,9 +101,9 @@ export async function waitingApplications(c: LeasingCtx, limit = 10) {
   ]);
   return {
     total: Number(total[0]?.n ?? 0),
-    rows: rows.map((r): Row & { score: unknown; recommendation: unknown; runId: string | null; model: string | null; confidence: number | null } => {
-      const ai = r.ai ? (JSON.parse(String(r.ai)) as { score: number | null; rec: string | null; run: string | null; model: string | null; confidence: number | null }) : null;
-      return Object.assign(r, { score: r.score ?? ai?.score ?? null, recommendation: r.recommendation ?? ai?.rec ?? null, runId: ai?.run ?? null, model: ai?.model ?? null, confidence: ai?.confidence ?? null });
+    rows: rows.map((r): Row & { score: unknown; recommendation: unknown; runId: string | null; proposalId: string | null; model: string | null; confidence: number | null } => {
+      const ai = r.ai ? (JSON.parse(String(r.ai)) as { id: string; score: number | null; rec: string | null; run: string | null; model: string | null; confidence: number | null }) : null;
+      return Object.assign(r, { score: r.score ?? ai?.score ?? null, recommendation: r.recommendation ?? ai?.rec ?? null, runId: ai?.run ?? null, proposalId: ai?.id ?? null, model: ai?.model ?? null, confidence: ai?.confidence ?? null });
     }),
   };
 }

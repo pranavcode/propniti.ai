@@ -65,6 +65,7 @@ registerTab({
       source: !proposal?.model || proposal.model === "rules" ? "rules" : "precomputed",
       model: (proposal?.model as string) ?? null,
       runId: (proposal?.run_id as string) ?? null,
+      proposalId: proposal && !proposal.decision ? String(proposal.id) : null,
       scoredAt: (proposal?.created_at as string) ?? null,
       decidedBy: (app.decider as string) ?? (app.decided_by as string) ?? null,
       decidedAt: (app.decided_at as string) ?? null,
