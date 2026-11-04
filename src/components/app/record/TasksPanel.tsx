@@ -12,8 +12,8 @@ import { EmptyState, ErrorBanner } from "../states";
 import { apiJson } from "../forms/api";
 import { collabUrl, useCollab } from "./useCollab";
 
-// Tasks on a record: quick add (POST …/tasks) and one-click complete (PATCH /api/e/tasks/{id}),
-// both optimistic.
+// Tasks on a record: quick add (POST …/tasks) and one-click complete or reopen (the tasks.complete
+// and tasks.reopen actions), both optimistic.
 
 export type TaskRow = { id: string; title: string; detail?: string; due_on?: string | null; priority?: string; status: string; assignee_id?: string | null; assignee_name?: string; source?: string; created_at: string; pending?: boolean };
 
@@ -48,7 +48,7 @@ export function TasksPanel({ entity, id, people, initial }: { entity: string; id
     const next = done(task) ? "Open" : "Done";
     setRows((r) => r.map((x) => (x.id === task.id ? { ...x, status: next } : x)));
     try {
-      await apiJson("PATCH", `/api/e/tasks/${encodeURIComponent(task.id)}`, { status: next });
+      await apiJson("POST", `/api/e/tasks/${encodeURIComponent(task.id)}/actions/${next === "Done" ? "complete" : "reopen"}`, {});
       if (next === "Done") toast.success("Task completed", { action: { label: "Undo", onClick: () => void toggle({ ...task, status: "Done" }) } });
     } catch (e) {
       setRows((r) => r.map((x) => (x.id === task.id ? task : x)));
