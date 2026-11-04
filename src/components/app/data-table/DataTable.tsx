@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Check, ChevronDown, ChevronL
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatMoney, formatNumber } from "@/lib/format";
+import { BULK_MATCH_CAP } from "@/lib/bulk";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useUrlState } from "@/hooks/use-url-state";
@@ -43,7 +44,9 @@ export type DataTableProps = {
   facets?: Facet[];
   rowHref?: string;                       // "/app/units/{id}"; a row click opens the peek drawer
   bulkActions?: BulkAction[];
-  onBulkAction?: (key: string, ids: string[]) => Promise<unknown> | void;
+  // ids, or "matching": every record under the current filters (up to BULK_MATCH_CAP). May report
+  // progress and resolve to the success message.
+  onBulkAction?: (key: string, target: string[] | "matching", progress: (done: number, of: number) => void) => Promise<string | void> | void;
   exportHref?: string;                    // "/api/e/units/export.csv"; the current query is appended
   onAiFilter?: AiFilterFn;
   views?: SavedView[];                    // built-in views (EntityDef.list.savedViews)
@@ -82,8 +85,14 @@ export function DataTable(props: DataTableProps) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const selectable = bulkActions.length > 0;
   const selectedIds = Object.keys(rowSelection).filter((k) => rowSelection[k]);
+  // "Select all N matching": the whole filtered list, not just this page (Gmail-style).
+  const [allMatching, setAllMatching] = useState(false);
+  const clearSelection = () => { setRowSelection({}); setAllMatching(false); };
   const [prevRows, setPrevRows] = useState(rows);
-  if (rows !== prevRows) { setPrevRows(rows); setRowSelection({}); }
+  if (rows !== prevRows) { setPrevRows(rows); setRowSelection({}); setAllMatching(false); }
+  const matchCount = Math.min(total, BULK_MATCH_CAP);
+  const canMatch = !!onBulkAction && rows.length > 0 && selectedIds.length === rows.length && total > rows.length;
+  const selectedCount = allMatching ? matchCount : selectedIds.length;
 
   const sort = readSort(params);
   const filtersActive = filterKeys(params).length > 0 || !!params.get("q");
@@ -108,7 +117,7 @@ export function DataTable(props: DataTableProps) {
     manualSorting: true,
     manualFiltering: true,
     state: { columnVisibility, rowSelection },
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: (u) => { setAllMatching(false); setRowSelection(u); },
     enableRowSelection: selectable,
   });
   const tRows = table.getRowModel().rows;
@@ -160,7 +169,7 @@ export function DataTable(props: DataTableProps) {
       open(r.original);
     },
     x: () => { const r = tRows[cursor]; if (!r || !selectable) return false; r.toggleSelected(); },
-    Escape: () => { if (selectedIds.length) setRowSelection({}); else if (cursor >= 0) setCursor(-1); else return false; },
+    Escape: () => { if (selectedIds.length) clearSelection(); else if (cursor >= 0) setCursor(-1); else return false; },
   }, keyboard && !peek.target);
 
   // ---- saved views
@@ -196,13 +205,18 @@ export function DataTable(props: DataTableProps) {
   const footerCells = footer && Object.keys(footer).length ? footer : null;
 
   const [confirming, setConfirming] = useState<BulkAction | null>(null);
+  const countLabel = (n: number) => `${formatNumber(n)} ${(n === 1 ? label.one : label.many).toLowerCase()}`;
   const doBulk = async (a: BulkAction, confirmed = false) => {
-    if (a.confirm && !confirmed) { setConfirming(a); return; }
-    const ids = selectedIds;
-    const run = Promise.resolve(onBulkAction?.(a.key, ids));
-    toast.promise(run, { loading: `${a.label}: ${ids.length} ${ids.length === 1 ? label.one : label.many}…`, success: `${a.label}: done for ${ids.length}`, error: (e) => (e instanceof Error ? e.message : `${a.label} failed`) });
-    await run.catch(() => {});
-    setRowSelection({});
+    if ((a.confirm || allMatching) && !confirmed) { setConfirming(a); return; }
+    const what = countLabel(selectedCount);
+    const id = toast.loading(`${a.label}: ${what}…`);
+    try {
+      const msg = await onBulkAction?.(a.key, allMatching ? "matching" : selectedIds, (done, of) => toast.loading(`${a.label}: ${formatNumber(done)} of ${formatNumber(of)}…`, { id }));
+      toast.success(`${a.label}: ${msg || `done for ${what}`}`, { id });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : `${a.label} failed`, { id });
+    }
+    clearSelection();
   };
 
   const exportUrl = exportHref ? `${exportHref}${exportHref.includes("?") ? "&" : "?"}${new URLSearchParams([...params].filter(([k]) => !["page", "view", "cols", "tab"].includes(k))).toString()}` : null;
@@ -373,12 +387,17 @@ export function DataTable(props: DataTableProps) {
       )}
 
       {selectedIds.length > 0 && (
-        <div role="toolbar" aria-label="Bulk actions" className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none">
-          <span className="mr-2 font-medium tabular-nums">{selectedIds.length} selected</span>
+        <div role="toolbar" aria-label="Bulk actions" className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl border bg-popover p-1.5 pl-3 text-popover-foreground shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none">
+          <span className="mr-2 font-medium tabular-nums">{allMatching ? `All ${formatNumber(matchCount)} matching selected` : `${selectedIds.length} selected`}</span>
+          {canMatch && !allMatching && (
+            <Button size="sm" variant="ghost" className="text-primary hover:text-primary" onClick={() => setAllMatching(true)}>
+              {total > BULK_MATCH_CAP ? `Select the first ${formatNumber(BULK_MATCH_CAP)} of ${formatNumber(total)}` : `Select all ${formatNumber(total)} matching`}
+            </Button>
+          )}
           {bulkActions.map((a) => (
             <Button key={a.key} size="sm" variant={a.tone === "danger" ? "destructive" : "outline"} onClick={() => void doBulk(a)}>{a.tone === "danger" && <Trash2 />}{a.label}</Button>
           ))}
-          <Button size="icon-sm" variant="ghost" onClick={() => setRowSelection({})} aria-label="Clear selection"><X /></Button>
+          <Button size="icon-sm" variant="ghost" onClick={clearSelection} aria-label="Clear selection"><X /></Button>
         </div>
       )}
 
@@ -386,8 +405,11 @@ export function DataTable(props: DataTableProps) {
         <ConfirmDialog
           open
           onOpenChange={(o) => !o && setConfirming(null)}
-          title={`${confirming.label}: ${selectedIds.length} ${selectedIds.length === 1 ? label.one.toLowerCase() : label.many.toLowerCase()}?`}
-          description={confirming.confirm?.replace("{n}", String(selectedIds.length))}
+          title={`${confirming.label}: ${countLabel(selectedCount)}?`}
+          description={[
+            allMatching && `Runs on every ${label.one.toLowerCase()} matching the current filters${total > BULK_MATCH_CAP ? ` (the first ${formatNumber(BULK_MATCH_CAP)} of ${formatNumber(total)})` : ""}, not only this page.`,
+            confirming.confirm?.replace("{n}", String(selectedCount)),
+          ].filter(Boolean).join(" ") || undefined}
           confirmLabel={confirming.label}
           tone={confirming.tone === "danger" ? "danger" : "default"}
           onConfirm={() => { const a = confirming; setConfirming(null); return doBulk(a, true); }}

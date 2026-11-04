@@ -25,11 +25,13 @@ const firstSentence = (s: string) => {
   return t.length > 80 ? `${t.slice(0, 77).trimEnd()}…` : t;
 };
 
-export function IntakeForm({ properties, photos, examples }: { properties: { id: string; name: string; metro: string }[]; photos: { url: string; label: string }[]; examples: string[] }) {
+export function IntakeForm({ properties, photos, examples, initial }: { properties: { id: string; name: string; metro: string }[]; photos: { url: string; label: string }[]; examples: string[]; initial?: { property?: string; unit?: { id: string; label: string } } }) {
   const router = useRouter();
-  const [property, setProperty] = useState(properties[0]?.id ?? "");
+  // ?property=&unit= (e.g. from a unit's page) start the form there, when the property is in scope.
+  const start = properties.some((p) => p.id === initial?.property) ? initial!.property! : properties[0]?.id ?? "";
+  const [property, setProperty] = useState(start);
   const [units, setUnits] = useState<{ id: string; label: string }[]>([]);
-  const [unit, setUnit] = useState("");
+  const [unit, setUnit] = useState(start === initial?.property ? initial?.unit?.id ?? "" : "");
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [enter, setEnter] = useState(true);
@@ -89,6 +91,7 @@ export function IntakeForm({ properties, photos, examples }: { properties: { id:
             <select className={cn(FIELD, "h-9")} value={unit} onChange={(e) => setUnit(e.target.value)} disabled={busy}>
               <option value="">Common area (no unit)</option>
               {units.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+              {unit && unit === initial?.unit?.id && !units.some((u) => u.id === unit) && <option value={unit}>{initial.unit.label}</option>}
             </select>
           </label>
         </div>

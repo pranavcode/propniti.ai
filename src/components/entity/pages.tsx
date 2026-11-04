@@ -12,7 +12,7 @@ import { fillTemplate } from "@/components/app/data-table/params";
 import { StatusBadge } from "@/components/app/display";
 import { DataHealthBadge, type HealthIssue } from "@/components/app/ai/DataHealthBadge";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
-import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, type QueryCtx } from "@/server/query";
+import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
 import { getPlatform } from "@/lib/platform";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,7 @@ import { RecordSummary } from "./RecordSummary";
 import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
 import { withActorNames } from "@/server/actors";
-import { columnKind, formFields, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
+import { bulkActions, columnKind, formFields, parentValues, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
 
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
 // Static routes under src/app/(app)/app/ override these for custom pages.
@@ -33,19 +33,6 @@ const errMsg = (e: unknown) => (e instanceof QueryError ? e.message : "This list
 // Links from stored data: same-site paths and http(s) only, never javascript: or data: URLs.
 const safeHref = (u: unknown) => (typeof u === "string" && /^(\/(?!\/)|https?:\/\/)/i.test(u) ? u : undefined);
 const attempt = <T,>(p: Promise<T>) => p.then((res) => ({ res, error: null as string | null }), (e) => ({ res: null, error: errMsg(e) }));
-
-// A built-in view key in the URL (?view=expiring-60, used by persona quick links) applies that
-// view's state when the URL doesn't already carry filters of its own.
-function withView(def: EntityDef, sp: URLSearchParams): URLSearchParams {
-  const key = sp.get("view");
-  const v = key && def.list.savedViews?.find((x) => x.key === key);
-  if (!v || [...sp.keys()].some((k) => k.startsWith("f.") || k === "q" || k === "sort")) return sp;
-  const out = new URLSearchParams(sp);
-  if (v.q) out.set("q", v.q);
-  for (const [k, val] of Object.entries(v.filters ?? {})) out.set(`f.${k}`, Array.isArray(val) ? val.join(",") : val);
-  if (v.sort) out.set("sort", v.sort[1] === "desc" ? `-${v.sort[0]}` : v.sort[0]);
-  return out;
-}
 
 async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promise<KpiData[]> {
   return Promise.all(kpis.filter((k) => !k.roles || k.roles.includes(ctx.actor.role)).map(async (k) => {
@@ -120,7 +107,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
         rowHref={`${def.route}/{id}`}
         exportHref={`/api/e/${def.key}/export.csv`}
         views={def.list.savedViews}
-        bulkActions={(def.list.bulkActions ?? []).filter((k) => can(role, k, def.key)).map((k) => ({ key: k, label: k.split(".")[1].replace(/_/g, " ") }))}
+        bulkActions={bulkActions(def, role)}
         searchPlaceholder={`Search ${def.label.many.toLowerCase()}…`}
         empty={{ title: `No ${def.label.many.toLowerCase()} yet`, description: def.help?.summary, action: createFields ? { label: `New ${def.label.one.toLowerCase()}`, href: `${def.route}?new=1` } : undefined }}
         error={error}
@@ -237,6 +224,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
         facetOptions(ctx, rel.key, q).catch(() => ({})),
         sub ? list(ctx, def.key, { size: 20, where: { column: sub.fk, value: id } }).then((x) => x.rows).catch(() => []) : Promise.resolve([]),
       ]);
+      const relCreate = can(role, "create", rel.key) ? { fields: formFields(rel, role, "create"), parent: parentValues(def, row, rel, remote, value) } : undefined;
       return (
         <div className="space-y-3">
         {children.length > 0 && (
@@ -248,7 +236,7 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
         )}
         <EntityList key={rel.key} entity={rel.key} label={rel.label} routeBase={rel.route} columns={tableColumns(rel, role, [remote])} rows={res?.rows ?? []} total={res?.total ?? 0} page={res?.page ?? 1} size={res?.size ?? 50}
           counts={res?.counts} footer={res?.footer} statusTabs={statusTabs(rel, role)} facets={tableFacets(rel, role, facets).filter((f) => f.key !== remote)} rowHref={`${rel.route}/{id}`} views={rel.list.savedViews}
-          searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" />
+          searchPlaceholder={`Search ${rel.label.many.toLowerCase()}…`} empty={{ title: `No ${rel.label.many.toLowerCase()} on this ${def.label.one.toLowerCase()}` }} error={error} maxHeight="70vh" create={relCreate} />
         </div>
       );
     } else if (active?.kind === "custom") {
