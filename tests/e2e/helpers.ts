@@ -14,6 +14,11 @@ export async function as(context: BrowserContext, persona: string) {
   await context.addCookies([{ name: "pn_as", value: persona, url: BASE }]);
 }
 
+// A plain click on a list row opens the record peek drawer; this continues to the full record page.
+export async function openFull(page: Page) {
+  await page.locator("[data-peek-drawer]").getByRole("link", { name: /Open full page/ }).click();
+}
+
 // React tags each element it has wired with a __reactProps$ key. Until every control has one,
 // clicks can land on server HTML with no handler and do nothing.
 export async function hydrated(page: Page) {

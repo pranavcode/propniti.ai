@@ -1,5 +1,5 @@
 import { expect as baseExpect, test, type Page } from "@playwright/test";
-import { as as asPersona, go, watch } from "./helpers";
+import { as as asPersona, go, openFull, watch } from "./helpers";
 
 // The shared dev server compiles pages on first visit, which can take well over the 5 s default.
 const expect = baseExpect.configure({ timeout: 60_000 });
@@ -53,6 +53,7 @@ test("deposit disposition: itemise, send once, settled", async ({ page }) => {
   const errors = await as(page, "grace");
   await go(page, "/app/receivables/deposits?view=due");
   await page.getByRole("row").nth(1).getByRole("cell").first().click();
+  await openFull(page);
   await expect(page).toHaveURL(/receivables\/deposits\/dep-/);
   // The row opens the record by client navigation; wait for the form before reading its state.
   await expect(page.getByRole("button", { name: /Send disposition and refund/ })).toBeVisible();

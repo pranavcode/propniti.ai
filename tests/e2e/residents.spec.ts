@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { as as asPersona, go, watch } from "./helpers";
+import { as as asPersona, go, openFull, watch } from "./helpers";
 
 // Residents lane flows in a real browser: Today, the unified inbox with an AI-suggested reply,
 // lease abstraction with "AI: fix this", the duplicate-resident merge and the announcement
@@ -89,6 +89,7 @@ test("resident 360 links to the ledger and the lease", async ({ page }) => {
   const errors = await as(page, "marcus");
   await go(page, "/app/residents");
   await page.getByRole("cell", { name: /^Chloe Adams #116/ }).click();
+  await openFull(page);
   await expect(page.getByRole("heading", { name: "Delinquency risk" })).toBeVisible();
   await page.getByRole("link", { name: "Open lease" }).click();
   await expect(page).toHaveURL(/\/app\/leases\/L-/);

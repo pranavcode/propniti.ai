@@ -1,5 +1,5 @@
 import { expect as baseExpect, test } from "@playwright/test";
-import { as, BASE, go } from "./helpers";
+import { as, BASE, go, openFull } from "./helpers";
 
 // Compliance flow as the maintenance supervisor: dashboard → KPI drill-down → filtered list →
 // record with its actions. Run against a dev server: BASE_URL=http://localhost:3201.
@@ -32,6 +32,7 @@ test("compliance dashboard drills into lists and records", async ({ page }) => {
   const first = page.locator("a[href^='/app/compliance/cois/']").first();
   if (await first.count()) {
     await first.click();
+    await openFull(page);
     await expect(page).toHaveURL(/\/app\/compliance\/cois\/[^/?]+/);
     await expect(page.getByText("Overview").first()).toBeVisible();
   }
