@@ -1,7 +1,7 @@
 "use client";
 import { demoNowIso } from "@/lib/clock";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, CircleHelp, Gavel, Loader2, Minus, Plus, ShieldCheck, Sparkles, X } from "lucide-react";

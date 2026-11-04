@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { applyFixes, dismissIssue } from "@/ai/datafix";
-import { dataOf, guarded, json, writeSession } from "@/ai/http";
+import { DB_BUSY, dataOf, guarded, isDbError, json, writeSession } from "@/ai/http";
 
 const Body = z.object({ action: z.enum(["apply", "dismiss"]), note: z.string().max(300).default("") });
 
@@ -18,6 +18,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     const r = await applyFixes(data, s.persona, [id], { safeOnly: false });
     const one = r.results[0];
-    return one?.ok ? json({ ok: true, message: one.message, runId: r.runId }, { setCookie: s.setCookie }) : json({ error: one?.message ?? "Couldn't apply", runId: r.runId }, { status: 400 });
+    if (one?.ok) return json({ ok: true, message: one.message, runId: r.runId }, { setCookie: s.setCookie });
+    // Not applied but waiting in the approvals inbox: accepted, not an error.
+    if (one?.queued) return json({ ok: false, queued: true, proposalId: one.proposalId, message: one.message, runId: r.runId }, { status: 202, setCookie: s.setCookie });
+    const message = one?.message ?? "Couldn't apply";
+    return isDbError(message) ? json({ error: DB_BUSY, runId: r.runId }, { status: 503 }) : json({ error: message, runId: r.runId }, { status: 400 });
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useState } from "react";
 import { AlertTriangle, ArrowLeft, Check, ExternalLink, Loader2, RefreshCw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";

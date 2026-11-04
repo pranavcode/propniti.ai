@@ -54,7 +54,11 @@ export async function explainScenario(s: AiSession, req: ScenarioRequest) {
         revenue_effect_usd: usd(revenueEffect), opex_effect_usd: usd(opexEffect),
         margin_baseline_pct: pct1(t.revenue_cents ? t.noi_cents / t.revenue_cents : null), margin_scenario_pct: pct1(t.margin),
         break_even_occupancy_pct: pct1(t.break_even_occupancy),
-        ...(res.length > 1 ? { top_gainer: top.name, top_gainer_delta_usd: usd(top.delta_cents), top_loser: low.name, top_loser_delta_usd: usd(low.delta_cents) } : {}),
+        // Keys say which way each end of the ranking moved, so "top loser" is never a property that gained.
+        ...(res.length > 1 ? {
+          ...(top.delta_cents > 0 ? { top_gainer: top.name, top_gainer_delta_usd: usd(top.delta_cents) } : { holds_up_best: top.name, holds_up_best_delta_usd: usd(top.delta_cents) }),
+          ...(low.delta_cents < 0 ? { top_loser: low.name, top_loser_delta_usd: usd(low.delta_cents) } : { gains_least: low.name, gains_least_delta_usd: usd(low.delta_cents) }),
+        } : {}),
       };
       const dir = t.delta_cents >= 0 ? "up" : "down";
       const money = (c: number) => formatMoney(usd(c), "whole");

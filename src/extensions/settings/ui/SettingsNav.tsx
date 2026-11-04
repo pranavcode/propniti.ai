@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { usePathname } from "next/navigation";
 import { Activity, Bell, Building2, Gauge, Globe, History, KeyRound, Landmark, Percent, Plug, ShieldCheck, Sparkles, Upload, Users, Workflow, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";

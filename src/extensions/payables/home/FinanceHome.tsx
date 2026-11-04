@@ -1,5 +1,5 @@
 import "server-only";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { ArrowRight, BarChart3, Bot, ChevronRight, FileStack, Inbox, Landmark, Sparkles } from "lucide-react";
 import type { Session } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";

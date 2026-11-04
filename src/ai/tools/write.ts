@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { INTERNAL_ROLES } from "@/entities/types";
+import { getEntity } from "@/entities";
+import { PERMISSIONS } from "@/auth/personas";
+import { INTERNAL_ROLES, type Role } from "@/entities/types";
 import { executeProposal } from "../effects";
 import { eff, get, isTable, parseJson, type Table } from "../data";
 import type { AgentCtx, ProposeInput } from "../runtime";
@@ -103,6 +105,15 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
     why, confidence: fix.confidence ?? 0.8, risk: human ? "High" : issue.severity === "critical" ? "Medium" : "Low", alwaysHuman: human,
     evidence: [{ entity_type: table, entity_id: id, label: `${table.replace(/_/g, " ")} ${id}` }],
   };
+}
+
+// For the page's button: why applying this fix would queue it in the approvals inbox, or null when
+// this role's click applies it. Mirrors applyFixes in datafix.ts and canDecide's low-risk rule for staff.
+export function queueReason(p: ProposeInput, role: Role): string | null {
+  if (p.alwaysHuman) return "Touches money, fraud or legal status: a person reviews it in the approvals inbox";
+  if (p.risk !== "Low") return "Critical issue: a person with approval rights reviews it in the approvals inbox";
+  const access = PERMISSIONS[role]?.[getEntity("data_issues")?.module ?? "intelligence"] ?? "none";
+  return access === "write" || access === "approve" ? null : "Your role can't apply Data Health fixes: a person reviews it in the approvals inbox";
 }
 
 registerTool({

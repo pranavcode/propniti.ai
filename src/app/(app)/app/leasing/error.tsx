@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useEffect } from "react";
 import { ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";

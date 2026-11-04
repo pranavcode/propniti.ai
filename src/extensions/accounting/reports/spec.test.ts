@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, monthsBetween, NO_PERIOD, resolvePeriod, rulesSpec, validateSpec, type Period, type RawSpec } from "./spec";
+import { addMonths, groundInText, monthsBetween, NO_PERIOD, resolvePeriod, rulesSpec, validateSpec, type Period, type RawSpec } from "./spec";
 
 const SCOPE = [
   { id: "p01", name: "The Lofts at Riverside", metro: "Austin" },
@@ -70,5 +70,42 @@ describe("period types resolve from the demo clock", () => {
     expect(at({ kind: "range", startMonth: 11, endMonth: 2 })).toEqual({ from: "2025-11", to: "2026-02" });
     expect(at({})).toEqual({ from: "2025-11", to: "2026-10" });
     expect(at({ kind: "ytd" }, "2027-03")).toEqual({ from: "2027-01", to: "2027-03" });
+  });
+});
+
+describe("production QA: '30+ days delinquent by property last month'", () => {
+  const Q = "last month 30+ days delinquent by property";
+  it("reads last month from the demo clock and keeps the aging filter (rules)", () => {
+    const { spec } = validateSpec(rulesSpec(Q, SCOPE), SCOPE, "2026-10");
+    expect(spec).toMatchObject({ measure: "delinquency_30", groupBy: "property", from: "2026-10", to: "2026-10" });
+    expect(rulesSpec("Past-due balance by property for Phoenix, 90 days or more", SCOPE).measure).toBe("delinquency_90");
+    expect(rulesSpec("delinquency by property", SCOPE).measure).toBe("delinquency");
+  });
+  it("overrides a model that read the period as January and dropped the aging", () => {
+    const model = raw({ measure: "delinquency", groupBy: "property", period: { ...NO_PERIOD, kind: "range", startMonth: 1, endMonth: 1, year: 2026 } });
+    const { spec } = validateSpec(groundInText(model, Q, "2026-10"), SCOPE, "2026-10");
+    expect(spec).toMatchObject({ measure: "delinquency_30", from: "2026-10", to: "2026-10" });
+  });
+  it("drops a month or year the person never named, and keeps one they did", () => {
+    const jan = { ...NO_PERIOD, kind: "range" as const, startMonth: 1, endMonth: 1, year: 2026 };
+    expect(groundInText(raw({ period: jan }), "Past-due balance by property for Phoenix", "2026-10").period).toBeNull();
+    expect(groundInText(raw({ period: jan }), "Past-due balance by property for January 2026", "2026-10").period).toEqual(jan);
+    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "quarter", quarter: 3, year: 2025 } }), "utilities in Q3", "2026-10").period).toMatchObject({ quarter: 3, year: null });
+  });
+  it("doesn't take 'may' the verb or 'prior year' as a named period (review)", () => {
+    const year = { ...NO_PERIOD, kind: "year" as const, year: 2025 };
+    expect(groundInText(raw({ period: year }), "NOI by property vs prior year", "2026-10").period).toBeNull();
+    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "range", startMonth: 5, endMonth: 5 } }), "show repairs that may be late", "2026-10").period).toBeNull();
+    expect(groundInText(raw({ period: { ...NO_PERIOD, kind: "range", startMonth: 5, endMonth: 5 } }), "repairs in May", "2026-10").period).toMatchObject({ startMonth: 5 });
+    expect(groundInText(raw({ period: year }), "NOI by property for the year 2025", "2026-10").period).toEqual(year);
+    expect(groundInText(raw({ period: year }), "landscaping by property last year", "2026-10").period).toEqual(year);
+    expect(groundInText(raw({ period: year }), "repairs by month vs last year", "2026-10").period).toBeNull();
+  });
+  it("takes property ids written with their names, and words a miss by the person's real scope", () => {
+    const { spec, dropped } = validateSpec(raw({ properties: ["p12 Camelback Terrace", "The Lofts at Riverside"] }), SCOPE, "2026-10");
+    expect(spec.properties).toEqual(["p12", "p01"]);
+    expect(dropped).toEqual([]);
+    expect(validateSpec(raw({ properties: ["p29 Biltmore Office Plaza"] }), SCOPE, "2026-10").dropped).toEqual(["Property p29 is outside your scope (2 properties)"]);
+    expect(validateSpec(raw({ properties: ["Elm Street"] }), SCOPE, "2026-10").dropped).toEqual(['No property in your scope matches "Elm Street"']);
   });
 });

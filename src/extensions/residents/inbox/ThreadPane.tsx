@@ -1,5 +1,5 @@
 import { demoNowIso } from "@/lib/clock";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { Bot, Mail, MessageSquare, Phone, Smartphone } from "lucide-react";
 import type { Actor } from "@/entities/types";
 import { can } from "@/entities";
