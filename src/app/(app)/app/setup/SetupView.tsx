@@ -5,7 +5,7 @@ import { ArrowRight, Check, Compass, Keyboard, Play, RotateCcw } from "lucide-re
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useShell } from "@/components/app/shell/context";
-import { useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
+import { GuidedSetupLink, useSetupProgress } from "@/components/app/onboarding/SetupChecklist";
 import { readLocal } from "@/hooks/use-local-storage";
 import { useMounted } from "@/hooks/use-mounted";
 import type { TourProgress } from "@/components/app/tour/types";
@@ -33,6 +33,7 @@ export function SetupView({ hints }: { hints: Record<string, string> }) {
           </div>
           {next && <p className="mt-2 text-[12.5px] text-muted-foreground">Next: <span className="text-foreground">{next.label}</span>. {next.description}</p>}
         </div>
+        <GuidedSetupLink />
         <ol className="divide-y overflow-hidden rounded-lg border bg-card">
           {items.map((i, n) => (
             <li key={i.key} className={cn("flex items-start gap-3 px-4 py-3.5", i === next && "bg-primary/[0.035]")}>

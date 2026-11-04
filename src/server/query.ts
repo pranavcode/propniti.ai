@@ -9,6 +9,7 @@ import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
 import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { BULK_MATCH_CAP } from "@/lib/bulk";
+import { EXPORT_CAP } from "@/lib/export/types";
 import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
@@ -26,7 +27,6 @@ export class QueryError extends Error {
 
 // Addendum 1: page sizes are 25/50/100.
 export const PAGE_SIZE_CAP = Math.min(MAX_PAGE_SIZE, 100);
-const EXPORT_CAP = 10_000;
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const WS_ID = /^[A-Za-z0-9_-]{22,64}$/;
 
@@ -467,11 +467,16 @@ export async function matchingIds(ctx: QueryCtx, entity: string, q: ListQuery, c
 
 // Streams the CSV page by page (keyset cursor), so up to EXPORT_CAP rows never sit in memory.
 // Validation errors (unknown filter, no read access) throw before the stream starts.
+// Export columns: the list's visible columns (or ?cols=), never images or JSON. Shared with XLSX and PDF.
+export function exportColumns(def: EntityDef, role: Role, q: ListQuery): [string, FieldDef][] {
+  const cols = visibleFields(def, role).filter(([, f]) => f.type !== "image" && f.type !== "json");
+  const keys = q.columns?.length ? cols.filter(([k]) => q.columns!.includes(k)) : cols.filter(([, f]) => f.list?.default);
+  return keys.length ? keys : cols;
+}
+
 export async function exportCsv(ctx: QueryCtx, entity: string, q: ListQuery): Promise<ReadableStream<Uint8Array>> {
   const def = getDef(entity);
-  const cols = visibleFields(def, ctx.actor.role).filter(([, f]) => f.type !== "image" && f.type !== "json");
-  const keys = q.columns?.length ? cols.filter(([k]) => q.columns!.includes(k)) : cols.filter(([, f]) => f.list?.default);
-  const use = keys.length ? keys : cols;
+  const use = exportColumns(def, ctx.actor.role, q);
   const line = (r: Row) => [r.id, ...use.map(([k, f]) => (f.type === "ref" ? r[`${k}__label`] ?? r[k] : r[k]))].map(csvCell).join(",") + "\r\n";
   const page = (cursor?: string) => list(ctx, entity, { ...q, size: PAGE_SIZE_CAP, cursor, page: 1, rowsOnly: true });
   const first = await page();

@@ -6,6 +6,8 @@ import { ownerEntities } from "@/extensions/owners/portal/owner-data";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { monthLabel, periodsOf, statementOf } from "@/extensions/owners/statements";
 import { StatementView } from "@/extensions/owners/ui/StatementView";
+import { DownloadMenu } from "@/extensions/export/DownloadMenu";
+import { downloadHrefs } from "@/lib/export/hrefs";
 
 type Props = { searchParams: Promise<{ entity?: string; period?: string }> };
 
@@ -44,7 +46,12 @@ export default async function OwnerStatements({ searchParams }: Props) {
             ))}
           </ul>
         </nav>
-        {st ? <StatementView st={st} explainUrl="/portal/owner/statements/explain" mode="owner" /> : <EmptyState title="No statement for this month" description="Pick another month." />}
+        {st ? (
+          <div className="min-w-0 space-y-2">
+            <div className="flex justify-end print:hidden"><DownloadMenu hrefs={downloadHrefs("/api/export/statement", { entity: entity.id, period })} label="Download statement" what="Downloads this month's statement for this entity." /></div>
+            <StatementView st={st} explainUrl="/portal/owner/statements/explain" mode="owner" />
+          </div>
+        ) : <EmptyState title="No statement for this month" description="Pick another month." />}
       </div>
     </>
   );

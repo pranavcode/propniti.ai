@@ -21,6 +21,7 @@ import { AI_MAX_W, AI_MIN_W, AssistantPanel } from "./AssistantPanel";
 import { CommandPalette } from "./CommandPalette";
 import { ShellCtx, useShell, type AssistantContext, type ShellContext } from "./context";
 import { exitPersona } from "./persona";
+import { NavProgress } from "./NavProgress";
 import { gotoTargets, ShortcutsDialog } from "./shortcuts";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -153,6 +154,7 @@ export function AppShell({ data, assistant: assistantBody, children }: { data: S
             <SetupChecklist onNavigate={() => setSetup(false)} />
           </DialogContent>
         </Dialog>
+        <NavProgress commit={children} />
         <TourOverlay active={tour.active} go={tour.go} dismiss={tour.dismiss} />
         <ChatBubble />
         <WelcomeSplash />

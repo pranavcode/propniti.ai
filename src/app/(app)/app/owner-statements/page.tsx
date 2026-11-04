@@ -12,6 +12,8 @@ import { Money, StatusBadge } from "@/components/app/display";
 import { entitiesOf, entityInScope, monthLabel, periodsOf, statementOf } from "@/extensions/owners/statements";
 import { StatementView } from "@/extensions/owners/ui/StatementView";
 import { monthTick } from "@/components/app/dashboard/fmt";
+import { DownloadMenu } from "@/extensions/export/DownloadMenu";
+import { downloadHrefs } from "@/lib/export/hrefs";
 
 export const metadata = { title: "Owner statements · Propniti" };
 
@@ -98,6 +100,7 @@ export default async function OwnerStatementsPage({ searchParams }: Props) {
                 </Link></li>
               ))}
             </ul>
+            {st && <div className="flex justify-end"><DownloadMenu hrefs={downloadHrefs("/api/export/statement", { entity: entityId, period })} label="Download statement" what="Downloads this month's statement for this entity." /></div>}
             {st ? (
               <StatementView st={st} explainUrl="/app/owner-statements/explain" mode="staff"
                 canDistribute={can(role, "owner_entities.distribute", "owner_entities")} canFix={can(role, "owner_distributions.pay_rounding_cent", "owner_distributions")} />

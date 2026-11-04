@@ -108,6 +108,15 @@ export function gradeMap(c, res) {
   return { checks: fields, pass: share >= 0.9 && required };
 }
 
+// /api/onboarding/detect: the record type, and a tool from the allowed list (some layouts are shared).
+export function gradeDetect(c, res) {
+  const d = (res.detections ?? []).find((x) => x.id === "f1");
+  return { checks: [
+    { name: "record type", ok: d?.kind === c.expect.kind, detail: d?.kind ?? "none" },
+    { name: "tool", ok: c.expect.tools.includes(d?.tool), detail: d?.tool ?? "none" },
+  ] };
+}
+
 // /api/ai/import-parse: the right number of rows, and each expected row's key fields.
 export function gradeParse(c, res) {
   const rows = res.rows ?? [];

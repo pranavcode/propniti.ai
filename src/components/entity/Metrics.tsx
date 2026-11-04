@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "@/components/Link";
+import { pickFilter } from "@/components/app/ResultsSummary";
 import { useRouter } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
@@ -57,7 +58,7 @@ function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
   // The tile drills through a link stretched over it (same pattern as KpiCard).
   return (
     <div className={cn("group/kpi relative flex h-full flex-col justify-between gap-2 rounded-lg border bg-card p-3.5 transition-colors", k.drill && "hover:border-primary/40 has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring", improving && "rounded-b-none")}>
-      {k.drill && <Link href={k.drill} aria-label={`${k.label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
+      {k.drill && <Link href={k.drill} onClick={pickFilter} aria-label={`${k.label}: open the records behind this number`} className="absolute inset-0 rounded-lg outline-none" />}
       <div className="-mt-1 flex h-6 items-center gap-1.5">
         <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground"><Term help={k.help} className="relative z-10">{k.label}</Term></span>
         {(k.asOf || k.drill) && (
