@@ -44,12 +44,15 @@ test("Marcus sees how many low-risk items match on every page before approving t
 
 test("Sam can't decide approvals, so he can notify the approver", async ({ page, context }) => {
   await as(context, "sam");
-  await go(page, `${BASE}/app/ai/approvals`);
-  const item = page.locator("article[id^=proposal-]").first();
+  // Admins approve compliance items themselves; data fixes and bills go to someone else.
+  await go(page, `${BASE}/app/ai/approvals?agent=data_health`);
+  const first = page.locator("article[id^=proposal-]").filter({ has: page.getByRole("button", { name: "Notify approver" }) }).first();
+  const item = page.locator(`article#${await first.getAttribute("id")}`);
   await expect(item.getByRole("button", { name: /Needs approver/ })).toBeVisible();
   await item.getByRole("button", { name: "Notify approver" }).click();
+  // A rerun on the same day finds it already sent; the first click names who was notified.
   await expect(page.getByText(/^(Notified |Already notified today)/)).toBeVisible();
-  await expect(item.getByRole("button", { name: "Notify approver" })).toBeHidden();
+  if (await page.getByText(/^Notified /).isVisible()) await expect(item.getByRole("button", { name: "Notify approver" })).toBeHidden();
 });
 
 test("Data Health honours rule and record links, shows removable pills and bulk counts", async ({ page, context }) => {
