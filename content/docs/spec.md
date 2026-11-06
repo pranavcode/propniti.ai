@@ -7,7 +7,7 @@ Propniti finds wrong operations data that money decisions rely on, shows why it'
 | Area | What Propniti has |
 | --- | --- |
 | Staff app | One app at `/app` for nine staff roles, each with its own home page and scope |
-| Record types | 64 record types in 13 modules (portfolio, leasing, residents, maintenance, communications, receivables, payables, accounting, owners, risk, intelligence, settings, platform) |
+| Record types | 63 record types in 13 modules (portfolio, leasing, residents, maintenance, communications, receivables, payables, accounting, owners, risk, intelligence, settings, platform) |
 | AI agents | Collections, Renewals, Leasing, Maintenance triage, Payables, Owner reporting, Compliance and Data Health |
 | Portals | Owner, resident, vendor and applicant portals at `/portal/...` |
 | Public site | Listings, tour booking and applications at `/listings` and `/apply/...`, with no sign-in |

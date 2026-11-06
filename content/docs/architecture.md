@@ -2,7 +2,7 @@
 
 Propniti is one Next.js 16 app, compiled by vinext into a single Cloudflare Worker that serves the marketing site, staff app, four portals, public listings site and API. Data lives in one D1 database: a shared, read-only base plus a private overlay per visitor. Eight AI agents run in the same Worker on a 15-minute Cron Trigger, on events and on demand, and change data only by proposing named actions.
 
-- Propniti has 64 kinds of record, such as properties, leases and work orders. Each kind is described once in code. The app builds everything else for it from that one description: its sidebar link, its ⌘K search entry, its list and detail pages, its API, who may see or change it, and which database columns queries may read. In code this description is an `EntityDef` in `src/entities/defs/`.
+- Propniti has 63 kinds of record, such as properties, leases and work orders. Each kind is described once in code. The app builds everything else for it from that one description: its sidebar link, its ⌘K search entry, its list and detail pages, its API, who may see or change it, and which database columns queries may read. In code this description is an `EntityDef` in `src/entities/defs/`.
 - Agents only propose changes. When a person approves one, the app runs the same server action a person's click runs, with the same checks.
 - Fixed rules compute every figure from the data. A model only writes the wording of answers and suggests actions.
 - Each action that moves money is one group of database writes that land together or not at all. Checks inside the SQL decide whether it runs, and each transfer has a unique key, so a repeated click moves the money once.

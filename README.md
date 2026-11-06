@@ -17,7 +17,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · sample data, no sign-up. Pr
 
 ## What it does
 
-- Propniti has 64 kinds of record, such as properties, leases and work orders. Each kind is described once in code. The app builds everything else for it from that one description: its sidebar link, its ⌘K search entry, its list and detail pages, its API, who may see or change it, and which database columns queries may read. In code this description is an `EntityDef` in `src/entities/defs/`; the 64 kinds are grouped into 13 modules.
+- Propniti has 63 kinds of record, such as properties, leases and work orders. Each kind is described once in code. The app builds everything else for it from that one description: its sidebar link, its ⌘K search entry, its list and detail pages, its API, who may see or change it, and which database columns queries may read. In code this description is an `EntityDef` in `src/entities/defs/`; the 63 kinds are grouped into 13 modules.
 - A sample portfolio of 30 properties in Austin, Dallas, Atlanta and Phoenix, with leases, ledgers, work orders, bills and history. Some records are wrong on purpose, for Data Health to find.
 - A simulated trust ledger: rent, fees, bills, owner distributions and deposits move through guarded SQL; a double click pays once.
 - AI agents that run every 15 minutes, on events and on request. Each step is stored, and a person approves what agents propose.
