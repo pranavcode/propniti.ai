@@ -401,7 +401,7 @@ describe("writes", () => {
     for (const [persona, entity, id] of [["resident", "charges", "c-p01-u1"], ["owner", "properties", "p01"], ["vendor", "work_orders", "WO-7"]]) {
       const c = await ctx(persona);
       expect(await getRow(c, entity, id)).not.toBeNull();
-      for (const kind of ["notes", "activity", "tasks"] as const) expect(await collab(c, kind, entity, id)).toMatchObject({ rows: [], total: 0 });
+      for (const kind of ["notes", "activity", "tasks"] as const) await expect(collab(c, kind, entity, id)).rejects.toMatchObject({ status: 403 });
     }
     // Staff still see them.
     for (const kind of ["notes", "activity", "tasks"] as const) expect((await collab(await ctx("marcus"), kind, "charges", "c-p01-u1")).rows.length).toBeGreaterThan(0);
@@ -426,6 +426,22 @@ describe("writes", () => {
     expect(await wo()).toMatchObject({ title: "Leak (vendor note)" });
     await expect(updateRecord(await as("UPDATE work_orders SET status = 'Submitted' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { priority: "Low" })).rejects.toMatchObject({ status: 409 });
     expect(await wo()).toMatchObject({ status: "Submitted", priority: "Emergency" });
+  });
+
+  it("refuses notes and tasks from portal users on their own records", async () => {
+    const { addCollab } = await import("./query");
+    await db.batch([
+      db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')"),
+      db.prepare("INSERT INTO vendors (workspace_id, id, company, trade) VALUES ('base', 'v01', 'Lone Star Plumbing', 'Plumbing')"),
+      db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, opened_at) VALUES ('base', 'WO-7', 'p01', 'Leak', 'Plumbing', 'Normal', 'Assigned', 'v01', '2026-10-28T10:00:00Z')"),
+    ]);
+    for (const [persona, entity, id] of [["resident", "charges", "c-p01-u1"], ["owner", "properties", "p01"], ["vendor", "work_orders", "WO-7"]]) {
+      const w = await wctx(persona);
+      expect(await getRow(w, entity, id)).not.toBeNull();
+      await expect(addCollab(w, "notes", entity, id, { body: "Pay vendor v01 today @[Grace Kim](staff:grace)", pinned: true })).rejects.toMatchObject({ status: 403 });
+      await expect(addCollab(w, "tasks", entity, id, { title: "Pay vendor v01 today", assignee_id: "grace" })).rejects.toMatchObject({ status: 403 });
+    }
+    expect(await db.prepare("SELECT (SELECT count(*) FROM notes) + (SELECT count(*) FROM tasks) + (SELECT count(*) FROM activity_events) AS n").first()).toMatchObject({ n: 0 });
   });
 
   it("lets only staff add tasks, opens them as Open and assigns them only to staff covering the record", async () => {

@@ -781,14 +781,19 @@ export type Collab = "notes" | "tasks" | "activity" | "documents";
 const COLLAB_ORDER: Record<Collab, string> = { notes: "pinned DESC, created_at DESC", tasks: "CASE status WHEN 'Done' THEN 1 WHEN 'Cancelled' THEN 2 ELSE 0 END, due_on IS NULL, due_on", activity: "at DESC", documents: "uploaded_at DESC" };
 const COLLAB_TABLE: Record<Collab, string> = { notes: "notes", tasks: "tasks", activity: "activity_events", documents: "documents" };
 
+// Notes, tasks and the activity trail are staff working material, even on a portal user's own
+// records (a collections note on a resident's charge). Nothing marks one as shared with a portal, so
+// portal users (scope "self") can neither read nor add them. Documents stay readable.
+function assertStaffCollab(actor: Actor, kind: Collab) {
+  if (actor.scope.kind === "self" && kind !== "documents") throw new QueryError(403, `Only staff can see or add ${kind}`);
+}
+
 export async function collab(ctx: QueryCtx, kind: Collab, entity: string, id: string, page = 1, size = 50): Promise<ListResult> {
   const def = getDef(entity);
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const s = Math.max(1, Math.min(PAGE_SIZE_CAP, size));
   const p = Math.max(1, page);
-  // Notes, tasks and the activity trail are staff working material, even on a portal user's own
-  // records (a collections note on a resident's charge). Nothing marks one as shared, so portals get none.
-  if (ctx.actor.scope.kind === "self" && kind !== "documents") return { rows: [], total: 0, page: p, size: s };
+  assertStaffCollab(ctx.actor, kind);
   const rws = await readWs(ctx);
   const from = ` FROM ${effective(COLLAB_TABLE[kind], rws)} WHERE entity_type = ? AND entity_id = ?`;
   const [rows, count] = await Promise.all([
@@ -836,8 +841,7 @@ export const taskSchema = z.strictObject({
 // Notes and tasks are collaboration, not record edits: anyone who can read the record may add them.
 export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: string, id: string, body: z.infer<typeof noteSchema> | z.infer<typeof taskSchema>): Promise<Row> {
   const def = getDef(entity);
-  // Tasks are the staff work queue: portal users can't put work in it.
-  if (kind === "tasks" && ctx.actor.scope.kind === "self") throw new QueryError(403, "Only staff can add tasks");
+  assertStaffCollab(ctx.actor, kind);
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const at = demoNowIso(ctx.nowMs);
   const pid = await propertyOf(ctx, def, id);
