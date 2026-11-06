@@ -13,7 +13,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · runs on sample data, no sig
 | --- | --- | --- |
 | ![Agents page with eight agents and their runs](public/img/marketing/shots/agents.webp) | ![Data Health issues with suggested fixes](public/img/marketing/shots/data-health.webp) | ![What-if simulator on the portfolio](public/img/marketing/shots/what-if.webp) |
 
-This README describes v2, the code on `main` that runs at propniti.ai. Product goals and principles are in [PRODUCT.md](PRODUCT.md); code conventions are in [AGENTS.md](AGENTS.md).
+This README describes the code on `main`, which runs at propniti.ai. Product goals and principles are in [PRODUCT.md](PRODUCT.md); code conventions are in [AGENTS.md](AGENTS.md).
 
 ## What it does
 
@@ -120,7 +120,7 @@ On Cloudflare with no key, Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`
 
 ## Tests, evals and coverage
 
-Measured on 2026-11-04 on `batch/six` (batch 6).
+Measured on 2026-11-04.
 
 - **Vitest:** 1279 tests in 141 files: 1278 pass and 1 is skipped. They cover money, scope, the query layer, migrations on SQLite and on local D1 (Miniflare), the seed generator, module actions, agents and the assistant. Money actions have double-click tests that must move money once.
 - **Playwright:** 190 browser tests in 34 flows in `tests/e2e/`: one per module, portals and public listings, plus sign-in, Inbox, My tasks, Automations, import, the chat bubble, assistant history, the welcome screen and bulk actions. They run against a dev server at `BASE_URL` (default `http://localhost:3201`): `npx playwright test tests/e2e/<flow>.spec.ts`.
@@ -138,7 +138,7 @@ Measured on 2026-11-04 on `batch/six` (batch 6).
 | Model calls (`lib/llm.ts`) | 82% | 64% |
 | API routes (`app/api`) | 32% | 26% |
 
-The v1 helpers left in `server/repo.ts` are still in the coverage scope and mostly untested, which lowers the totals.
+The `DemoState` helpers in `server/repo.ts` are in the coverage scope and mostly untested, which lowers the totals.
 
 ### AI evals
 
@@ -146,9 +146,9 @@ The v1 helpers left in `server/repo.ts` are still in the coverage scope and most
 
 - `npm run eval` sends 86 cases in 11 areas to a running app (`BASE_URL`, default `https://propniti.ai`) and writes [`evals/results/latest.md`](evals/results/latest.md). It exits 1 below `MIN_PASS` (default 0.8). It is not part of CI; there is a manual **AI eval** workflow.
 - 43 more cases (triage, drafts, data fixes, applicant scoring, resident replies) run inside `npm test`, graded on the rules output with no model.
-- The 9 invoice-vs-PO cases read the v1 demo state and are skipped against a v2 server.
+- The 9 invoice-vs-PO cases need the `/api/state` demo state, which the app doesn't serve, so they are skipped.
 
-**Latest live run:** 2026-11-04 15:52 UTC, Workers AI on a local server, **74/86 (86%)**, above the 0.8 bar. Invoice reading, insurance declarations, the AI filter, record summaries, column mapping and pasted notes passed every case; agent runs passed 4 of 8, with 4 falling back to rules. Onboarding file detection scored 0/5 in that run; after the fix in batch 6 those 5 cases passed 5/5 on their own, and the full suite has not been re-run since.
+**Latest live run:** 2026-11-04 15:52 UTC, Workers AI on a local server, **74/86 (86%)**, above the 0.8 bar. Invoice reading, insurance declarations, the AI filter, record summaries, column mapping and pasted notes passed every case; agent runs passed 4 of 8, with 4 falling back to rules. Onboarding file detection scored 0/5 in that run. Run on their own against the current file detection, those 5 cases passed 5/5; the full suite has not been run against it.
 
 ## Deploy
 
@@ -160,7 +160,7 @@ npm run deploy:vinext
 npx wrangler secret put ANTHROPIC_API_KEY   # optional
 ```
 
-`cloudflare.config.ts` sets the Worker name, domains, the D1 binding, the Workers AI binding, two rate limiters (20 AI calls and 60 writes a minute per IP), the `src/worker-entry.ts` entry and the 15-minute Cron Trigger. The v2 preview runs as a separate Worker with its own D1 database; deploy it by changing the name, domains and database id before `deploy:vinext`. Run remote migrations before deploying.
+`cloudflare.config.ts` sets the Worker name, domains, the D1 binding, the Workers AI binding, two rate limiters (20 AI calls and 60 writes a minute per IP), the `src/worker-entry.ts` entry and the 15-minute Cron Trigger. The preview runs as a separate Worker with its own D1 database; deploy it by changing the name, domains and database id before `deploy:vinext`. Run remote migrations before deploying.
 
 **Docker** (any container host):
 

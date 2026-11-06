@@ -1,8 +1,8 @@
-This is a step-by-step tour of Propniti v2 at [propniti.ai](https://propniti.ai). It has one section for each staff persona, one for each portal and one for the public listings site. Each section says where the person lands, what they do and which AI shows up.
+This is a step-by-step tour of Propniti at [propniti.ai](https://propniti.ai). It has one section for each staff persona, one for each portal and one for the public listings site. Each section says where the person lands, what they do and which AI shows up.
 
 **Start here.** Open [propniti.ai/login](https://propniti.ai/login). Sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (every demo account uses it), or pick one of the 13 people in the *Pick a person* list beside the form: click a person (or use the arrow keys) to fill the form, then *Sign in as …*, or double-click to sign in straight away. *What each person sees*, below, describes each one. To switch later, open the avatar menu in the top bar and choose *Switch role (demo)*, or use *Switch* in the banner.
 
-**First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for that role, what's new and up to three things waiting. *Help › Show welcome screen* brings it back. A dot in the sidebar marks a feature you haven't opened yet. Once per browser session a small card offers a tour; it sits over the foot of the sidebar so it never covers a table, and on a phone or with the sidebar collapsed the chat bubble offers it instead. The *Ask Propniti* panel also opens on its own once a day.
+**First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for that role, a *What's new* list of features and up to three things waiting. *Help › Show welcome screen* brings it back. A dot in the sidebar marks a feature you haven't opened yet. Once per browser session a small card offers a tour; it sits over the foot of the sidebar so it never covers a table, and on a phone or with the sidebar collapsed the chat bubble offers it instead. The *Ask Propniti* panel also opens on its own once a day.
 
 **About the data.** Names, companies and figures are sample data: 30 properties in Austin, Dallas, Atlanta and Phoenix. "Today" is 4 November 2026, and the books are closed through October. Your changes go into a private copy that only you see. It resets at midnight Pacific time. No real payments or messages are sent.
 
@@ -83,7 +83,7 @@ AI here: *Explain* (facts computed, wording by a model or by rules), the what-if
 
 ## 3. Priya Shah, regional manager
 
-Priya sees 14 Texas properties. She lands on `/app`, the regional version.
+Priya sees 14 Texas properties. She lands on `/app`, which shows her regional home.
 
 1. Scroll to *Property comparison*: occupancy, economic occupancy, NOI against budget, collections, delinquency and work-order SLA side by side.
 2. Click *Variance* on a row to explain that property's NOI change.

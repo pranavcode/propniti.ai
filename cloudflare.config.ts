@@ -10,6 +10,9 @@ export default defineConfig({
     limits: { cpuMs: 60_000 },
     domains: ["propniti.ai", "www.propniti.ai"],
     workersDev: true,
+    // Smart Placement: run near the D1 database rather than the visitor, since most requests make
+    // several sequential queries (bulk actions about 0.6 s per record when run far from it).
+    placement: { mode: "smart" },
     compatibilityDate: "2026-10-28",
     compatibilityFlags: ["nodejs_compat", "nodejs_compat_populate_process_env"],
     // Workers Logs: request logs, errors and AI fallbacks, queryable in the Cloudflare dashboard.
