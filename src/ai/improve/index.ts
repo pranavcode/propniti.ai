@@ -180,7 +180,9 @@ export async function executePlan(s: ImproveSession, key: ImproveKey, property: 
   if (!claimed.meta.changes) throw new PlanConflict("Agents are already running a plan for this number, here or on another page; it will show here in a moment.");
   const refresh = async () => {
     const next = String(Math.max(Date.now(), Number(token) + 1));
-    await s.db.prepare("UPDATE meta SET value = ? WHERE key = ? AND value = ?").bind(next, lock, token).run();
+    const r = await s.db.prepare("UPDATE meta SET value = ? WHERE key = ? AND value = ?").bind(next, lock, token).run();
+    // Lost the lock (it expired and another click took it): stop before starting another run.
+    if (!r.meta.changes) throw new PlanConflict("Another plan for this number started while this one was running; it will show here in a moment.");
     token = next;
   };
   try {

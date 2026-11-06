@@ -358,6 +358,22 @@ describe("improve: review fixes", () => {
     expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
   });
 
+  it("stops before the next agent run if another request took the lock meanwhile", async () => {
+    const f = setup();
+    const key = `improve-lock:${WS}:delinquency`;
+    const prepare = f.db.prepare.bind(f.db);
+    // Right after the claim, another request takes the lock over (as if this one had expired).
+    f.db.prepare = (q: string) => {
+      const st = prepare(q);
+      if (q.startsWith("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT")) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { bind: (...a: unknown[]) => { const b = st.bind(...a); return { ...b, run: async () => { const r = await b.run(); f.raw.prepare("UPDATE meta SET value = '1' WHERE key = ?").run(key); return r; } }; } });
+      return st;
+    };
+    await expect(run(f, DANIEL, "delinquency")).rejects.toBeInstanceOf(PlanConflict);
+    expect(proposals(f.raw)).toHaveLength(0);
+    // The other request's lock is left alone.
+    expect(f.raw.prepare("SELECT value FROM meta WHERE key = ?").get(key)).toMatchObject({ value: "1" });
+  });
+
   it("holds the lock for the metric, not the scope", async () => {
     const f = setup();
     f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(`improve-lock:${WS}:delinquency`, String(Date.now()));
