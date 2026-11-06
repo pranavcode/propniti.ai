@@ -300,8 +300,8 @@ What moving takes in this codebase:
 
 | Check | Count | What it covers |
 | --- | --- | --- |
-| Unit tests (Vitest) | 1,279 in 141 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes |
-| End-to-end tests (Playwright) | 190 in 34 specs | Each persona's main flows, the portals, the public site, import, guided setup, downloads, the assistant and approvals |
+| Unit tests (Vitest) | 1,298 in 143 files | Money, rules, parsing, scope, migrations on SQLite and local D1, the AI runtime and routes |
+| End-to-end tests (Playwright) | 191 in 34 specs | Each persona's main flows, the portals, the public site, import, guided setup, downloads, the assistant and approvals |
 | Live AI evals | 17 case files, 138 cases (86 live) | Agent and assistant behaviour against a live model, scored by fixed-rule graders (`npm run eval`) |
 
 ## Key decisions

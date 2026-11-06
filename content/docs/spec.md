@@ -359,7 +359,7 @@ Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Sco
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
 | Abuse | Bounded writes | Same-origin check; 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
 | Reliability | AI failure doesn't block work | Rules take over, and the output is labelled Rules |
-| Tests | Regressions caught before deploy | 1,279 unit tests; 190 end-to-end tests |
+| Tests | Regressions caught before deploy | 1,298 unit tests; 191 end-to-end tests |
 | Errors | No database internals shown to people | Database errors show "The database is busy; try again in a moment"; the detail goes to the server log |
 
 **Known gaps.** No real authentication: the password is published and anyone can sign in as any persona. The workspace cookie is the only key to a visitor's changes. No per-org AI quota. Some fields (lease status, budget approval, capex, 1099s, legal cases, service requests, message threads) have no named action, so generic edits can change them. Full list: [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
