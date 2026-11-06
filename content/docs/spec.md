@@ -195,7 +195,7 @@ A role × module matrix (Settings → Roles) sets each role's access per module:
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | |
+| Users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | The principal can add people but can't grant the admin role |
 | Import of properties, units, residents, leases, owners, vendors and aged balances | Built | See [Import](#import) |
 | Guided setup at `/app/onboarding` | Built | See [Guided setup](#guided-setup) |
 | Integrations | Partial | Status cards only; no outside service is called |

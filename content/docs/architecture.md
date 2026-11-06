@@ -180,13 +180,17 @@ The app has no real accounts and moves no real money.
 | AI acting on data | Proposals only; registered actions only; re-checks before running; one `canDecide` rule on every path |
 | Leaking database internals | D1 and SQLite errors show "The database is busy; try again in a moment" (503); detail goes to the server log |
 | Imports | Role and scope checks per record type, payload caps, one locked batch, guarded undo |
+| AI file detection | The model sees file names, headers and 3 rows per file, and may only name a tool and record type |
+| Data Health fixes | Fixes touching money, fraud or legal status always queue for approval, whoever clicks (an admin's fixes too) |
+| Granting access | The principal can invite people but can't grant the admin role, and only within their own scope |
+| Spreadsheet injection | Downloads neutralise cells starting with `=`, `+`, `-` or `@` |
 | Invented figures | Figures from rules; unsupported model figures rejected |
 | AI cost | 20 AI calls a minute per IP; per-run deadline, step limit and budget |
 | Cross-site writes | Same-origin check on writes and AI routes; HttpOnly, SameSite=Lax, Secure workspace cookie |
 | Request abuse | 60 writes a minute per IP; body caps (64 KB records, 16 KB AI, 4 MB uploads) |
 | Uploads | File type from its signature (JPEG, PNG, WebP, PDF); not stored |
 | Cron route | Per-isolate token compared in constant time, or an admin session |
-| Sign-in | Constant-time password check, rate limited; `next` limited to `/app` and `/portal` paths |
+| Sign-in | Constant-time password check, same-origin, rate limited, 4 KB body cap; `next` limited to `/app` and `/portal` paths |
 | Browser | CSP, HSTS, `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy |
 
 **Known gaps**
