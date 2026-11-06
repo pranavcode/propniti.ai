@@ -9,14 +9,14 @@ export const DOCS = [
   {
     slug: "spec",
     title: "Product Specification",
-    description: "What Propniti v2 does and for whom: 13 personas, requirements with their build status, how the eight agents are triggered and routed, the data model and the release plan.",
+    description: "What Propniti does and for whom: 13 personas, requirements with their build status, how the eight agents are triggered and routed, the data model and the roadmap.",
     artifactIds: ["DXDBSKYjgKugTihapBFiwi", "65657bb1-596a-48d3-8a7d-2adb8ddbcb99"],
     markdown: spec,
   },
   {
     slug: "architecture",
     title: "Solution Architecture & Design",
-    description: "How Propniti v2 is built: one Cloudflare Worker, a shared base with a private overlay per visitor, record types defined once, and an agent runtime that proposes through named actions.",
+    description: "How Propniti is built: one Cloudflare Worker, a shared base with a private overlay per visitor, record types defined once, and an agent runtime that proposes through named actions.",
     artifactIds: ["NhiYprgrxfwewnvc8NPjCX", "afbf4499-1e14-4619-99cb-37329da487e4"],
     markdown: architecture,
   },

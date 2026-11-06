@@ -1,10 +1,10 @@
 ## Overview
 
-Propniti is property management software for US residential and commercial portfolios. Eight AI agents do routine operations work. People approve anything that involves money, legal terms or safety. This spec describes v2, the version live at [propniti.ai](https://propniti.ai), and marks each requirement as built, partial or not built. Source code: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
+Propniti is property management software for US residential and commercial portfolios. Eight AI agents do routine operations work. People approve anything that involves money, legal terms or safety. This spec describes the product live at [propniti.ai](https://propniti.ai) and marks each requirement as built, partial or not built. Source code: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
 
 **Promise.** Know your portfolio is right. Propniti checks, explains and corrects the operations data that money decisions depend on.
 
-| Area | What v2 has |
+| Area | What Propniti has |
 | --- | --- |
 | Staff app | One app at `/app` for nine staff roles, each with its own home page and scope |
 | Record types | 64 record types in 13 modules (portfolio, leasing, residents, maintenance, communications, receivables, payables, accounting, owners, risk, intelligence, settings, platform) |
@@ -26,7 +26,7 @@ Propniti is property management software for US residential and commercial portf
 
 ## Goals and non-goals
 
-**Goals (v2)**
+**Goals**
 
 - Each role sees its own home, its own records and its own next actions, scoped to its region, properties or own record.
 - Agents run on a schedule and on events, without a person starting them. Each run is recorded step by step.
@@ -34,7 +34,7 @@ Propniti is property management software for US residential and commercial portf
 - Bad data is found and fixed before owners or auditors see it.
 - Money rules (idempotent payments, trust balance checks, bank-change holds) run on the server.
 
-**Non-goals (v2)**
+**Non-goals**
 
 - Real accounts, real payments and real messages. Sign-in uses demo accounts with one published password; payments and messages are simulated.
 - Live sync with other property management systems. Data comes in through file import only.
@@ -42,7 +42,7 @@ Propniti is property management software for US residential and commercial portf
 
 ## Personas
 
-All names and companies are fictional. A visitor signs in on [propniti.ai/login](https://propniti.ai/login) with a demo account, or picks a person from the list beside the form, and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). The old `/demo` link now goes to `/login`.
+All names and companies are fictional. A visitor signs in on [propniti.ai/login](https://propniti.ai/login) with a demo account, or picks a person from the list beside the form, and can switch at any time from the avatar menu in the top bar (*Switch role (demo)*). `/demo` redirects to `/login`.
 
 **Demo accounts.** Each persona has the email `<id>@propniti.demo` (for example `marcus@propniti.demo`), and every account uses the published password `propniti-demo`. Beside the form, *Pick a person* lists all 13 people: click one (or move with the arrow keys) to fill the form, then *Sign in as …*; double-click signs in straight away. *What each person sees*, below, describes each persona. `/login?as=<id>` prefills a person, and a `next` link to an `/app` or `/portal` page is kept. The browser remembers the last person, and a visitor who is already signed in sees *Continue as …* and *Switch person*. The form also works without JavaScript.
 
@@ -148,7 +148,7 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | Record a payment; a double click records one payment | Built | Simulated money |
 | Collections workbench: a rules risk score with reasons, drafted reminders in English or Spanish; *Remind* and *Record payment* from the delinquency list | Built | |
 | Payment run: pay approved bills in one run; bills over the limit go to staff approvers | Built | Simulated money |
-| Collection rate: the share of each month's own charges paid so far, never over 100% | Built | Paying down older balances no longer counts toward the current month |
+| Collection rate: the share of each month's own charges paid so far, never over 100% | Built | Payments toward older balances don't count toward the current month |
 | Returned payments with a state-capped fee; deposit dispositions | Built | |
 | AP inbox: read an uploaded invoice, suggest GL coding, run payables checks, approve and pay | Built | Reading uses a vision model when one is configured; otherwise manual entry |
 | Hold payments on an unverified vendor bank change; a different person must verify it | Built | |
@@ -183,7 +183,7 @@ Status: **Built** means it works end to end on propniti.ai. **Partial** means pa
 | *Summarize with AI* on a record without a summary (record page and peek drawer) | Built | Same scope checks, figure checks and rules fallback as stored summaries; the result is kept in the visitor's copy |
 | AI summaries on records, computed from the record's current figures | Built | See [Source labels](#source-labels) |
 | Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes*, filters from links, bulk apply up to 50 | Built | Counts are scoped to the persona. Issues show rule names, record names and readable values, never rule ids or raw keys. An issue with no automatic fix gives a manual next step and a link to the record. Fixes that touch money, fraud or legal status, and anything not low risk, always wait in the approvals inbox, whoever clicks. A low-risk fix runs only if the person clicking may decide it; an admin's fixes go to the approvals inbox |
-| Automations at `/app/automations`: every agent with its schedule, events, autonomy, last run, next run and 30-day runs and failures; the 15-minute sweep; event triggers; approval rules; rules built into the product | Built | Events that nothing raises yet are marked as such. Settings → Automations now opens this page |
+| Automations at `/app/automations`: every agent with its schedule, events, autonomy, last run, next run and 30-day runs and failures; the 15-minute sweep; event triggers; approval rules; rules built into the product | Built | Events that nothing raises yet are marked as such. Settings → Automations opens this page |
 
 ### Portals and public site
 
@@ -334,7 +334,7 @@ Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Sco
 | Shared base | The sample portfolio: 30 properties, their units, residents, leases, ledgers, vendors, owners, work orders, 18 closed months of metrics, agent history and data issues. Read-only while the app runs |
 | Visitor overlay | Each visitor's changes, in rows with the same ids. An overlay row replaces the base row with that id; a deleted overlay row hides it |
 
-- The schema has 106 tables (`migrations/0002_v2.sql`, plus migrations 0003–0008 for indexes and later fields).
+- The schema has 106 tables (`migrations/0002_v2.sql`, plus migrations 0003–0008 for indexes and further fields).
 - Money is stored as integer cents. Transfers and the audit log are append-only.
 - AI tables: agent definitions, runs, steps, events, proposals, decisions, approval policies, summaries and assistant threads.
 - Each visitor's overlay is private, found by an HttpOnly cookie, and deleted at the first midnight Pacific after it was created.
@@ -355,7 +355,7 @@ Model providers are live. Everything else is simulated.
 
 ## Non-functional requirements
 
-| Area | Requirement | v2 today |
+| Area | Requirement | How Propniti meets it |
 | --- | --- | --- |
 | Scale | Bounded queries and pages | 30 properties and 3,318 units of sample data; pages of 25, 50 or 100 rows; downloads capped at 10,000 rows |
 | Scope | No reads or writes outside a persona's scope | Every list, metric and download filters by scope in SQL. Portal users see only their own records. The scope check runs inside the write |
@@ -365,21 +365,14 @@ Model providers are live. Everything else is simulated.
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
 | Abuse | Bounded writes | Same-origin check on writes and on the AI routes the app calls (the read-only status and run-stream routes excepted); 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
 | Reliability | AI failure doesn't block work | Rules take over and the label says so |
-| Tests | Regressions caught before deploy | 1,279 unit tests in 141 files; 190 end-to-end tests in 34 specs, with the touched specs run against production after each deploy |
+| Tests | Regressions caught before deploy | Measured on 4 November 2026: 1,279 unit tests in 141 files; 190 end-to-end tests in 34 specs, with the touched specs run against production after each deploy |
 | Errors | No database internals shown to people | AI routes, Data Health results and run steps show "The database is busy; try again in a moment" for database errors; the detail goes to the server log |
 
-**Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. There is no per-org AI quota. Some fields are still editable through generic edits until their actions exist: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
+**Known gaps.** No real authentication: the demo password is published, anyone can sign in as any persona, and the persona cookie is not a security boundary. The workspace cookie is the only key to a visitor's changes. There is no per-org AI quota. Some fields have no named action and can be changed through generic edits: lease status, budget approval, capex, 1099s, legal cases, service requests and message threads. The full list is in [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
 
-## Release plan
+## Roadmap
 
-| Release | Contents | Status |
-| --- | --- | --- |
-| V1 prototype | Six role views, AI invoice reading and validation, simulated trust-account payments, ratings, rent-roll import | Replaced by v2 |
-| v2 | 13 personas with scoped homes; 64 record types in 13 modules; eight scheduled and event-driven agents with approvals, autonomy and policy limits; run traces; assistant; Data Health; record peek drawer; four portals; public listings and applications; per-visitor overlay on a shared base | Live at propniti.ai since 4 November 2026 |
-| v2 updates | Demo sign-in form; Inbox; My tasks; Automations; import from other tools with optional AI help; *Ask Propniti* chat bubble; sparkle marks on AI pages; clickable breadcrumbs; approval checks on Data Health fixes and record actions; in-app not-found page; readable run steps; *Summarize with AI*; collapsible home sections | Live, 4 November 2026 |
-| v2 updates (evening) | Chat history, *Ask about this*, *Right now*, Do mode starts agents; welcome splash, tour toasts and new-feature dots; approvals and bulk friction fixes; leasing, money and operations shortcuts; one decide rule with life-safety approvals; collection rate per month's charges; *Improve with AI*; label definitions and help pages; compact sign-in layout | Live, 4 November 2026 |
-| v2 updates (batches 5 and 6) | Copilot layout and sample conversations; guided setup with rules-first file detection and suggested approval limits; CSV, Excel and PDF downloads with optional branding; action feedback (progress bar, filter summaries, toasts); about 30 fixes from a UX audit: names instead of ids, readable Data Health with manual next steps, one past-due definition, scoped counts, dates, phone layouts, KPI tiles, the Agents page in plain words, no dead-end sidebar links, tour offers that never cover tables, dark mode in the portals and a theme that follows the device | Live, 4 November 2026 |
-| Pilot readiness | Real accounts and identity provider, real payment and messaging providers in test mode, owner-portal approval of agent proposals, AP inbox intake of portal invoices, natural-language list filters | Not built |
+Propniti has been live at [propniti.ai](https://propniti.ai) since 4 November 2026. Not built yet, for a pilot: real accounts and an identity provider, real payment and messaging providers in test mode, owner-portal approval of agent proposals, AP inbox intake of portal invoices, and natural-language list filters.
 
 ## Open questions
 
