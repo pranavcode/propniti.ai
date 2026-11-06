@@ -367,17 +367,26 @@ export async function postLateFees(ctx: ActionContext, propertyIds: string[], pe
 // Fraud hold: a vendor with an open unverified-bank-change issue can't be paid.
 const NO_FRAUD_HOLD = (vendor: string) => `NOT EXISTS (SELECT 1 FROM ${effective("data_issues")} AS di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ${vendor} AND di.status = 'open')`;
 
+// Maker-checker: whoever entered or submitted a bill (from the append-only audit log, as for bank
+// changes) can't approve it. ?1 workspace, ?2 bill, ?3 approver.
+const NOT_BILL_MAKER = `NOT EXISTS (SELECT 1 FROM audit AS mk WHERE mk.workspace_id IN ('base', ?1) AND mk.entity_type = 'bills' AND mk.entity_id = ?2 AND mk.action IN ('bills.created', 'bills.submit') AND mk.actor_id = ?3)`;
+
 export async function approveBill(ctx: ActionContext, billId: string): Promise<Outcome> {
   const { db, ws, nowMs, actor } = ctx;
   const bill = await db.prepare(`SELECT * FROM ${effective("bills")} AS b WHERE b.id = ?2`).bind(ws, billId).first<{ id: string; status: string; amount_cents: number; property_id: string; vendor_id: string }>();
   if (!bill) return { status: 404, error: "Bill not found" };
   const denied = forbidden(actor, ["payables"], bill.property_id);
   if (denied) return denied;
+  const maker = `You entered ${billId}, so someone else has to approve it.`;
+  if (!(await db.prepare(`SELECT 1 AS ok WHERE ${NOT_BILL_MAKER}`).bind(ws, billId, actor.personaId).first())) return { status: 403, error: maker };
   const at = nowIso(nowMs);
   const [upsert] = await db.batch([
-    db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Approved'", approved_by: "?3", approved_at: "?4" }, "e.status = 'Pending approval'")).bind(ws, billId, actor.personaId, at),
+    db.prepare(overlayUpsertSql("bills", BILL_COLS, { status: "'Approved'", approved_by: "?3", approved_at: "?4" }, `e.status = 'Pending approval' AND ${NOT_BILL_MAKER}`)).bind(ws, billId, actor.personaId, at),
   ]);
-  if (!upsert.meta.changes) return { status: 409, error: `${billId} is already ${bill.status.toLowerCase()}.` };
+  if (!upsert.meta.changes) {
+    if (!(await db.prepare(`SELECT 1 AS ok WHERE ${NOT_BILL_MAKER}`).bind(ws, billId, actor.personaId).first())) return { status: 403, error: maker };
+    return { status: 409, error: `${billId} is already ${bill.status.toLowerCase()}.` };
+  }
   await db.batch([
     eventStmt(db, ws, at, "bill.approved", "bills", billId, bill.property_id, { amount_cents: bill.amount_cents, vendor_id: bill.vendor_id }),
     auditStmt(db, ws, at, actor, { action: "Bill approved", entityType: "bills", entityId: billId, propertyId: bill.property_id, detail: `${billId}: ${dollars(bill.amount_cents)}`, before: { status: bill.status }, after: { status: "Approved" } }),
@@ -444,12 +453,13 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
          (SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS latest_submission,
          (SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS itemised_submission,
          (SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS invoice_cents,
-         ${INVOICED_VENDOR("w.id")} AS invoiced_vendor
+         ${INVOICED_VENDOR("w.id")} AS invoiced_vendor,
+         (SELECT CASE WHEN e.actor_kind = 'staff' THEN e.actor_id END FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS entered_by
        FROM ${effective("work_orders")} AS w JOIN ${effective("properties")} AS p ON p.id = w.property_id LEFT JOIN ${effective("vendors")} AS v ON v.id = w.vendor_id
        WHERE w.id = ?2`,
     )
     .bind(ws, woId)
-    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; cost_cents: number | null; latest_submission: string | null; itemised_submission: string | null; invoice_cents: number | null; invoiced_vendor: string | null; property_id: string; owner_entity_id: string; title: string }>();
+    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; cost_cents: number | null; latest_submission: string | null; itemised_submission: string | null; invoice_cents: number | null; invoiced_vendor: string | null; entered_by: string | null; property_id: string; owner_entity_id: string; title: string }>();
   if (!wo) return { status: 404, error: "Work order not found" };
   // Maintenance approvers sign off the work, payables approvers pay it, owners approve over-limit
   // repairs from their portal.
@@ -470,6 +480,9 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
     return { status: 409, error: `${woId} has a newer invoice without line items. Ask ${wo.company} to resubmit it itemised.` };
   const amount = wo.itemised_submission ? wo.invoice_cents : wo.cost_cents;
   if (amount == null) return { status: 409, error: `${woId} has no invoice yet. Ask ${wo.company} to submit one.` };
+  // Maker-checker: an invoice staff entered by hand is approved by someone else. Vendor-submitted
+  // invoices have no staff maker. The insert below re-checks it in SQL.
+  if (wo.entered_by && wo.entered_by === actor.personaId) return { status: 403, error: `You entered the invoice on ${woId}, so someone else has to approve it.` };
   if (wo.invoiced_vendor !== wo.vendor_id) return { status: 409, error: `The vendor on ${woId} isn't the one who invoiced it. Ask the invoicing vendor to resubmit, or dispatch the job again.` };
   const policy = await db
     .prepare(`SELECT owner_approval_over_cents FROM ${effective("approval_policies")} AS a WHERE a.category = 'Maintenance spend' AND (a.owner_entity_id = ?2 OR a.owner_entity_id IS NULL) ORDER BY a.owner_entity_id IS NULL LIMIT 1`)
@@ -496,9 +509,10 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
            AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")} AND ${OWNER_OK}
            AND coalesce((SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1), '') = ?12
            AND (?12 <> '' OR w.cost_cents = ?7) AND w.vendor_id = ${INVOICED_VENDOR("w.id")}
+           AND NOT EXISTS (SELECT 1 FROM ${effective("wo_events")} AS mk WHERE mk.id = ?12 AND mk.work_order_id = w.id AND mk.actor_kind = 'staff' AND mk.actor_id = ?13)
          ON CONFLICT DO NOTHING`,
       )
-      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS, ownerLimit, actor.role, wo.latest_submission ?? ""),
+      .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS, ownerLimit, actor.role, wo.latest_submission ?? "", actor.personaId),
     db.prepare(overlayUpsertSql("work_orders", WO_COLS, { status: "'Completed'", cost_cents: "?4", completed_at: "?5" }, "EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?3)")).bind(ws, woId, id, amount, at),
     db
       .prepare(`INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) SELECT ?1, ?2, ?3, ?4, ?5, 'staff', ?6, 'Approval', 'Completed', ?7 WHERE EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND id = ?8)`)

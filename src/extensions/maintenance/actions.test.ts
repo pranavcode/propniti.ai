@@ -67,7 +67,7 @@ describe("in-house dispatch", () => {
 
 describe("vendor invoice → validate → approve and pay", () => {
   it("records the invoice, flags lines over the PO and pays exactly once", async () => {
-    const r = await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-1", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }, { description: "Trip charge", amount: 45 }], total: 345, source: "manual" });
+    const r = await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-1", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }, { description: "Trip charge", amount: 45 }], total: 345, source: "manual" }, "vendor");
     expect(r).toMatchObject({ status: 200, message: expect.stringContaining("issue") });
     // Issues found: paying needs a reason.
     expect(await act("work_orders.approve_and_pay", "WO-2", {})).toMatchObject({ status: 409, error: expect.stringContaining("add a short note") });
@@ -107,6 +107,24 @@ describe("payee is the vendor who invoiced", () => {
   });
 });
 
+describe("maker-checker on invoices staff enter", () => {
+  const invoice = { invoice_number: "LSP-10", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" };
+
+  it("refuses the person who entered an invoice approving it, in SQL too, and lets someone else pay it once", async () => {
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "tom")).toMatchObject({ status: 200 });
+    expect(await act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 }, "tom")).toMatchObject({ status: 403 });
+    const n = () => db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = 'vendor:WO-2'").bind(WS).first<{ n: number }>().then((r) => r?.n);
+    expect(await n()).toBe(0);
+    expect(await twice(() => act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 }, "daniel"))).toEqual([200, 409]);
+    expect(await n()).toBe(1);
+  });
+
+  it("leaves vendor-submitted invoices to any approver", async () => {
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "vendor")).toMatchObject({ status: 200 });
+    expect(await act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 }, "tom")).toMatchObject({ status: 200 });
+  });
+});
+
 describe("photos, turnovers, preventive schedules", () => {
   it("checks photos against the job's trade", async () => {
     expect(await act("work_orders.check_photos", "WO-2")).toMatchObject({ status: 200, message: expect.stringContaining("all match") });
@@ -134,7 +152,7 @@ describe("invoice photo requirement", () => {
 
   it("passes when a photo was on file before the invoice", async () => {
     await db.prepare("UPDATE photos SET taken_at = '2026-10-21T09:00:00Z' WHERE id = 'ph-2'").run();
-    await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-4", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" });
+    await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-4", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" }, "vendor");
     expect(await act("work_orders.approve_and_pay", "WO-2", { expected_cents: 30000 })).toMatchObject({ status: 200 });
   });
 });
