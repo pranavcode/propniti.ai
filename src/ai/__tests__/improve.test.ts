@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@/entities";
 import type { Actor } from "@/entities/types";
 import { getAction } from "@/extensions";
@@ -332,6 +332,30 @@ describe("improve: review fixes", () => {
     expect(new Set(keys).size).toBe(keys.length);
     // Another card is not blocked by this one.
     expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key LIKE 'improve-lock:%'").get()!.n).toBe(0);
+  });
+
+  it("refreshes the lock before each agent's run, so a long plan keeps it", async () => {
+    const f = setup();
+    const key = `improve-lock:${WS}:delinquency`;
+    // The clock jumps past LOCK_MS right after the claim: without a refresh, the lock would read as expired.
+    let clock = Date.now();
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const seen: number[] = [];
+    const prepare = f.db.prepare.bind(f.db);
+    f.db.prepare = (q: string) => {
+      if (/INSERT INTO agent_runs/.test(q)) seen.push(Number((f.raw.prepare("SELECT value FROM meta WHERE key = ?").get(key) as { value: string }).value));
+      const st = prepare(q);
+      if (q.startsWith("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT")) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { bind: (...a: unknown[]) => { const b = st.bind(...a); return { ...b, run: async () => { const r = await b.run(); clock += 10 * 60_000; return r; } }; } });
+      return st;
+    };
+    try {
+      await run(f, DANIEL, "delinquency");
+    } finally {
+      now.mockRestore();
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    for (const v of seen) expect(v).toBeGreaterThanOrEqual(clock - 1);
+    expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
   });
 
   it("holds the lock for the metric, not the scope", async () => {
