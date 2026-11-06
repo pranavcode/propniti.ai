@@ -1,6 +1,6 @@
 ## Summary
 
-Propniti v2 is one Next.js 16 app, compiled with vinext into a single Cloudflare Worker. It serves the marketing site, the staff app, four portals, the public listings site and every API route. Data lives in one D1 database: a shared, read-only base dataset plus a private overlay per visitor. Eight AI agents run inside the same Worker on a 15-minute Cron Trigger, on events and on demand. They change data only by proposing named actions that a person or an approval policy lets through.
+Propniti is one Next.js 16 app, compiled with vinext into a single Cloudflare Worker. It serves the marketing site, the staff app, four portals, the public listings site and every API route. Data lives in one D1 database: a shared, read-only base dataset plus a private overlay per visitor. Eight AI agents run inside the same Worker on a 15-minute Cron Trigger, on events and on demand. They change data only by proposing named actions that a person or an approval policy lets through.
 
 Key choices:
 
@@ -50,9 +50,9 @@ Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propni
 | Help | `/app/help/<id>` | Renders the seeded help articles that definitions and assistant citations link to |
 | AI API | `/api/ai/...` | Agents, runs (with a streaming trace), proposals, assistant, summaries, data health, policies, sweep, events, invoice reading |
 
-Old v1 routes (`/demo`, `/pm`, `/owner`, `/tenant`, `/vendor`, `/maintenance`, `/admin`, `/onboarding`) redirect to their v2 pages (`/onboarding` goes to `/app`; guided setup is `/app/onboarding`), and `/app/settings/automations` redirects to `/app/automations`.
+Short paths redirect to their pages: `/demo` to `/login`; `/pm` and `/onboarding` to `/app` (guided setup is `/app/onboarding`); `/owner`, `/tenant` and `/vendor` to their portals; `/maintenance` to `/app/maintenance/work-orders`; `/admin` to `/app/settings`. `/app/settings/automations` redirects to `/app/automations`.
 
-**Links.** Every in-app link uses `@/components/Link`, which prefetches a page on hover, focus or touch instead of for every visible link. A lint rule blocks importing `next/link` directly. Opening `/app` went from 29 prefetch requests to 2.
+**Links.** Every in-app link uses `@/components/Link`, which prefetches a page on hover, focus or touch instead of for every visible link. A lint rule blocks importing `next/link` directly. Opening `/app` makes 2 prefetch requests; prefetching every visible link would make 29.
 
 ## Data: shared base and visitor overlay
 
@@ -197,7 +197,7 @@ The app has no real accounts and moves no real money. Main controls:
 - **One key.** The workspace cookie is the only key to a visitor's changes.
 - **Quotas.** There is no per-org AI quota.
 - **Approval policies.** Only the owner threshold on maintenance spend is enforced in the money code; the other limits route proposals.
-- **Generic edits.** Some fields are still editable through generic edits until their actions exist.
+- **Generic edits.** Some fields have no named action and can be changed through generic edits.
 
 Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).
 
@@ -214,6 +214,8 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 - **CI** (GitHub Actions, on every push to `main` and every pull request): `npm ci`, then lint, type check and unit tests, the Next.js build and the Worker build. CI does not deploy.
 
 ## Tests and evals
+
+Measured on 4 November 2026.
 
 | Check | Count | What it covers |
 | --- | --- | --- |
@@ -236,4 +238,4 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 | Property NOI | The last closed month | The month in progress has a full month of rent against a few days of expenses |
 | Sign-in | Demo accounts with one published password, plus one-click cards | Shows a real sign-in flow without pretending to be an account system |
 | Import | Code parses, checks and writes; AI only suggests, and a person accepts | Imported records are correct whether or not a model is available |
-| Prefetch | On hover or focus only | Prefetching every visible link loaded D1 on each page view |
+| Prefetch | On hover or focus only | Prefetching every visible link would load D1 on each page view |
