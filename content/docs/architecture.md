@@ -23,11 +23,11 @@ Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propni
 | Marketing and docs | Static pages at `/`, `/pricing`, `/security` and `/docs` | Describe the product and serve these docs |
 | Cloudflare Worker · propniti.ai | Cloudflare Workers: serverless code that runs in Cloudflare's data centres, started per request, with no server to manage | Runs the whole app as one Worker, `property-mgmt-ai-prototype`, on propniti.ai and www.propniti.ai |
 | Cron Trigger `*/15 * * * *` | Cloudflare Cron Triggers: a schedule that calls the Worker's `scheduled()` handler | Every 15 minutes, `scheduled()` in `src/worker-entry.ts` sends one internal request to `/api/ai/sweep`, which runs one unit of agent work |
-| vinext (Next.js App Router) | A Vite-based build of the Next.js App Router that outputs a Worker | Serves pages and API routes and checks the same origin on every write |
+| vinext (Next.js App Router) | A Vite-based build of the Next.js App Router that outputs a Worker | Serves pages and API routes |
 | Scope and permissions | The role × module matrix in `src/auth/personas.ts` and the scope filters in the query layer | Decides what each persona can see and change; reads filter to the persona's scope in SQL |
 | AI runtime | The orchestrator, 8 agents, assistant, summaries and Explain in `src/ai` | Runs agents within time, step and cost limits and turns their proposals into approval routing and named actions |
 | Provider layer `src/ai/providers` | One interface over every model | Picks one model per request; when none answers, the rules do |
-| Rate limiters | Cloudflare Rate Limiting bindings: per-key counters kept by Cloudflare and checked from Worker code | Cap AI routes at 20 requests a minute and writes at 60 a minute per IP (`AI_RATE_LIMITER`, `WRITE_RATE_LIMITER`) |
+| Rate limiters | Cloudflare Rate Limiting bindings: per-key counters kept by Cloudflare and checked from Worker code | Cap AI routes at 20 requests a minute and writes at 60 a minute per IP (`AI_RATE_LIMITER`, `WRITE_RATE_LIMITER`). Counts are approximate, kept per Cloudflare location |
 | ASSETS | Workers static assets: files uploaded with the Worker and served from Cloudflare's network | Serve built `/_next/static` files directly; the app serves images, fonts and docs files through the binding |
 | D1 · propniti-v2 | Cloudflare D1: a managed SQLite database reached from the Worker through a binding | Holds all app data in one database |
 | Shared base | Rows with `workspace_id = 'base'` | The sample portfolio of 30 properties that every visitor reads; read-only at runtime |
@@ -101,10 +101,10 @@ Every table has a `workspace_id`.
 | Persona | Who you are acting as, chosen at sign-in or from a one-click card | Stored in the `pn_as` cookie; sets your role, scope and home page |
 | Role | One of 9 staff roles or 4 portal roles | Selects your row in the permission matrix |
 | Module permission | none, read, write or approve, per role and module | Sets whether you can open, change or approve records in each module |
-| Scope | platform, org, region, properties or self | Sets which properties and records you can reach |
+| Scope | platform, org, region, property or self | Sets which properties and records you can reach |
 | What you see | The read side of access | Lists, metrics, charts, exports, search and the assistant filter to your scope in SQL; an out-of-scope record looks the same as a missing one |
 | What you can do | The write side of access | Writes need entity rights and re-check scope inside the batch. Agent proposals follow the decide rule (`src/ai/decide.ts`): low risk with no amount needs write access; money, legal or safety needs approve access |
-| Life-safety items | Proposals that touch life safety | Only the property's regional manager or the principal can decide them |
+| Life-safety items | Proposals that touch life safety, including taking a vendor with open emergency or life-safety jobs off work | Only the property's regional manager or the principal can decide them |
 | Portals are self-scoped | The scope for the 4 portal roles | Owners see their own entities and properties; residents their lease and household; vendors their jobs, invoices and certificates; applicants their application |
 | Over the owner's limit | Maintenance spend above the owner's approval threshold | The owner decides in the portal, or a principal does |
 
@@ -241,11 +241,11 @@ The app has no real accounts and moves no real money.
 | Granting access | The principal can invite people but can't grant the admin role, and only within their own scope |
 | Spreadsheet injection | Downloads neutralise cells starting with `=`, `+`, `-` or `@` |
 | Invented figures | Figures from rules; unsupported model figures rejected |
-| AI cost | 20 AI calls a minute per IP; per-run deadline, step limit and budget |
-| Cross-site writes | Same-origin check on writes and AI routes; HttpOnly, SameSite=Lax, Secure workspace cookie |
-| Request abuse | 60 writes a minute per IP; body caps (64 KB records, 16 KB AI, 4 MB uploads) |
+| AI cost | 20 AI calls a minute per IP (approximate, counted per Cloudflare location); per-run deadline, step limit and budget |
+| Cross-site writes | Same-origin check in app code on writes and AI routes (`src/app/api/e/_lib/http.ts`, `src/ai/session.ts`); HttpOnly, SameSite=Lax, Secure workspace cookie |
+| Request abuse | 60 writes a minute per IP (approximate, counted per Cloudflare location); body caps (64 KB records, 16 KB AI, 4 MB uploads) |
 | Uploads | File type from its signature (JPEG, PNG, WebP, PDF); not stored |
-| Cron route | Per-isolate token compared in constant time, or an admin session |
+| Cron route | Per-isolate token compared in constant time, or a session whose role approves on the AI module (principal, regional manager, property manager, broker, accountant, maintenance supervisor, platform admin) |
 | Sign-in | Constant-time password check, same-origin, rate limited, 4 KB body cap; `next` limited to `/app` and `/portal` paths |
 | Browser | CSP, HSTS, `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy |
 
@@ -292,7 +292,7 @@ What moving takes in this codebase:
 - App code reaches the database, models and rate limiters only through `getPlatform()` (`src/lib/platform`). The Node version of that port already uses a SQLite file, API-key models and in-memory rate limiters, and the `Dockerfile` builds it with `next build` as a standalone Node server instead of the vinext Worker build. A single container with a SQLite volume runs with no code changes.
 - A database other than SQLite needs a new `Db` adapter and a SQL port. Queries use SQLite's `?1` numbered parameters, `json_each`, `json_extract`, `julianday`, `date()` and `INSERT OR IGNORE`/`OR REPLACE`.
 - Money code (`src/server/money.ts`) relies on `db.batch()` running its statements in order as one transaction, with no other write landing in between, as D1 does. The replacement must give each batch one transaction with serialized writes (for example SERIALIZABLE isolation with retry, or a lock per workspace), a changed-row count per statement, and the partial unique index `transfers_live_key`.
-- `scheduled()` exists only on Workers. `/api/ai/sweep` accepts the token `scheduled()` keeps in memory, or an admin session, so an outside scheduler needs a shared secret check added to that route. Until then, Run on visit starts a sweep on the first AI request after 17 minutes.
+- `scheduled()` exists only on Workers. `/api/ai/sweep` accepts the token `scheduled()` keeps in memory, or a session whose role approves on the AI module, so an outside scheduler needs a shared secret check added to that route. Until then, Run on visit starts a sweep on the first AI request after 17 minutes.
 - The in-memory rate limiters count per instance. With more than one instance, implement the `RateLimiter` port over a shared store such as Redis, or limit at the load balancer.
 - Bedrock, Vertex AI, Foundry or a local model each need a provider in `src/ai/providers` and `src/lib/llm.ts`. Anthropic and OpenAI keys already work on any host.
 
