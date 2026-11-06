@@ -310,9 +310,9 @@ describe("improve: review fixes", () => {
     expect(plan).toMatchObject({ id: "plan-delinquency-all-45", plans: 46, since: "2026-11-03T00:00:00Z", records: 4 });
   });
 
-  it("refuses a second plan while one for the same card and scope is still running, and frees it after", async () => {
+  it("refuses a second plan while one for the same card is still running, and frees it after", async () => {
     const f = setup();
-    const key = `improve-lock:${WS}:plan-delinquency-all-`;
+    const key = `improve-lock:${WS}:delinquency`;
     f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(key, String(Date.now()));
     await expect(run(f, DANIEL, "delinquency")).rejects.toThrow(/already running/);
     expect(proposals(f.raw)).toHaveLength(0);
@@ -320,6 +320,27 @@ describe("improve: review fixes", () => {
     f.raw.prepare("UPDATE meta SET value = ? WHERE key = ?").run(String(Date.now() - 10 * 60_000), key);
     await run(f, DANIEL, "delinquency");
     expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
+  });
+
+  it("runs one plan per card at a time across pages: the home card and a property page race, one wins", async () => {
+    const f = setup();
+    const out = await Promise.allSettled([run(f, DANIEL, "delinquency"), run(f, DANIEL, "delinquency", "p01"), run(f, MARCUS, "delinquency")]);
+    expect(out.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+    for (const o of out.filter((o) => o.status === "rejected")) expect((o as PromiseRejectedResult).reason).toBeInstanceOf(PlanConflict);
+    const keys = proposals(f.raw).map((x) => `${x.entity_id}|${x.action}`);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(new Set(keys).size).toBe(keys.length);
+    // Another card is not blocked by this one.
+    expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key LIKE 'improve-lock:%'").get()!.n).toBe(0);
+  });
+
+  it("holds the lock for the metric, not the scope", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(`improve-lock:${WS}:delinquency`, String(Date.now()));
+    await expect(run(f, DANIEL, "delinquency", "p01")).rejects.toThrow(/already running a plan for this number/);
+    expect(proposals(f.raw)).toHaveLength(0);
+    // A different card still runs.
+    await expect(run(f, DANIEL, "vacancy")).resolves.toMatchObject({ planId: "plan-vacancy-all-0" });
   });
 
   it("acts only on records the person was shown that still qualify, and says what it dropped", async () => {
