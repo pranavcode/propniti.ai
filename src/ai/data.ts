@@ -92,6 +92,17 @@ export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: str
       params: [JSON.stringify(ctx.actor.propertyIds), JSON.stringify(org.any), JSON.stringify(org.noProperty)],
     };
   }
+  // Proposals with no property follow the same rule: on a record type above, or a fix for an issue
+  // the role sees (a property manager who sends a vendor issue's fix sees the proposal it makes).
+  if (table === "ai_proposals") {
+    const org = orgIssueTypes(ctx.actor.role);
+    const types = JSON.stringify([...org.any, ...org.noProperty]);
+    const issues = eff("data_issues", ctx.ws);
+    return {
+      sql: `(${alias}.property_id IN (SELECT value FROM json_each(?)) OR (${alias}.property_id IS NULL AND (${alias}.entity_type IN (SELECT value FROM json_each(?)) OR (${alias}.entity_type = 'data_issues' AND EXISTS (SELECT 1 FROM ${issues.sql} di WHERE di.id = ${alias}.entity_id AND di.entity_type IN (SELECT value FROM json_each(?)))))))`,
+      params: [JSON.stringify(ctx.actor.propertyIds), types, ...issues.params, types],
+    };
+  }
   return { sql: `${via ? via(alias) : `${alias}.${col}`} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ctx.actor.propertyIds)] };
 }
 

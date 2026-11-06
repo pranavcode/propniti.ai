@@ -5,7 +5,7 @@ import { generate } from "@/seed/generate";
 import { get } from "../data";
 import { applyFixes, dismissIssue, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
-import { dataHealth, issuesPage } from "../views";
+import { dataHealth, issuesPage, proposal } from "../views";
 import { fixPreviewProps, NEXT_STEP, type Issue } from "../ui/IssueFix";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
@@ -247,6 +247,17 @@ describe("Data Health issues on records with no property", () => {
     const grace = { db: f.db, ws: WS, actor: actorOf("grace") };
     expect(await dismissIssue(grace, getPersona("grace")!, "di-bank", "Called the vendor")).toMatchObject({ ok: true });
     expect((await get(grace, "data_issues", "di-bank"))?.status).toBe("dismissed");
+  });
+
+  it("a property manager who sends a vendor issue's fix sees the proposal it makes; a role that can't read vendors doesn't", async () => {
+    const f = orgIssues();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    const r = await applyFixes(marcus, getPersona("marcus")!, ["di-bank"], { safeOnly: false });
+    expect(r.results[0]).toMatchObject({ ok: false, queued: true });
+    const id = r.results[0].proposalId!;
+    expect(f.raw.prepare("SELECT property_id, assignee_role FROM ai_proposals WHERE id = ?").get(id)).toMatchObject({ property_id: null, assignee_role: "accountant" });
+    expect(await proposal(marcus, id)).toMatchObject({ id });
+    expect(await proposal({ db: f.db, ws: WS, actor: { ...MARCUS, personaId: "lena", name: "Lena Ortiz", role: "leasing_agent" as const } }, id)).toBeNull();
   });
 
   it("a property manager still dismisses a low-stakes issue on their property", async () => {
