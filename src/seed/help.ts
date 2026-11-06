@@ -6,7 +6,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Complete the setup checklist",
     body: `New organizations finish setup through a short checklist before the portfolio goes live. Open it from the sidebar progress card or **/app/setup**.
 
-1. **Company profile** (Settings → Company profile): legal name, EIN, logo and business address.
+1. **Company profile** (Settings → Company profile): legal name, EIN, logo and business address. The principal or an admin can edit it.
 2. **Connect trust and operating banks** (Banking) so rent and owner payouts have somewhere to post.
 3. **Import your portfolio** (Settings → Import data): upload exports from your current tool. See "Import data from another system".
 4. **Review roles and permissions** (Settings → Roles and permissions): who can approve bills, post fees and see owner data.
