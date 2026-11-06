@@ -7,7 +7,7 @@ import { executeProposal } from "./effects";
 import { canDecide, publicError } from "./http";
 import { openRun, runWithContext } from "./orchestrator";
 import type { IssueFilters } from "./filters";
-import { fixProposal, queueReason, type FixOption } from "./tools/write";
+import { canDismiss, fixProposal, queueReason, type FixOption } from "./tools/write";
 import { ISSUE_ORDER, issueWhere } from "./views";
 import "./agents";
 
@@ -100,6 +100,7 @@ export async function dismissIssue(data: DataCtx, persona: Persona, id: string, 
   const issue = await get(data, "data_issues", id);
   if (!issue) return { ok: false, status: 404, message: "Not found" };
   if (issue.status !== "open") return { ok: false, status: 409, message: `Already ${issue.status}` };
+  if (!canDismiss(issue, data.actor.role)) return { ok: false, status: 403, message: "Only the principal or a payables approver can dismiss a critical, money or fraud issue. Fix it or send the fix for approval instead." };
   const now = demoNowIso();
   await upsertOverlay(data, "data_issues", id, { status: "dismissed", fixed_by: persona.id, fixed_at: now });
   await (await insert(data.db, data.ws, "audit", { id: newId("aud"), at: now, actor: persona.name, actor_id: persona.id, role: data.actor.role, action: "data_issue.dismissed", entity_type: issue.entity_type, entity_id: issue.entity_id, property_id: issue.property_id ?? null, detail: `${issue.rule_id}${note ? ` — ${note}` : ""}` })).run();

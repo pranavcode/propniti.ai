@@ -3,7 +3,7 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { generate } from "@/seed/generate";
 import { get } from "../data";
-import { applyFixes, issueTargets } from "../datafix";
+import { applyFixes, dismissIssue, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
 import { dataHealth, issuesPage } from "../views";
 import { fixPreviewProps, NEXT_STEP, type Issue } from "../ui/IssueFix";
@@ -234,6 +234,26 @@ describe("Data Health issues on records with no property", () => {
     expect(ids((await issuesPage(data, {})).rows)).not.toContain("di-bank");
     expect(await get(data, "data_issues", "di-bank")).toBeNull();
     expect((await dataHealth(data)).rules.map((r) => r.id)).not.toContain("vendors.unverified_bank_change");
+  });
+
+  it("a property manager sees a vendor bank-change flag but can't dismiss it; an accountant can", async () => {
+    const f = orgIssues();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    const row = (await issuesPage(marcus, { issue: "di-bank" })).rows[0] as unknown as Issue;
+    expect(row.canDismiss).toBe(false);
+    expect(fixPreviewProps(row, async () => null).onDismiss).toBeUndefined();
+    expect(await dismissIssue(marcus, getPersona("marcus")!, "di-bank", "")).toMatchObject({ ok: false, status: 403 });
+    expect((await get(marcus, "data_issues", "di-bank"))?.status).toBe("open");
+    const grace = { db: f.db, ws: WS, actor: actorOf("grace") };
+    expect(await dismissIssue(grace, getPersona("grace")!, "di-bank", "Called the vendor")).toMatchObject({ ok: true });
+    expect((await get(grace, "data_issues", "di-bank"))?.status).toBe("dismissed");
+  });
+
+  it("a property manager still dismisses a low-stakes issue on their property", async () => {
+    const f = orgIssues();
+    f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', 'di-addr', 'properties.address_format', 'properties', 'p01', 'p01', '2026-11-01', 'info', '{}', ?)").run(JSON.stringify({ changes: { street: "1 Main St" } }));
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    expect(await dismissIssue(marcus, getPersona("marcus")!, "di-addr", "")).toMatchObject({ ok: true });
   });
 });
 

@@ -119,6 +119,14 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
   };
 }
 
+// Dismissing closes the issue with no fix and no approval, so a fraud or money flag (an unverified
+// bank change) or any critical issue is dismissed only by the principal or a payables approver.
+export function canDismiss(issue: Record<string, unknown>, role: Role): boolean {
+  const p = fixProposal(issue);
+  if (!(p.alwaysHuman && p.assignee === "accountant") && issue.severity !== "critical") return true;
+  return role === "principal" || PERMISSIONS[role]?.payables === "approve";
+}
+
 // For the page's button: why applying this fix would queue it in the approvals inbox, or null when
 // this role's click applies it. Mirrors applyFixes in datafix.ts and canDecide's low-risk rule for staff.
 export function queueReason(p: ProposeInput, role: Role): string | null {

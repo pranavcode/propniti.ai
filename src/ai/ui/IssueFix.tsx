@@ -11,7 +11,7 @@ import { humanizeKey, readableText, valueText, type FieldHint } from "@/lib/fiel
 
 export type Issue = {
   id: string; rule_id: string; rule_name: string | null; rule_description: string | null; entity_type: string; entity_id: string; property: string | null; severity: string; detected_at: string;
-  suggested_fix: { why?: string[]; confidence?: number; source?: string; merge_into?: string } | null; before: Record<string, unknown> | null; after: Record<string, unknown>; needsPerson: string | null; href?: string; evidence: Record<string, unknown>;
+  suggested_fix: { why?: string[]; confidence?: number; source?: string; merge_into?: string } | null; before: Record<string, unknown> | null; after: Record<string, unknown>; needsPerson: string | null; canDismiss?: boolean; href?: string; evidence: Record<string, unknown>;
   entity_label?: string; record?: string | null; fields?: Record<string, FieldHint>;
   options?: { label: string; why: string | null; before: Record<string, unknown> | null; after: Record<string, unknown> }[];
 };
@@ -55,7 +55,7 @@ export function fixPreviewProps(i: Issue, act: (action: "apply" | "dismiss", opt
     needsPerson: noFix(i) && !i.options?.length ? null : i.needsPerson,
     nextStep: noFix(i) ? { text: NEXT_STEP[i.rule_id] ?? "Open the record to correct it.", href: i.href, label: `Open ${(i.entity_label ?? "record").toLowerCase()}` } : undefined,
     onApply: noFix(i) ? undefined : () => act("apply"),
-    onDismiss: () => act("dismiss"),
+    onDismiss: i.canDismiss === false ? undefined : () => act("dismiss"),
   };
 }
 
