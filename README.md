@@ -118,7 +118,7 @@ The spec, architecture and walkthrough are at [propniti.ai/docs](https://propnit
 
 Measured on 2026-11-04.
 
-- **Vitest:** 1279 tests in 141 files (1 skipped): money, scope, queries, the seed, actions, agents, the assistant, and migrations on SQLite and local D1 (Miniflare).
+- **Vitest:** 1292 tests in 143 files (1 skipped): money, scope, queries, the seed, actions, agents, the assistant, and migrations on SQLite and local D1 (Miniflare).
 - **Playwright:** 190 browser tests in 34 flows in `tests/e2e/`, one per module plus portals, public listings and cross-cutting features. They run against `BASE_URL` (default `http://localhost:3201`): `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches.
 
