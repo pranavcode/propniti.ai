@@ -83,7 +83,7 @@ AI here: *Explain* (facts computed, wording by a model or by rules), the what-if
 
 ## 3. Priya Shah, regional manager
 
-Priya sees 14 Texas properties. She lands on `/app`, the regional version.
+Priya sees 14 Texas properties. She lands on `/app`, which shows her regional home.
 
 1. Scroll to *Property comparison*: occupancy, economic occupancy, NOI against budget, collections, delinquency and work-order SLA side by side.
 2. Click *Variance* on a row to explain that property's NOI change.
