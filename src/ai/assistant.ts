@@ -7,12 +7,13 @@ import { addDays, money, monthName, total } from "./rules";
 import { columns, eff, insert, newId, parseJson, sql, upsertOverlay, type DataCtx, type Table } from "./data";
 import { matchMetro, monthly, type Delinquent, type NoiExplanation } from "./facts";
 import { openRun, runNow, runWithContext } from "./orchestrator";
-import { RULES } from "./providers";
+import { MODEL_FALLBACK, RULES } from "./providers";
 import { amountsIn } from "./tools/write";
 import { REMINDER_LIMIT } from "./ui/rightNow";
 import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
 import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
 import { errText, modelLoop, type AgentCtx } from "./runtime";
+import { plainError } from "./trace";
 import type { ToolKey } from "./types";
 import "./agents";
 import { agentName } from "@/ai/ui/labels";
@@ -276,6 +277,7 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
           out = { ...h, answer: value.answer };
           live = true;
         } catch (err) {
+          ctx.modelFailed = true;
           await ctx.step({ kind: "message", output: { model_error: errText(err), fallback: "rules" }, ok: false });
         }
       }
@@ -311,6 +313,7 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
               note = "Figures computed from your data; suggestions by AI.";
             }
           } catch (err) {
+            ctx.modelFailed = true;
             await ctx.step({ kind: "message", output: { model_error: errText(err), fallback: "rules" }, ok: false });
           }
         }
@@ -353,11 +356,13 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
       if (out && about && onRecord) out.citations = [{ entity_type: about.entity, entity_id: about.id, label: about.label === about.title ? about.title : `${about.label} ${about.title}`, href: about.href }, ...out.citations];
       if (!out) out = { answer: "I can answer questions about rent, leases, work orders, bills, NOI, occupancy, approvals, data health and the agents. Try one of the suggestions.", citations: [] };
     }
+    if (!live && ctx.modelFailed) note ??= MODEL_FALLBACK;
     return { summary: out!.answer.slice(0, 1000), result: { out: out!, live, note } };
   });
 
   const ctx = run.ctx;
-  const res = run.result ?? { out: { answer: `Something went wrong: ${run.summary}`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
+  // run.summary is the raw failure, kept for the trace; the reply says it in plain words.
+  const res = run.result ?? { out: { answer: `Something went wrong, so there's no answer this time: ${plainError(run.summary)}. Try again in a minute.`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
   const steps = await db.prepare("SELECT tool_key, input, output, latency_ms, ok, kind FROM agent_steps WHERE workspace_id = ? AND run_id = ? AND kind IN ('tool_call', 'tool_result') ORDER BY idx").bind(ws, runId).all<{ tool_key: string; input: string | null; output: string | null; latency_ms: number | null; ok: number; kind: string }>();
   const trace: TraceItem[] = [];
   for (let i = 0; i < steps.results.length; i++) {

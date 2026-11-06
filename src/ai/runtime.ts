@@ -48,6 +48,8 @@ export type AgentCtx = Omit<RunContext, "propose"> & {
   autonomy: Autonomy;
   usage: Usage;
   modelUsed: ModelInfo;
+  // Set when a model call failed and the run fell back to rules.
+  modelFailed?: boolean;
   proposals: Proposed[];
   deadline: number;
   // The actions this agent may propose, and the rules check every model proposal passes through:
@@ -231,6 +233,7 @@ export async function modelLoop(ctx: AgentCtx, opts: { system: string; prompt: s
       reply = await model.chat(system, turns, specs, { timeoutMs: modelTimeout(ctx) });
     } catch (err) {
       console.error(`[ai] ${model.info.label} failed, using rules:`, errText(err));
+      ctx.modelFailed = true;
       await ctx.step({ kind: "message", output: { model_error: errText(err), fallback: "rules" }, ok: false });
       return null;
     }

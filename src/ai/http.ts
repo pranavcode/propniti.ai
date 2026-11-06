@@ -4,6 +4,7 @@ import type { Row } from "@/entities/types";
 import { rateLimit } from "@/lib/guard";
 import { parseBody } from "@/lib/requests";
 import { DB_BUSY, publicError, sql, type DataCtx } from "./data";
+import { MODEL_DOWN, ModelError } from "./providers";
 import { needsApprove, staffDecision } from "./decide";
 import { aiSession, json, sameOrigin, type AiSession } from "./session";
 
@@ -52,6 +53,8 @@ export async function guarded(fn: () => Promise<Response>) {
   try {
     return await fn();
   } catch (err) {
+    // The provider's own error was logged where it happened (providers/index.ts).
+    if (err instanceof ModelError) return json({ error: MODEL_DOWN }, { status: 503 });
     const message = err instanceof Error ? err.message : "Something went wrong";
     const shown = publicError(message);
     if (shown === message) console.error("[ai] route failed:", err);
