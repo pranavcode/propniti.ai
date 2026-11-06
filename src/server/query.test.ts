@@ -407,6 +407,27 @@ describe("writes", () => {
     for (const kind of ["notes", "activity", "tasks"] as const) expect((await collab(await ctx("marcus"), kind, "charges", "c-p01-u1")).rows.length).toBeGreaterThan(0);
   });
 
+  it("writes only the changed columns and refuses an edit when the record changed or locked after it was read", async () => {
+    await db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', 'WO-8', 'p01', 'Leak', 'Plumbing', 'Normal', 'Assigned', '2026-10-28T10:00:00Z')").run();
+    await updateRecord(await wctx("marcus"), "work_orders", "WO-8", { description: "Under the sink" });
+    // Another request's write lands between this edit's read and its write batch.
+    const racing = (sql: string): Db => {
+      let fired = false;
+      return { prepare: (q) => db.prepare(q), batch: async (stmts) => {
+        if (!fired && stmts.length >= 4) { fired = true; await db.prepare(sql).bind(WS).run(); }
+        return db.batch(stmts);
+      } };
+    };
+    const as = async (sql: string) => ({ ...(await wctx("marcus")), db: racing(sql) });
+    const wo = async () => db.prepare("SELECT title, priority, status FROM work_orders WHERE workspace_id = ? AND id = 'WO-8'").bind(WS).first();
+    await updateRecord(await as("UPDATE work_orders SET priority = 'Emergency' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { title: "Leak under sink" });
+    expect(await wo()).toMatchObject({ title: "Leak under sink", priority: "Emergency" });
+    await expect(updateRecord(await as("UPDATE work_orders SET title = 'Leak (vendor note)' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { title: "Kitchen leak" })).rejects.toMatchObject({ status: 409 });
+    expect(await wo()).toMatchObject({ title: "Leak (vendor note)" });
+    await expect(updateRecord(await as("UPDATE work_orders SET status = 'Submitted' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { priority: "Low" })).rejects.toMatchObject({ status: 409 });
+    expect(await wo()).toMatchObject({ status: "Submitted", priority: "Emergency" });
+  });
+
   it("hides a deleted base row with an overlay tombstone, for this visitor only", async () => {
     await deleteRecord(await wctx("daniel"), "properties", "p06");
     expect(await getRow(await ctx("daniel", WS), "properties", "p06")).toBeNull();

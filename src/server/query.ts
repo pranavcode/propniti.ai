@@ -11,7 +11,7 @@ import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { BULK_MATCH_CAP } from "@/lib/bulk";
 import { LIFE_SAFETY_ROLES, safetyJobs, VENDOR_OFF } from "@/ai/life-safety";
 import { EXPORT_CAP } from "@/lib/export/types";
-import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
+import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, overlayUpsertSql, TABLES } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
 // relation in one; every value is bound. Reads go through effective(): the visitor's overlay
@@ -707,15 +707,46 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   const after: Row = { ...before, ...changes, workspace_id: ctx.ws, deleted: 0 };
   const changed = diffKeys(before, after).filter((k) => k in changes);
   const summary = `Updated ${changed.map((c) => Object.entries(def.fields).find(([k, f]) => (f.column ?? k) === c)?.[1].label ?? c).join(", ") || "nothing"}`;
+  const fresh = unchangedSince(ctx, def, id, before, Object.keys(changes), Object.keys(body).filter((k) => body[k] !== undefined));
   try {
-    await ctx.db.batch([upsert(ctx.db, def.table, after), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
+    await ctx.db.batch([fresh.guard, writeColumns(ctx, def, id, before, changes), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
     forgetOverlay(ctx.actor);
     forgetInboxCounts(ctx.ws);
   } catch (e) {
-    if (outOfScope(e)) throw new QueryError(403, "That change would move the record outside your scope");
+    if (outOfScope(e)) {
+      if (!(await fresh.check.first())) throw new QueryError(409, `This ${def.label.one.toLowerCase()} changed while you were editing it. Reload and try again.`);
+      throw new QueryError(403, "That change would move the record outside your scope");
+    }
     throw constraintError(e);
   }
   return (await getRow(ctx, entity, id))!;
+}
+
+// Copy-on-write of the changed columns only: the other columns come from the row as it is when the
+// batch runs, so an edit never puts back values another request changed after this one read them.
+function writeColumns(ctx: WriteCtx, def: EntityDef, id: string, before: Row, changes: Record<string, unknown>) {
+  const cols = Object.keys(before).filter((c) => c !== "seq" && c !== "workspace_id").map(ident);
+  const keys = Object.keys(changes);
+  const set = Object.fromEntries(keys.map((k, i) => [ident(k), `?${i + 3}`]));
+  return ctx.db.prepare(overlayUpsertSql(def.table, cols, { ...set, deleted: "0" })).bind(ctx.ws, id, ...keys.map((k) => changes[k]));
+}
+
+// Fails the write batch (like scopeGuard) unless the row still has the values this edit read in the
+// columns it changes, and isn't now in a lockedWhen state that covers the edit. `check` is the same
+// condition as a read, so a refused batch can say "changed" rather than "out of scope".
+function unchangedSince(ctx: WriteCtx, def: EntityDef, id: string, before: Row, columns: string[], fields: string[]) {
+  const sql = [`e.id = ?`, ...columns.map((c) => `e.${ident(c)} IS ?`)];
+  const params: unknown[] = [id, ...columns.map((c) => before[c] ?? null)];
+  const lock = def.lockedWhen;
+  if (lock && (!lock.fields || fields.some((k) => lock.fields!.includes(k)))) {
+    sql.push(`coalesce(e.${ident(def.fields[lock.field]?.column ?? lock.field)}, '') NOT IN (SELECT value FROM json_each(?))`);
+    params.push(JSON.stringify(lock.in));
+  }
+  const cond = `EXISTS (SELECT 1 FROM ${effective(def.table, ctx.ws)} AS e WHERE ${sql.join(" AND ")})`;
+  return {
+    guard: ctx.db.prepare(`INSERT INTO meta (key, value) SELECT '${SCOPE_GUARD}', NULL WHERE NOT ${cond}`).bind(...params),
+    check: ctx.db.prepare(`SELECT 1 AS ok WHERE ${cond}`).bind(...params),
+  };
 }
 
 const pick = (r: Row, keys: string[]) => Object.fromEntries(keys.map((k) => [k, r[k]]));
