@@ -75,5 +75,5 @@ export function decidableSql(role: Role, alias = "p"): { sql: string; params: un
   const base = { sql: `(${approve.sql} OR (${alias}.risk = 'Low' AND ${alias}.amount_cents IS NULL AND ${write.sql}))`, params: [...approve.params, ...write.params] };
   if (LIFE_SAFETY_ROLES.includes(role)) return base;
   const riskTypes = known.filter((k) => getEntity(k)!.module === "risk");
-  return { sql: `(${base.sql} AND NOT (${alias}.risk = 'High' AND (${alias}.entity_type IN (SELECT value FROM json_each(?)) OR ${alias}.payload LIKE '%"_life_safety":true%')))`, params: [...base.params, JSON.stringify(riskTypes)] };
+  return { sql: `(${base.sql} AND NOT (${alias}.risk = 'High' AND (${alias}.entity_type IN (SELECT value FROM json_each(?)) OR instr(${alias}.payload, '"_life_safety":true') > 0)))`, params: [...base.params, JSON.stringify(riskTypes)] };
 }
