@@ -897,6 +897,8 @@ export const viewSchema = z.strictObject({
   }),
 });
 
+const MAX_VIEWS = 200;
+
 export async function listViews(ctx: QueryCtx, entity: string) {
   const def = getDef(entity);
   assertRead(def, ctx.actor.role);
@@ -912,8 +914,16 @@ export async function saveView(ctx: WriteCtx, body: z.infer<typeof viewSchema>) 
   for (const k of Object.keys(body.state.filters ?? {})) field(def, k.split(".")[0], ctx.actor.role);
   if (body.state.sort) field(def, body.state.sort[0], ctx.actor.role);
   const id = `view-${crypto.randomUUID().slice(0, 12)}`;
-  await ctx.db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state, position) VALUES (?, ?, ?, ?, ?, ?, 100)")
-    .bind(ctx.ws, id, def.key, body.name, body.shared ? null : ctx.actor.personaId, JSON.stringify(body.state)).run();
+  // Shared views have no owner, so the creator is recorded in the audit log (deleteView reads it).
+  const [r] = await ctx.db.batch([
+    ctx.db.prepare(`INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state, position) SELECT ?1, ?2, ?3, ?4, ?5, ?6, 100
+      WHERE (SELECT count(*) FROM saved_views WHERE workspace_id = ?1 AND deleted = 0) < ${MAX_VIEWS}`)
+      .bind(ctx.ws, id, def.key, body.name, body.shared ? null : ctx.actor.personaId, JSON.stringify(body.state)),
+    ctx.db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, actor_id, role, action, entity_type, entity_id, detail)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'saved_views.created', 'saved_views', ?7, ?8 WHERE EXISTS (SELECT 1 FROM saved_views WHERE workspace_id = ?1 AND id = ?7)`)
+      .bind(ctx.ws, crypto.randomUUID(), demoNowIso(ctx.nowMs), ctx.actor.name, ctx.actor.personaId, ctx.actor.role, id, `Saved view "${body.name}" on ${def.label.many.toLowerCase()}`),
+  ]);
+  if (!r.meta.changes) throw new QueryError(409, `This workspace has ${MAX_VIEWS} saved views. Delete some before saving more.`);
   forgetOverlay(ctx.actor);
   return { key: id, label: body.name, shared: !!body.shared, mine: !body.shared, ...body.state };
 }
@@ -922,6 +932,10 @@ export async function deleteView(ctx: WriteCtx, id: string) {
   const v = await rawRow(ctx.db, "saved_views", ctx.ws, id);
   if (!v) throw new QueryError(404, "View not found");
   if (v.owner_id != null && v.owner_id !== ctx.actor.personaId) throw new QueryError(403, "That view belongs to someone else");
+  if (v.owner_id == null && ctx.actor.role !== "admin") {
+    const made = await ctx.db.prepare("SELECT 1 AS ok FROM audit WHERE workspace_id = ? AND action = 'saved_views.created' AND entity_id = ? AND actor_id = ?").bind(ctx.ws, id, ctx.actor.personaId).first();
+    if (!made) throw new QueryError(403, "Only the person who shared this view, or an administrator, can delete it");
+  }
   await upsert(ctx.db, "saved_views", { ...v, workspace_id: ctx.ws, deleted: 1 }).run();
   forgetOverlay(ctx.actor);
 }

@@ -462,6 +462,21 @@ describe("writes", () => {
     expect(await addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "marcus" })).toMatchObject({ status: "Open", assignee_id: "marcus" });
   });
 
+  it("lets only a shared view's creator or an admin delete it, and caps views per workspace", async () => {
+    const { saveView, deleteView } = await import("./query");
+    const state = { filters: { status: "Vacant" } };
+    const shared = await saveView(await wctx("marcus"), { entity: "units", name: "Vacant", shared: true, state });
+    await expect(deleteView(await wctx("lena"), shared.key)).rejects.toMatchObject({ status: 403 });
+    await deleteView(await wctx("marcus"), shared.key);
+    await db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state) VALUES ('base', 'view-org', 'units', 'Org view', NULL, '{}')").run();
+    await expect(deleteView(await wctx("marcus"), "view-org")).rejects.toMatchObject({ status: 403 });
+    await deleteView(await wctx("sam"), "view-org");
+    // At most 200 live views per workspace.
+    await db.batch(Array.from({ length: 199 }, (_, i) => db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state) VALUES (?, ?, 'units', 'v', 'marcus', '{}')").bind(WS, `view-cap-${i}`)));
+    await saveView(await wctx("marcus"), { entity: "units", name: "Last one", state });
+    await expect(saveView(await wctx("marcus"), { entity: "units", name: "One too many", state })).rejects.toMatchObject({ status: 409 });
+  });
+
   it("hides a deleted base row with an overlay tombstone, for this visitor only", async () => {
     await deleteRecord(await wctx("daniel"), "properties", "p06");
     expect(await getRow(await ctx("daniel", WS), "properties", "p06")).toBeNull();
