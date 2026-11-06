@@ -17,11 +17,11 @@ Live demo: **[propniti.ai](https://propniti.ai)** · sample data, no sign-up. Pr
 
 ## What it does
 
-- **One record framework.** 64 record types in 13 modules, each defined once. Pages, the API, permission checks, search and downloads are built from the definitions.
-- **A sample portfolio.** 30 properties in Austin, Dallas, Atlanta and Phoenix, with leases, ledgers, work orders, bills and history. Some records are wrong on purpose, for Data Health to find.
-- **A simulated trust ledger.** Rent, fees, bills, owner distributions and deposits move through guarded SQL; a double click pays once.
-- **AI agents with an audit trail.** Agents run every 15 minutes, on events and on request, and each step is stored. Agents propose; people approve.
-- **Data Health.** Rules find bad records (duplicates, miscoded bills, rent typos, unverified vendor bank changes) and suggest fixes with before and after values.
+- 64 record types in 13 modules, each defined once. Pages, the API, permission checks, search and downloads are built from the definitions.
+- A sample portfolio of 30 properties in Austin, Dallas, Atlanta and Phoenix, with leases, ledgers, work orders, bills and history. Some records are wrong on purpose, for Data Health to find.
+- A simulated trust ledger: rent, fees, bills, owner distributions and deposits move through guarded SQL; a double click pays once.
+- AI agents that run every 15 minutes, on events and on request. Each step is stored, and a person approves what agents propose.
+- Data Health: rules find bad records (duplicates, miscoded bills, rent typos, unverified vendor bank changes) and suggest fixes with before and after values.
 
 ## Personas
 
@@ -54,7 +54,7 @@ npm ci
 npm run dev          # http://localhost:3000
 ```
 
-The first start creates `.data/propniti.db`, applies `migrations/` and generates the sample data. No AI key is needed; without one, AI features use rules and say so.
+The first start creates `.data/propniti.db`, applies `migrations/` and generates the sample data. No AI key is needed; without one, AI features use rules and are labelled **Rules**.
 
 | Command | What it does |
 | --- | --- |
@@ -80,7 +80,7 @@ The first start creates `.data/propniti.db`, applies `migrations/` and generates
 | `AI_PROVIDER` | Force `anthropic`, `openai` or `workers-ai`. If the forced provider isn't configured, rules answer |
 | `TRUSTED_IP_HEADER` | Off Cloudflare only: the client-IP header your proxy sets, for per-client rate limits |
 
-On Cloudflare with no key, the model is Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`). A failed call falls back to rules, and the label says so.
+On Cloudflare with no key, the model is Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`). A failed call falls back to rules, and the output is labelled **Rules**.
 
 ### Loading the sample data into D1
 
@@ -177,7 +177,7 @@ Report vulnerabilities per [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), and run `npm run check` before opening a pull request.
+Open an issue or pull request; read [CONTRIBUTING.md](CONTRIBUTING.md) and run `npm run check` first.
 
 ## License
 
