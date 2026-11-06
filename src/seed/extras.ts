@@ -861,9 +861,10 @@ class Extras {
       }
     }
     // Leases: end before start; rent ten times market (typo).
+    const staleLeases = new Set(c.planted["leases.past_end_date"] ?? []);
     for (const l of c.leases) {
       const r = rng(`dhl:${l.id}`);
-      if (l.commercial || l.status === "Future") continue;
+      if (l.commercial || l.status === "Future" || staleLeases.has(l.id)) continue;
       if (r.chance(0.026) && l.end !== null) {
         const [s, e] = [l.row.start_on, l.row.end_on];
         l.row.start_on = e;

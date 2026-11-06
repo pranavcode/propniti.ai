@@ -254,7 +254,7 @@ describe("seed generator", () => {
 
   it("flags every lease still Active (or Notice past move-out) after its end date, except swapped dates, with two fixes to choose from", () => {
     const past = T.leases.filter((l) => ["Active", "Notice"].includes(l.status as string) && (l.end_on as string) < AS_OF && (l.end_on as string) >= (l.start_on as string) && !(l.status === "Notice" && (l.move_out_on as string) >= AS_OF));
-    expect(past.length).toBeGreaterThan(0);
+    expect(past.length).toBe(7); // six planted holdovers plus one Active holdover on a down unit
     expect(flagged("leases.past_end_date")).toEqual(new Set(past.map((l) => l.id as string)));
     for (const i of T.data_issues.filter((x) => x.rule_id === "leases.past_end_date")) {
       expect(JSON.parse(i.suggested_fix as string).options.map((o: { changes: object }) => o.changes)).toEqual([{ status: "Expired" }, { status: "Month-to-month" }]);
