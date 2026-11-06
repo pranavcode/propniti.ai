@@ -1,6 +1,6 @@
 import { demoNowIso } from "@/lib/clock";
 import { routeTo } from "./decide";
-import { safetyJobs, safetyJobsNote, vendorsTurnedOff } from "./life-safety";
+import { isPaymentHold, isVendorOff, offVendors, safetyJobs, safetyJobsNote, vendorsTurnedOff, type Effect } from "./life-safety";
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { asOf, eff, getRaw, insert, isTable, newId, retryBusy, type DataCtx } from "./data";
@@ -158,6 +158,19 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
     return { id: open.id, queueState: "needs_you", duplicate: true };
   }
 
+  // A payment hold keeps the vendor on work while it has open emergency or life-safety jobs, so the
+  // accountant can still approve it; taking the vendor off work becomes its own life-safety proposal.
+  let split: string[] = [];
+  if (isPaymentHold({ action: p.action, payload: p.payload })) {
+    const held = p.payload as { effects?: Effect[] };
+    const off = offVendors(held?.effects ?? []);
+    const n = await safetyJobs(db, ws, off);
+    if (n) {
+      split = off;
+      p = { ...p, payload: { ...held, effects: (held.effects ?? []).filter((e) => !isVendorOff(e)) }, why: [...p.why, `The vendor stays on work: ${safetyJobsNote(n)}. Taking it off work is a separate proposal for the principal or a regional manager`] };
+    }
+  }
+
   const policy = p.category ? ctx.policies.find((x) => x.category === p.category) : undefined;
   // Taking a vendor off work while it has open emergency or life-safety jobs is a life-safety call.
   const safety = await safetyJobs(db, ws, vendorsTurnedOff({ entity_type: p.entity, entity_id: p.entityId, action: p.action, payload: p.payload }));
@@ -190,6 +203,14 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
     queue_state: queueState, assignee_role: assignee, model: source === "rules" ? "rules" : ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
   };
   await (await insert(db, ws, "ai_proposals", row)).run();
+  for (const v of split) {
+    const name = String((await getRaw(ctx.data, "vendors", v))?.company ?? v);
+    await proposeImpl(ctx, {
+      entity: "vendors", entityId: v, action: "vendors.stop_assigning", propertyId: p.propertyId ?? null, title: `Take ${name} off work until its bank change is verified`,
+      why: ["Bank details changed with no verification on file", "Split from the payment hold, which the accountant decides"], confidence: p.confidence, risk: "High", alwaysHuman: true,
+      payload: { effects: [{ kind: "update", table: "vendors", id: v, changes: { status: "Inactive" } }] }, evidence: [{ entity_type: "vendors", entity_id: v, label: name }],
+    }, execute);
+  }
   if (!auto || ctx.aborted) return { id, queueState, duplicate: false };
 
   const result = await execute(ctx.data, row, { id: ctx.agent, name: agentName(ctx.agent), agent: ctx.agent });
