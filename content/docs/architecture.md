@@ -2,11 +2,11 @@
 
 Propniti is one Next.js 16 app, compiled by vinext into a single Cloudflare Worker that serves the marketing site, staff app, four portals, public listings site and API. Data lives in one D1 database: a shared, read-only base plus a private overlay per visitor. Eight AI agents run in the same Worker on a 15-minute Cron Trigger, on events and on demand, and change data only by proposing named actions.
 
-- Each of the 64 record types is defined once as an `EntityDef`, from which the sidebar, ⌘K, pages, API, permissions and SQL column whitelist are built.
-- An approved agent proposal runs the same named server action, with the same checks, as a person's click.
-- Rules compute every figure from the data. A model writes the wording of answers and suggests actions.
-- Each money action is one guarded D1 batch, with one live transfer per idempotency key.
-- Workers AI, Claude and OpenAI sit behind one provider port and are interchangeable. With none configured, AI features run on rules and are labelled **Rules**.
+- Propniti has 64 kinds of record, such as properties, leases and work orders. Each kind is described once in code. The app builds everything else for it from that one description: its sidebar link, its ⌘K search entry, its list and detail pages, its API, who may see or change it, and which database columns queries may read. In code this description is an `EntityDef` in `src/entities/defs/`.
+- Agents only propose changes. When a person approves one, the app runs the same server action a person's click runs, with the same checks.
+- Fixed rules compute every figure from the data. A model only writes the wording of answers and suggests actions.
+- Each action that moves money is one group of database writes that land together or not at all. Checks inside the SQL decide whether it runs, and each transfer has a unique key, so a repeated click moves the money once.
+- The app can use Workers AI, Claude or OpenAI. All three plug in the same way, so one can replace another. With none set up, AI features run on fixed rules and are labelled **Rules**.
 
 Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
 
