@@ -137,7 +137,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Technician view: start a job, log time, mark done | Built | |
 | Vendor invoice check against the purchase order, then *Approve and pay* | Built | Rules: totals within 2%, line sums, photos. Blocked on an unverified bank change or above the owner's limit |
 | Compliance: certificates of insurance, permits, inspections, legal cases, with an expiries timeline | Built | Legal cases are hidden from roles without access |
-| Set a vendor to Inactive or Do not use while it has open emergency or life-safety work orders | Built | Only the principal or a regional manager. Others reassign the jobs first. Agent proposals that do this go to them too |
+| Set a vendor to Inactive or Do not use while it has open emergency or life-safety work orders | Built | Only the principal or a regional manager. Others reassign the jobs first. Agent proposals that do this go to them too. A payment hold after a suspicious bank change stays with the accountant; taking that vendor off work becomes a separate proposal |
 
 ### Finance
 
@@ -175,7 +175,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Help articles at `/app/help/<id>` | Built | Assistant citations link here |
 | Readable run steps with linked record names; raw input and output under *Technical details* | Built | Out-of-scope records show their type only |
 | AI summaries on records from current figures; *Summarize with AI* where none exists | Built | See [Source labels](#source-labels) |
-| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* (up to 50) | Built | Fixes touching money, fraud or legal status wait in the approvals inbox. Property-scoped roles see issues on their properties, plus issues on records with no property (such as vendors) that they can read |
+| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* (up to 50) | Built | Fixes touching money, fraud or legal status wait in the approvals inbox. Property-scoped roles see issues on their properties, plus issues on records with no property (such as vendors) that they can read. Only the principal or a payables approver can dismiss a critical, money or fraud issue |
 | Leases still Active after their end date | Built | A person picks *Mark as ended* or *Switch to month-to-month*; either goes to the approvals inbox |
 | Model failures show a plain message, never the provider's error | Built | The assistant says it used the rule-based answer. Other AI requests say "The AI service didn't respond. Try again in a minute." |
 | Automations (`/app/automations`): each agent's schedule, events, autonomy and recent runs; the sweep; approval and built-in rules | Built | |
