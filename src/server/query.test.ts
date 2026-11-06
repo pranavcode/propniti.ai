@@ -657,6 +657,22 @@ describe("metrics", () => {
     expect(byProp.points).toHaveLength(4);
   });
 
+  it("serves a metric only to roles with access to its module", async () => {
+    await import("@/extensions");
+    // A leasing agent has no payables, accounting or receivables access; an owner has no payables.
+    for (const key of ["payables.open_ap", "accounting.income_expense", "accounting.trust_cash", "accounting.cash_forecast", "receivables.aging_by_property"])
+      await expect(metrics(await ctx("lena"), key)).rejects.toMatchObject({ status: 403 });
+    for (const key of ["payables.open_ap", "payables.aging"]) await expect(metrics(await ctx("owner"), key)).rejects.toMatchObject({ status: 403 });
+    // Access they do have still works.
+    await expect(metrics(await ctx("lena"), "portfolio.noi")).resolves.toBeTruthy();
+    await expect(metrics(await ctx("owner"), "owners.distributions")).resolves.toBeTruthy();
+    await expect(metrics(await ctx("grace"), "payables.open_ap")).resolves.toBeTruthy();
+    // "Explain this number" uses the same module rule.
+    const { canReadModuleOf } = await import("./query");
+    expect(canReadModuleOf("leasing_agent", "receivables.collections_rate")).toBe(false);
+    expect(canReadModuleOf("leasing_agent", "portfolio.noi")).toBe(true);
+  });
+
   it("adds the visitor's live payments to the current month", async () => {
     await db.prepare(`INSERT INTO payments (workspace_id, id, lease_id, household_id, property_id, charge_id, method, received_on, amount_cents) VALUES ('${WS}', 'pay-live', 'l-p01-u2', 'h-p01-u2', 'p01', 'c-p01-u2', 'ACH', '2026-10-28', 145000)`).run();
     const before = await metrics(await ctx("marcus", null), "receivables.collections_rate", { month: "2026-10" });

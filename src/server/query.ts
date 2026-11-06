@@ -3,8 +3,8 @@ import { demoNowIso } from "@/lib/clock";
 import { AS_OF } from "@/seed/constants";
 import { z, type ZodType } from "zod";
 import { can, getEntity } from "@/entities";
-import { getPersona } from "@/auth/personas";
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type Role, type Row } from "@/entities/types";
+import { getPersona, PERMISSIONS } from "@/auth/personas";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type ModuleKey, type Role, type Row } from "@/entities/types";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
 import { forgetInboxCounts } from "@/extensions/inbox/counts";
@@ -983,13 +983,23 @@ export async function asOfMonth(db: Db): Promise<string> {
   return m?.m ?? AS_OF.slice(0, 7);
 }
 
+// Metrics are portfolio figures: staff and owners see them by default; residents, vendors and
+// applicants only when the metric names their role (their scope is per row, not per property). Either
+// way the role needs access to the metric's module, the key's prefix (payables.open_ap → payables).
+export const canReadModuleOf = (role: Role, key: string) => (PERMISSIONS[role]?.[key.split(".")[0] as ModuleKey] ?? "none") !== "none";
+
+export function canReadMetric(role: Role, key: string) {
+  const m = getMetric(key);
+  if (!m) return false;
+  const portal = role === "resident" || role === "vendor" || role === "applicant";
+  if (m.roles ? !m.roles.includes(role) : portal) return false;
+  return canReadModuleOf(role, key);
+}
+
 export async function metrics(ctx: QueryCtx, key: string, params: MetricParams = {}): Promise<MetricResult> {
   const m = getMetric(key);
   if (!m) throw new QueryError(404, `Unknown metric "${key}"`);
-  // Metrics are portfolio figures: staff and owners see them by default; residents, vendors and
-  // applicants only when the metric names their role (their scope is per row, not per property).
-  const portal = ctx.actor.role === "resident" || ctx.actor.role === "vendor" || ctx.actor.role === "applicant";
-  if (m.roles ? !m.roles.includes(ctx.actor.role) : portal) throw new QueryError(403, "You can't view this metric");
+  if (!canReadMetric(ctx.actor.role, key)) throw new QueryError(403, "You can't view this metric");
   if (params.property && ctx.actor.propertyIds !== "all" && !ctx.actor.propertyIds.includes(params.property)) throw new QueryError(403, "That property is outside your scope");
   if (params.month && !/^\d{4}-\d{2}$/.test(params.month)) throw new QueryError(400, "month must be YYYY-MM");
   // A row-scoped portal user ("self" with no property list) never gets portfolio-wide figures.
