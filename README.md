@@ -148,7 +148,7 @@ The `DemoState` helpers in `server/repo.ts` are in the coverage scope and mostly
 - 43 more cases (triage, drafts, data fixes, applicant scoring, resident replies) run inside `npm test`, graded on the rules output with no model.
 - The 9 invoice-vs-PO cases need the `/api/state` demo state, which the app doesn't serve, so they are skipped.
 
-**Latest live run:** 2026-11-04 15:52 UTC, Workers AI on a local server, **74/86 (86%)**, above the 0.8 bar. Invoice reading, insurance declarations, the AI filter, record summaries, column mapping and pasted notes passed every case; agent runs passed 4 of 8, with 4 falling back to rules. Onboarding file detection scored 0/5 in that run. Run on their own against the code on `main`, those 5 cases pass 5/5; the full suite has not been run again on that code.
+**Latest live run:** 2026-11-04 15:52 UTC, Workers AI on a local server, **74/86 (86%)**, above the 0.8 bar. Invoice reading, insurance declarations, the AI filter, record summaries, column mapping and pasted notes passed every case; agent runs passed 4 of 8, with 4 falling back to rules. Onboarding file detection scored 0/5 in that run. Run on their own against the current file detection, those 5 cases passed 5/5; the full suite has not been run against it.
 
 ## Deploy
 
