@@ -82,6 +82,16 @@ describe("POST /api/session with email and password", () => {
     expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: "https://evil.example" })).status).toBe(403);
     expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: null })).status).toBe(403);
   });
+
+  it("refuses an http origin in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: `http://${host}` })).status).toBe(403);
+      expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: `https://${host}` })).status).toBe(303);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe("POST /api/session with a persona (the cards)", () => {
