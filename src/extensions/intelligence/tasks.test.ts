@@ -153,8 +153,9 @@ describe("snooze, reassign and bulk", () => {
   const taskRow = (id: string) => db.prepare("SELECT status, due_on, assignee_id, assignee_role FROM tasks WHERE workspace_id = ? AND id = ?").bind(WS, id).first();
 
   it("snoozes to a later date once on a double click, with activity on the task and its record", async () => {
-    const statuses = (await Promise.all([run("tasks.snooze", "t-overdue", { due_on: "2026-11-10" }), run("tasks.snooze", "t-overdue", { due_on: "2026-11-10" })])).map((r) => r.status).sort();
-    expect(statuses).toEqual([200, 409]);
+    const out = await Promise.all([run("tasks.snooze", "t-overdue", { due_on: "2026-11-10" }), run("tasks.snooze", "t-overdue", { due_on: "2026-11-10" })]);
+    expect(out.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(out.find((r) => r.status === 200)).toMatchObject({ message: expect.stringMatching(/ to Nov 10, 2026$/) });
     expect(await taskRow("t-overdue")).toMatchObject({ status: "Open", due_on: "2026-11-10" });
     expect((await db.prepare("SELECT count(*) AS n FROM activity_events WHERE workspace_id = ? AND verb = 'task_snoozed'").bind(WS).first<{ n: number }>())?.n).toBe(2);
     // Today or earlier isn't a snooze; done tasks can't be snoozed.

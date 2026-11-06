@@ -1,5 +1,6 @@
 import { ask, AskRequest } from "@/ai/assistant";
 import { DB_BUSY, dataOf, guarded, json, publicError, waitUntil, writeSession } from "@/ai/http";
+import { MODEL_DOWN, ModelError } from "@/ai/providers";
 import { cookieHeader } from "@/server/workspace";
 
 // The assistant (⌘J and /app/copilot): chat about data, actions to confirm, and help.
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
     void ask({ ...args, onStatus: (status) => void send({ status }) })
       .then((reply) => send({ reply }))
       .catch((err) => {
+        if (err instanceof ModelError) return send({ error: MODEL_DOWN });
         const shown = publicError(err instanceof Error ? err.message : "Something went wrong");
         if (shown !== DB_BUSY) console.error("[ai] assistant failed:", err);
         return send({ error: shown });

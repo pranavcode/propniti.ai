@@ -2,6 +2,7 @@ import { demoNowIso } from "@/lib/clock";
 import { z } from "zod";
 import { getAction } from "@/extensions/actions";
 import { isAiAction } from "./action-keys";
+import { isPaymentHold, isVendorOff, LIFE_SAFETY_ROLES, offVendors, safetyJobs, safetyJobsNote } from "./life-safety";
 import { letterDates } from "./rules";
 import { can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
@@ -242,11 +243,23 @@ async function runProposal(data: DataCtx, proposal: Row, by: By, edited: unknown
     // The proposal's own effects: planned first (nothing is written if one is invalid), then the
     // decision and every effect land in one batch, or none of them do.
     let plans: { stmts: DbStatement[]; note: string }[];
+    let keptOn: string[] = [];
     try {
       let { effects } = Payload.parse(payload);
       if (!effects.length) effects = await deriveEffects(data, proposal, payload as Record<string, unknown>);
       if (!effects.length) throw new Error(`No handler for ${action} yet`);
       plans = [];
+      // Emergency jobs may have reached the vendor since the hold was proposed: the payments are
+      // still held, but only the principal or a regional manager takes the vendor off work.
+      const role = (by.role ?? data.actor.role) as (typeof LIFE_SAFETY_ROLES)[number];
+      if (isPaymentHold(proposal) && !LIFE_SAFETY_ROLES.includes(role)) {
+        const n = await safetyJobs(db, ws, offVendors(effects as Record<string, unknown>[]));
+        if (n) {
+          keptOn = offVendors(effects as Record<string, unknown>[]);
+          effects = effects.filter((e) => !isVendorOff(e as Record<string, unknown>));
+          plans.push({ stmts: [], note: `Vendor kept on work (${safetyJobsNote(n)}); taking it off work is a separate proposal for the principal or a regional manager` });
+        }
+      }
       for (const e of effects) plans.push(await planEffect(data, e, by, proposal, gate));
     } catch (err) {
       return { ok: false, status: 400, message: err instanceof Error ? err.message : String(err) };
@@ -254,6 +267,14 @@ async function runProposal(data: DataCtx, proposal: Row, by: By, edited: unknown
     const message = plans.map((p) => p.note).join(" · ");
     const results = await db.batch([decide, ...superseded, ...plans.flatMap((p) => p.stmts), ...(await record(message))]);
     if (!results[0].meta.changes) return { ok: false, status: 409, message: superseded.length && results[1].meta.changes ? "Already fixed by another approval" : "Already decided" };
+    if (keptOn.length) {
+      try {
+        const { proposeOffWork } = await import("./orchestrator");
+        await proposeOffWork(data, (proposal.agent as AgentKey) ?? "payables", keptOn, (proposal.property_id as string) ?? null, Number(proposal.confidence ?? 0.9));
+      } catch (err) {
+        console.error("[ai] off-work proposal failed after a payment hold:", err);
+      }
+    }
     return { ok: true, message };
   }
 

@@ -1,5 +1,6 @@
 import type { Row } from "@/entities/types";
 import { demoNow } from "@/lib/clock";
+import { formatAsOf } from "@/lib/format";
 import { parseJson, sql, type DataCtx } from "../data";
 import { defineAgent, money, planOf, type Candidate } from "./framework";
 import { triage } from "../rules";
@@ -82,7 +83,7 @@ export default defineAgent({
           why: [
             late != null ? `Past its SLA due time by about ${late} hours (${String(w.priority).toLowerCase()} priority)` : "Open past its SLA due time",
             r.from ? `${r.from.company} has ${r.from.open_jobs} open jobs` : `Triaged as ${String(w.category).toLowerCase()}, ${String(w.priority).toLowerCase()} priority, with no vendor yet`,
-            `${r.to.company}: rating ${r.to.rating ?? "n/a"}, ${r.to.open_jobs} open jobs, insurance valid to ${r.to.coi_expires}`,
+            `${r.to.company}: rating ${r.to.rating ?? "n/a"}, ${r.to.open_jobs} open jobs, insurance valid to ${formatAsOf(r.to.coi_expires)}`,
           ],
           confidence: 0.75, risk: "Medium",
           facts: { work_order: String(w.id), title: String(w.title), from_vendor: r.from?.company ?? null, to_vendor: r.to.company, to_open_jobs: r.to.open_jobs, property: prop?.name ?? null },
@@ -98,7 +99,7 @@ export default defineAgent({
       const why = [
         `Reads as ${t.trade}, ${t.priority.toLowerCase()}${t.safety ? " (safety issue)" : ""}`,
         `Typical ${t.trade.toLowerCase()} job costs ${money(estimate)} (median of past jobs)`,
-        best ? `${best.company}: rating ${best.rating ?? "n/a"}, ${best.open_jobs} open jobs, insurance valid to ${best.coi_expires}` : `No ${t.trade.toLowerCase()} vendor with valid insurance covers ${prop?.metro ?? "this metro"}; assign in-house`,
+        best ? `${best.company}: rating ${best.rating ?? "n/a"}, ${best.open_jobs} open jobs, insurance valid to ${formatAsOf(best.coi_expires)}` : `No ${t.trade.toLowerCase()} vendor with valid insurance covers ${prop?.metro ?? "this metro"}; assign in-house`,
         overOwner ? `Over the owner's ${money(ownerOver!)} approval limit: the owner approves in their portal` : limit != null ? `Within the ${money(limit)} auto-approve limit` : "No auto-approve limit set",
       ];
       return [{

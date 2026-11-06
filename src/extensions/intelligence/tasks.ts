@@ -3,6 +3,7 @@ import { AlarmClock, CircleCheck, RotateCcw, Send, UserRoundPen } from "lucide-r
 import type { ActionContext, Row } from "@/entities/types";
 import { STAFF } from "@/entities/common";
 import { demoNowIso } from "@/lib/clock";
+import { formatAsOf } from "@/lib/format";
 import { effective, overlayUpsertSql } from "@/server/effective";
 import { registerAction } from "../actions";
 import { isNoticeTask, noticeRecipient } from "./notice";
@@ -97,8 +98,8 @@ registerAction({
     const today = demoNowIso(ctx.nowMs).slice(0, 10);
     if (input.due_on <= today) return { status: 400, error: "Pick a date after today" };
     if (input.due_on > addDays(today, 365)) return { status: 400, error: "Pick a date within a year" };
-    const ok = await change(ctx, row, (n) => `${stillOpen()} AND coalesce(e.due_on, '') <> ?${n}`, { due_on: "?3" }, input.due_on, "task_snoozed", `${ctx.actor.name} snoozed task "${String(row.title)}" to ${input.due_on}`, { arg: input.due_on });
-    return ok ? { status: 200, message: `Snoozed "${String(row.title)}" to ${input.due_on}` } : { status: 409, error: "This task is already due then, or no longer open" };
+    const ok = await change(ctx, row, (n) => `${stillOpen()} AND coalesce(e.due_on, '') <> ?${n}`, { due_on: "?3" }, input.due_on, "task_snoozed", `${ctx.actor.name} snoozed task "${String(row.title)}" to ${formatAsOf(input.due_on)}`, { arg: input.due_on });
+    return ok ? { status: 200, message: `Snoozed "${String(row.title)}" to ${formatAsOf(input.due_on)}` } : { status: 409, error: "This task is already due then, or no longer open" };
   },
   help: { summary: "Moves the due date to a later day. The task stays on the list and comes back as due on that day." },
 });

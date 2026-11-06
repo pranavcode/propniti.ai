@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { as, BASE, go } from "./helpers";
 
-// The sign-in page: email + password form beside a compact one-click people list. Each test starts signed
+// The sign-in page: one card with the email + password form and a compact one-click people list. Each test starts signed
 // out (storageState carries the workspace cookie only, no pn_as).
 
 const persona = async (page: Page) => (await page.context().cookies(BASE)).find((c) => c.name === "pn_as")?.value;
@@ -39,6 +39,28 @@ test.describe("sign in", () => {
     await expect(priya).toBeFocused();
     await expect(priya).toHaveAttribute("aria-checked", "true");
     await expect(email(page)).toHaveValue("priya@propniti.demo");
+  });
+
+  test("one card: the people list sits beside the form on desktop and above it on a phone", async ({ page }) => {
+    const boxes = async () => {
+      const [title, list, button] = await Promise.all([
+        page.getByRole("heading", { name: "Sign in", exact: true }).boundingBox(),
+        page.getByRole("radiogroup", { name: "Pick a person" }).boundingBox(),
+        page.getByRole("button", { name: "Sign in", exact: true }).boundingBox(),
+      ]);
+      return { title: title!, list: list!, button: button! };
+    };
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await go(page, "/login");
+    let b = await boxes();
+    expect(b.list.x).toBeGreaterThan(b.button.x + b.button.width);
+    expect(b.list.y).toBeLessThan(b.button.y);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    b = await boxes();
+    expect(b.list.y).toBeGreaterThan(b.title.y);
+    expect(b.list.y + b.list.height).toBeLessThan(b.button.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
   test("typing an email shows who it is", async ({ page }) => {
@@ -86,6 +108,9 @@ test.describe("sign in", () => {
 
     await go(page, "/login");
     await expect(page.getByText("You're signed in as")).toBeVisible();
+    // Headings don't skip a level: h1, then an h2 (hidden) before the people list's h3.
+    expect(await page.locator("h1, h2, h3").evaluateAll((hs) => hs.map((h) => h.tagName))).toEqual(expect.arrayContaining(["H1", "H2", "H3"]));
+    await expect(page.getByRole("heading", { level: 2, name: "Signed in" })).toBeAttached();
     await page.getByRole("link", { name: "Switch person" }).click();
     await expect(email(page)).toBeVisible();
     await go(page, "/login");

@@ -34,7 +34,7 @@ export function anthropicModel(): ChatModel {
           tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema as { type: "object" } })),
           messages: toMessages(turns),
         },
-        { timeout: opts?.timeoutMs ?? 60_000 },
+        { timeout: opts?.timeoutMs ?? 60_000, ...(opts?.timeoutMs ? { maxRetries: 0 } : {}) },
       );
       if (res.stop_reason === "refusal") throw new Error("model declined the request");
       // A tool call cut off at max_tokens can still parse as a partial object; never run it.
@@ -51,7 +51,7 @@ export function anthropicModel(): ChatModel {
           betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
           output_config: { effort: "low", format: betaZodOutputFormat(schema) },
         },
-        { timeout: opts?.timeoutMs ?? 60_000 },
+        { timeout: opts?.timeoutMs ?? 60_000, ...(opts?.timeoutMs ? { maxRetries: 0 } : {}) },
       );
       if (res.stop_reason === "refusal") throw new Error("model declined the request");
       if (!res.parsed_output) throw new Error("model returned no structured output");

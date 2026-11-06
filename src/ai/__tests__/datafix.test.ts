@@ -3,9 +3,9 @@ import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
 import { generate } from "@/seed/generate";
 import { get } from "../data";
-import { applyFixes, issueTargets } from "../datafix";
+import { applyFixes, dismissIssue, issueTargets } from "../datafix";
 import { healthFilters } from "../filters";
-import { dataHealth, issuesPage } from "../views";
+import { dataHealth, issuesPage, proposal } from "../views";
 import { fixPreviewProps, NEXT_STEP, type Issue } from "../ui/IssueFix";
 import { DB_BUSY, publicError } from "../http";
 import { executeProposal } from "../effects";
@@ -197,6 +197,118 @@ describe("Data Health scope", () => {
     expect((await issuesPage(data, {})).rows.map((r) => (r as Record<string, unknown>).id)).not.toContain("di-gl");
     const all = await dataHealth({ db: f.db, ws: WS, actor: DANIEL });
     expect(all.rules.find((r) => r.id === "leases.rent_outlier")?.open).toBe(2);
+  });
+});
+
+describe("Data Health issues on records with no property", () => {
+  // A vendor bank change (no property) and lease issues at p01 (Marcus's) and p10 (not his).
+  function orgIssues() {
+    const f = setup();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'vendors.unverified_bank_change', 'vendors', 'Unverified vendor bank change', 'critical', 'x', 'computed'), ('base', 'leases.rent_outlier', 'leases', 'Rent far above market', 'warn', 'x', 'computed')").run();
+    const add = f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', ?, ?, ?, ?, ?, '2026-11-01', ?, '{}', ?)");
+    add.run("di-bank", "vendors.unverified_bank_change", "vendors", "v02", null, "critical", JSON.stringify({ action: "vendors.hold_payments", why: ["Bank details changed"] }));
+    add.run("di-far", "leases.rent_outlier", "leases", "l3", "p10", "warn", null);
+    return f;
+  }
+  const ids = (rows: unknown[]) => rows.map((r) => (r as Record<string, unknown>).id);
+
+  it("a property manager sees vendor issues their role can read, and still not other properties' issues", async () => {
+    const f = orgIssues();
+    const data = { db: f.db, ws: WS, actor: MARCUS };
+    const list = await issuesPage(data, {});
+    expect(ids(list.rows)).toContain("di-bank");
+    expect(ids(list.rows)).not.toContain("di-far");
+    expect(await get(data, "data_issues", "di-bank")).not.toBeNull();
+    expect(await get(data, "data_issues", "di-far")).toBeNull();
+    const h = await dataHealth(data);
+    expect(h.rules.find((r) => r.id === "vendors.unverified_bank_change")?.open).toBe(1);
+    expect(h.rules.find((r) => r.id === "leases.rent_outlier")?.open).toBe(1); // di-rent at p01 only
+    expect(h.open).toBe(list.total);
+    expect(h.rules.reduce((n, r) => n + r.open, 0)).toBeLessThanOrEqual(h.open);
+    expect(h.modules.find((m) => m.entities.includes("vendors"))?.open).toBe(1);
+  });
+
+  it("a role that can't read vendors still doesn't see their issues", async () => {
+    const f = orgIssues();
+    const data = { db: f.db, ws: WS, actor: { ...MARCUS, personaId: "lena", name: "Lena Ortiz", role: "leasing_agent" as const } };
+    expect(ids((await issuesPage(data, {})).rows)).not.toContain("di-bank");
+    expect(await get(data, "data_issues", "di-bank")).toBeNull();
+    expect((await dataHealth(data)).rules.map((r) => r.id)).not.toContain("vendors.unverified_bank_change");
+  });
+
+  it("a property manager sees a vendor bank-change flag but can't dismiss it; an accountant can", async () => {
+    const f = orgIssues();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    const row = (await issuesPage(marcus, { issue: "di-bank" })).rows[0] as unknown as Issue;
+    expect(row.canDismiss).toBe(false);
+    expect(fixPreviewProps(row, async () => null).onDismiss).toBeUndefined();
+    expect(await dismissIssue(marcus, getPersona("marcus")!, "di-bank", "")).toMatchObject({ ok: false, status: 403 });
+    expect((await get(marcus, "data_issues", "di-bank"))?.status).toBe("open");
+    const grace = { db: f.db, ws: WS, actor: actorOf("grace") };
+    expect(await dismissIssue(grace, getPersona("grace")!, "di-bank", "Called the vendor")).toMatchObject({ ok: true });
+    expect((await get(grace, "data_issues", "di-bank"))?.status).toBe("dismissed");
+  });
+
+  it("a property manager who sends a vendor issue's fix sees the proposal it makes; a role that can't read vendors doesn't", async () => {
+    const f = orgIssues();
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    const r = await applyFixes(marcus, getPersona("marcus")!, ["di-bank"], { safeOnly: false });
+    expect(r.results[0]).toMatchObject({ ok: false, queued: true });
+    const id = r.results[0].proposalId!;
+    expect(f.raw.prepare("SELECT property_id, assignee_role FROM ai_proposals WHERE id = ?").get(id)).toMatchObject({ property_id: null, assignee_role: "accountant" });
+    expect(await proposal(marcus, id)).toMatchObject({ id });
+    expect(await proposal({ db: f.db, ws: WS, actor: { ...MARCUS, personaId: "lena", name: "Lena Ortiz", role: "leasing_agent" as const } }, id)).toBeNull();
+  });
+
+  it("a property manager still dismisses a low-stakes issue on their property", async () => {
+    const f = orgIssues();
+    f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', 'di-addr', 'properties.address_format', 'properties', 'p01', 'p01', '2026-11-01', 'info', '{}', ?)").run(JSON.stringify({ changes: { street: "1 Main St" } }));
+    const marcus = { db: f.db, ws: WS, actor: MARCUS };
+    expect(await dismissIssue(marcus, getPersona("marcus")!, "di-addr", "")).toMatchObject({ ok: true });
+  });
+});
+
+describe("Data Health fixes a person chooses between", () => {
+  // The lease ended but is still marked Active: end it, or switch it to month-to-month.
+  function pastEnd() {
+    const f = setup();
+    f.raw.prepare("UPDATE leases SET end_on = '2026-07-31' WHERE id = 'l2'").run();
+    f.raw.prepare("INSERT INTO data_rules (workspace_id, id, entity_type, name, severity, description, check_kind) VALUES ('base', 'leases.past_end_date', 'leases', 'Lease still active after its end date', 'warn', 'x', 'computed')").run();
+    f.raw.prepare("INSERT INTO data_issues (workspace_id, id, rule_id, entity_type, entity_id, property_id, detected_at, severity, evidence, suggested_fix) VALUES ('base', 'di-end', 'leases.past_end_date', 'leases', 'l2', 'p01', '2026-11-01', 'warn', '{}', ?)").run(JSON.stringify({
+      options: [{ label: "Mark as ended", changes: { status: "Expired" }, why: "The resident moved out" }, { label: "Switch to month-to-month", changes: { status: "Month-to-month" }, why: "The resident stays on" }],
+      why: ["The lease ended Jul 31, 2026 but is still marked Active"], confidence: 0.85, source: "rule",
+    }));
+    return f;
+  }
+
+  it("shows both choices with before and after, and the manual next step", async () => {
+    const f = pastEnd();
+    const issue = (await issuesPage({ db: f.db, ws: WS, actor: MARCUS }, { issue: "di-end" })).rows[0] as unknown as Issue;
+    const p = fixPreviewProps(issue, async () => null);
+    expect(p.onApply).toBeUndefined();
+    expect(p.nextStep?.text).toBe(NEXT_STEP["leases.past_end_date"]);
+    expect(p.needsPerson).toMatch(/approvals inbox/);
+    expect(p.choices?.map((c) => [c.label, c.changes])).toEqual([
+      ["Mark as ended", [{ field: "status", label: "Status", before: "Active", after: "Expired" }]],
+      ["Switch to month-to-month", [{ field: "status", label: "Status", before: "Active", after: "Month-to-month" }]],
+    ]);
+  });
+
+  it("needs a choice, queues the chosen status change for a person, and applies it only on approval", async () => {
+    const f = pastEnd();
+    const data = { db: f.db, ws: WS, actor: MARCUS };
+    const marcus = getPersona("marcus")!;
+    expect((await applyFixes(data, marcus, ["di-end"], { safeOnly: false })).results[0]).toMatchObject({ ok: false, message: "Choose a fix first: Mark as ended or Switch to month-to-month" });
+    expect(await issueTargets(data, {}, "safe")).toMatchObject({ ids: expect.not.arrayContaining(["di-end"]) });
+    expect(await issueTargets(data, {}, "send")).toMatchObject({ ids: expect.not.arrayContaining(["di-end"]) });
+    const r = await applyFixes(data, marcus, ["di-end"], { safeOnly: false, option: 1 });
+    expect(r.results[0]).toMatchObject({ ok: false, queued: true });
+    const row = f.raw.prepare("SELECT * FROM ai_proposals WHERE workspace_id = ? AND id = ?").get(WS, r.results[0].proposalId!) as Record<string, unknown>;
+    expect(row).toMatchObject({ assignee_role: "property_manager", risk: "High", title: "Fix: past end date on leases l2 (Switch to month-to-month)" });
+    expect((await get(data, "leases", "l2"))?.status).toBe("Active");
+    expect(await executeProposal(data, row, { id: "marcus", name: "Marcus Bell" })).toMatchObject({ ok: true });
+    expect((await get(data, "leases", "l2"))?.status).toBe("Month-to-month");
+    expect((await get(data, "data_issues", "di-end"))?.status).toBe("fixed");
   });
 });
 

@@ -51,8 +51,13 @@ export default defineAgent({
     await ctx.step({ kind: "reasoning_summary", output: { rule_checks: counts }, ok: true });
 
     const open = await ctx.call<{ rows: Row[]; total: number }>("data.issues", { status: "open", size: 50 });
+    // A bank-change issue stays open after its hold is approved (it is the payment hold, closed by
+    // the callback), so it isn't proposed again once a hold on it has been approved.
+    const ws = ctx.ws === "base" ? null : ctx.ws;
+    const held = new Set((await ctx.db.prepare(`SELECT p.entity_id FROM ${effective("ai_proposals", ws)} p JOIN ${effective("ai_decisions", ws)} d ON d.proposal_id = p.id WHERE p.entity_type = 'data_issues' AND instr(p.payload, '"rule":"vendors.unverified_bank_change"') > 0 AND d.decision IN ('Approved', 'Edited')`).all<{ entity_id: string }>()).results.map((r) => r.entity_id));
     const out: Candidate[] = [];
     for (const issue of open.rows) {
+      if (held.has(String(issue.id))) continue;
       let fix = issue.suggested_fix as Record<string, unknown> | null;
       if (!fix || (!fix.changes && !fix.action && !fix.merge_into)) {
         const table = String(issue.entity_type);

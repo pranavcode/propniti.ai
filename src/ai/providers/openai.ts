@@ -26,7 +26,7 @@ export function openaiModel(): ChatModel {
       const t0 = Date.now();
       const res = await client.chat.completions.create(
         { model, messages: toMessages(system, turns), tools: tools.map((t) => ({ type: "function" as const, function: { name: t.name, description: t.description, parameters: t.schema } })) },
-        { timeout: opts?.timeoutMs ?? 60_000 },
+        { timeout: opts?.timeoutMs ?? 60_000, ...(opts?.timeoutMs ? { maxRetries: 0 } : {}) },
       );
       const msg = res.choices[0]?.message;
       const calls = (msg?.tool_calls ?? []).flatMap((c) => {
@@ -45,7 +45,7 @@ export function openaiModel(): ChatModel {
       const t0 = Date.now();
       const res = await client.chat.completions.parse(
         { model, messages: [{ role: "system", content: system }, { role: "user", content: user }], response_format: zodResponseFormat(schema, "result") },
-        { timeout: opts?.timeoutMs ?? 60_000 },
+        { timeout: opts?.timeoutMs ?? 60_000, ...(opts?.timeoutMs ? { maxRetries: 0 } : {}) },
       );
       const value = res.choices[0]?.message.parsed;
       if (value == null) throw new Error("model returned no structured output");

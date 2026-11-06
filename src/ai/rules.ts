@@ -179,7 +179,7 @@ export function computeFix(rule: string, row: Row): { changes: Record<string, un
     const d = new Date(row.start_on + "T00:00:00Z");
     d.setUTCMonth(d.getUTCMonth() + months);
     d.setUTCDate(d.getUTCDate() - 1);
-    return { changes: { end_on: d.toISOString().slice(0, 10) }, why: [`End date ${row.end_on} is before the start ${row.start_on}; set it to start + ${months} months`], confidence: 0.85 };
+    return { changes: { end_on: d.toISOString().slice(0, 10) }, why: [`End date ${dateLabel(row.end_on)}, ${row.end_on.slice(0, 4)} is before the start ${dateLabel(row.start_on)}, ${row.start_on.slice(0, 4)}; set it to start + ${months} months`], confidence: 0.85 };
   }
   return null;
 }

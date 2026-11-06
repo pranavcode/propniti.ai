@@ -5,7 +5,7 @@ import { RENTER_HELP } from "../components/public/renter-help";
 import { HELP_ARTICLES } from "./help";
 import { leaseDocTerms } from "./leaseDoc";
 import { MORE_HELP_ARTICLES } from "./help-more";
-import { addMonths, addMonthsDay, day, iso, monthStart, rng, round, ts, type Rng } from "./rng";
+import { addMonths, addMonthsDay, day, dollars, iso, monthStart, rng, round, ts, usDate, type Rng } from "./rng";
 
 // Everything around the ledger that makes the product feel lived-in: policies and state rules,
 // the leasing funnel, operations depth, communications, risk and compliance, AI agent history,
@@ -15,6 +15,7 @@ import { addMonths, addMonthsDay, day, iso, monthStart, rng, round, ts, type Rng
 
 const regional = (p: Prop) => (p.region === "r-tx" ? "priya" : p.region === "r-se" ? "s-wanjiru" : "s-colton");
 const CURRENT = new Set(["Active", "Notice", "Month-to-month", "Eviction"]);
+const PAST_END_RULE = "leases.past_end_date";
 const hashish = (s: string) => Array.from(s).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 const pick = <T>(r: Rng, xs: readonly T[]) => xs[r.int(0, xs.length - 1)];
 const name = (h: Household) => (h.residents[0] ? `${h.residents[0].first_name} ${h.residents[0].last_name}` : h.name);
@@ -860,14 +861,15 @@ class Extras {
       }
     }
     // Leases: end before start; rent ten times market (typo).
+    const staleLeases = new Set(c.planted["leases.past_end_date"] ?? []);
     for (const l of c.leases) {
       const r = rng(`dhl:${l.id}`);
-      if (l.commercial || l.status === "Future") continue;
+      if (l.commercial || l.status === "Future" || staleLeases.has(l.id)) continue;
       if (r.chance(0.026) && l.end !== null) {
         const [s, e] = [l.row.start_on, l.row.end_on];
         l.row.start_on = e;
         l.row.end_on = s;
-        issue("leases.end_before_start", "leases", l.id, l.u.p.id, "critical", { start_on: e, end_on: s, term_months: l.term }, { changes: { start_on: s, end_on: e }, why: ["End date is before start date", `Swapping them gives a ${l.term}-month term, matching term_months`], confidence: 0.96, source: "rule" });
+        issue("leases.end_before_start", "leases", l.id, l.u.p.id, "critical", { start_on: e, end_on: s, term_months: l.term }, { changes: { start_on: s, end_on: e }, why: ["End date is before start date", `Swapping them gives a ${l.term}-month term, matching the term on the lease`], confidence: 0.96, source: "rule" });
       } else if (r.chance(0.03) && CURRENT.has(l.status) && l.hh.residents[0]?.id !== "res-p01-0001") {
         l.row.rent_cents = l.rent * 10;
         issue("leases.rent_outlier", "leases", l.id, l.u.p.id, "critical", { rent_cents: l.rent * 10, market_rent_cents: l.u.market, billed_cents: l.rent }, { changes: { rent_cents: l.rent }, why: [`Rent is ${Math.round((l.rent * 10) / l.u.market)}× the unit's market rent`, "Monthly charges bill one tenth of it", "Looks like an extra zero typed at entry"], confidence: 0.92, source: "rule" });
@@ -929,7 +931,7 @@ class Extras {
     for (const id of c.planted["bank_transactions.unmatched_deposit"] ?? []) {
       const t = c.t.bank_transactions.find((b) => b.id === id)!;
       const near = c.t.transfers.filter((x) => x.bank_account_id === t.bank_account_id && x.kind === "Rent" && x.status === "Cleared").sort((a, b) => Math.abs((a.amount_cents as number) - (t.amount_cents as number)) - Math.abs((b.amount_cents as number) - (t.amount_cents as number)))[0];
-      issue("bank_transactions.unmatched_deposit", "bank_transactions", id, near?.property_id as string ?? null, "warn", { amount_cents: t.amount_cents, posted_on: t.posted_on }, { action: "bank_transactions.match", params: { transfer_id: near?.id }, why: ["No transfer batch links to this deposit", `Closest batch: ${near?.ref} for ${((near?.amount_cents as number) / 100).toFixed(2)}`], confidence: 0.62, source: "reconciliation" });
+      issue("bank_transactions.unmatched_deposit", "bank_transactions", id, near?.property_id as string ?? null, "warn", { amount_cents: t.amount_cents, posted_on: t.posted_on }, { action: "bank_transactions.match", params: { transfer_id: near?.id }, why: ["No transfer batch links to this deposit", `Closest batch: ${String(near?.ref).replace(/\d{4}-\d{2}-\d{2}/, usDate)} for ${dollars(near?.amount_cents as number)}`], confidence: 0.62, source: "reconciliation" });
     }
     for (const rule of ["prospects.invalid_email", "documents.import_swapped_columns", "documents.misfiled"]) {
       for (const id of c.planted[rule] ?? []) {
@@ -961,7 +963,7 @@ class Extras {
     issue("vendors.unverified_bank_change", "vendors", "v26", null, "critical", { bank_last4: "0917", previous_last4: "5521", changed_at: v26.bank_changed_at, requested_by: "email from keyright-locksmiths.co (lookalike domain)" }, { action: "vendors.hold_payments", params: { create_task: true }, why: ["Bank details changed 3 days ago", "No verification task or callback on file", "Request came from a lookalike email domain"], confidence: 0.95, source: "ap" });
     for (const item of c.t.compliance_items.filter((x) => x.status === "Overdue")) {
       const lifeSafety = ["Fire inspection", "Fire alarm test", "Elevator cert", "Boiler"].includes(item.kind as string);
-      issue("compliance_items.overdue", "compliance_items", item.id as string, item.property_id as string | null, lifeSafety ? "critical" : "warn", { kind: item.kind, due_on: item.due_on, days_overdue: ASOF - day(item.due_on as string) }, { action: "compliance_items.schedule", params: { create_task: true }, why: [`${item.kind} was due ${item.due_on}`, lifeSafety ? "Life-safety item: a person schedules it" : "Book the inspection or training and attach the certificate"], confidence: 0.99, source: "compliance" });
+      issue("compliance_items.overdue", "compliance_items", item.id as string, item.property_id as string | null, lifeSafety ? "critical" : "warn", { kind: item.kind, due_on: item.due_on, days_overdue: ASOF - day(item.due_on as string) }, { action: "compliance_items.schedule", params: { create_task: true }, why: [`${item.kind} was due ${usDate(item.due_on as string)}`, lifeSafety ? "Life-safety item: a person schedules it" : "Book the inspection or training and attach the certificate"], confidence: 0.99, source: "compliance" });
     }
     for (const v of c.t.vendors.filter((v) => v.id === "v19" || v.id === "v42")) v.w9_on_file = 0;
     for (const v of c.t.vendors.filter((v) => v.is_1099 && !v.w9_on_file)) issue("vendors.missing_w9", "vendors", v.id as string, null, "warn", { w9_on_file: 0, is_1099: 1 }, { action: "vendors.request_w9", params: {}, why: ["1099 vendor with no W-9 on file", "Payments this year need a TIN for 1099 filing"], confidence: 0.97, source: "rule" });
@@ -977,6 +979,21 @@ class Extras {
         w.completed_at = ts(day(w.opened_at as string) - 1, 600);
         issue("work_orders.closed_before_opened", "work_orders", w.id as string, w.property_id as string, "warn", { opened_at: w.opened_at, completed_at: w.completed_at }, { changes: { completed_at: right }, why: ["Completed one day before it was opened", "The completion event in the history has the right time"], confidence: 0.9, source: "rule" });
       }
+    }
+    // Leases still marked Active (or Notice, with the move-out also past) after their end date. Not
+    // month-to-month holdovers on notice (they move out later), and not swapped dates (own rule).
+    // A person picks the fix, so it carries options and no field changes of its own.
+    for (const l of c.leases) {
+      const row = l.row;
+      const [status, end, out] = [row.status as string, row.end_on as string | null, row.move_out_on as string | null];
+      if (!end || end >= AS_OF || end < (row.start_on as string) || !["Active", "Notice"].includes(status) || (status === "Notice" && out && out >= AS_OF)) continue;
+      issue(PAST_END_RULE, "leases", l.id, l.u.p.id, "warn", { status, end_on: end, move_out_on: out }, {
+        options: [
+          { label: "Mark as ended", changes: { status: "Expired" }, why: "The resident has moved out or the lease is over" },
+          { label: "Switch to month-to-month", changes: { status: "Month-to-month" }, why: "The resident stays on and pays month to month" },
+        ],
+        why: [`The lease ended ${usDate(end)} but is still marked ${status}`, out ? `Move-out ${out < AS_OF ? "was" : "is set for"} ${usDate(out)}` : "No move-out date is recorded", "Rent and renewals treat it as a running lease"], confidence: 0.85, source: "rule",
+      });
     }
     // A few already fixed (history in data_fix_log + audit). The row then holds the corrected value.
     const byId = new Map<string, Map<string, R>>();
@@ -999,12 +1016,13 @@ class Extras {
     const RULES: [string, string, string, string, string, string | null][] = [
       ["residents.possible_duplicate", "residents", "Possible duplicate resident", "warn", "Two residents at the same property share a phone number and nearly the same name.", "SELECT a.id FROM {{residents}} a JOIN {{residents}} b ON a.phone = b.phone AND a.property_id = b.property_id AND a.id > b.id AND a.last_name = b.last_name"],
       ["residents.phone_in_email", "residents", "Phone number in email field", "warn", "The email field holds digits only.", "SELECT id FROM {{residents}} WHERE email NOT LIKE '%@%'"],
-      ["leases.end_before_start", "leases", "Lease ends before it starts", "critical", "end_on is earlier than start_on.", "SELECT id FROM {{leases}} WHERE end_on < start_on"],
+      ["leases.end_before_start", "leases", "Lease ends before it starts", "critical", "The lease end date is earlier than its start date.", "SELECT id FROM {{leases}} WHERE end_on < start_on"],
+      [PAST_END_RULE, "leases", "Lease still active after its end date", "warn", "The lease is marked Active or Notice, but its end date has passed and it isn't month-to-month. Mark it as ended or switch it to month-to-month.", `SELECT id FROM {{leases}} WHERE status IN ('Active', 'Notice') AND end_on < '${AS_OF}' AND end_on >= start_on AND NOT (status = 'Notice' AND coalesce(move_out_on, '') >= '${AS_OF}')`],
       ["leases.rent_outlier", "leases", "Rent far above market", "critical", "Lease rent is more than 3× the unit's market rent.", "SELECT l.id FROM {{leases}} l JOIN {{units}} u ON u.id = l.unit_id WHERE l.rent_cents > 3 * u.market_rent_cents AND l.kind = 'Residential'"],
-      ["properties.negative_unit_count", "properties", "Negative unit count", "critical", "unit_count is below zero.", "SELECT id FROM {{properties}} WHERE unit_count < 0"],
+      ["properties.negative_unit_count", "properties", "Negative unit count", "critical", "The property's unit count is below zero.", "SELECT id FROM {{properties}} WHERE unit_count < 0"],
       ["properties.missing_zip_state", "properties", "Missing ZIP or state", "warn", "ZIP or state is blank.", "SELECT id FROM {{properties}} WHERE zip = '' OR state = ''"],
       ["properties.address_format", "properties", "Address not in USPS format", "info", "Street is all capitals or ends with a period.", "SELECT id FROM {{properties}} WHERE street = upper(street) OR street LIKE '%.'"],
-      ["units.orphan_property", "units", "Unit points to a missing property", "critical", "property_id doesn't match any property.", "SELECT u.id FROM {{units}} u WHERE NOT EXISTS (SELECT 1 FROM {{properties}} p WHERE p.id = u.property_id)"],
+      ["units.orphan_property", "units", "Unit points to a missing property", "critical", "The unit is linked to a property that doesn't exist.", "SELECT u.id FROM {{units}} u WHERE NOT EXISTS (SELECT 1 FROM {{properties}} p WHERE p.id = u.property_id)"],
       ["units.sqft_outlier", "units", "Square footage outlier", "warn", "Unit sq ft is more than 3× its floor plan.", "SELECT u.id FROM {{units}} u JOIN {{unit_types}} t ON t.id = u.unit_type_id WHERE u.sqft > 3 * t.sqft"],
       ["payments.wrong_lease", "payments", "Payment posted to the wrong lease", "warn", "The payment's lease differs from the lease of the charge it pays.", "SELECT p.id FROM {{payments}} p JOIN {{charges}} c ON c.id = p.charge_id WHERE p.lease_id <> c.lease_id"],
       ["bill_lines.gl_miscoded", "bills", "GL account doesn't fit the line", "warn", "A recurring-contract line differs from the contract's GL account, or a work-order repair isn't coded to repairs.", "SELECT l.id FROM {{bill_lines}} l JOIN {{bills}} b ON b.id = l.bill_id LEFT JOIN {{recurring_bills}} rb ON rb.id = b.recurring_bill_id WHERE (rb.id IS NOT NULL AND l.gl_account_id <> rb.gl_account_id) OR (b.work_order_id IS NOT NULL AND l.gl_account_id NOT IN ('gl-6000', 'gl-6050'))"],
@@ -1015,7 +1033,7 @@ class Extras {
       ["documents.misfiled", "documents", "Document filed to the wrong record", "info", "The document type doesn't fit the record it's filed to.", "SELECT id FROM {{documents}} WHERE doc_type = 'Lease' AND entity_type <> 'leases'"],
       ["prospects.invalid_email", "prospects", "Invalid prospect email", "info", "Email has a typo in the domain.", "SELECT id FROM {{prospects}} WHERE email NOT LIKE '%@%.%' OR email LIKE '%,%'"],
       ["work_orders.completed_without_cost", "work_orders", "Completed vendor job without cost", "info", "A vendor work order is completed with no cost recorded.", "SELECT id FROM {{work_orders}} WHERE status IN ('Completed', 'Paid') AND vendor_id IS NOT NULL AND cost_cents IS NULL"],
-      ["work_orders.closed_before_opened", "work_orders", "Completed before it was opened", "warn", "completed_at is earlier than opened_at.", "SELECT id FROM {{work_orders}} WHERE completed_at < opened_at"],
+      ["work_orders.closed_before_opened", "work_orders", "Completed before it was opened", "warn", "The work order's completion time is earlier than the time it was opened.", "SELECT id FROM {{work_orders}} WHERE completed_at < opened_at"],
       ["compliance_items.overdue", "compliance_items", "Compliance item overdue", "warn", "A permit, inspection, certificate or training is past its due date and not done.", "SELECT id FROM {{compliance_items}} WHERE completed_on IS NULL AND due_on < '2026-11-04'"],
       ["bills.possible_duplicate", "bills", "Possible duplicate invoice", "critical", "Same vendor and invoice number as another bill.", "SELECT b.id FROM {{bills}} b JOIN {{bills}} o ON o.vendor_id = b.vendor_id AND o.invoice_number = b.invoice_number AND o.id <> b.id AND o.status = 'Paid' WHERE b.status <> 'Paid'"],
       ["bills.amount_outlier", "bills", "Invoice far above the vendor's usual", "warn", "An unpaid bill is more than 2.4× the vendor's median paid bill.", null],
@@ -1117,7 +1135,7 @@ class Extras {
       const p = c.propById[w.property_id as string];
       const est = (w.estimate_cents as number) ?? 0;
       const overOwner = est > 250_000;
-      doRun("maintenance_triage", d, Math.min(1430, m), "event", ["work_orders.get", "vendors.rank", "approval_policies.check"], [{ entity: "work_orders", id: w.id as string, pid: p.id, action: "work_orders.assign_vendor", title: `Assign ${w.vendor_id ? c.vendorName[w.vendor_id as string] : "in-house tech"} to ${w.id} (${w.category}, ${String(w.priority).toLowerCase()})`, why: [`Classified as ${w.category} from the request text`, w.vendor_id ? `${c.vendorName[w.vendor_id as string]}: best rating and on-time rate for ${w.category} in ${p.metro}` : "Simple repair; in-house tech available today", overOwner ? "Estimate is over the owner approval limit" : `Estimate $${Math.round(est / 100)} is within the $750 auto-approve limit`], conf: 0.86, amount: est, risk: overOwner ? "High" : "Low", queue: (w.status === "New" || w.status === "Triaged") && d >= ASOF - 1 ? "needs_you" : "auto_handled", role: "maintenance_supervisor" }], `Triage: ${w.category}, ${w.priority}. ${w.vendor_id ? "Vendor ranked." : "In-house."}`, "wo.created");
+      doRun("maintenance_triage", d, Math.min(1430, m), "event", ["work_orders.get", "vendors.rank", "approval_policies.check"], [{ entity: "work_orders", id: w.id as string, pid: p.id, action: "work_orders.assign_vendor", title: `Assign ${w.vendor_id ? c.vendorName[w.vendor_id as string] : "in-house tech"} to ${w.id} (${w.category}, ${String(w.priority).toLowerCase()})`, why: [`Classified as ${w.category} from the request text`, w.vendor_id ? `${c.vendorName[w.vendor_id as string]}: best rating and on-time rate for ${w.category} in ${p.metro}` : "Simple repair; in-house tech available today", overOwner ? "Estimate is over the owner approval limit" : `Estimate ${dollars(est, false)} is within the $750 auto-approve limit`], conf: 0.86, amount: est, risk: overOwner ? "High" : "Low", queue: (w.status === "New" || w.status === "Triaged") && d >= ASOF - 1 ? "needs_you" : "auto_handled", role: "maintenance_supervisor" }], `Triage: ${w.category}, ${w.priority}. ${w.vendor_id ? "Vendor ranked." : "In-house."}`, "wo.created");
     }
     // Payables: anomaly checks on recent bills.
     const recentBills = c.bills.filter((b) => (b.bill_date as string) >= iso(ASOF - 10) && b.status !== "Paid");
@@ -1129,7 +1147,7 @@ class Extras {
     // Renewals: weekly pricing runs for leases ending in the next 120 days.
     for (const d of [ASOF - 28, ASOF - 21, ASOF - 14, ASOF - 7, ASOF - 1]) {
       const exp = c.leases.filter((l) => ["Active", "Month-to-month"].includes(l.status) && l.end !== null && l.end - d < 120 && l.end - d > 60 && !l.commercial && rng(`ren:${l.id}:${d}`).chance(0.12));
-      doRun("renewals", d, 15 * 60, "schedule", ["leases.list_expiring", "units.market_rent", "renewal_offers.propose"], exp.slice(0, 8).map((l) => ({ entity: "leases", id: l.id, pid: l.u.p.id, action: "renewal_offers.send", title: `Renew ${l.hh.name} at $${Math.round(round(l.rent * 1.03, 500) / 100).toLocaleString("en-US")} (+3%) for 12 months`, why: [`Market rent for ${l.u.number} is $${Math.round(l.u.market / 100)}`, "On-time payment history", "Similar renewals accepted at +2.5–3.5% this quarter"], conf: 0.74, amount: round(l.rent * 1.03, 500), risk: "Low", queue: d >= ASOF - 7 ? "needs_you" : "auto_handled", role: "property_manager", payload: { term_months: 12, rent_cents: round(l.rent * 1.03, 500) } })), `Priced ${exp.length} renewals.`);
+      doRun("renewals", d, 15 * 60, "schedule", ["leases.list_expiring", "units.market_rent", "renewal_offers.propose"], exp.slice(0, 8).map((l) => ({ entity: "leases", id: l.id, pid: l.u.p.id, action: "renewal_offers.send", title: `Renew ${l.hh.name} at $${Math.round(round(l.rent * 1.03, 500) / 100).toLocaleString("en-US")} (+3%) for 12 months`, why: [`Market rent for ${l.u.number} is ${dollars(l.u.market, false)}`, "On-time payment history", "Similar renewals accepted at +2.5–3.5% this quarter"], conf: 0.74, amount: round(l.rent * 1.03, 500), risk: "Low", queue: d >= ASOF - 7 ? "needs_you" : "auto_handled", role: "property_manager", payload: { term_months: 12, rent_cents: round(l.rent * 1.03, 500) } })), `Priced ${exp.length} renewals.`);
     }
     // Data Health: every 6 hours; proposals for open critical issues.
     const crit = (this.t.data_issues ?? []).filter((i) => i.status === "open");
@@ -1143,11 +1161,11 @@ class Extras {
     doRun("compliance", ASOF, 11 * 60 + 5, "schedule", ["compliance_items.list", "tasks.create"], overdue.slice(0, 30).map((x) => {
       const late = x.status === "Overdue";
       const life = ["Fire inspection", "Fire alarm test", "Elevator cert", "Boiler"].includes(x.kind as string);
-      return { entity: "compliance_items", id: x.id as string, pid: x.property_id as string | null, action: x.staff_id ? "compliance_items.assign_training" : "compliance_items.schedule", title: `${late ? "Overdue" : "Due soon"}: ${x.title}`, why: [`Due ${x.due_on}${late ? `, ${ASOF - day(x.due_on as string)} days ago` : ""}`, life ? "Life-safety item: a person must schedule it" : x.staff_id ? "Required annually for anyone who talks to applicants or residents" : "Certificate needed for insurance and the city"], conf: 0.97, risk: life ? "High" : "Low", queue: late || life ? "needs_you" : "auto_handled", role: life ? (x.property_id ? "regional_manager" : "principal") : "maintenance_supervisor" };
+      return { entity: "compliance_items", id: x.id as string, pid: x.property_id as string | null, action: x.staff_id ? "compliance_items.assign_training" : "compliance_items.schedule", title: `${late ? "Overdue" : "Due soon"}: ${x.title}`, why: [`Due ${usDate(x.due_on as string)}${late ? `, ${ASOF - day(x.due_on as string)} days ago` : ""}`, life ? "Life-safety item: a person must schedule it" : x.staff_id ? "Required annually for anyone who talks to applicants or residents" : "Certificate needed for insurance and the city"], conf: 0.97, risk: life ? "High" : "Low", queue: late || life ? "needs_you" : "auto_handled", role: life ? (x.property_id ? "regional_manager" : "principal") : "maintenance_supervisor" };
     }), `Checked ${c.t.compliance_items.length} compliance items: ${overdue.filter((x) => x.status === "Overdue").length} overdue, ${overdue.filter((x) => x.status === "Due soon").length} due within 30 days.`);
-    doRun("compliance", ASOF, 11 * 60, "schedule", ["vendor_cois.list_expiring", "compliance_items.list"], (this.t.vendor_cois ?? []).filter((x) => x.status !== "Valid").map((x) => ({ entity: "vendors", id: x.vendor_id as string, pid: null, action: "vendors.request_coi", title: `Request a current COI from ${c.vendorName[x.vendor_id as string]} (${x.status === "Expired" ? "expired" : "expires"} ${x.expires_on})`, why: [`Certificate ${x.status === "Expired" ? "expired" : "expires"} on ${x.expires_on}`, "Vendor has open or scheduled jobs"], conf: 0.97, risk: x.status === "Expired" ? "Medium" : "Low", queue: x.status === "Expired" ? "needs_you" : "auto_handled", role: "maintenance_supervisor" })), "Checked 34 certificates and 120 compliance items.");
+    doRun("compliance", ASOF, 11 * 60, "schedule", ["vendor_cois.list_expiring", "compliance_items.list"], (this.t.vendor_cois ?? []).filter((x) => x.status !== "Valid").map((x) => ({ entity: "vendors", id: x.vendor_id as string, pid: null, action: "vendors.request_coi", title: `Request a current COI from ${c.vendorName[x.vendor_id as string]} (${x.status === "Expired" ? "expired" : "expires"} ${usDate(x.expires_on as string)})`, why: [`Certificate ${x.status === "Expired" ? "expired" : "expires"} on ${usDate(x.expires_on as string)}`, "Vendor has open or scheduled jobs"], conf: 0.97, risk: x.status === "Expired" ? "Medium" : "Low", queue: x.status === "Expired" ? "needs_you" : "auto_handled", role: "maintenance_supervisor" })), "Checked 34 certificates and 120 compliance items.");
     doRun("owner_reporting", ASOF - 2, 13 * 60, "schedule", ["owner_statements.get", "metrics.variance"], [{ entity: "owner_entities", id: "oe01", pid: null, action: "messages.send", title: "Send Helen Carter the October variance explanation", why: ["Distribution down 9% vs September", "Roof progress payment $48,500 at Barton Creek", "Higher HVAC spend after August heat"], conf: 0.82, risk: "Low", queue: "needs_you", role: "accountant" }], "Drafted October statement notes for 8 owner entities.");
-    doRun("leasing", ASOF, 9 * 60, "schedule", ["prospects.list", "messages.draft"], (this.t.prospects ?? []).filter((p) => p.stage === "Contacted" && p.last_contact_at && (p.last_contact_at as string) < iso(ASOF - 3)).slice(0, 12).map((p) => ({ entity: "prospects", id: p.id as string, pid: p.property_id as string, action: "prospects.send_follow_up", title: `Follow up with ${p.name}: no contact in ${Math.max(3, ASOF - day(p.last_contact_at as string))} days`, why: ["Interested lead gone quiet", `Desired move-in ${p.desired_move_in}`], conf: 0.88, risk: "Low", queue: "needs_you", role: "leasing_agent" })), "Found prospects waiting on a reply.");
+    doRun("leasing", ASOF, 9 * 60, "schedule", ["prospects.list", "messages.draft"], (this.t.prospects ?? []).filter((p) => p.stage === "Contacted" && p.last_contact_at && (p.last_contact_at as string) < iso(ASOF - 3)).slice(0, 12).map((p) => ({ entity: "prospects", id: p.id as string, pid: p.property_id as string, action: "prospects.send_follow_up", title: `Follow up with ${p.name}: no contact in ${Math.max(3, ASOF - day(p.last_contact_at as string))} days`, why: ["Interested lead gone quiet", `Desired move-in ${usDate(p.desired_move_in as string)}`], conf: 0.88, risk: "Low", queue: "needs_you", role: "leasing_agent" })), "Found prospects waiting on a reply.");
     for (const app of (this.t.applications ?? []).filter((a) => a.stage === "Review")) doRun("leasing", ASOF - 1, 16 * 60 + rng(String(app.id)).int(0, 300), "event", ["applications.score"], [{ entity: "applications", id: app.id as string, pid: app.property_id as string, action: app.recommendation === "Deny" ? "applications.deny" : "applications.approve", title: `${app.recommendation} application ${app.id} (score ${app.score})`, payload: { application_id: app.id, score: app.score, recommendation: app.recommendation, income_to_rent: app.income_to_rent }, why: JSON.parse(app.scoring_factors as string).map((f: { detail: string; direction: string }) => `${f.direction === "+" ? "For" : "Against"}: ${f.detail}`), conf: 0.8, risk: "Medium", queue: "needs_you", role: "broker" }], "Scored the application from income, credit band and rental history.", "application.submitted");
 
     // Give every proposal the action key and payload the live agents produce, so approving any seeded

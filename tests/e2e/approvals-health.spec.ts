@@ -64,9 +64,11 @@ test("Data Health honours rule and record links, shows removable pills and bulk 
   await go(page, `${BASE}/app/data-health?f.rule_id=bill_lines.gl_miscoded`);
   // Issues name their rule in words, not by key: every card on the page is from this rule.
   await expect(page.getByText("Rule: GL account doesn't fit the line")).toBeVisible();
-  const cards = page.getByRole("button", { name: "Dismiss" });
+  const cards = page.getByRole("button", { name: "Send for approval", exact: true });
   await expect(cards.first()).toBeVisible();
   await expect(page.getByText(/^GL account doesn't fit the line · /)).toHaveCount(await cards.count());
+  // GL recodes move money, so a property manager can't dismiss them; only the principal or a payables approver can.
+  await expect(page.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
   // GL recodes move money: the rule's fixes go to the approvals inbox in one click, after a confirm.
   await page.getByRole("button", { name: /^Send all \d+\+? for approval$/ }).click();
   await expect(page.getByRole("dialog").getByRole("heading", { name: /^Send \d+ fixes for approval\?$/ })).toBeVisible();

@@ -37,6 +37,7 @@ Clean, reconciled records. These are most of the data and must tie out: rent rol
 | `residents.possible_duplicate` | Same person, slightly different spelling, same phone | Merge into the older record |
 | `leases.end_before_start` | `end_on` < `start_on` | Swap or set end = start + term |
 | `leases.rent_outlier` | Rent 10× the unit's market rent (typo) | Divide by 10 |
+| `leases.past_end_date` | Month-to-month holdover still marked Active, 1–4 months past its end (6 planted: 2 in p01–p03, 2 elsewhere in Texas, 2 in Atlanta or Phoenix). The generator also leaves 1 on its own: an Active Phoenix lease past its end with its move-out still ahead, so the rule finds 7 | A person picks: mark as ended or switch to month-to-month (approval) |
 | `properties.negative_unit_count` | `unit_count` < 0 | Set to the count of units rows |
 | `units.orphan_property` | `property_id` points nowhere | Re-link by building/number match |
 | `payments.wrong_lease` | Payment posted to a neighbouring lease | Move to the lease whose charge matches the amount |

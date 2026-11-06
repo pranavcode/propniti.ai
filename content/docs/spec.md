@@ -7,7 +7,7 @@ Propniti finds wrong operations data that money decisions rely on, shows why it'
 | Area | What Propniti has |
 | --- | --- |
 | Staff app | One app at `/app` for nine staff roles, each with its own home page and scope |
-| Record types | 64 record types in 13 modules (portfolio, leasing, residents, maintenance, communications, receivables, payables, accounting, owners, risk, intelligence, settings, platform) |
+| Record types | 63 record types in 13 modules (portfolio, leasing, residents, maintenance, communications, receivables, payables, accounting, owners, risk, intelligence, settings, platform) |
 | AI agents | Collections, Renewals, Leasing, Maintenance triage, Payables, Owner reporting, Compliance and Data Health |
 | Portals | Owner, resident, vendor and applicant portals at `/portal/...` |
 | Public site | Listings, tour booking and applications at `/listings` and `/apply/...`, with no sign-in |
@@ -40,7 +40,7 @@ Propniti finds wrong operations data that money decisions rely on, shows why it'
 
 ## Personas
 
-All names and companies are fictional. Sign in at [propniti.ai/login](https://propniti.ai/login) with a demo account, or pick a person from the list beside the form. Switch later from the avatar menu (*Switch role (demo)*). `/demo` redirects to `/login`.
+All names and companies are fictional. Sign in at [propniti.ai/login](https://propniti.ai/login) with a demo account, or pick a person from the list in the same card. Switch later from the avatar menu (*Switch role (demo)*). `/demo` redirects to `/login`.
 
 Accounts are `<id>@propniti.demo` (for example `marcus@propniti.demo`) with the password `propniti-demo`. In *Pick a person*, a click fills the form and a double-click signs in. `/login?as=<id>` prefills a person.
 
@@ -137,6 +137,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Technician view: start a job, log time, mark done | Built | |
 | Vendor invoice check against the purchase order, then *Approve and pay* | Built | Rules: totals within 2%, line sums, photos. Blocked on an unverified bank change or above the owner's limit |
 | Compliance: certificates of insurance, permits, inspections, legal cases, with an expiries timeline | Built | Legal cases are hidden from roles without access |
+| Set a vendor to Inactive or Do not use while it has open emergency or life-safety work orders | Built | Only the principal or a regional manager. Others reassign the jobs first. Agent proposals that do this go to them too. A payment hold after a suspicious bank change stays with the accountant; if the vendor has such jobs, the hold keeps it on work and taking it off work becomes a separate proposal |
 
 ### Finance
 
@@ -149,7 +150,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Collection rate: the share of each month's own charges paid so far, capped at 100% | Built | Payments toward older balances don't count |
 | Returned payments with a state-capped fee; deposit dispositions | Built | |
 | AP inbox: read an uploaded invoice, suggest GL coding, run payables checks, approve and pay | Built | Manual entry when no vision model is configured |
-| Hold payments on an unverified vendor bank change; a different person verifies it | Built | |
+| Hold payments on an unverified vendor bank change; a different person verifies it | Built | Approving the hold doesn't release payments: only the callback on the number on file does |
 | Owner statements with per-line *Explain*, and distributions | Built | |
 | Bank reconciliation with suggested matches | Built | |
 | 1099 preparation | Built | |
@@ -174,7 +175,9 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Help articles at `/app/help/<id>` | Built | Assistant citations link here |
 | Readable run steps with linked record names; raw input and output under *Technical details* | Built | Out-of-scope records show their type only |
 | AI summaries on records from current figures; *Summarize with AI* where none exists | Built | See [Source labels](#source-labels) |
-| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* (up to 50) | Built | Fixes touching money, fraud or legal status wait in the approvals inbox |
+| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* (up to 50) | Built | Fixes touching money, fraud or legal status wait in the approvals inbox. Property-scoped roles see issues on their properties, plus issues on records with no property (such as vendors) that they can read. Only the principal or a payables approver can dismiss a critical, money or fraud issue |
+| Leases still Active after their end date | Built | A person picks *Mark as ended* or *Switch to month-to-month*; either goes to the approvals inbox |
+| Model failures show a plain message, never the provider's error | Built | The assistant says it used the rule-based answer. Other AI requests say "The AI service didn't respond. Try again in a minute." |
 | Automations (`/app/automations`): each agent's schedule, events, autonomy and recent runs; the sweep; approval and built-in rules | Built | |
 
 ### Portals and public site
@@ -193,7 +196,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | The principal can add people but can't grant the admin role |
+| Company profile, users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | The principal and admins edit the company profile. The principal can add people but can't grant the admin role |
 | Import of properties, units, residents, leases, owners, vendors and aged balances | Built | See [Import](#import) |
 | Guided setup at `/app/onboarding` | Built | See [Guided setup](#guided-setup) |
 | Integrations | Partial | Status cards only; no outside service is called |
@@ -356,7 +359,7 @@ Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Sco
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
 | Abuse | Bounded writes | Same-origin check; 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
 | Reliability | AI failure doesn't block work | Rules take over, and the output is labelled Rules |
-| Tests | Regressions caught before deploy | 1,279 unit tests; 190 end-to-end tests |
+| Tests | Regressions caught before deploy | 1,307 unit tests; 191 end-to-end tests |
 | Errors | No database internals shown to people | Database errors show "The database is busy; try again in a moment"; the detail goes to the server log |
 
 **Known gaps.** No real authentication: the password is published and anyone can sign in as any persona. The workspace cookie is the only key to a visitor's changes. No per-org AI quota. Some fields (lease status, budget approval, capex, 1099s, legal cases, service requests, message threads) have no named action, so generic edits can change them. Full list: [docs/security-review.md](https://github.com/pranavcode/propniti.ai/blob/main/docs/security-review.md).

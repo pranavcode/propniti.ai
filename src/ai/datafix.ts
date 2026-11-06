@@ -7,14 +7,15 @@ import { executeProposal } from "./effects";
 import { canDecide, publicError } from "./http";
 import { openRun, runWithContext } from "./orchestrator";
 import type { IssueFilters } from "./filters";
-import { fixProposal, queueReason } from "./tools/write";
+import { canDismiss, fixProposal, queueReason, type FixOption } from "./tools/write";
 import { ISSUE_ORDER, issueWhere } from "./views";
 import "./agents";
 
 // Data Health center actions. Applying a fix from the page is a person acting, but it still runs as
 // a Data Health Agent run, so the proposal, the change, the fix log and the audit row link up.
 
-export async function applyFixes(data: DataCtx, persona: Persona, issueIds: string[], opts: { safeOnly: boolean }) {
+// option: which of the issue's fix options a person picked, for rules whose fix is a choice.
+export async function applyFixes(data: DataCtx, persona: Persona, issueIds: string[], opts: { safeOnly: boolean; option?: number }) {
   const start = { db: data.db, ws: data.ws, actor: data.actor, agent: "data_health" as const, trigger: { kind: "manual" as const, input: { issues: issueIds } } };
   const runId = await openRun(start);
   const results: { id: string; ok: boolean; message: string; queued?: boolean; proposalId?: string }[] = [];
@@ -23,8 +24,9 @@ export async function applyFixes(data: DataCtx, persona: Persona, issueIds: stri
     for (const id of issueIds) {
       const issue = await get(data, "data_issues", id);
       if (!issue || issue.status !== "open") { results.push({ id, ok: false, message: issue ? `Already ${issue.status}` : "Not found" }); continue; }
-      const fix = await fixFor(data, issue);
+      const fix = await fixFor(data, issue, opts.option);
       if (!fix) { results.push({ id, ok: false, message: "No automatic fix for this one; open the record to correct it" }); continue; }
+      if (fix.options) { results.push({ id, ok: false, message: `Choose a fix first: ${(fix.options as FixOption[]).map((o) => o.label).join(" or ")}` }); continue; }
       const p = fixProposal({ ...issue, suggested_fix: JSON.stringify(fix) } as Row);
       if (opts.safeOnly && (p.alwaysHuman || p.risk !== "Low")) { results.push({ id, ok: false, message: "Needs an individual review (money, fraud or legal)" }); continue; }
       const made = await ctx.proposeFull(p);
@@ -49,9 +51,18 @@ export async function applyFixes(data: DataCtx, persona: Persona, issueIds: stri
   return { runId, applied: results.filter((r) => r.ok).length, queued: results.filter((r) => r.queued).length, results };
 }
 
-// The stored fix, or one computed from the record now when the rule left none.
-async function fixFor(data: DataCtx, issue: Row): Promise<Record<string, unknown> | null> {
+// The stored fix, or one computed from the record now when the rule left none. A fix with options
+// becomes the picked option's changes; with none picked (or an unknown one) it stays a choice.
+async function fixFor(data: DataCtx, issue: Row, option?: number): Promise<Record<string, unknown> | null> {
   const fix = parseJson<Record<string, unknown> | null>(issue.suggested_fix, null);
+  const options = Array.isArray(fix?.options) ? (fix.options as FixOption[]) : null;
+  if (options) {
+    const pick = option == null ? undefined : options[option];
+    if (!pick) return fix;
+    const rest = { ...fix };
+    delete rest.options;
+    return { ...rest, changes: pick.changes, choice: pick.label, why: [...((rest.why as string[]) ?? []), ...(pick.why ? [`${pick.label}: ${pick.why}`] : [])] };
+  }
   if (fix?.changes || fix?.merge_into || fix?.action) return fix;
   const t = String(issue.entity_type);
   const rec = isTable(t) ? await get(data, t, String(issue.entity_id)) : null;
@@ -89,6 +100,7 @@ export async function dismissIssue(data: DataCtx, persona: Persona, id: string, 
   const issue = await get(data, "data_issues", id);
   if (!issue) return { ok: false, status: 404, message: "Not found" };
   if (issue.status !== "open") return { ok: false, status: 409, message: `Already ${issue.status}` };
+  if (!canDismiss(issue, data.actor.role)) return { ok: false, status: 403, message: "Only the principal or a payables approver can dismiss a critical, money or fraud issue. Fix it or send the fix for approval instead." };
   const now = demoNowIso();
   await upsertOverlay(data, "data_issues", id, { status: "dismissed", fixed_by: persona.id, fixed_at: now });
   await (await insert(data.db, data.ws, "audit", { id: newId("aud"), at: now, actor: persona.name, actor_id: persona.id, role: data.actor.role, action: "data_issue.dismissed", entity_type: issue.entity_type, entity_id: issue.entity_id, property_id: issue.property_id ?? null, detail: `${issue.rule_id}${note ? ` — ${note}` : ""}` })).run();

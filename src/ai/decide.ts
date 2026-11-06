@@ -1,6 +1,7 @@
 import { PERMISSIONS } from "@/auth/personas";
 import { allEntities, getEntity } from "@/entities";
 import { INTERNAL_ROLES, type ModuleKey, type Role, type Row } from "@/entities/types";
+import { LIFE_SAFETY_ROLES } from "./life-safety";
 
 // Who may decide an agent's proposal, for staff. canDecide (http.ts) enforces it on every decision;
 // the pages, the "Needs you" counts and the Approve button read the same rule from here, so the
@@ -8,8 +9,10 @@ import { INTERNAL_ROLES, type ModuleKey, type Role, type Row } from "@/entities/
 // waiting approval is checked in canDecide).
 //   needs_you: write access to the record's module for low-risk items with no amount; approve
 //              access for anything with money, legal or safety risk.
-//   life-safety (high-risk items in the risk module, e.g. an overdue fire inspection): only the
-//              regional manager (in scope) or the principal, whatever else the role may approve.
+//   life-safety (high-risk items in the risk module, e.g. an overdue fire inspection, and taking a
+//              vendor with open emergency or life-safety jobs off work, flagged _life_safety in the
+//              payload when proposed): only the regional manager (in scope) or the principal,
+//              whatever else the role may approve.
 //   waiting:   over the owner's limit; the owner decides in their portal, or a principal.
 
 // Anything with money, legal or safety risk needs approve access, not just write.
@@ -17,8 +20,11 @@ export const needsApprove = (p: Row) => p.risk !== "Low" || p.amount_cents != nu
 
 const moduleOf = (entityType: unknown) => getEntity(String(entityType))?.module ?? "intelligence";
 const isStaff = (role: string) => (INTERNAL_ROLES as readonly string[]).includes(role);
-const LIFE_SAFETY_ROLES: Role[] = ["principal", "regional_manager"];
-const isLifeSafety = (p: Row) => p.risk === "High" && moduleOf(p.entity_type) === "risk";
+const flagged = (p: Row) => {
+  if (p.payload && typeof p.payload === "object") return (p.payload as { _life_safety?: unknown })._life_safety === true;
+  return typeof p.payload === "string" && p.payload.includes('"_life_safety":true');
+};
+const isLifeSafety = (p: Row) => p.risk === "High" && (moduleOf(p.entity_type) === "risk" || flagged(p));
 
 // Who an agent routes a proposal to when the rule decides it: life-safety items go to the regional
 // manager of the property, or the principal when there is no property (org-level items).
@@ -69,5 +75,5 @@ export function decidableSql(role: Role, alias = "p"): { sql: string; params: un
   const base = { sql: `(${approve.sql} OR (${alias}.risk = 'Low' AND ${alias}.amount_cents IS NULL AND ${write.sql}))`, params: [...approve.params, ...write.params] };
   if (LIFE_SAFETY_ROLES.includes(role)) return base;
   const riskTypes = known.filter((k) => getEntity(k)!.module === "risk");
-  return { sql: `(${base.sql} AND NOT (${alias}.risk = 'High' AND ${alias}.entity_type IN (SELECT value FROM json_each(?))))`, params: [...base.params, JSON.stringify(riskTypes)] };
+  return { sql: `(${base.sql} AND NOT (${alias}.risk = 'High' AND (${alias}.entity_type IN (SELECT value FROM json_each(?)) OR instr(${alias}.payload, '"_life_safety":true') > 0)))`, params: [...base.params, JSON.stringify(riskTypes)] };
 }

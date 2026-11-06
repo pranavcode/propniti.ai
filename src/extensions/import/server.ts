@@ -5,6 +5,7 @@ import type { EntityKey, Role } from "@/entities/types";
 import { APPEND_ONLY } from "@/server/effective";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { demoNowIso } from "@/lib/clock";
+import { formatAsOf } from "@/lib/format";
 import { editable, effective, forgetOverlay, QueryError, type QueryCtx, type WriteCtx } from "@/server/query";
 import { AS_OF } from "@/seed/constants";
 import type { Payload } from "./assemble";
@@ -374,7 +375,7 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
       case "properties": return { label: String(r.name), detail: `${r.street}, ${r.city}, ${r.state} ${r.zip}` };
       case "units": return { label: `${name(r.property_id)} #${r.number}`, detail: `${r.status} · market rent ${$(r.market_rent_cents)}` };
       case "residents": return { label: `${r.first_name} ${r.last_name}`.trim(), detail: `${name(r.property_id)} · ${r.status}` };
-      case "leases": return { label: `${name(r.property_id)} #${unitNo(r.unit_id)}`, detail: `${r.status} · ${r.start_on} → ${r.end_on ?? "month-to-month"} · ${$(r.rent_cents)}/mo` };
+      case "leases": return { label: `${name(r.property_id)} #${unitNo(r.unit_id)}`, detail: `${r.status} · ${formatAsOf(r.start_on)} → ${r.end_on ? formatAsOf(r.end_on) : "month-to-month"} · ${$(r.rent_cents)}/mo` };
       case "charges": return { label: `${name(r.property_id)} #${unitNo(r.unit_id)}`, detail: `${r.description} · ${$(r.amount_cents)}` };
       case "recurring_charges": return { label: String(r.label), detail: `${name(r.property_id)} · ${$(r.amount_cents)} ${String(r.frequency).toLowerCase()}` };
       case "deposits": return { label: `${name(r.property_id)} #${unitNo(rows.leases.find((l) => l.id === r.lease_id)?.unit_id)}`, detail: `Security deposit ${$(r.amount_cents)} held` };

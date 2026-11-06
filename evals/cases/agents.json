@@ -6,5 +6,6 @@
   { "id": "agent-payables", "agent": "ap", "persona": "grace", "expect": { "steps": 3, "tool": "records.search" } },
   { "id": "agent-data-health", "agent": "data_health", "persona": "sam", "expect": { "steps": 4, "proposals": true, "tool": "data.issues" } },
   { "id": "agent-owner-reporting", "agent": "owner_reporting", "persona": "grace", "expect": { "steps": 3, "tool": "metrics.explain_noi" } },
-  { "id": "agent-compliance", "agent": "compliance", "persona": "tom", "expect": { "steps": 3, "tool": "records.search" } }
+  { "id": "agent-compliance", "agent": "compliance", "persona": "tom", "expect": { "steps": 3, "tool": "records.search" } },
+  { "id": "agent-compliance-principal", "agent": "compliance", "persona": "daniel", "expect": { "steps": 3, "tool": "records.search" } }
 ]

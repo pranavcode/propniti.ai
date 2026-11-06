@@ -1,5 +1,5 @@
 import { AS_OF } from "@/seed/constants";
-import type { Actor, ListResult, Row } from "@/entities/types";
+import type { Actor, ListResult, Role, Row } from "@/entities/types";
 import { allEntities, can } from "@/entities/registry";
 import { MAX_PAGE_SIZE } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
@@ -71,11 +71,38 @@ const SCOPE_VIA: Partial<Record<Table, (alias: string) => string>> = {
   applicants: (a) => `(SELECT ap.property_id FROM applications ap WHERE ap.applicant_id = ${a}.id LIMIT 1)`,
 };
 
+// Record types whose Data Health issues a property-scoped role sees whatever their property: types
+// with no property link (vendors) that the role can read, as the role sees those records themselves.
+// Org-level rows of a property-linked type (an org-wide compliance item) count only when the type's
+// def shows its no-property rows to the role.
+export function orgIssueTypes(role: Role): { any: string[]; noProperty: string[] } {
+  const readable = allEntities().filter((d) => can(role, "read", d.key));
+  return { any: readable.filter((d) => !d.scopePath).map((d) => d.key as string), noProperty: readable.filter((d) => d.scopePath && d.scopeNullVisible?.(role)).map((d) => d.key as string) };
+}
+
 // "property_id IN (…)" for the actor, or nothing for org-wide actors.
 export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: string; params: unknown[] } {
   const col = TABLES[table];
   const via = SCOPE_VIA[table];
   if ((!col && !via) || ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  if (table === "data_issues") {
+    const org = orgIssueTypes(ctx.actor.role);
+    return {
+      sql: `(${alias}.property_id IN (SELECT value FROM json_each(?)) OR ${alias}.entity_type IN (SELECT value FROM json_each(?)) OR (${alias}.property_id IS NULL AND ${alias}.entity_type IN (SELECT value FROM json_each(?))))`,
+      params: [JSON.stringify(ctx.actor.propertyIds), JSON.stringify(org.any), JSON.stringify(org.noProperty)],
+    };
+  }
+  // Proposals with no property follow the same rule: on a record type above, or a fix for an issue
+  // the role sees (a property manager who sends a vendor issue's fix sees the proposal it makes).
+  if (table === "ai_proposals") {
+    const org = orgIssueTypes(ctx.actor.role);
+    const types = JSON.stringify([...org.any, ...org.noProperty]);
+    const issues = eff("data_issues", ctx.ws);
+    return {
+      sql: `(${alias}.property_id IN (SELECT value FROM json_each(?)) OR (${alias}.property_id IS NULL AND (${alias}.entity_type IN (SELECT value FROM json_each(?)) OR (${alias}.entity_type = 'data_issues' AND EXISTS (SELECT 1 FROM ${issues.sql} di WHERE di.id = ${alias}.entity_id AND di.entity_type IN (SELECT value FROM json_each(?)))))))`,
+      params: [JSON.stringify(ctx.actor.propertyIds), types, ...issues.params, types],
+    };
+  }
   return { sql: `${via ? via(alias) : `${alias}.${col}`} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ctx.actor.propertyIds)] };
 }
 

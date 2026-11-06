@@ -166,17 +166,27 @@ export const planInput = (plan: string, improve: ImproveKey, property: string | 
 // ones the fresh plan still includes (balances get paid, prospects reply, someone else proposes).
 export type Shown = { action: ActionKey; ids: string[] }[];
 export async function executePlan(s: ImproveSession, key: ImproveKey, property: string | null, shown: Shown): Promise<ExecuteResult> {
-  // One plan at a time per card and scope: a click in another tab while agents are still proposing
-  // would otherwise race the open-proposal check. A lock older than LOCK_MS (a crashed request) expires.
-  const lock = `improve-lock:${s.ws}:${planPrefix(key, s.actor, property)}`;
-  const token = String(Date.now());
+  // One plan at a time per card (metric) in the workspace, whatever the scope: the home card's plan
+  // ("all") and a property page's plan cover the same records, so a click on either while agents are
+  // still proposing would race the open-proposal check. The lock is a guarded insert into meta; one
+  // older than LOCK_MS (a crashed request) expires. It is refreshed before each agent's run, so a
+  // plan with several runs (each up to its deadline) keeps it.
+  const lock = `improve-lock:${s.ws}:${key}`;
+  let token = String(Date.now());
   const claimed = await s.db
     .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value WHERE CAST(meta.value AS INTEGER) < ?")
     .bind(lock, token, Date.now() - LOCK_MS)
     .run();
-  if (!claimed.meta.changes) throw new PlanConflict("Agents are already running a plan for this number; it will show here in a moment.");
+  if (!claimed.meta.changes) throw new PlanConflict("Agents are already running a plan for this number, here or on another page; it will show here in a moment.");
+  const refresh = async () => {
+    const next = String(Math.max(Date.now(), Number(token) + 1));
+    const r = await s.db.prepare("UPDATE meta SET value = ? WHERE key = ? AND value = ?").bind(next, lock, token).run();
+    // Lost the lock (it expired and another click took it): stop before starting another run.
+    if (!r.meta.changes) throw new PlanConflict("Another plan for this number started while this one was running; it will show here in a moment.");
+    token = next;
+  };
   try {
-    return await runPlan(s, key, property, shown);
+    return await runPlan(s, key, property, shown, refresh);
   } finally {
     await s.db.prepare("DELETE FROM meta WHERE key = ? AND value = ?").bind(lock, token).run();
   }
@@ -184,7 +194,7 @@ export async function executePlan(s: ImproveSession, key: ImproveKey, property: 
 
 const LOCK_MS = 2 * 60_000;
 
-async function runPlan(s: ImproveSession, key: ImproveKey, property: string | null, shown: Shown): Promise<ExecuteResult> {
+async function runPlan(s: ImproveSession, key: ImproveKey, property: string | null, shown: Shown, refresh: () => Promise<void>): Promise<ExecuteResult> {
   // The plan number is read first, so two clicks racing each other pick the same id.
   const planId = `${planPrefix(key, s.actor, property)}${(await planTotals(s, key, property)).last + 1}`;
   const pv = await analyze(s, key, property);
@@ -207,6 +217,7 @@ async function runPlan(s: ImproveSession, key: ImproveKey, property: string | nu
     const runId = i ? `${planId}.${i}` : planId;
     const input = planInput(planId, key, property, group.map((g) => ({ action: g.action!, ids: g.ids })));
     let started;
+    await refresh();
     try {
       started = await startRun({ db: s.db, ws: s.ws, actor: s.actor, agent, runId, trigger: { kind: "manual", input } });
     } catch (err) {

@@ -5,7 +5,7 @@ import { SignIn, type Card } from "./SignIn";
 
 export const metadata: Metadata = { title: "Sign in · Propniti demo" };
 
-// Demo sign-in: an email and password form (one published password for every demo person) beside
+// Demo sign-in: an email and password form (one published password for every demo person) in one card with
 // a compact one-click people list. Both post to /api/session, which checks the password, sets the pn_as
 // cookie and lands on that persona's home (or a safe `next`). Plain form posts, so both work
 // before any JavaScript loads.

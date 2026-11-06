@@ -11,6 +11,8 @@ export const canSettings = (role: Role) => (PERMISSIONS[role].settings ?? "none"
 export const canEditSettings = (role: Role) => PERMISSIONS[role].settings === "approve";
 // Adding people: admins, and the principal (who can't grant the admin role; the invite route checks).
 export const canInvite = (role: Role) => canEditSettings(role) || role === "principal";
+// The company profile: admins, and the principal, who signs for the company.
+export const canEditCompany = (role: Role) => canEditSettings(role) || role === "principal";
 
 export function settingsNav(role: Role): SettingsGroup[] {
   const groups: SettingsGroup[] = [];

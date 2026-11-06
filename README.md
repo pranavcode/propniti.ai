@@ -17,7 +17,7 @@ Live demo: **[propniti.ai](https://propniti.ai)** · sample data, no sign-up. Pr
 
 ## What it does
 
-- 64 record types in 13 modules, each defined once. Pages, the API, permission checks, search and downloads are built from the definitions.
+- Propniti has 63 kinds of record, such as properties, leases and work orders. Each kind is described once in code. The app builds everything else for it from that one description: its sidebar link, its ⌘K search entry, its list and detail pages, its API, who may see or change it, and which database columns queries may read. In code this description is an `EntityDef` in `src/entities/defs/`; the 63 kinds are grouped into 13 modules.
 - A sample portfolio of 30 properties in Austin, Dallas, Atlanta and Phoenix, with leases, ledgers, work orders, bills and history. Some records are wrong on purpose, for Data Health to find.
 - A simulated trust ledger: rent, fees, bills, owner distributions and deposits move through guarded SQL; a double click pays once.
 - AI agents that run every 15 minutes, on events and on request. Each step is stored, and a person approves what agents propose.
@@ -118,8 +118,8 @@ The spec, architecture and walkthrough are at [propniti.ai/docs](https://propnit
 
 Measured on 2026-11-04.
 
-- **Vitest:** 1279 tests in 141 files (1 skipped): money, scope, queries, the seed, actions, agents, the assistant, and migrations on SQLite and local D1 (Miniflare).
-- **Playwright:** 190 browser tests in 34 flows in `tests/e2e/`, one per module plus portals, public listings and cross-cutting features. They run against `BASE_URL` (default `http://localhost:3201`): `npx playwright test tests/e2e/<flow>.spec.ts`.
+- **Vitest:** 1307 tests in 143 files (1 skipped): money, scope, queries, the seed, actions, agents, the assistant, and migrations on SQLite and local D1 (Miniflare).
+- **Playwright:** 191 browser tests in 34 flows in `tests/e2e/`, one per module plus portals, public listings and cross-cutting features. They run against `BASE_URL` (default `http://localhost:3201`): `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches.
 
 | Area | Lines | Branches |

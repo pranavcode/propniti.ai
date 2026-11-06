@@ -21,6 +21,8 @@ export type FixPreviewProps = {
   source: "rule" | string;               // "rule" or the agent that proposed it
   needsPerson?: string | null;           // reason the fix can't be one-click: "Moves money: needs an accountant"
   nextStep?: { text: string; href?: string; label?: string }; // what a person does when there are no field changes
+  // Fixes a person chooses between (e.g. end a lease, or switch it to month-to-month), each with its own changes.
+  choices?: { label: string; detail?: string | null; changes: FixChange[]; onChoose: () => void | Promise<unknown> }[];
   onApply?: () => void | Promise<unknown>;
   onDismiss?: () => void | Promise<unknown>;
   className?: string;
@@ -28,14 +30,15 @@ export type FixPreviewProps = {
 
 const show = (v: unknown) => (v == null || v === "" ? <span className="italic text-muted-foreground">empty</span> : typeof v === "object" ? JSON.stringify(v) : String(v));
 
-export function FixPreview({ title, changes, why, confidence, source, needsPerson, nextStep, onApply, onDismiss, className }: FixPreviewProps) {
+export function FixPreview({ title, changes, why, confidence, source, needsPerson, nextStep, choices, onApply, onDismiss, className }: FixPreviewProps) {
   const [state, setState] = useState<"open" | "applied" | "queued" | "dismissed">("open");
   const [busy, setBusy] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(null);
   // The server decides whether a fix applied or went to the approvals inbox: onApply may return { queued }.
-  const act = async (k: "applied" | "dismissed") => {
+  const act = async (k: "applied" | "dismissed", run = k === "applied" ? onApply : onDismiss) => {
     setBusy(true);
     try {
-      const r = await (k === "applied" ? onApply : onDismiss)?.();
+      const r = await run?.();
       setState(k === "applied" && (r as { queued?: boolean } | undefined)?.queued ? "queued" : k);
     } finally { setBusy(false); }
   };
@@ -80,12 +83,27 @@ export function FixPreview({ title, changes, why, confidence, source, needsPerso
 
       {!onApply && (
         <div className="border-t px-3 py-2 text-[12.5px]">
-          <p className="font-medium">No automatic fix — a person needs to check this.</p>
+          <p className="font-medium">{choices?.length ? "A person picks the fix." : "No automatic fix — a person needs to check this."}</p>
           {nextStep && <p className="mt-0.5 text-muted-foreground">{nextStep.text}{nextStep.href && <> <Link href={nextStep.href} className="font-medium text-primary hover:underline">{nextStep.label ?? "Open the record"}</Link></>}</p>}
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
+      {state === "open" && choices?.map((c) => (
+        <div key={c.label} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-2 text-[12.5px]">
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">{c.label}</div>
+            <div className="text-muted-foreground">
+              {c.changes.map((x) => <span key={x.field} className="mr-2">{x.label ?? x.field}: {show(x.before)} <ArrowRight className="inline size-3" /> <span className="font-medium text-tone-success">{show(x.after)}</span></span>)}
+              {c.detail && <span>· {c.detail}</span>}
+            </div>
+          </div>
+          <Button size="sm" variant={needsPerson ? "outline" : "default"} disabled={busy} onClick={() => { setChosen(c.label); void act("applied", c.onChoose); }}>{needsPerson ? <><Lock /> Send for approval</> : <><Check /> Apply</>}</Button>
+        </div>
+      ))}
+
+      {/* An open issue with no fix, no note and no button left for this role (a fraud flag a property
+          manager can't dismiss) gets no footer rather than an empty strip. */}
+      {(state !== "open" || needsPerson || changes.length > 0 || onDismiss || onApply) && <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
         {state === "open" ? (
           <>
             {needsPerson ? <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-tone-warning"><Lock className="size-3 shrink-0" /><span className="truncate">{needsPerson}</span></span>
@@ -97,10 +115,10 @@ export function FixPreview({ title, changes, why, confidence, source, needsPerso
           </>
         ) : (
           <span className={cn("flex items-center gap-1.5 text-[12px] font-medium", state === "applied" ? "text-tone-success" : "text-muted-foreground")}>
-            {state === "applied" ? <><Check className="size-3.5" />Fix applied · logged</> : state === "queued" ? <><Lock className="size-3.5" />Sent for approval</> : <><X className="size-3.5" />Dismissed</>}
+            {state === "applied" ? <><Check className="size-3.5" />{chosen ?? "Fix applied"} · logged</> : state === "queued" ? <><Lock className="size-3.5" />{chosen ? `${chosen}: sent for approval` : "Sent for approval"}</> : <><X className="size-3.5" />Dismissed</>}
           </span>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@/entities";
 import type { Actor } from "@/entities/types";
 import { getAction } from "@/extensions";
@@ -310,9 +310,9 @@ describe("improve: review fixes", () => {
     expect(plan).toMatchObject({ id: "plan-delinquency-all-45", plans: 46, since: "2026-11-03T00:00:00Z", records: 4 });
   });
 
-  it("refuses a second plan while one for the same card and scope is still running, and frees it after", async () => {
+  it("refuses a second plan while one for the same card is still running, and frees it after", async () => {
     const f = setup();
-    const key = `improve-lock:${WS}:plan-delinquency-all-`;
+    const key = `improve-lock:${WS}:delinquency`;
     f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(key, String(Date.now()));
     await expect(run(f, DANIEL, "delinquency")).rejects.toThrow(/already running/);
     expect(proposals(f.raw)).toHaveLength(0);
@@ -320,6 +320,67 @@ describe("improve: review fixes", () => {
     f.raw.prepare("UPDATE meta SET value = ? WHERE key = ?").run(String(Date.now() - 10 * 60_000), key);
     await run(f, DANIEL, "delinquency");
     expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
+  });
+
+  it("runs one plan per card at a time across pages: the home card and a property page race, one wins", async () => {
+    const f = setup();
+    const out = await Promise.allSettled([run(f, DANIEL, "delinquency"), run(f, DANIEL, "delinquency", "p01"), run(f, MARCUS, "delinquency")]);
+    expect(out.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+    for (const o of out.filter((o) => o.status === "rejected")) expect((o as PromiseRejectedResult).reason).toBeInstanceOf(PlanConflict);
+    const keys = proposals(f.raw).map((x) => `${x.entity_id}|${x.action}`);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(new Set(keys).size).toBe(keys.length);
+    // Another card is not blocked by this one.
+    expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key LIKE 'improve-lock:%'").get()!.n).toBe(0);
+  });
+
+  it("refreshes the lock before each agent's run, so a long plan keeps it", async () => {
+    const f = setup();
+    const key = `improve-lock:${WS}:delinquency`;
+    // The clock jumps past LOCK_MS right after the claim: without a refresh, the lock would read as expired.
+    let clock = Date.now();
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const seen: number[] = [];
+    const prepare = f.db.prepare.bind(f.db);
+    f.db.prepare = (q: string) => {
+      if (/INSERT INTO agent_runs/.test(q)) seen.push(Number((f.raw.prepare("SELECT value FROM meta WHERE key = ?").get(key) as { value: string }).value));
+      const st = prepare(q);
+      if (q.startsWith("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT")) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { bind: (...a: unknown[]) => { const b = st.bind(...a); return { ...b, run: async () => { const r = await b.run(); clock += 10 * 60_000; return r; } }; } });
+      return st;
+    };
+    try {
+      await run(f, DANIEL, "delinquency");
+    } finally {
+      now.mockRestore();
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    for (const v of seen) expect(v).toBeGreaterThanOrEqual(clock - 1);
+    expect(f.raw.prepare("SELECT count(*) AS n FROM meta WHERE key = ?").get(key)!.n).toBe(0);
+  });
+
+  it("stops before the next agent run if another request took the lock meanwhile", async () => {
+    const f = setup();
+    const key = `improve-lock:${WS}:delinquency`;
+    const prepare = f.db.prepare.bind(f.db);
+    // Right after the claim, another request takes the lock over (as if this one had expired).
+    f.db.prepare = (q: string) => {
+      const st = prepare(q);
+      if (q.startsWith("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT")) return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { bind: (...a: unknown[]) => { const b = st.bind(...a); return { ...b, run: async () => { const r = await b.run(); f.raw.prepare("UPDATE meta SET value = '1' WHERE key = ?").run(key); return r; } }; } });
+      return st;
+    };
+    await expect(run(f, DANIEL, "delinquency")).rejects.toBeInstanceOf(PlanConflict);
+    expect(proposals(f.raw)).toHaveLength(0);
+    // The other request's lock is left alone.
+    expect(f.raw.prepare("SELECT value FROM meta WHERE key = ?").get(key)).toMatchObject({ value: "1" });
+  });
+
+  it("holds the lock for the metric, not the scope", async () => {
+    const f = setup();
+    f.raw.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(`improve-lock:${WS}:delinquency`, String(Date.now()));
+    await expect(run(f, DANIEL, "delinquency", "p01")).rejects.toThrow(/already running a plan for this number/);
+    expect(proposals(f.raw)).toHaveLength(0);
+    // A different card still runs.
+    await expect(run(f, DANIEL, "vacancy")).resolves.toMatchObject({ planId: "plan-vacancy-all-0" });
   });
 
   it("acts only on records the person was shown that still qualify, and says what it dropped", async () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ORG_ID } from "@/extensions/settings/data";
+import { canEditCompany } from "@/extensions/settings/nav";
 import { mergePrefs, settingsPost, setupStep } from "@/extensions/settings/write";
 
 const body = z.strictObject({
@@ -17,4 +18,4 @@ export const POST = settingsPost(body, async (ctx, b) => {
   const profile = await mergePrefs(ctx, ORG_ID, "profile", b, "Updated company profile");
   await setupStep(ctx, "company", "Done").run();
   return { profile, message: "Company profile saved" };
-}, { adminOnly: true });
+}, { allow: canEditCompany, refused: "Only the principal and admins change the company profile" });

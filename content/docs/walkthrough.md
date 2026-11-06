@@ -31,7 +31,7 @@ AI output is labelled **AI** (a live model, just now), **AI · saved** (stored f
 
 ![Record peek drawer open beside a work-order list](/docs/walkthrough/screens/marcus-peek-drawer.webp#2880x1800)
 
-![Sign-in form beside the Pick a person list](/docs/walkthrough/screens/login-form.webp#2880x1800)
+![Sign-in card with the form and the Pick a person list](/docs/walkthrough/screens/login-form.webp#2880x1800)
 
 ![Ask Propniti bubble with a tip](/docs/walkthrough/screens/marcus-chat-bubble.webp#2880x1800)
 
@@ -51,6 +51,8 @@ All 30 properties. Lands on `/app`, the portfolio home.
 4. Click *What-if*, try *Rent +3%*, then *Explain this scenario*.
 5. Under a red KPI such as *Occupancy*, click *Improve with AI* to see why it's red and what agents can do. *Have agents do this* starts them.
 6. Approve or reject proposals in *Waiting for your decision*.
+
+Daniel and admins can edit *Settings → Company profile*; other roles see it read-only.
 
 ### Guided setup
 
@@ -109,6 +111,7 @@ Three Austin communities. Lands on `/app/today`.
 6. In *My tasks → Overdue*, mark one done, then *Undo*. Try *Snooze* and *Reassign*.
 7. Open a lease's *Abstraction* tab and click *Abstract lease on file*. It cites pages and flags mismatched dates; *Apply fix* corrects the record.
 8. In *Announcements → New*, pick a property, *Draft with AI*, review and send.
+9. Open *Data health*. It lists issues on his properties and on vendors. Two leases are still Active after their end date: pick *Mark as ended* or *Switch to month-to-month*, which goes to approvals.
 
 ![Marcus's Today page with briefing, KPIs and approvals](/docs/walkthrough/screens/marcus-today.webp#2880x1800)
 
@@ -179,7 +182,7 @@ All owner entities. Lands on `/app/finance`.
 6. In *Technician view*, *Start job* and log 30 minutes.
 7. Open `/app/compliance` for insurance certificates, permits, inspections and the expiries timeline.
 
-The PO check uses fixed rules, not a model.
+The PO check uses fixed rules, not a model. Tom can't set a vendor to Inactive or Do not use while it has open emergency or life-safety jobs; he reassigns them first, or asks Priya or Daniel.
 
 ![Tom's maintenance home with triage queue](/docs/walkthrough/screens/tom-maintenance-home.webp#2880x1800)
 

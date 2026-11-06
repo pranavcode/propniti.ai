@@ -6,7 +6,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Complete the setup checklist",
     body: `New organizations finish setup through a short checklist before the portfolio goes live. Open it from the sidebar progress card or **/app/setup**.
 
-1. **Company profile** (Settings → Company profile): legal name, EIN, logo and business address.
+1. **Company profile** (Settings → Company profile): legal name, EIN, logo and business address. The principal or an admin can edit it.
 2. **Connect trust and operating banks** (Banking) so rent and owner payouts have somewhere to post.
 3. **Import your portfolio** (Settings → Import data): upload exports from your current tool. See "Import data from another system".
 4. **Review roles and permissions** (Settings → Roles and permissions): who can approve bills, post fees and see owner data.
@@ -615,7 +615,7 @@ Good to know: you see your own tasks and your role's unassigned tasks, never oth
     body: `The demo has an account for every persona. Open **/login**.
 
 1. Type a demo email, for example **marcus@propniti.demo**, and the password **propniti-demo**. Every demo account uses the same password, shown on the page. The form shows who the email belongs to as you type.
-2. Or use **Pick a person** beside the form: click a person (or move with the arrow keys) to fill the form, or double-click to sign in straight away. *What each person sees*, below, describes each one.
+2. Or use **Pick a person** in the sign-in card: click a person (or move with the arrow keys) to fill the form, or double-click to sign in straight away. *What each person sees*, below, describes each one.
 3. Choose **Sign in as …**. You land on that persona's home page.
 4. Next time, the page remembers the last person. If you're already signed in, choose **Continue as …** or **Switch person**.
 
