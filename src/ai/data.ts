@@ -102,12 +102,14 @@ export function orgIssueTypes(role: Role): { any: string[]; noProperty: string[]
 
 // "property_id IN (…)" for the actor, or nothing for org-wide actors.
 export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: string; params: unknown[] } {
+  // Portal users (self scope) read only their own rows, which the AI layer doesn't model: no rows.
+  if (ctx.actor.scope.kind === "self") return { sql: "0", params: [] };
   if (ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
   const def = defOf(table);
   if (def?.scopePath) {
     const e = defScope(def.scopePath, table, alias, ctx.ws);
     const ids = JSON.stringify(ctx.actor.propertyIds);
-    if (ctx.actor.scope.kind !== "self" && def.scopeNullVisible?.(ctx.actor.role)) return { sql: `((${e.sql}) IS NULL OR (${e.sql}) IN (SELECT value FROM json_each(?)))`, params: [...e.params, ...e.params, ids] };
+    if (def.scopeNullVisible?.(ctx.actor.role)) return { sql: `((${e.sql}) IS NULL OR (${e.sql}) IN (SELECT value FROM json_each(?)))`, params: [...e.params, ...e.params, ids] };
     return { sql: `(${e.sql}) IN (SELECT value FROM json_each(?))`, params: [...e.params, ids] };
   }
   const col = TABLES[table];

@@ -157,7 +157,8 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     const r = await ctx.call<{ total: number; rows: Row[] }>("data.issues", { status: "open", size: 10 });
     return { answer: `${r.total} open data issue${r.total === 1 ? "" : "s"}. ${r.rows.slice(0, 5).map((i) => `${humanizeKey(String(i.rule_id).split(".").pop()!)} on ${getEntity(String(i.entity_type))?.label.one.toLowerCase() ?? String(i.entity_type).replace(/_/g, " ")} ${i.entity_id}`).join("; ")}.`, citations: [{ label: "Data health", href: "/app/data-health" }] };
   }
-  if (/\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
+  // Run counts cover the whole organisation (runs have no property); portal users don't get them.
+  if (ctx.data.actor.scope.kind !== "self" && /\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
     const runs = await sql<{ agent_key: string; n: number; proposals: number }>(ctx.data, "SELECT r.agent_key, count(*) AS n, (SELECT count(*) FROM {ai_proposals} p WHERE p.agent = r.agent_key) AS proposals FROM {agent_runs} r GROUP BY r.agent_key ORDER BY n DESC", [], { unscoped: true });
     const saved = (await monthly(ctx.data, { months: 1 })).reduce((s, r) => s + Number(r.ai_minutes_saved ?? 0), 0);
     return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${agentName(r.agent_key)} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
