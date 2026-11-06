@@ -126,6 +126,27 @@ describe("what people can change", () => {
     expect(["property_manager", "accountant", "maintenance_supervisor", "broker", "leasing_agent", "owner"].some((r) => canEditPolicies(r as never))).toBe(false);
   });
 
+  it("limits policy edits to the editor's scope and keeps the owner's repair threshold", async () => {
+    const { policyEditRefusal } = await import("../policy-scope");
+    const { db } = openFixture();
+    const PRIYA: Actor = { personaId: "priya", name: "Priya Shah", role: "regional_manager", scope: { kind: "region", ids: ["r-tx"], label: "Texas" } as never, propertyIds: ["p01", "p02"] };
+    const AUSTIN_ONE: Actor = { ...PRIYA, propertyIds: ["p01"] };
+    const oe01 = { owner_entity_id: "oe01", category: "Maintenance spend" };
+    const oe02 = { owner_entity_id: "oe02", category: "Maintenance spend" };
+    const org = { owner_entity_id: null, category: "Maintenance spend" };
+    // An owner entity's policy: every one of its properties in the editor's scope.
+    expect(await policyEditRefusal(db, WS, PRIYA, oe01, { limit_cents: 40000 })).toBeNull();
+    expect(await policyEditRefusal(db, WS, PRIYA, oe02, { limit_cents: 40000 })).toMatch(/outside your scope/);
+    expect(await policyEditRefusal(db, WS, AUSTIN_ONE, oe01, { limit_cents: 40000 })).toMatch(/outside your scope/);
+    // The org default: org-wide editors only.
+    expect(await policyEditRefusal(db, WS, PRIYA, org, { limit_cents: 40000 })).toMatch(/organization default/);
+    expect(await policyEditRefusal(db, WS, SAM, org, { limit_cents: 40000 })).toBeNull();
+    // Clearing the owner's threshold on maintenance spend removes the owner's say: refused for everyone.
+    expect(await policyEditRefusal(db, WS, DANIEL, org, { owner_approval_over_cents: null })).toMatch(/owner/);
+    expect(await policyEditRefusal(db, WS, DANIEL, org, { owner_approval_over_cents: 300000 })).toBeNull();
+    expect(await policyEditRefusal(db, WS, DANIEL, { owner_entity_id: null, category: "Bill payment" }, { owner_approval_over_cents: null })).toBeNull();
+  });
+
   it("the sample automation rules that never ran are not exposed as records", () => {
     expect(getEntity("automation_rules")).toBeUndefined();
     expect(getEntity("automation_runs")).toBeUndefined();
