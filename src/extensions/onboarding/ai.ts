@@ -66,7 +66,8 @@ export function validateReply(req: DetectRequest, reply: z.infer<typeof Reply>):
   return out;
 }
 
-const TIMEOUT_MS = 30_000;
+// Workers AI took 12 to 23 s on a few files; more files write a longer reply.
+const TIMEOUT_MS = 45_000;
 
 export async function detectWithModel(req: DetectRequest): Promise<DetectResult> {
   const model = currentModel();
