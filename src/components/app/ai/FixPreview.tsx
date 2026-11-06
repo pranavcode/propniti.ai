@@ -101,7 +101,9 @@ export function FixPreview({ title, changes, why, confidence, source, needsPerso
         </div>
       ))}
 
-      <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
+      {/* An open issue with no fix, no note and no button left for this role (a fraud flag a property
+          manager can't dismiss) gets no footer rather than an empty strip. */}
+      {(state !== "open" || needsPerson || changes.length > 0 || onDismiss || onApply) && <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-2">
         {state === "open" ? (
           <>
             {needsPerson ? <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-tone-warning"><Lock className="size-3 shrink-0" /><span className="truncate">{needsPerson}</span></span>
@@ -116,7 +118,7 @@ export function FixPreview({ title, changes, why, confidence, source, needsPerso
             {state === "applied" ? <><Check className="size-3.5" />{chosen ?? "Fix applied"} · logged</> : state === "queued" ? <><Lock className="size-3.5" />{chosen ? `${chosen}: sent for approval` : "Sent for approval"}</> : <><X className="size-3.5" />Dismissed</>}
           </span>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
