@@ -615,7 +615,7 @@ Good to know: you see your own tasks and your role's unassigned tasks, never oth
     body: `The demo has an account for every persona. Open **/login**.
 
 1. Type a demo email, for example **marcus@propniti.demo**, and the password **propniti-demo**. Every demo account uses the same password, shown on the page. The form shows who the email belongs to as you type.
-2. Or use **Pick a person** beside the form: click a person (or move with the arrow keys) to fill the form, or double-click to sign in straight away. *What each person sees*, below, describes each one.
+2. Or use **Pick a person** in the sign-in card: click a person (or move with the arrow keys) to fill the form, or double-click to sign in straight away. *What each person sees*, below, describes each one.
 3. Choose **Sign in as …**. You land on that persona's home page.
 4. Next time, the page remembers the last person. If you're already signed in, choose **Continue as …** or **Switch person**.
 
