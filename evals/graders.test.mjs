@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeExtract, gradeMap, gradeParse, gradeSummary, isFallback, unknownNames } from "./graders.mjs";
+import { gradeExtract, gradeMap, gradeParse, gradeSummary, isFallback, leaksProviderText, unknownNames } from "./graders.mjs";
 
 const pass = (g) => g.pass ?? g.checks.every((c) => c.ok);
 const checks = (overrides = {}) =>
@@ -24,6 +24,12 @@ describe("eval graders", () => {
     expect(isFallback({ source: "mock" })).toBe(true);
     expect(isFallback({ source: "workers-ai", note: "Real AI API not configured: the Workers AI call failed." })).toBe(true);
     expect(isFallback({ source: "workers-ai", note: "Figures computed from your data; suggestions by AI." })).toBe(false);
+  });
+
+  it("spots provider error text but not a plain short reason", () => {
+    expect(leaksProviderText([{ output: '{"model_error":"401 {\\"type\\":\\"error\\",\\"request_id\\":\\"req_011CVabcdefgh\\"}"}' }])).toBe(true);
+    expect(leaksProviderText([{ output: "InferenceUpstreamError: 3040: Capacity temporarily exceeded" }])).toBe(true);
+    expect(leaksProviderText([{ output: '{"model_error":"model unavailable","fallback":"rules"}' }])).toBe(false);
   });
 
   it("flags capitalised names that appear nowhere in the data", () => {

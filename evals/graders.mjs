@@ -143,7 +143,7 @@ export function gradePlan(c, res) {
   const e = c.expect;
   const tools = (res.trace ?? []).map((t) => t.tool);
   const firstOf = (k) => (res.trace ?? []).find((t) => t.tool === k);
-  const checks = [];
+  const checks = [{ name: "no provider error text in the reply", ok: !leaksProviderText({ answer: res.answer, note: res.note, trace: res.trace }) }];
   if (e.mode) checks.push({ name: "mode", ok: res.mode === e.mode, detail: res.mode });
   if (e.tool) checks.push({ name: `looked up ${e.tool}`, ok: tools.includes(e.tool), detail: tools.join(",") });
   if (e.toolAny) checks.push({ name: `looked up one of ${e.toolAny.join("/")}`, ok: e.toolAny.some((t) => tools.includes(t)), detail: tools.join(",") });
@@ -196,8 +196,12 @@ export function gradeSummary(c, res) {
   return { checks };
 }
 
+// Provider error text (request ids, key fragments, raw upstream errors) never reaches a trace or reply.
+const PROVIDER_TEXT = /request[_ ]id|\breq_[A-Za-z0-9]{8,}|x-api-key|\bsk-[A-Za-z0-9-]{8,}|"type":\s*"error"|InferenceUpstreamError|AiError|\b(401|403|5\d\d) \{/;
+export const leaksProviderText = (v) => PROVIDER_TEXT.test(JSON.stringify(v ?? null));
+
 // POST /api/ai/agents/<key>/run, then the finished run: it ran tools, recorded steps, didn't fail,
-// and every proposal has reasons and evidence.
+// every proposal has reasons and evidence, and no step shows a provider's own error text.
 export function gradeAgentRun(c, res) {
   const e = c.expect;
   const steps = res.steps ?? [];
@@ -207,6 +211,7 @@ export function gradeAgentRun(c, res) {
     { name: `at least ${e.steps} steps`, ok: steps.length >= e.steps, detail: steps.length },
     { name: `called ${e.tool}`, ok: steps.some((s) => s.tool_key === e.tool), detail: [...new Set(steps.map((s) => s.tool_key).filter(Boolean))].join(",") },
     { name: "proposals explain themselves", ok: props.every((p) => (p.why ?? []).length && (p.evidence ?? []).length), detail: props.length },
+    { name: "no provider error text in the trace", ok: !leaksProviderText(steps) && !leaksProviderText(res.run) },
   ];
   if (e.proposals) checks.push({ name: "made or kept proposals", ok: props.length > 0 || /already waiting/.test(res.run?.summary ?? ""), detail: res.run?.summary?.slice(0, 80) });
   return { checks };
