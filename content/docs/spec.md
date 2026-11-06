@@ -1,8 +1,8 @@
 ## Overview
 
-Propniti is property management software for US residential and commercial portfolios. Eight AI agents handle routine operations work; people approve anything involving money, legal terms or safety. This spec covers the live product at [propniti.ai](https://propniti.ai). Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
+Propniti is property management software for US residential and commercial portfolios. Eight AI agents handle routine operations work, and a person approves anything involving money, legal terms or safety. This spec covers the live product at [propniti.ai](https://propniti.ai). Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
 
-**Promise.** Know your portfolio is right. Propniti checks, explains and corrects the operations data that money decisions depend on.
+Propniti finds wrong operations data that money decisions rely on, shows why it's wrong and fixes it.
 
 | Area | What Propniti has |
 | --- | --- |
@@ -15,12 +15,10 @@ Propniti is property management software for US residential and commercial portf
 
 ![System architecture: browsers reach one Cloudflare Worker at propniti.ai, which serves pages and APIs, checks scope, runs the AI runtime, reads a D1 database with a shared base and per-visitor overlays, and calls models through one provider layer; a Cron Trigger starts the sweep every 15 minutes](/docs/architecture/system-architecture.svg#1000x560)
 
-*One Worker serves everything. Data is a shared read-only base plus a private overlay per visitor. Models sit behind one provider layer, with rules as the fallback.*
-
 **Product principles**
 
 - AI output shows its source (a live model, a stored earlier result, or rules) and links to the run that produced it.
-- Code computes the figures. A model only words answers and suggests actions; model text that states a figure the data doesn't contain is replaced with the rules text.
+- Code computes the figures. A model writes the wording and suggests actions; if its text states a figure the data doesn't contain, the app shows the rules text instead.
 - KPIs, charts and totals open the records behind them.
 - Fair housing: applicant scoring ignores protected characteristics, and criminal history goes to a person instead of being scored.
 
@@ -30,8 +28,8 @@ Propniti is property management software for US residential and commercial portf
 
 - Each role sees its own home, records and next actions, scoped to its region, properties or own record.
 - Agents run on a schedule and on events, and each run is recorded step by step.
-- Agents propose; people decide. An admin can let low-risk actions inside approval-policy limits apply on their own.
-- Bad data is found and fixed before owners or auditors see it.
+- Agents make proposals and a person decides each one. An admin can let low-risk actions within approval-policy limits apply without a person.
+- Data Health finds and fixes bad records before they reach owner statements or an audit.
 - Money rules (idempotent payments, trust balance checks, bank-change holds) run on the server.
 
 **Non-goals**
@@ -66,7 +64,7 @@ A role × module matrix (Settings → Roles) sets each role's access per module:
 
 ## Functional requirements
 
-**Built** works end to end on propniti.ai. **Partial** works in part; the note says which. **Not built** is not in the code.
+Status is Built (works end to end on propniti.ai), Partial (the note says what's missing) or Not built.
 
 ### Navigation and records
 
@@ -215,7 +213,7 @@ A role × module matrix (Settings → Roles) sets each role's access per module:
 | Files | CSV, TSV or Excel (.xlsx); up to 6 files, 3 MB and 2,000 rows each |
 | Who | Staff, within their create rights. New properties need a principal or regional manager; opening balances, deposits and recurring charges need a principal, regional manager, property manager or accountant |
 
-Code parses, checks and writes; errors must be fixed or left out first. Records already on file are matched but not changed. Running the same import twice writes nothing the second time.
+Code checks every row before writing anything. Fix or exclude each error first. Records already on file are matched but not changed. Running the same import twice writes nothing the second time.
 
 With *Use AI to help map and clean up* on, a model sees the headers, the first 5 rows and up to 30 flagged cells per file, and suggests column matches and cleanups for you to accept.
 
@@ -223,7 +221,7 @@ With *Use AI to help map and clean up* on, a model sees the headers, the first 5
 
 ## Guided setup
 
-*Set up your portfolio* (`/app/onboarding`) takes a new customer from nothing to a checked portfolio in five steps. A principal, regional manager or admin can use it. Steps can be skipped, and the flow resumes where you left it.
+*Set up your portfolio* (`/app/onboarding`) has five steps and ends with a Data Health check on the imported records. A principal, regional manager or admin can use it. Steps can be skipped, and the flow resumes where you left it.
 
 | Step | What happens |
 | --- | --- |
@@ -238,8 +236,6 @@ With *Use AI to help map and clean up* on, a model sees the headers, the first 5
 Each agent has a goal, a tool allow-list, triggers, a default autonomy level and the actions its proposals may run.
 
 ![Agent run flow: six triggers start a run in the orchestrator; the agent collects candidates with read tools and an optional model; each proposal is routed by autonomy, policy limits and always-a-person rules; it applies on its own or waits for a person allowed by the decide rule; the registered action re-checks the record and runs once](/docs/architecture/agent-run-flow.svg#1000x622)
-
-*Agents only propose. A change runs through a registered action that first re-checks scope and the record.*
 
 | Agent | Owner role | Watches for | Schedule (UTC) | Events | Default autonomy |
 | --- | --- | --- | --- | --- | --- |
@@ -322,7 +318,7 @@ Re-running an agent doesn't duplicate a proposal that is still open.
 
 A stored model summary shows only while its source facts still match the record. Otherwise the rules write a sentence from the current figures.
 
-Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Scout) on Cloudflare. `AI_PROVIDER` can force one. With no model, everything runs on rules and says so.
+Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Scout) on Cloudflare. `AI_PROVIDER` can force one. With no model, everything runs on rules and is labelled **Rules**.
 
 ## Data model
 
@@ -359,7 +355,7 @@ Model choice: an Anthropic key, then an OpenAI key, then Workers AI (Llama 4 Sco
 | AI safety | Model output can't act or invent figures | Untrusted text framed as data; schema-checked output; proposals must match a rules candidate; unsupported figures rejected |
 | AI cost | Bounded spend | 20 AI calls a minute per IP; per-run step limit, deadline and 50-cent budget |
 | Abuse | Bounded writes | Same-origin check; 60 writes a minute per IP; body size caps; 30 new workspaces per IP an hour |
-| Reliability | AI failure doesn't block work | Rules take over and the label says so |
+| Reliability | AI failure doesn't block work | Rules take over, and the output is labelled Rules |
 | Tests | Regressions caught before deploy | 1,279 unit tests; 190 end-to-end tests |
 | Errors | No database internals shown to people | Database errors show "The database is busy; try again in a moment"; the detail goes to the server log |
 
