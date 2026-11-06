@@ -1,5 +1,6 @@
 import { demoNowIso } from "@/lib/clock";
 import { routeTo } from "./decide";
+import { safetyJobs, safetyJobsNote, vendorsTurnedOff } from "./life-safety";
 import type { ActionKey, Actor, AgentKey, EntityKey, Role, Row } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { asOf, eff, getRaw, insert, isTable, newId, retryBusy, type DataCtx } from "./data";
@@ -158,29 +159,33 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
   }
 
   const policy = p.category ? ctx.policies.find((x) => x.category === p.category) : undefined;
+  // Taking a vendor off work while it has open emergency or life-safety jobs is a life-safety call.
+  const safety = await safetyJobs(db, ws, vendorsTurnedOff({ entity_type: p.entity, entity_id: p.entityId, action: p.action, payload: p.payload }));
+  const lifeSafety = safety > 0 ? { _life_safety: true } : {};
   // Unstated risk is Medium (a person looks), and an amount with no policy limit is over the limit.
-  const risk: Risk = p.risk ?? "Medium";
+  const risk: Risk = safety ? "High" : p.risk ?? "Medium";
   const human = p.alwaysHuman || policy?.alwaysHuman || risk === "High";
   const overLimit = p.amountCents != null && (policy?.limitCents == null || p.amountCents > policy.limitCents);
   const ownerNeeded = p.amountCents != null && policy?.ownerApprovalOverCents != null && p.amountCents > policy.ownerApprovalOverCents;
   // Auto-run only inside a visitor's workspace: the shared base is never changed by a schedule.
   const auto = ctx.autonomy === "auto_within_policy" && ws !== "base" && !human && !overLimit && risk === "Low";
   const queueState = auto ? "auto_handled" : ownerNeeded ? "waiting" : "needs_you";
-  const assignee = ownerNeeded ? "owner" : routeTo({ entity_type: p.entity, risk, property_id: p.propertyId ?? null }) ?? policy?.approverRole ?? p.assignee ?? null;
+  const assignee = ownerNeeded ? "owner" : routeTo({ entity_type: p.entity, risk, property_id: p.propertyId ?? null, payload: lifeSafety }) ?? policy?.approverRole ?? p.assignee ?? null;
 
   const id = newId("prop");
   // What the agent saw, so approval can refuse a proposal whose record has since changed.
   const target = isTable(p.entity) ? await getRaw(ctx.data, p.entity, p.entityId) : null;
   const source = p.source ?? (ctx.modelUsed.provider === "rules" ? "rules" : "live");
-  const payload = { ...(p.payload as Record<string, unknown>), _source: source, ...(target ? { _snapshot: snapshotOf(target) } : {}) };
+  const payload = { ...(p.payload as Record<string, unknown>), _source: source, ...lifeSafety, ...(target ? { _snapshot: snapshotOf(target) } : {}) };
+  const why = safety ? [...p.why, safetyJobsNote(safety)] : p.why;
   const stepId = await ctx.step({
     kind: "proposal",
-    output: { proposal_id: id, title: p.title, action: p.action, confidence: p.confidence, risk, queue_state: queueState, why: p.why },
+    output: { proposal_id: id, title: p.title, action: p.action, confidence: p.confidence, risk, queue_state: queueState, why },
     ok: true,
   });
   const row = {
     id, agent: ctx.agent, entity_type: p.entity, entity_id: p.entityId, property_id: p.propertyId ?? null, action: p.action, title: p.title,
-    payload: JSON.stringify(payload ?? {}), why: JSON.stringify(p.why), evidence: JSON.stringify(p.evidence ?? []),
+    payload: JSON.stringify(payload ?? {}), why: JSON.stringify(why), evidence: JSON.stringify(p.evidence ?? []),
     confidence: Math.round(Math.min(1, Math.max(0, p.confidence)) * 100) / 100, risk, amount_cents: p.amountCents ?? null,
     queue_state: queueState, assignee_role: assignee, model: source === "rules" ? "rules" : ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
   };
