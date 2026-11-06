@@ -5,7 +5,7 @@ import { AS_OF } from "@/seed/constants";
 import { overlayUpsertSql } from "@/server/effective";
 import { demoNowIso } from "@/lib/clock";
 import { registerAction } from "../actions";
-import { formatDate } from "@/lib/format";
+import { formatAsOf, formatDate } from "@/lib/format";
 
 const RISK_WRITE: Role[] = ["principal", "regional_manager", "property_manager", "maintenance_supervisor"];
 const rid = () => crypto.randomUUID();
@@ -109,10 +109,10 @@ registerAction({
       .bind(ctx.ws, String(row.id), input.expires_on, Math.round(input.gl_limit * 100), input.workers_comp ? 1 : 0).run();
     if (!res.meta.changes) return { status: 409, error: "This certificate was already reviewed" };
     const company = String(row.vendor_id__label ?? row.vendor_id);
-    const a = activity(ctx.ws, "vendor_cois", String(row.id), null, at, ctx.actor.personaId, "verified", `${ctx.actor.name} verified the certificate: ${String(row.carrier)}, valid to ${input.expires_on}`);
-    const b = activity(ctx.ws, "vendors", String(row.vendor_id), null, at, ctx.actor.personaId, "verified", `${ctx.actor.name} verified a certificate of insurance valid to ${input.expires_on}`);
+    const a = activity(ctx.ws, "vendor_cois", String(row.id), null, at, ctx.actor.personaId, "verified", `${ctx.actor.name} verified the certificate: ${String(row.carrier)}, valid to ${formatAsOf(input.expires_on)}`);
+    const b = activity(ctx.ws, "vendors", String(row.vendor_id), null, at, ctx.actor.personaId, "verified", `${ctx.actor.name} verified a certificate of insurance valid to ${formatAsOf(input.expires_on)}`);
     await ctx.db.batch([a, b].map((x) => ctx.db.prepare(x.sql).bind(...x.binds)));
-    return { status: 200, message: `Verified ${company}'s certificate, valid to ${input.expires_on}` };
+    return { status: 200, message: `Verified ${company}'s certificate, valid to ${formatAsOf(input.expires_on)}` };
   },
   help: { summary: "Confirms the certificate against the carrier's document. Only verified certificates count when dispatching or ranking vendors.", article: "vendor-insurance-certificates" },
 });
@@ -159,7 +159,7 @@ registerAction({
     if (input.completed_on > at.slice(0, 10)) return { status: 400, error: "The completion date can't be in the future" };
     const res = await ctx.db.prepare(overlayUpsertSql("compliance_items", COMPLIANCE_COLS, { completed_on: "?3", status: "'Done'" }, "e.completed_on IS NULL")).bind(ctx.ws, String(row.id), input.completed_on).run();
     if (!res.meta.changes) return { status: 409, error: "This item is already done" };
-    const a = activity(ctx.ws, "compliance_items", String(row.id), row.property_id, at, ctx.actor.personaId, "status_changed", `${ctx.actor.name} marked this done (completed ${input.completed_on})${input.note ? `: ${input.note}` : ""}`);
+    const a = activity(ctx.ws, "compliance_items", String(row.id), row.property_id, at, ctx.actor.personaId, "status_changed", `${ctx.actor.name} marked this done (completed ${formatAsOf(input.completed_on)})${input.note ? `: ${input.note}` : ""}`);
     await ctx.db.prepare(a.sql).bind(...a.binds).run();
     return { status: 200, message: `Marked "${String(row.title)}" done` };
   },

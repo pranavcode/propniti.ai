@@ -12,7 +12,7 @@ export function CoiBanner({ coi }: { coi: Coi | undefined }) {
   const text = !coi ? "We don't have your insurance certificate. Upload it to keep getting jobs."
     : coi.status === "Pending verification" ? `Your certificate from ${coi.carrier} is pending verification. The maintenance team checks it before it counts for new jobs.`
     : coi.status === "Expired" ? `Your insurance certificate expired on ${formatDate(coi.expires_on, "always")}. New jobs are on hold until you upload the renewal.`
-    : coi.status === "Expiring" ? `Your insurance certificate expires in ${coi.days} days (${coi.expires_on}). Upload the renewal so jobs aren't held.`
+    : coi.status === "Expiring" ? `Your insurance certificate expires in ${coi.days} days (${formatDate(coi.expires_on, "always")}). Upload the renewal so jobs aren't held.`
     : `Insurance is current until ${formatDate(coi.expires_on, "always")} (${coi.carrier}).`;
   const Icon = tone === "success" ? ShieldCheck : ShieldAlert;
   return (

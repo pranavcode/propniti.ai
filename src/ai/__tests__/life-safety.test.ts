@@ -52,7 +52,7 @@ describe("deactivating a vendor with open emergency or life-safety jobs", () => 
     for (const [priority, category] of [["Emergency", "HVAC"], ["Normal", "Life safety"]]) {
       const f = setup(priority, category);
       const p = await stopAssigning(f);
-      expect(p).toMatchObject({ risk: "High", assignee_role: "principal" });
+      expect(p).toMatchObject({ risk: "High", assignee_role: "principal", title: "Hill Country Grounds has 1 open jobs with insurance expired Oct 1, 2026" });
       expect(JSON.parse(String(p.payload))._life_safety).toBe(true);
       expect(JSON.parse(String(p.why))).toContain("1 open emergency or life-safety work order still assigned");
       expect(approverRoles(p)).toEqual(["principal", "regional_manager"]);
