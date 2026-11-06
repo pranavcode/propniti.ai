@@ -125,7 +125,7 @@ Every table has a `workspace_id`.
 | Idempotency | A unique index allows one live transfer per key per workspace, so a double click creates one payment |
 | Trust balance | Recomputed in SQL |
 | Authority | Each action re-checks approve rights and property scope. Maintenance spend over the owner threshold needs the owner's recorded approval |
-| Bank changes | Bill and work-order payouts wait while an unverified vendor bank change is open. A different person must verify it |
+| Bank changes | Bill and work-order payouts wait while an unverified vendor bank change is open. Approving the hold doesn't release them; only a callback by a different person does |
 | Settlement | A new transfer is Pending and clears 8 seconds later |
 | Fee | 8% management fee from `MANAGEMENT_FEE_RATE` |
 | Ledger | Payments apply to the oldest open charge first; stored balances must match the ledger |
@@ -197,7 +197,7 @@ Sweeps cover up to 10 visitor workspaces active in the last 30 minutes, never th
 - **Deduplication.** One open proposal per agent, record and action.
 - **Approval** (`src/ai/effects.ts`, `src/ai/http.ts`). The server re-checks scope, the record's key fields against the snapshot, the action's precondition and the approver's role. A guarded `ai_decisions` insert runs it once.
 - **Decision rule** (`src/ai/decide.ts`, enforced by `canDecide`). Buttons, *Needs you* counts and the server share it. Life-safety items go only to the property's regional manager or the principal. It applies in the approvals inbox, the record action route (`/api/e/<entity>/<id>/actions/<action>`), Data Health and *Dispatch as suggested*. A proposal the caller can't decide stays queued (202 with the proposal id) if it involves money, legal or safety or isn't low risk; a refused low-risk proposal returns 403.
-- **Vendors on life-safety jobs** (`src/ai/life-safety.ts`). Setting a vendor to Inactive or Do not use while it has open emergency or life-safety work orders is a life-safety decision. The record API refuses it, and deleting the vendor, for other roles (403), and an agent proposal that does it goes to the regional manager or principal. A payment hold after a suspicious bank change is the exception: the accountant still decides it, the vendor stays on work, and taking it off work becomes a separate proposal.
+- **Vendors on life-safety jobs** (`src/ai/life-safety.ts`). Setting a vendor to Inactive or Do not use while it has open emergency or life-safety work orders is a life-safety decision. The record API refuses it, and deleting the vendor, for other roles (403), and an agent proposal that does it goes to the regional manager or principal. A payment hold after a suspicious bank change is the exception: the accountant still decides it. If the vendor has such jobs when the hold is proposed or approved, the hold leaves it on work and taking it off work becomes a separate proposal.
 
 ### Improve with AI
 

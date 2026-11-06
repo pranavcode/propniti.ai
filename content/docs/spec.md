@@ -137,7 +137,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Technician view: start a job, log time, mark done | Built | |
 | Vendor invoice check against the purchase order, then *Approve and pay* | Built | Rules: totals within 2%, line sums, photos. Blocked on an unverified bank change or above the owner's limit |
 | Compliance: certificates of insurance, permits, inspections, legal cases, with an expiries timeline | Built | Legal cases are hidden from roles without access |
-| Set a vendor to Inactive or Do not use while it has open emergency or life-safety work orders | Built | Only the principal or a regional manager. Others reassign the jobs first. Agent proposals that do this go to them too. A payment hold after a suspicious bank change stays with the accountant; taking that vendor off work becomes a separate proposal |
+| Set a vendor to Inactive or Do not use while it has open emergency or life-safety work orders | Built | Only the principal or a regional manager. Others reassign the jobs first. Agent proposals that do this go to them too. A payment hold after a suspicious bank change stays with the accountant; if the vendor has such jobs, the hold keeps it on work and taking it off work becomes a separate proposal |
 
 ### Finance
 
@@ -150,7 +150,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Collection rate: the share of each month's own charges paid so far, capped at 100% | Built | Payments toward older balances don't count |
 | Returned payments with a state-capped fee; deposit dispositions | Built | |
 | AP inbox: read an uploaded invoice, suggest GL coding, run payables checks, approve and pay | Built | Manual entry when no vision model is configured |
-| Hold payments on an unverified vendor bank change; a different person verifies it | Built | |
+| Hold payments on an unverified vendor bank change; a different person verifies it | Built | Approving the hold doesn't release payments: only the callback on the number on file does |
 | Owner statements with per-line *Explain*, and distributions | Built | |
 | Bank reconciliation with suggested matches | Built | |
 | 1099 preparation | Built | |
