@@ -2,17 +2,17 @@
 
 Propniti is one Next.js 16 app, compiled by vinext into a single Cloudflare Worker that serves the marketing site, staff app, four portals, public listings site and API. Data lives in one D1 database: a shared, read-only base plus a private overlay per visitor. Eight AI agents run in the same Worker on a 15-minute Cron Trigger, on events and on demand, and change data only by proposing named actions.
 
-- **Record types are defined once.** Each of the 64 record types is an `EntityDef`, from which the sidebar, ⌘K, pages, API, permissions and SQL column whitelist are built.
-- **Agents act through named actions.** An approved proposal runs the same server action, with the same checks, as a person's click.
-- **Figures come from data.** Rules compute the numbers; a model words answers and suggests actions.
-- **Money rules run in SQL.** Each money action is one guarded D1 batch, with one live transfer per idempotency key.
-- **Models sit behind one port.** Workers AI, Claude and OpenAI are interchangeable. With none configured, AI features run on rules and say so.
+- Each of the 64 record types is defined once as an `EntityDef`, from which the sidebar, ⌘K, pages, API, permissions and SQL column whitelist are built.
+- An approved agent proposal runs the same named server action, with the same checks, as a person's click.
+- Rules compute every figure from the data. A model writes the wording of answers and suggests actions.
+- Each money action is one guarded D1 batch, with one live transfer per idempotency key.
+- Workers AI, Claude and OpenAI sit behind one provider port and are interchangeable. With none configured, AI features run on rules and are labelled **Rules**.
 
 Source: [github.com/pranavcode/propniti.ai](https://github.com/pranavcode/propniti.ai) (AGPL-3.0).
 
 ![System architecture: browsers reach one Cloudflare Worker at propniti.ai, which serves pages and APIs, checks scope, runs the AI runtime, reads a D1 database with a shared base and per-visitor overlays, and calls models through one provider layer; a Cron Trigger starts the sweep every 15 minutes](/docs/architecture/system-architecture.svg#1000x560)
 
-*One Worker serves everything. Data is a shared read-only base plus a private overlay per visitor. Models sit behind one provider layer, with rules as the fallback.*
+*When no model is configured or a call fails, rules answer.*
 
 ## Runtime
 
@@ -163,7 +163,7 @@ Sweeps cover up to 10 visitor workspaces active in the last 30 minutes, never th
 ### Summaries, explanations and the assistant
 
 - **Record summaries** (`src/ai/summaries.ts`). Facts come from the record type's `ai.facts`. A stored model summary shows only while its facts equal the current ones; otherwise the rules sentence is used. Labels: *Rules*, *Generated* or *Precomputed*. *Summarize with AI* stores a new summary in the visitor's overlay.
-- **Explain** (KPIs, statement lines, budget variances, what-if). Code computes the facts; a model may word them only with numbers from the facts.
+- **Explain** (KPIs, statement lines, budget variances, what-if). Code computes the facts. A model may reword them but can't add a number that isn't in them.
 - **Assistant** (`src/ai/assistant.ts`). Chat, actions and help modes over the agents' tools, with conversations stored per persona. The base ships 28 sample conversations (ids `smp-…`). *Right now* and the *Ask Propniti* chat bubble (`src/components/app/guide`) read counts from `/api/guide`. A dollar figure in a model answer must appear in the tool output, or the rules answer is used. Action mode only proposes.
 - **Prompt hygiene.** Prompts frame records, documents, messages and questions as data, never instructions. A schema validates model output.
 
@@ -231,10 +231,10 @@ Full review: [docs/security-review.md](https://github.com/pranavcode/propniti.ai
 | Demo date | Fixed `AS_OF`; one demo clock | The data stays in step with "today" |
 | How agents change data | Proposals that run named actions | People and agents pass the same scope, money and audit checks |
 | Autonomy | Two levels: Approve first, Auto within policy | Low-risk work can run alone; money, legal and safety can't |
-| Trusting model output | Rules compute figures; the model words them | Numbers stay correct when the model is wrong or absent |
+| Trusting model output | Rules compute figures; a model only writes the wording | If the model is wrong or down, figures still come from the rules |
 | Ledger | The lease ledger is the source of truth; oldest charge paid first | Stored balances match the ledger |
-| Application fee | $55 into the property's trust account as owner income | Standard accounting for the fee |
+| Application fee | $55 into the property's trust account as owner income | — |
 | Property NOI | The last closed month | A partial month skews expenses |
 | Sign-in | Demo accounts with one published password, plus one-click cards | Not an account system |
-| Import | Code parses, checks and writes; AI only suggests | Imports are correct with or without a model |
+| Import | Code parses, checks and writes; AI only suggests | A model can suggest column matches but never writes a record |
 | Prefetch | On hover or focus only | Keeps D1 load per page view low |
