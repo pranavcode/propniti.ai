@@ -755,6 +755,9 @@ export async function collab(ctx: QueryCtx, kind: Collab, entity: string, id: st
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const s = Math.max(1, Math.min(PAGE_SIZE_CAP, size));
   const p = Math.max(1, page);
+  // Notes, tasks and the activity trail are staff working material, even on a portal user's own
+  // records (a collections note on a resident's charge). Nothing marks one as shared, so portals get none.
+  if (ctx.actor.scope.kind === "self" && kind !== "documents") return { rows: [], total: 0, page: p, size: s };
   const rws = await readWs(ctx);
   const from = ` FROM ${effective(COLLAB_TABLE[kind], rws)} WHERE entity_type = ? AND entity_id = ?`;
   const [rows, count] = await Promise.all([

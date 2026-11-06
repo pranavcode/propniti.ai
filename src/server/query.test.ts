@@ -384,6 +384,29 @@ describe("writes", () => {
     expect(String(audit.data)).toContain('"phone":"2"');
   });
 
+  it("gives portal users no staff notes, activity or tasks on their own records", async () => {
+    const { collab } = await import("./query");
+    const at = "2026-10-28T10:00:00Z";
+    await db.batch([
+      db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')"),
+      db.prepare("INSERT INTO vendors (workspace_id, id, company, trade) VALUES ('base', 'v01', 'Lone Star Plumbing', 'Plumbing')"),
+      db.prepare(`INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, opened_at) VALUES ('base', 'WO-7', 'p01', 'Leak', 'Plumbing', 'Normal', 'Assigned', 'v01', '${at}')`),
+      ...[["charges", "c-p01-u1"], ["properties", "p01"], ["work_orders", "WO-7"]].flatMap(([t, id]) => [
+        db.prepare(`INSERT INTO notes (workspace_id, id, entity_type, entity_id, author_id, body, created_at) VALUES ('base', 'n-${id}', '${t}', '${id}', 'marcus', 'Staff only: payment plan likely', '${at}')`),
+        db.prepare(`INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, at, actor_kind, actor_id, verb, summary) VALUES ('base', 'ae-${id}', '${t}', '${id}', '${at}', 'staff', 'marcus', 'commented', 'Marcus added a note')`),
+        db.prepare(`INSERT INTO tasks (workspace_id, id, title, entity_type, entity_id, created_at) VALUES ('base', 't-${id}', 'Call about collections', '${t}', '${id}', '${at}')`),
+        db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, entity_type, entity_id, detail) VALUES ('base', 'au-${id}', '${at}', 'Marcus Bell', '${t}.updated', '${t}', '${id}', 'Internal change')`),
+      ]),
+    ]);
+    for (const [persona, entity, id] of [["resident", "charges", "c-p01-u1"], ["owner", "properties", "p01"], ["vendor", "work_orders", "WO-7"]]) {
+      const c = await ctx(persona);
+      expect(await getRow(c, entity, id)).not.toBeNull();
+      for (const kind of ["notes", "activity", "tasks"] as const) expect(await collab(c, kind, entity, id)).toMatchObject({ rows: [], total: 0 });
+    }
+    // Staff still see them.
+    for (const kind of ["notes", "activity", "tasks"] as const) expect((await collab(await ctx("marcus"), kind, "charges", "c-p01-u1")).rows.length).toBeGreaterThan(0);
+  });
+
   it("hides a deleted base row with an overlay tombstone, for this visitor only", async () => {
     await deleteRecord(await wctx("daniel"), "properties", "p06");
     expect(await getRow(await ctx("daniel", WS), "properties", "p06")).toBeNull();
