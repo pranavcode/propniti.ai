@@ -216,6 +216,16 @@ export async function payRent(ctx: ActionContext, chargeId: string): Promise<Out
   const { db, ws, nowMs, actor } = ctx;
   const c = await chargeRow(db, ws, chargeId);
   if (!c) return { status: 404, error: "Charge not found" };
+  // A resident pays only a charge on their own household; staff only where they may record
+  // payments (receivables, in scope), as when taking a payment by phone.
+  if (actor.role === "resident") {
+    const rec = getPersona(actor.personaId)?.record;
+    const own = rec && (await db.prepare(`SELECT 1 AS ok FROM ${effective("residents")} AS r WHERE r.id = ?2 AND r.household_id = ?3`).bind(ws, rec.id, c.household_id).first());
+    if (!own) return { status: 403, error: "You can only pay charges on your own lease." };
+  } else {
+    const denied = forbidden(actor, ["receivables"], c.property_id, ["property_manager"]);
+    if (denied) return denied;
+  }
   const at = nowIso(nowMs);
   const id = uid("tr");
   const [insert] = await db.batch([
@@ -250,6 +260,9 @@ export async function recordPayment(ctx: ActionContext, input: RecordPaymentInpu
   const { db, ws, nowMs, actor } = ctx;
   const c = await chargeRow(db, ws, input.chargeId);
   if (!c) return { status: 404, error: "Charge not found" };
+  // Property managers record payments with write access to receivables; others need approve.
+  const denied = forbidden(actor, ["receivables"], c.property_id, ["property_manager"]);
+  if (denied) return denied;
   if (!(input.amountCents > 0)) return { status: 400, error: "Amount must be more than $0" };
   const at = nowIso(nowMs);
   const id = uid("tr");
@@ -716,6 +729,8 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
   const { db, ws, nowMs, actor } = ctx;
   const d = await depositRow(ctx, depositId);
   if (!d) return { status: 404, error: "Deposit not found" };
+  const denied = forbidden(actor, ["receivables"], d.property_id, ["property_manager"]);
+  if (denied) return denied;
   if (d.status === "Settled") return { status: 409, error: "This deposit is already settled." };
   if (!d.move_out_on || d.move_out_on > AS_OF) return { status: 409, error: "The resident hasn't moved out yet. Dispositions are sent after move-out." };
   if (lines.some((l) => !(l.amount_cents > 0) || !Number.isInteger(l.amount_cents))) return { status: 400, error: "Each deduction needs an amount above $0." };
@@ -813,6 +828,8 @@ export async function movePayment(ctx: ActionContext, paymentId: string, toCharg
   const { db, ws, nowMs, actor } = ctx;
   const p = await db.prepare(`SELECT * FROM ${effective("payments")} AS p WHERE p.id = ?2`).bind(ws, paymentId).first<{ id: string; lease_id: string; charge_id: string | null; household_id: string; property_id: string; amount_cents: number; nsf: number }>();
   if (!p) return { status: 404, error: "Payment not found" };
+  const denied = forbidden(actor, ["receivables", "accounting"], p.property_id);
+  if (denied) return denied;
   const c = await db.prepare(`SELECT c.*, ${chargeOpenSql("c")} AS open_cents FROM ${effective("charges")} AS c WHERE c.id = ?2`).bind(ws, toChargeId).first<{ id: string; lease_id: string; household_id: string; property_id: string; description: string; open_cents: number }>();
   if (!c) return { status: 404, error: "Target charge not found" };
   if (c.property_id !== p.property_id) return { status: 400, error: "A payment can only move to a lease at the same property." };
