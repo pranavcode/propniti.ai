@@ -73,6 +73,14 @@ export const addMonthsDay = (d: number, n: number) => {
 };
 export const weekday = (d: number) => (d + 4) % 7; // 0 = Sunday
 
+// Stored reasons read as people write them: "Oct 1, 2026" and "$9,270.58".
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const usDate = (isoDate: string) => {
+  const [y, m, d] = isoDate.slice(0, 10).split("-").map(Number);
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+};
+export const dollars = (cents: number, decimals = true) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: decimals ? 2 : 0, maximumFractionDigits: decimals ? 2 : 0 })}`;
+
 // Integer-cent rounding, half up. SQL uses CAST((x * pct + 50) / 100 AS INTEGER) for whole percents.
 export const pctOf = (cents: number, pct: number) => Math.floor((cents * pct + 50) / 100);
 export const round = (cents: number, to = 100) => Math.round(cents / to) * to;

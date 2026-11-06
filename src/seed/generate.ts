@@ -709,6 +709,28 @@ function people(c: Ctx) {
     c.leases.push(l);
     c.leaseById[l.id] = l;
   }
+  // Corrupted (leases.past_end_date): month-to-month holdovers whose status was left Active, 1–4
+  // months past their end. Two in p01–p03, two elsewhere in Texas, two in Atlanta or Phoenix, one per
+  // property. Billing already carries the month-to-month premium; the resident still lives there.
+  const AUSTIN3 = ["p01", "p02", "p03"];
+  const holdovers = c.leases
+    .filter((l) => l.status === "Month-to-month" && !l.commercial && !l.hh.evict && !l.notice && l.end !== null && l.end >= ASOF - 122 && l.end <= ASOF - 31 && !l.hh.residents.some((r) => r.id === "res-p01-0001"))
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+  const stale: Lease[] = [];
+  for (const inGroup of [(p: Prop) => AUSTIN3.includes(p.id), (p: Prop) => p.region === "r-tx" && !AUSTIN3.includes(p.id), (p: Prop) => p.region !== "r-tx"]) {
+    const picked = new Set<string>();
+    for (const l of holdovers) {
+      if (picked.size === 2 || !inGroup(l.u.p) || picked.has(l.u.p.id)) continue;
+      picked.add(l.u.p.id);
+      stale.push(l);
+    }
+  }
+  for (const l of stale) {
+    l.status = "Active";
+    l.u.status = l.u.row.status = "Occupied";
+    l.u.row.available_on = null;
+  }
+  c.planted["leases.past_end_date"] = stale.map((l) => l.id);
   for (const l of c.leases) {
     if (l.hh.evict && ["Active", "Month-to-month"].includes(l.status)) l.status = "Eviction";
     const sr = rng(`lease:${l.id}`);

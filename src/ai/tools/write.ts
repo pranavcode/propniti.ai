@@ -78,8 +78,13 @@ const HUMAN_RULES = /^(payments\.|owner_distributions\.|bank_transactions\.|vend
 const LEDGER = /^(charges|payments|transfers|owner_distributions|bank_accounts|journal_entries|credits|bank_transactions)$/;
 const PAYABLES = /^(bills|bill_lines)$/;
 const MONEY_FIELD = /^gl_account_id$|_cents$|^bank_/;
+// A lease's status decides whether it bills rent and whether the resident is still under it (legal
+// status): always a person, but a property manager's call, not an accountant's.
+const LEGAL_RULES = /^leases\.past_end_date$/;
 
-type Fix = { changes?: Record<string, unknown>; action?: string; params?: Record<string, unknown>; why?: string[]; confidence?: number; source?: string; merge_into?: string };
+// options: fixes a person chooses between (each with its own changes); `choice` names the picked one.
+export type FixOption = { label: string; changes: Record<string, unknown>; why?: string };
+type Fix = { changes?: Record<string, unknown>; action?: string; params?: Record<string, unknown>; why?: string[]; confidence?: number; source?: string; merge_into?: string; options?: FixOption[]; choice?: string };
 
 export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): ProposeInput {
   const fix = parseJson<Fix | null>(issue.suggested_fix, null) ?? {};
@@ -90,7 +95,7 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
   const money = HUMAN_RULES.test(rule) || LEDGER.test(table) || PAYABLES.test(table) || Object.keys(fix.changes ?? {}).some((k) => MONEY_FIELD.test(k));
   // A fix that names an action (merge, void, hold) but no field changes has nothing to apply here.
   const manual = !Object.keys(fix.changes ?? {}).length && !fix.merge_into && rule !== "vendors.unverified_bank_change";
-  const human = money || manual;
+  const human = money || manual || LEGAL_RULES.test(rule);
   const assignee = money ? "accountant" : "property_manager";
   const why = [...(fix.why ?? [`Rule ${rule} flagged this ${table.replace(/_/g, " ")} record`]), ...(extraWhy ? [extraWhy] : [])];
   // Ledger rows aren't edited from here, and action-only fixes need a person to do them: either
@@ -107,7 +112,7 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
         : [{ kind: "update", table, id, changes: fix.changes ?? {}, fix: true, issue_id: issue.id }];
   return {
     entity: "data_issues", entityId: String(issue.id), action: "data_issues.apply_fix", propertyId: (issue.property_id as string) ?? null,
-    title: `Fix: ${rule.replace(/^[a-z_]+\./, "").replace(/_/g, " ")} on ${table.replace(/_/g, " ")} ${id}`,
+    title: `Fix: ${rule.replace(/^[a-z_]+\./, "").replace(/_/g, " ")} on ${table.replace(/_/g, " ")} ${id}${fix.choice ? ` (${fix.choice})` : ""}`,
     payload: { issue_id: issue.id, rule, before: evidence, changes: fix.changes ?? null, merge_into: fix.merge_into ?? null, effects },
     why, confidence: fix.confidence ?? 0.8, risk: human ? "High" : issue.severity === "critical" ? "Medium" : "Low", alwaysHuman: human, ...(human ? { assignee } : {}),
     evidence: [{ entity_type: table, entity_id: id, label: `${table.replace(/_/g, " ")} ${id}` }],

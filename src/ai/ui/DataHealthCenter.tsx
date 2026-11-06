@@ -59,9 +59,9 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
   const [done, setDone] = useState<Record<string, "applied" | "dismissed" | "sent for approval">>({});
   const qs = (o: Record<string, string | undefined>) => "?" + new URLSearchParams(Object.entries({ ...filters, ...o }).filter(([, v]) => v).map(([k, v]) => [k, v!])).toString();
 
-  const act = async (id: string, action: "apply" | "dismiss") => {
+  const act = async (id: string, action: "apply" | "dismiss", option?: number) => {
     try {
-      const r = await actOnIssue(id, action);
+      const r = await actOnIssue(id, action, option);
       setDone((d) => ({ ...d, [id]: r.queued ? "sent for approval" : action === "apply" ? "applied" : "dismissed" }));
       if (r.queued) toast.info(r.message, { action: { label: "Open approvals", onClick: () => router.push(`/app/ai/approvals?proposal=${r.proposalId}`) } });
       else toast.success(r.message);
@@ -148,7 +148,7 @@ export function DataHealthCenter({ health, issues, filters }: { health: Health; 
           {issues.rows.length ? issues.rows.map((i) => done[i.id] ? (
             <div key={i.id} className="rounded-lg border border-dashed p-3 text-[12.5px] text-muted-foreground">{i.rule_name ?? "Data issue"} on {issueRecord(i)}: {done[i.id]}.</div>
           ) : (
-            <FixPreview key={i.id} {...fixPreviewProps(i, (a) => act(i.id, a))} />
+            <FixPreview key={i.id} {...fixPreviewProps(i, (a, o) => act(i.id, a, o))} />
           )) : <EmptyState kind="filtered" title="No open issues here" description="Every rule passes for this filter. The Data Health Agent re-checks the rules every morning." />}
           <div className="flex items-center justify-end gap-3 text-[12px] text-muted-foreground">
             <span>{issues.total} issues · page {issues.page} of {Math.max(1, Math.ceil(issues.total / issues.size))}</span>

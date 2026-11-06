@@ -8,8 +8,8 @@ import type { Session } from "@/auth/session";
 import type { ProposalJson } from "@/ai/ui/client";
 import { agentName } from "@/ai/ui/labels";
 import { ProposalCard } from "@/ai/ui/RunView";
-import { proposalsPage } from "@/ai/views";
-import type { DataCtx } from "@/ai/data";
+import { hiddenIssueTypes, proposalsPage } from "@/ai/views";
+import { scopeClause, type DataCtx } from "@/ai/data";
 import { PageBody, Section } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { CollapsibleSection } from "@/components/app/collapsible/Collapsible";
@@ -34,11 +34,14 @@ function scoped(ctx: QueryCtx, col = "property_id") {
   return ids === "all" ? { sql: "1 = 1", params: [] as unknown[] } : { sql: `${col} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ids)] as unknown[] };
 }
 
-async function risks(ctx: QueryCtx, role: Role): Promise<Risk[]> {
+async function risks(ctx: QueryCtx, role: Role, data: DataCtx): Promise<Risk[]> {
   const s = scoped(ctx);
+  // Same visibility as the Data Health page: issues in the persona's properties, plus issues on
+  // records with no property (vendors) that the role can read.
+  const di = scopeClause(data, "data_issues", "i");
   const checks: { key: string; entity: EntityKey; label: string; detail: string; href: string; tone: Risk["tone"]; sql?: string; params?: unknown[]; metric?: string }[] = [
     { key: "issues", entity: "data_issues", label: "Critical data issues", detail: "Bad data under money decisions, such as an unverified vendor bank change", href: "/app/data-health?severity=critical", tone: "danger",
-      sql: `SELECT count(*) AS n FROM {data_issues} WHERE status = 'open' AND severity = 'critical' AND ${s.sql}`, params: s.params },
+      sql: `SELECT count(*) AS n FROM {data_issues} AS i WHERE i.status = 'open' AND i.severity = 'critical' AND i.entity_type NOT IN (SELECT value FROM json_each(?)) AND ${di.sql}`, params: [JSON.stringify(hiddenIssueTypes(role)), ...di.params] },
     { key: "sla", entity: "work_orders", label: "Work orders past SLA", detail: "Open past their SLA due time", href: "/app/maintenance/work-orders?view=past-sla", tone: "danger",
       sql: `SELECT count(*) AS n FROM {work_orders} WHERE status NOT IN ('Completed', 'Paid', 'Cancelled') AND sla_due_at IS NOT NULL AND substr(sla_due_at, 1, 10) < $AS_OF AND ${s.sql}`, params: s.params },
     { key: "compliance", entity: "compliance_items", label: "Overdue compliance items", detail: "Inspections, permits and certificates past due", href: "/app/compliance/items?f.status=Overdue", tone: "danger", metric: "risk.overdue_items" },
@@ -67,7 +70,7 @@ export async function Briefing({ session, data, embedded }: { session: Session; 
     rows<{ id: string; title: string; due_on: string | null; priority: string; entity_type: string | null; entity_id: string | null }>(ctx,
       "SELECT id, title, due_on, priority, entity_type, entity_id FROM {tasks} WHERE status IN ('Open', 'In progress') AND (assignee_id = ? OR (assignee_id IS NULL AND assignee_role = ?)) ORDER BY due_on IS NULL, due_on LIMIT 5", [persona.id, role]),
     count(ctx, "SELECT count(*) AS n FROM {tasks} WHERE status IN ('Open', 'In progress') AND (assignee_id = ? OR (assignee_id IS NULL AND assignee_role = ?)) AND due_on < $AS_OF", [persona.id, role]),
-    risks(ctx, role),
+    risks(ctx, role, data),
   ]);
   const counts = queue.counts as Record<string, number>;
   const needs = counts.needs_you ?? 0;
