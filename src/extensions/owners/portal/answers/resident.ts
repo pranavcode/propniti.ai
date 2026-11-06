@@ -21,7 +21,7 @@ export async function answerResident(c: PortalCtx, q: string): Promise<Answer> {
   if (!r) return { answer: "I couldn't find your resident record. Please message the office.", facts: {}, trace: [] };
   const lease = await currentLease(c, r.household_id);
   const trace: Lookup[] = [{ label: "Resident", detail: `${r.first_name} ${r.last_name} (${r.id})` }];
-  if (lease) trace.push({ label: "Lease", detail: `${lease.id}: ${lease.property} #${lease.unit}, ${usd(lease.rent_cents)}/month, ${lease.start_on} to ${lease.end_on ?? "month-to-month"}` });
+  if (lease) trace.push({ label: "Lease", detail: `${lease.id}: ${lease.property} #${lease.unit}, ${usd(lease.rent_cents)}/month, ${formatDate(lease.start_on, "always")} to ${lease.end_on ? formatDate(lease.end_on, "always") : "month-to-month"}` });
   const text = q.toLowerCase();
 
   if (/\b(rent|due|balance|owe|pay|payment|late|fee)\b/.test(text)) {

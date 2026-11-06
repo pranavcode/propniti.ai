@@ -127,6 +127,15 @@ describe("settings routes", () => {
     expect((await company.POST(post("/app/settings/company/save", bad))).status).toBe(400);
   });
 
+  it("lets the principal and admins edit the company profile, and no other role", async () => {
+    const profile = { legal_name: "Summit Residential Partners, LLC", ein: "84-2719305", address: "600 Congress Ave, Suite 1400, Austin, TX 78701", phone: "(512) 555-0140", support_email: "residents@summitresidential.example", timezone: "America/Chicago", fiscal_year_start: "January", license_number: "TX 9011842" };
+    for (const p of ["daniel", "sam"]) expect((await company.POST(post("/app/settings/company/save", profile, p))).status, p).toBe(200);
+    for (const p of ["priya", "marcus", "lena", "rachel", "grace", "tom"]) expect((await company.POST(post("/app/settings/company/save", profile, p))).status, p).toBe(403);
+    const cross = new Request(`http://${host}/app/settings/company/save`, { method: "POST", body: JSON.stringify(profile), headers: { host, origin: "https://evil.example", "content-type": "application/json", cookie: `pn_as=daniel; pn_ws=${WS}` } });
+    expect((await company.POST(cross)).status).toBe(403);
+    expect((await company.POST(post("/app/settings/company/save", { ...profile, ein: "123" }, "daniel"))).status).toBe(400);
+  });
+
   it("lets the principal add people, but not grant the administrator role or reach outside the org", async () => {
     const as = (b: unknown, p = "daniel") => invite.POST(post("/app/settings/users/invite", b, p));
     const ok = await as({ ...body, email: "pm.new@summitresidential.example" });

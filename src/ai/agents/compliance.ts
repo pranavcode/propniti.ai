@@ -1,7 +1,7 @@
 import type { Row } from "@/entities/types";
 import { daysBetween, sql } from "../data";
 import { addDays, defineAgent, type Candidate } from "./framework";
-import { formatDate } from "@/lib/format";
+import { formatAsOf, formatDate } from "@/lib/format";
 
 // Vendor insurance certificates (COIs) and property compliance items that are expired or due within
 // 30 days. An expired COI on a vendor with open jobs is a person's call: stop assigning them.
@@ -41,7 +41,7 @@ export default defineAgent({
       const ev = [{ entity_type: "vendors", entity_id: String(v.id), label: String(v.company) }];
       if (expired && Number(v.open_jobs) > 0) {
         out.push({
-          entity: "vendors", entityId: String(v.id), action: "vendors.stop_assigning", title: `${v.company} has ${v.open_jobs} open jobs with insurance expired ${v.latest}`,
+          entity: "vendors", entityId: String(v.id), action: "vendors.stop_assigning", title: `${v.company} has ${v.open_jobs} open jobs with insurance expired ${formatAsOf(v.latest)}`,
           why: [`Certificate expired ${-days} days ago`, `${v.open_jobs} work orders still assigned`, "Uninsured work exposes the owner to liability"], confidence: 0.93, risk: "High", alwaysHuman: true, mandatory: true, category: "Safety", facts, evidence: ev,
           effects: [{ kind: "update", table: "vendors", id: String(v.id), changes: { status: "Inactive" } }, { kind: "task", title: `Reassign ${v.company}'s open jobs or collect a current COI`, assignee_role: "maintenance_supervisor", priority: "High" }],
           priority: 3000 - days,
@@ -49,9 +49,9 @@ export default defineAgent({
       }
       if (!v.coi_id) continue;
       out.push({
-        entity: "vendor_cois", entityId: String(v.coi_id), action: "vendor_cois.request_certificate", title: `Ask ${v.company} for a renewed insurance certificate (${expired ? "expired" : "expires"} ${v.latest})`,
+        entity: "vendor_cois", entityId: String(v.coi_id), action: "vendor_cois.request_certificate", title: `Ask ${v.company} for a renewed insurance certificate (${expired ? "expired" : "expires"} ${formatAsOf(v.latest)})`,
         why: [expired ? `Expired ${-days} days ago` : `Expires in ${days} days`, Number(v.open_jobs) ? `${v.open_jobs} open jobs` : "No open jobs right now"], confidence: 0.95, risk: "Low", facts, evidence: ev,
-        message: { party_kind: "vendor", party_id: String(v.id), subject: "Updated certificate of insurance needed", body: `Hello ${v.company}, our records show your certificate of insurance ${expired ? "expired" : "expires"} on ${v.latest}. Please upload a current certificate in the vendor portal so we can keep assigning you work.` },
+        message: { party_kind: "vendor", party_id: String(v.id), subject: "Updated certificate of insurance needed", body: `Hello ${v.company}, our records show your certificate of insurance ${expired ? "expired" : "expires"} on ${formatAsOf(v.latest)}. Please upload a current certificate in the vendor portal so we can keep assigning you work.` },
         effects: [], priority: 2000 - days,
       });
     }
@@ -60,7 +60,7 @@ export default defineAgent({
       const days = daysBetween(ctx.today, String(c.due_on));
       out.push({
         entity: "compliance_items", entityId: String(c.id), propertyId: (c.property_id as string) ?? null, action: "compliance_items.schedule",
-        title: `${days < 0 ? "Overdue" : "Due soon"}: ${c.title} (${c.due_on})`, why: [`${c.kind} ${days < 0 ? `overdue by ${-days} days` : `due in ${days} days`}`], confidence: 0.9, risk: days < 0 ? "Medium" : "Low",
+        title: `${days < 0 ? "Overdue" : "Due soon"}: ${c.title} (${formatAsOf(c.due_on)})`, why: [`${c.kind} ${days < 0 ? `overdue by ${-days} days` : `due in ${days} days`}`], confidence: 0.9, risk: days < 0 ? "Medium" : "Low",
         facts: { item: String(c.title), due_on: String(c.due_on), days_left: days }, evidence: [{ entity_type: "compliance_items", entity_id: String(c.id), label: String(c.title) }],
         effects: [{ kind: "task", title: `Schedule: ${c.title}`, detail: `${c.kind} due ${formatDate(String(c.due_on), "always")}.`, property_id: (c.property_id as string) ?? null, assignee_role: "property_manager", priority: days < 0 ? "High" : "Normal", due_on: days < 0 ? ctx.today : String(c.due_on) }],
         priority: 1500 - days,

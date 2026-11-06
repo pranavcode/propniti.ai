@@ -1,4 +1,4 @@
-import { dataOf, staffSession } from "@/ai/http";
+import { dataOf, publicError, staffSession } from "@/ai/http";
 import { runDetail } from "@/ai/views";
 
 // Live run trace as server-sent events: "refs" then "step" for each batch of new agent_steps rows, "run" when the run's
@@ -38,7 +38,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         }
         send("end", { status });
       } catch (err) {
-        send("error", { error: err instanceof Error ? err.message : String(err) });
+        const message = err instanceof Error ? err.message : String(err);
+        const shown = publicError(message);
+        if (shown === message) console.error("[ai] run stream failed:", err);
+        send("error", { error: shown === message ? "The run couldn't be read. Refresh to try again." : shown });
       } finally {
         controller.close();
       }

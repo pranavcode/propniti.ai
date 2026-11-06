@@ -9,6 +9,7 @@ import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
 import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { BULK_MATCH_CAP } from "@/lib/bulk";
+import { LIFE_SAFETY_ROLES, safetyJobs, VENDOR_OFF } from "@/ai/life-safety";
 import { EXPORT_CAP } from "@/lib/export/types";
 import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
 
@@ -699,6 +700,11 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   assertUnlocked(def, current, Object.keys(body).filter((k) => body[k] !== undefined));
   await assertRefs(ctx, def, body);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
+  // Taking a vendor with open emergency or life-safety jobs off work is a life-safety call.
+  if (def.key === "vendors" && VENDOR_OFF.includes(String(body.status)) && !VENDOR_OFF.includes(String(before.status)) && !LIFE_SAFETY_ROLES.includes(ctx.actor.role)) {
+    const n = await safetyJobs(ctx.db, ctx.ws, [id]);
+    if (n) throw new QueryError(403, `This vendor has ${n} open emergency or life-safety work order${n === 1 ? "" : "s"}. Reassign ${n === 1 ? "it" : "them"} first, or ask the principal or a regional manager to change the status.`);
+  }
   const changes = changesToColumns(def, body);
   if (!Object.keys(changes).length) throw new QueryError(400, "Nothing to change");
   const after: Row = { ...before, ...changes, workspace_id: ctx.ws, deleted: 0 };

@@ -4,6 +4,8 @@ import type { Row } from "@/entities/types";
 import { rateLimit } from "@/lib/guard";
 import { parseBody } from "@/lib/requests";
 import { DB_BUSY, publicError, sql, type DataCtx } from "./data";
+import { MODEL_DOWN, ModelError } from "./providers";
+import { LIFE_SAFETY_ROLES, safetyJobs, vendorsTurnedOff } from "./life-safety";
 import { needsApprove, staffDecision } from "./decide";
 import { aiSession, json, sameOrigin, type AiSession } from "./session";
 
@@ -52,6 +54,8 @@ export async function guarded(fn: () => Promise<Response>) {
   try {
     return await fn();
   } catch (err) {
+    // The provider's own error was logged where it happened (providers/index.ts).
+    if (err instanceof ModelError) return json({ error: MODEL_DOWN }, { status: 503 });
     const message = err instanceof Error ? err.message : "Something went wrong";
     const shown = publicError(message);
     if (shown === message) console.error("[ai] route failed:", err);
@@ -68,6 +72,10 @@ export async function canDecide(s: Pick<AiSession, "db" | "ws" | "actor" | "pers
   if (s.persona.portal) {
     if (s.actor.role === "owner" && p.queue_state === "waiting" && p.assignee_role === "owner" && (await ownsProposal(s, p))) return { ok: true };
     return { ok: false, error: "Only staff can act on agent proposals." };
+  }
+  // Checked again now: emergency jobs may have reached the vendor after the proposal was written.
+  if (!LIFE_SAFETY_ROLES.includes(s.actor.role) && (await safetyJobs(s.db, s.ws, vendorsTurnedOff(p)))) {
+    return { ok: false, error: `${s.persona.title} can't take a vendor with open emergency or life-safety work orders off work. Approver: principal or regional manager.` };
   }
   return staffDecision(s.actor.role, p, s.persona.title);
 }

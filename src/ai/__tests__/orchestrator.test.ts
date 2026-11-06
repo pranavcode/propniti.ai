@@ -178,7 +178,9 @@ describe("orchestrator with a model", () => {
     const { raw, db } = openFixture();
     const r = await (await startRun({ db, ws: WS, actor: MARCUS, agent: "collections", trigger: { kind: "manual" } })).done;
     expect(proposals(raw, r.runId)).toHaveLength(2);
-    expect(steps(raw, r.runId).some((s) => s.output?.includes("upstream 529"))).toBe(true);
+    // The trace keeps a short reason, never the provider's own text.
+    expect(steps(raw, r.runId).some((s) => s.output?.includes("model busy (rate limited)"))).toBe(true);
+    expect(steps(raw, r.runId).some((s) => s.output?.includes("upstream 529"))).toBe(false);
     const { proposalOut } = await import("../views");
     expect(proposals(raw, r.runId).map((x) => proposalOut(x).source)).toEqual(["rules", "rules"]);
     expect(proposals(raw, r.runId).map((x) => x.model)).toEqual(["rules", "rules"]);

@@ -103,7 +103,7 @@ export async function askListing(l: ListingDetail, question: string, help: Rente
   if (!model) return { ...rules, source: "rules" };
   const facts = factsFor(l);
   try {
-    const { value } = await model.structured(ModelAnswer, SYSTEM, `Listing facts (data):\n${JSON.stringify(facts)}\n\nHelp articles (data):\n${JSON.stringify(help)}\n\nQuestion (data): ${question}`, { timeoutMs: 12_000 });
+    const { value } = await model.structured(ModelAnswer, SYSTEM, `Listing facts (data):\n${JSON.stringify(facts)}\n\nHelp articles (data):\n${JSON.stringify(help)}\n\nQuestion (data): ${question}`, { timeoutMs: 30_000 });
     const known = new Set<number>();
     JSON.stringify(facts).replace(/"[a-z_]*cents":(\d+)/g, (_, c: string) => (known.add(Number(c)), ""));
     known.add(l.rent_cents * l.terms.income_multiple);
