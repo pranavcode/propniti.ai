@@ -24,8 +24,12 @@ describe("work order write permissions", () => {
     expect(created).toContain("status");
     expect(created).not.toContain("estimate");
     const sup = Object.keys(writeSchema(def, "maintenance_supervisor", "update").shape);
-    expect(sup).toEqual(expect.arrayContaining(["estimate", "cost", "vendor_id", "sla_due_at"]));
+    expect(sup).toEqual(expect.arrayContaining(["estimate", "sla_due_at"]));
     expect(sup).not.toContain("status"); // status moves through work_orders.set_status (a system field)
+    // The payee and the amount paid change only through dispatch and the invoice.
+    for (const mode of ["create", "update"] as const) expect(Object.keys(writeSchema(def, "principal", mode).shape)).not.toEqual(expect.arrayContaining(["vendor_id"]));
+    expect(sup).not.toContain("vendor_id");
+    expect(sup).not.toContain("cost");
   });
 
   it("only staff approve and pay", () => {

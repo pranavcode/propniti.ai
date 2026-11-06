@@ -427,6 +427,13 @@ export async function payBill(ctx: ActionContext, billId: string): Promise<Outco
   return { status: 409, error: `Trust account can't cover ${dollars(bill.amount_cents)} (available ${dollars(avail?.a ?? 0)})` };
 }
 
+// The payee a work order's money may go to: the vendor named on its latest invoice (or, for an
+// older vendor-entered invoice without the field, the vendor who sent it), else the vendor its
+// latest dispatch named. NULL when none is known, which refuses the payment.
+const INVOICED_VENDOR = (wo: string) => `coalesce(
+  (SELECT coalesce(json_extract(s.detail, '$.vendor_id'), CASE WHEN s.actor_kind = 'vendor' THEN s.actor_id END) FROM ${effective("wo_events")} AS s WHERE s.work_order_id = ${wo} AND s.kind = 'Submission' ORDER BY s.at DESC, s.seq DESC LIMIT 1),
+  (SELECT json_extract(a.detail, '$.vendor_id') FROM ${effective("wo_events")} AS a WHERE a.work_order_id = ${wo} AND a.kind = 'Assigned' ORDER BY a.at DESC, a.seq DESC LIMIT 1))`;
+
 // Approves submitted work. Vendor jobs pay out from trust (key vendor:<wo>), within the owner's
 // approval limit; in-house jobs just complete.
 export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): Promise<Outcome> {
@@ -436,12 +443,13 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
       `SELECT w.*, p.owner_entity_id, v.company,
          (SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS latest_submission,
          (SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS itemised_submission,
-         (SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS invoice_cents
+         (SELECT json_extract(e.detail, '$.total_cents') FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' AND json_array_length(json_extract(e.detail, '$.lines')) > 0 ORDER BY e.at DESC, e.seq DESC LIMIT 1) AS invoice_cents,
+         ${INVOICED_VENDOR("w.id")} AS invoiced_vendor
        FROM ${effective("work_orders")} AS w JOIN ${effective("properties")} AS p ON p.id = w.property_id LEFT JOIN ${effective("vendors")} AS v ON v.id = w.vendor_id
        WHERE w.id = ?2`,
     )
     .bind(ws, woId)
-    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; cost_cents: number | null; latest_submission: string | null; itemised_submission: string | null; invoice_cents: number | null; property_id: string; owner_entity_id: string; title: string }>();
+    .first<{ id: string; status: string; vendor_id: string | null; company: string | null; cost_cents: number | null; latest_submission: string | null; itemised_submission: string | null; invoice_cents: number | null; invoiced_vendor: string | null; property_id: string; owner_entity_id: string; title: string }>();
   if (!wo) return { status: 404, error: "Work order not found" };
   // Maintenance approvers sign off the work, payables approvers pay it, owners approve over-limit
   // repairs from their portal.
@@ -462,6 +470,7 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
     return { status: 409, error: `${woId} has a newer invoice without line items. Ask ${wo.company} to resubmit it itemised.` };
   const amount = wo.itemised_submission ? wo.invoice_cents : wo.cost_cents;
   if (amount == null) return { status: 409, error: `${woId} has no invoice yet. Ask ${wo.company} to submit one.` };
+  if (wo.invoiced_vendor !== wo.vendor_id) return { status: 409, error: `The vendor on ${woId} isn't the one who invoiced it. Ask the invoicing vendor to resubmit, or dispatch the job again.` };
   const policy = await db
     .prepare(`SELECT owner_approval_over_cents FROM ${effective("approval_policies")} AS a WHERE a.category = 'Maintenance spend' AND (a.owner_entity_id = ?2 OR a.owner_entity_id IS NULL) ORDER BY a.owner_entity_id IS NULL LIMIT 1`)
     .bind(ws, wo.owner_entity_id)
@@ -486,7 +495,7 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
          WHERE w.id = ?3 AND w.status = 'Submitted' AND ?7 > 0 AND ?7 <= ${AVAILABLE_SQL("?4")}
            AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")} AND ${OWNER_OK}
            AND coalesce((SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1), '') = ?12
-           AND (?12 <> '' OR w.cost_cents = ?7)
+           AND (?12 <> '' OR w.cost_cents = ?7) AND w.vendor_id = ${INVOICED_VENDOR("w.id")}
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, woId, trust, wo.owner_entity_id, wo.company, amount, at, nowMs + SETTLE_MS, ownerLimit, actor.role, wo.latest_submission ?? ""),

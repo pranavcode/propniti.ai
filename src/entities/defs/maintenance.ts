@@ -42,7 +42,8 @@ registerEntity({
     category: { type: "text", label: "Trade", facet: true, required: true, sortable: true, list: { default: true }, editable: WO_STAFF },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, required: true, sortable: true, list: { default: false }, editable: [] },
     unit_id: { type: "ref", ref: "units", label: "Unit", list: { default: false }, editable: [...OPS, "maintenance_supervisor"] },
-    vendor_id: { type: "ref", ref: "vendors", label: "Vendor", facet: true, list: { default: true }, editable: [...OPS, "maintenance_supervisor"] },
+    // The payee: set only by dispatch (and cleared by a vendor declining), never by a generic edit.
+    vendor_id: { system: true, type: "ref", ref: "vendors", label: "Vendor", facet: true, list: { default: true } },
     assignee_id: { type: "ref", ref: "staff", label: "Technician", facet: true, list: { default: false }, editable: [...OPS, "maintenance_supervisor"] },
     opened_at: { type: "datetime", label: "Opened", required: true, sortable: true, list: { default: true }, editable: [] },
     sla_due_at: { type: "datetime", label: "SLA due", sortable: true, list: { default: true }, editable: WO_STAFF },
@@ -52,7 +53,7 @@ registerEntity({
     age_days: { type: "number", label: "Age (days)", sortable: true, list: { default: false, align: "right" }, sql: `CAST(julianday(coalesce(work_orders.completed_at, ${AS_OF})) - julianday(work_orders.opened_at) AS INTEGER)` },
     // Payment amounts derive from estimates, costs and submitted invoices: staff only.
     estimate: { type: "money", label: "Estimate", column: "estimate_cents", sortable: true, list: { default: false, align: "right" }, editable: SUP },
-    cost: { type: "money", label: "Cost", column: "cost_cents", sortable: true, list: { default: false, align: "right" }, editable: [...OPS, "maintenance_supervisor"] },
+    cost: { system: true, type: "money", label: "Cost", column: "cost_cents", sortable: true, list: { default: false, align: "right" } },
     source: { type: "enum", label: "Source", facet: true, enum: [
       { value: "Resident", tone: "neutral" }, { value: "Staff", tone: "neutral" }, { value: "Inspection", tone: "neutral" }, { value: "Preventive", tone: "neutral" }, { value: "Turnover", tone: "neutral" },
     ] },
@@ -129,6 +130,8 @@ registerEntity({
   },
   permissions: { read: [...STAFF, "vendor", "resident", "owner"], create: WO_STAFF, update: SUP, delete: [...LEADERS, "maintenance_supervisor"] },
   writes: "generic",
+  // Once invoiced, the job changes only through its actions (approve and pay, owner approval).
+  lockedWhen: { field: "status", in: ["Submitted", "Completed", "Paid", "Cancelled"] },
   // Agents (Maintenance Triage) listen for wo.created; ids follow the seed, WO-12345.
   events: { created: "wo.created" },
   idFormat: { prefix: "WO", digits: 5 },
