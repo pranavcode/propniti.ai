@@ -9,6 +9,8 @@ import { vendorsTurnedOff } from "../life-safety";
 import { applyFixes } from "../datafix";
 import { executeProposal } from "../effects";
 import { get } from "../data";
+import { getAction } from "@/extensions/actions";
+import { runAction } from "@/app/api/e/_lib/actions";
 import { canDecide } from "../http";
 import { startRun } from "../orchestrator";
 import { setModelForTests } from "../providers";
@@ -121,6 +123,16 @@ describe("a payment hold after a suspicious bank change", () => {
     return f.raw.prepare("SELECT * FROM ai_proposals WHERE workspace_id = ? AND id = ?").get(WS, r.results[0].proposalId!) as P;
   };
   const status = async (f: F) => (await get({ db: f.db, ws: WS, actor: DANIEL }, "vendors", "v02"))?.status;
+  // The hold is the open issue: approving the hold leaves it open, so v02's bill b1 can't be approved
+  // or paid until a callback on the number on file closes it.
+  async function stillHeld(f: F) {
+    const w = (actor: Actor) => ({ db: f.db, ws: WS, nowMs: Date.now(), actor });
+    expect((await get({ db: f.db, ws: WS, actor: DANIEL }, "data_issues", "di-bank"))?.status).toBe("open");
+    expect((await runAction(w(GRACE), getAction("bills.approve")!, "b1", {})).status).toBe(409);
+    expect((await runAction(w(DANIEL), getAction("vendors.confirm_bank_change")!, "v02", { spoke_with: "Dana Hill", phone_on_file: true })).status).toBe(200);
+    expect((await get({ db: f.db, ws: WS, actor: DANIEL }, "data_issues", "di-bank"))?.status).toBe("fixed");
+    expect((await runAction(w(GRACE), getAction("bills.approve")!, "b1", {})).status).toBe(200);
+  }
 
   it("stays with the accountant while the vendor has emergency jobs; taking it off work is split out to the principal", async () => {
     const f = bankChange(true);
@@ -138,6 +150,7 @@ describe("a payment hold after a suspicious bank change", () => {
     expect(JSON.parse(String(off.payload))._life_safety).toBe(true);
     expect(await decide(f, "grace", GRACE, off)).toMatchObject({ ok: false });
     expect(await decide(f, "daniel", DANIEL, off)).toEqual({ ok: true });
+    await stillHeld(f);
   });
 
   it("with no emergency jobs, holds payments and takes the vendor off work in one proposal", async () => {
@@ -147,6 +160,12 @@ describe("a payment hold after a suspicious bank change", () => {
     expect(f.raw.prepare("SELECT count(*) AS n FROM ai_proposals WHERE workspace_id = ? AND action = 'vendors.stop_assigning'").get(WS)).toMatchObject({ n: 0 });
     expect(await executeProposal({ db: f.db, ws: WS, actor: GRACE }, p, { id: "grace", name: "Grace Kim", role: "accountant" })).toMatchObject({ ok: true });
     expect(await status(f)).toBe("Inactive");
+    // The issue stays open as the hold, but the Data Health agent doesn't propose the hold again.
+    await (await startRun({ db: f.db, ws: WS, actor: DANIEL, agent: "data_health", trigger: { kind: "manual" } })).done;
+    expect(f.raw.prepare("SELECT count(*) AS n FROM ai_proposals WHERE workspace_id = ? AND entity_id = 'di-bank'").get(WS)).toMatchObject({ n: 1 });
+    await stillHeld(f);
+    // The callback puts the vendor back on work.
+    expect(await status(f)).toBe("Active");
   });
 
   it("keeps the vendor on work when an emergency job arrives after the hold was proposed, unless the principal approves", async () => {
@@ -157,7 +176,13 @@ describe("a payment hold after a suspicious bank change", () => {
       expect(await decide(f, by.id, actor, p)).toEqual({ ok: true });
       const r = await executeProposal({ db: f.db, ws: WS, actor }, p, by);
       expect(r).toMatchObject({ ok: true });
-      if (expected === "Active") expect(r.message).toMatch(/Vendor kept on work/);
+      const off = f.raw.prepare("SELECT * FROM ai_proposals WHERE workspace_id = ? AND action = 'vendors.stop_assigning' AND entity_id = 'v02'").all(WS) as P[];
+      if (expected === "Active") {
+        expect(r.message).toMatch(/Vendor kept on work.*separate proposal/);
+        expect(off).toHaveLength(1);
+        expect(off[0]).toMatchObject({ risk: "High", assignee_role: "principal" });
+        expect(await decide(f, "grace", GRACE, off[0])).toMatchObject({ ok: false });
+      } else expect(off).toHaveLength(0);
       expect(await status(f)).toBe(expected);
     }
   });

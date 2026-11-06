@@ -203,19 +203,23 @@ async function proposeImpl(ctx: AgentCtx, p: ProposeInput, execute: Executor): P
     queue_state: queueState, assignee_role: assignee, model: source === "rules" ? "rules" : ctx.modelUsed.model, run_id: ctx.runId, step_id: stepId, created_at: demoNowIso(),
   };
   await (await insert(db, ws, "ai_proposals", row)).run();
-  for (const v of split) {
-    const name = String((await getRaw(ctx.data, "vendors", v))?.company ?? v);
-    await proposeImpl(ctx, {
-      entity: "vendors", entityId: v, action: "vendors.stop_assigning", propertyId: p.propertyId ?? null, title: `Take ${name} off work until its bank change is verified`,
-      why: ["Bank details changed with no verification on file", "Split from the payment hold, which the accountant decides"], confidence: p.confidence, risk: "High", alwaysHuman: true,
-      payload: { effects: [{ kind: "update", table: "vendors", id: v, changes: { status: "Inactive" } }] }, evidence: [{ entity_type: "vendors", entity_id: v, label: name }],
-    }, execute);
-  }
+  for (const v of split) await proposeImpl(ctx, await offWorkProposal(ctx.data, v, p.propertyId ?? null, p.confidence), execute);
   if (!auto || ctx.aborted) return { id, queueState, duplicate: false };
 
   const result = await execute(ctx.data, row, { id: ctx.agent, name: agentName(ctx.agent), agent: ctx.agent });
   await ctx.step({ kind: "message", output: { auto_applied: id, ...result }, ok: result.ok });
   return { id, queueState, duplicate: false, executed: result };
+}
+
+// Taking a vendor off work, split out of a bank-change payment hold because the vendor has open
+// emergency or life-safety jobs: its own proposal, which routes to the principal or regional manager.
+export async function offWorkProposal(data: DataCtx, vendorId: string, propertyId: string | null, confidence: number): Promise<ProposeInput> {
+  const name = String((await getRaw(data, "vendors", vendorId))?.company ?? vendorId);
+  return {
+    entity: "vendors", entityId: vendorId, action: "vendors.stop_assigning", propertyId, title: `Take ${name} off work until its bank change is verified`,
+    why: ["Bank details changed with no verification on file", "Split from the payment hold, which the accountant decides"], confidence, risk: "High", alwaysHuman: true,
+    payload: { effects: [{ kind: "update", table: "vendors", id: vendorId, changes: { status: "Inactive" } }] }, evidence: [{ entity_type: "vendors", entity_id: vendorId, label: name }],
+  };
 }
 
 export const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);

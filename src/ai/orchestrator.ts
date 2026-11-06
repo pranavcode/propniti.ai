@@ -7,7 +7,7 @@ import { dueBetween } from "./cron";
 import { CHARGE_IS_OPEN } from "@/server/data";
 import { asOf, eff, insert, newId, parseJson, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
-import { createRunContext, errText, type AgentCtx } from "./runtime";
+import { createRunContext, errText, offWorkProposal, type AgentCtx } from "./runtime";
 import type { ApprovalPolicy, AgentDef, Autonomy, EventType, RunContext, TriggerKind } from "./types";
 
 // The orchestrator: turns a trigger (schedule, event, a person's "Run now", chat) into an
@@ -148,6 +148,17 @@ export async function runWithContext<T>(
 }
 
 // Creates a run row for work that isn't a registered agent loop (the assistant's chat turns).
+// After a payment hold is approved without taking the vendor off work (emergency jobs reached it
+// after the hold was proposed): the off-work part as its own proposal for the life-safety approver.
+export async function proposeOffWork(data: DataCtx, agent: AgentKey, vendorIds: string[], propertyId: string | null, confidence: number) {
+  const start = { db: data.db, ws: data.ws, actor: data.actor, agent, trigger: { kind: "manual" as const, input: { vendors: vendorIds } } };
+  const runId = await openRun(start);
+  await runWithContext(runId, start, Date.now(), agent, "act_with_approval", ["vendors.stop_assigning"], async (ctx) => {
+    for (const v of vendorIds) await ctx.proposeFull(await offWorkProposal(data, v, propertyId, confidence));
+    return { summary: `Proposed taking ${vendorIds.length} vendor${vendorIds.length === 1 ? "" : "s"} off work, split from a payment hold.`, result: null };
+  });
+}
+
 export async function openRun(o: StartOpts, nowMs = Date.now()) {
   const runId = newId("run");
   await (await insert(o.db, o.ws, "agent_runs", {
