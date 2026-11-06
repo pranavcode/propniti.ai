@@ -701,10 +701,7 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   await assertRefs(ctx, def, body);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
   // Taking a vendor with open emergency or life-safety jobs off work is a life-safety call.
-  if (def.key === "vendors" && VENDOR_OFF.includes(String(body.status)) && !VENDOR_OFF.includes(String(before.status)) && !LIFE_SAFETY_ROLES.includes(ctx.actor.role)) {
-    const n = await safetyJobs(ctx.db, ctx.ws, [id]);
-    if (n) throw new QueryError(403, `This vendor has ${n} open emergency or life-safety work order${n === 1 ? "" : "s"}. Reassign ${n === 1 ? "it" : "them"} first, or ask the principal or a regional manager to change the status.`);
-  }
+  if (def.key === "vendors" && VENDOR_OFF.includes(String(body.status)) && !VENDOR_OFF.includes(String(before.status))) await assertNoSafetyJobs(ctx, id, "change the status");
   const changes = changesToColumns(def, body);
   if (!Object.keys(changes).length) throw new QueryError(400, "Nothing to change");
   const after: Row = { ...before, ...changes, workspace_id: ctx.ws, deleted: 0 };
@@ -723,6 +720,14 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
 
 const pick = (r: Row, keys: string[]) => Object.fromEntries(keys.map((k) => [k, r[k]]));
 
+// Deleting or deactivating a vendor that still has open emergency or life-safety jobs is for the
+// principal or a regional manager (src/ai/life-safety.ts).
+async function assertNoSafetyJobs(ctx: WriteCtx, vendorId: string, what: string) {
+  if (LIFE_SAFETY_ROLES.includes(ctx.actor.role)) return;
+  const n = await safetyJobs(ctx.db, ctx.ws, [vendorId]);
+  if (n) throw new QueryError(403, `This vendor has ${n} open emergency or life-safety work order${n === 1 ? "" : "s"}. Reassign ${n === 1 ? "it" : "them"} first, or ask the principal or a regional manager to ${what}.`);
+}
+
 export async function deleteRecord(ctx: WriteCtx, entity: string, id: string): Promise<void> {
   const def = getDef(entity);
   assertWrite(def, ctx.actor.role, "delete");
@@ -730,6 +735,7 @@ export async function deleteRecord(ctx: WriteCtx, entity: string, id: string): P
   if (!current) throw new QueryError(404, `${def.label.one} not found`);
   assertUnlocked(def, current);
   const before = (await rawRow(ctx.db, def.table, ctx.ws, id))!;
+  if (def.key === "vendors") await assertNoSafetyJobs(ctx, id, "delete it");
   const pid = await propertyOf(ctx, def, id);
   forgetOverlay(ctx.actor);
   await ctx.db.batch([upsert(ctx.db, def.table, { ...before, workspace_id: ctx.ws, deleted: 1 }), ...trail(ctx, def, id, "deleted", pid, before, null, `Deleted ${def.label.one.toLowerCase()} ${String(before[def.fields[def.titleField]?.column ?? def.titleField] ?? id)}`)]);

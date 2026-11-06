@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import "@/entities";
 import { getPersona } from "@/auth/personas";
 import type { Actor } from "@/entities/types";
-import { updateRecord } from "@/server/query";
+import { deleteRecord, updateRecord } from "@/server/query";
 import { sql } from "../data";
 import { approverRoles, decidableSql } from "../decide";
 import { vendorsTurnedOff } from "../life-safety";
@@ -93,6 +93,15 @@ describe("deactivating a vendor with open emergency or life-safety jobs", () => 
     f.raw.prepare("UPDATE vendors SET status = 'Active' WHERE workspace_id = ? AND id = 'v02'").run(WS);
     f.raw.prepare("UPDATE work_orders SET status = 'Completed' WHERE id = 'WO-7001'").run();
     await expect(updateRecord(ctx(MARCUS), "vendors", "v02", { status: "Inactive" })).resolves.toMatchObject({ status: "Inactive" });
+  });
+
+  // Only the principal and regional managers may delete vendors today; the life-safety check backs
+  // that up if delete rights ever widen.
+  it("lets only the life-safety roles delete the vendor", async () => {
+    const f = setup("Emergency");
+    const ctx = (actor: Actor) => ({ db: f.db, ws: WS, nowMs: Date.now(), actor });
+    await expect(deleteRecord(ctx(TOM), "vendors", "v02")).rejects.toThrow();
+    await expect(deleteRecord(ctx(DANIEL), "vendors", "v02")).resolves.toBeUndefined();
   });
 });
 
