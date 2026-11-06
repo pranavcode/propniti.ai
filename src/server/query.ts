@@ -831,15 +831,18 @@ export const taskSchema = z.strictObject({
   due_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   priority: z.enum(["High", "Normal", "Low"]).optional(),
   assignee_id: z.string().max(80).optional(),
-  status: z.enum(["Open", "In progress", "Done", "Cancelled"]).optional(),
 });
 
 // Notes and tasks are collaboration, not record edits: anyone who can read the record may add them.
 export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: string, id: string, body: z.infer<typeof noteSchema> | z.infer<typeof taskSchema>): Promise<Row> {
   const def = getDef(entity);
+  // Tasks are the staff work queue: portal users can't put work in it.
+  if (kind === "tasks" && ctx.actor.scope.kind === "self") throw new QueryError(403, "Only staff can add tasks");
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const at = demoNowIso(ctx.nowMs);
   const pid = await propertyOf(ctx, def, id);
+  const assignee = kind === "tasks" ? (body as z.infer<typeof taskSchema>).assignee_id : undefined;
+  if (assignee && !(await staffCovers(ctx, assignee, pid == null ? null : String(pid)))) throw new QueryError(400, "Assign the task to an active staff member who works on this record's property");
   const rid = crypto.randomUUID();
   const { db, ws, actor } = ctx;
   let insert: DbStatement;
@@ -853,7 +856,7 @@ export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: 
   } else {
     const b = body as z.infer<typeof taskSchema>;
     insert = db.prepare("INSERT INTO tasks (workspace_id, id, title, detail, entity_type, entity_id, property_id, assignee_id, created_by, due_on, priority, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(ws, rid, b.title, b.detail ?? "", def.key, id, pid == null ? null : String(pid), b.assignee_id ?? null, actor.personaId, b.due_on ?? null, b.priority ?? "Normal", b.status ?? "Open", at);
+      .bind(ws, rid, b.title, b.detail ?? "", def.key, id, pid == null ? null : String(pid), b.assignee_id ?? null, actor.personaId, b.due_on ?? null, b.priority ?? "Normal", "Open", at);
     summary = `${actor.name} added task "${b.title}"`;
   }
   forgetOverlay(ctx.actor);
@@ -864,6 +867,14 @@ export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: 
   ]);
   const row = await db.prepare(`SELECT * FROM ${kind} WHERE workspace_id = ? AND id = ?`).bind(ws, rid).first<Row>();
   return row!;
+}
+
+// An active staff member whose role assignment covers the property (org-wide, its region or the
+// property itself); for a record with no property, any active staff member.
+async function staffCovers(ctx: QueryCtx, staffId: string, propertyId: string | null) {
+  const covers = `EXISTS (SELECT 1 FROM ${effective("role_assignments", ctx.ws)} AS ra WHERE ra.staff_id = s.id AND (ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id = ?2)
+    OR (ra.scope_kind = 'region' AND ra.scope_id = (SELECT p.region_id FROM ${effective("properties", ctx.ws)} AS p WHERE p.id = ?2))))`;
+  return !!(await ctx.db.prepare(`SELECT 1 AS ok FROM ${effective("staff", ctx.ws)} AS s WHERE s.id = ?1 AND s.active = 1 AND (?2 IS NULL OR ${covers})`).bind(staffId, propertyId).first());
 }
 
 // ---------------------------------------------------------------------------------------------

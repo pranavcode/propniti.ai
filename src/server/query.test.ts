@@ -428,6 +428,24 @@ describe("writes", () => {
     expect(await wo()).toMatchObject({ status: "Submitted", priority: "Emergency" });
   });
 
+  it("lets only staff add tasks, opens them as Open and assigns them only to staff covering the record", async () => {
+    const { addCollab, taskSchema } = await import("./query");
+    await db.batch([
+      db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')"),
+      db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 'marcus', 'org1', 'Marcus Bell', 'PM', 'm@x.example'), ('base', 'gus', 'org1', 'Gus Ortega', 'Tech', 'g@x.example')"),
+      db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-m', 'marcus', 'property_manager', 'property', 'p01'), ('base', 'ra-g', 'gus', 'maintenance_supervisor', 'region', 'r-se')"),
+    ]);
+    // A resident can read their charge but can't put work in the staff queue.
+    await expect(addCollab(await wctx("resident"), "tasks", "charges", "c-p01-u1", { title: "Call me back" })).rejects.toMatchObject({ status: 403 });
+    expect(await db.prepare("SELECT count(*) AS n FROM tasks").first()).toMatchObject({ n: 0 });
+    // Created tasks start Open; the body can't set the status.
+    expect(taskSchema.safeParse({ title: "Chase", status: "Done" }).success).toBe(false);
+    const m = await wctx("marcus");
+    await expect(addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "nobody" })).rejects.toMatchObject({ status: 400 });
+    await expect(addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "gus" })).rejects.toMatchObject({ status: 400 });
+    expect(await addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "marcus" })).toMatchObject({ status: "Open", assignee_id: "marcus" });
+  });
+
   it("hides a deleted base row with an overlay tombstone, for this visitor only", async () => {
     await deleteRecord(await wctx("daniel"), "properties", "p06");
     expect(await getRow(await ctx("daniel", WS), "properties", "p06")).toBeNull();
