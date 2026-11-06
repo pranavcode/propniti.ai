@@ -95,6 +95,15 @@ describe("bill money flow", () => {
     expect((await runAction(daniel, getAction("bills.approve")!, id, {})).status).toBe(200);
   });
 
+  it("pays a bill over the bill-payment limit only for a payables approver, the rule the payment run routes to", async () => {
+    const w = write();
+    const { payBill } = await import("@/server/money");
+    const over = await db.prepare("SELECT b.id FROM bills b WHERE b.workspace_id = 'base' AND b.status = 'Approved' AND b.property_id = 'p01' AND b.amount_cents > 500000 LIMIT 1").first<{ id: string }>();
+    const id = over?.id ?? String((await db.prepare("INSERT INTO bills (workspace_id, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents, status) VALUES (?, 'b-over-limit', 'p01', 'oe01', 'v01', 'LSP-BIG', '2026-11-01', '2026-11-20', 600000, 'Approved') RETURNING id").bind(WS).first<{ id: string }>())!.id);
+    for (const persona of ["marcus", "tom", "lena"]) expect((await payBill({ ...w, actor: await resolveActor(db, getPersona(persona)!, WS) }, id)).status).toBe(403);
+    expect(await db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = ?").bind(WS, `vendor:${id}`).first()).toMatchObject({ n: 0 });
+  });
+
   it("refuses to create a bill in any status but Draft", async () => {
     const schema = writeSchema(getDef("bills"), "accountant", "create");
     const body = { vendor_id: "v01", property_id: "p01", owner_entity_id: "oe01", invoice_number: "X", bill_date: "2026-11-03", due_on: "2026-12-03", amount: 10 };
