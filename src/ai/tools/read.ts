@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { can } from "@/entities/registry";
 import { INTERNAL_ROLES, type Row } from "@/entities/types";
 import { get, list, parseJson, sql, TABLES, columns, type Filter, type Table } from "../data";
 import { delinquency, explainNoi, monthly } from "../facts";
@@ -88,7 +89,7 @@ registerTool({
   description: "Residents who owe rent: balance, days late and aging buckets per lease, computed from charges, payments and credits. Filter by minimum days late, metro (Austin, Dallas, Atlanta, Phoenix) or property ids.",
   input: z.object({ min_days: z.number().int().min(0).optional(), metro: z.enum(["Austin", "Dallas", "Atlanta", "Phoenix"]).optional(), property_ids: z.array(z.string()).max(30).optional(), lease_ids: z.array(z.string().max(80)).max(50).optional(), limit: z.number().int().min(1).max(50).default(25) }),
   output: z.any(),
-  mode: "read", roles, requiresApproval: never,
+  mode: "read", roles, reads: "charges", requiresApproval: never,
   async run(ctx, i) {
     const c = ac(ctx);
     return delinquency(c.data, c.today, { minDays: i.min_days, metro: i.metro, propertyIds: i.property_ids, leaseIds: i.lease_ids, limit: i.limit });
@@ -100,7 +101,7 @@ registerTool({
   description: "A lease's ledger: recent charges, payments (with NSF returns) and credits, and the current balance.",
   input: z.object({ lease_id: z.string().max(80) }),
   output: z.any(),
-  mode: "read", roles, requiresApproval: never,
+  mode: "read", roles, reads: "charges", requiresApproval: never,
   async run(ctx, i) {
     const c = ac(ctx);
     const lease = await get(c.data, "leases", i.lease_id);
@@ -122,8 +123,12 @@ registerTool({
   output: z.any(),
   mode: "read", roles, requiresApproval: never,
   async run(ctx, i) {
-    const rows = await monthly(ac(ctx).data, { metro: i.metro, propertyIds: i.property_ids, months: i.months });
-    return { rows: rows.slice(0, 120) };
+    const d = ac(ctx).data;
+    const rows = (await monthly(d, { metro: i.metro, propertyIds: i.property_ids, months: i.months })).slice(0, 120);
+    // Money columns (NOI, collections, aging) come from the ledger; a role that can't read journal
+    // entries keeps occupancy, work-order and leasing counts only.
+    if (can(d.actor.role, "read", "journal_entries")) return { rows };
+    return { rows: rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.endsWith("_cents")))) };
   },
 });
 
@@ -132,7 +137,7 @@ registerTool({
   description: "Explains a change in NOI month over month: drivers that add up to the change (operating expenses, vacancy loss, concessions, other income), the properties that moved most and the expense lines that changed. All figures computed.",
   input: z.object({ metro: z.enum(["Austin", "Dallas", "Atlanta", "Phoenix"]).optional(), property_ids: z.array(z.string()).max(30).optional(), month: z.string().regex(/^\d{4}-\d{2}$/).optional() }),
   output: z.any(),
-  mode: "read", roles, requiresApproval: never,
+  mode: "read", roles, reads: "journal_entries", requiresApproval: never,
   async run(ctx, i) {
     const c = ac(ctx);
     return (await explainNoi(c.data, { metro: i.metro, propertyIds: i.property_ids, month: i.month, today: c.today })) ?? { error: "Not enough monthly history" };

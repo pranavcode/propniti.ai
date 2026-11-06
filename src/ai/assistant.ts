@@ -363,7 +363,9 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
 
   const ctx = run.ctx;
   // run.summary is the raw failure, kept for the trace; the reply says it in plain words.
-  const res = run.result ?? { out: { answer: `Something went wrong, so there's no answer this time: ${plainError(run.summary)}. Try again in a minute.`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
+  // A refused read (the role can't open charges, say) is an answer, not a failure to retry.
+  const denied = /You don't have access to [a-z ]+/.exec(String(run.summary ?? ""))?.[0];
+  const res = run.result ?? { out: { answer: denied ? `${denied}, so I can't answer that.` : `Something went wrong, so there's no answer this time: ${plainError(run.summary)}. Try again in a minute.`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
   const steps = await db.prepare("SELECT tool_key, input, output, latency_ms, ok, kind FROM agent_steps WHERE workspace_id = ? AND run_id = ? AND kind IN ('tool_call', 'tool_result') ORDER BY idx").bind(ws, runId).all<{ tool_key: string; input: string | null; output: string | null; latency_ms: number | null; ok: number; kind: string }>();
   const trace: TraceItem[] = [];
   for (let i = 0; i < steps.results.length; i++) {
