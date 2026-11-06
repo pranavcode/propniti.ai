@@ -12,7 +12,9 @@ import { registerTool } from "./registry";
 const ac = (ctx: RunContext) => ctx as unknown as AgentCtx;
 const roles = [...INTERNAL_ROLES];
 const never = () => false;
-const SEARCHABLE = Object.keys(TABLES).filter((t) => !t.startsWith("assistant_") && t !== "agent_steps") as Table[];
+// AI logs (decisions, summaries, runs, fix logs) quote records from any property; they stay out.
+const UNSEARCHABLE = new Set(["agent_steps", "agent_runs", "ai_decisions", "ai_summaries", "data_fix_log"]);
+const SEARCHABLE = Object.keys(TABLES).filter((t) => !t.startsWith("assistant_") && !UNSEARCHABLE.has(t)) as Table[];
 const entity = z.enum(SEARCHABLE as [Table, ...Table[]]);
 
 // Long text and image lists don't help the model; trim them so results stay small.
