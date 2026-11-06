@@ -136,20 +136,29 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
               <ArrowLeft aria-hidden className="size-4" /> Back to site
             </Link>
           </div>
-          <div className="mt-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-2 lg:mt-8">
-            <h1 className="text-balance text-[clamp(1.75rem,3.2vw,2.5rem)] font-semibold leading-[1.05] tracking-[-0.03em] text-white">Sign in to the Propniti demo.</h1>
-            <p className="hidden items-center gap-2 text-[13px] text-(--mk-on-ink-muted) sm:inline-flex">
-              <Lock aria-hidden className="size-3.5 text-(--mk-mint)" />
-              Private demo data, resets at midnight Pacific.
-            </p>
-          </div>
+          <h1 className="mt-6 text-balance text-[clamp(1.75rem,3.2vw,2.5rem)] font-semibold leading-[1.05] tracking-[-0.03em] text-white lg:mt-8">Sign in to the Propniti demo.</h1>
 
-          <div className="mt-5 grid items-start gap-4 lg:mt-6 lg:grid-cols-[400px_1fr] lg:gap-5">
-            <div className="rounded-2xl bg-white p-5 text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] sm:p-6">
+          {/* One card. Desktop: the form pane (title, form) on the left, the people list on the right.
+              Narrower: title, people list, then the form. DOM order is title, form, list; `order` moves
+              the list up below lg and reading-flow keeps keyboard focus in the visual order. */}
+          <div className="mt-5 grid overflow-hidden rounded-2xl bg-white text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] [reading-flow:grid-order] lg:mt-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_1fr]">
+            <div className="px-5 pt-5 sm:px-6 sm:pt-6 lg:col-start-1 lg:row-start-1">
+              {!switching && current ? (
+                <p className="text-[14px] text-(--mk-muted)">You&apos;re signed in as</p>
+              ) : (
+                <>
+                  <h2 id="signin-title" className="text-[20px] font-semibold tracking-[-0.01em]">Sign in</h2>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-(--mk-muted)">
+                    Every demo person signs in with password<code className="whitespace-nowrap rounded bg-(--mk-teal-tint) px-1.5 py-0.5 font-mono text-[13px] font-medium text-(--mk-teal-deep)">{DEMO_PASSWORD}</code>
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="order-2 flex flex-col border-t border-(--mk-line) px-5 pb-5 pt-5 sm:px-6 sm:pb-6 lg:order-none lg:col-start-1 lg:row-start-2 lg:border-t-0 lg:pt-3">
               {!switching && current ? (
                 <div>
-                  <p className="text-[14px] text-(--mk-muted)">You&apos;re signed in as</p>
-                  <div className="mt-3 flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <span aria-hidden className={`grid size-11 shrink-0 place-items-center rounded-full text-[15px] font-semibold ${TONES[Math.max(0, cards.findIndex((c) => c.id === current.id)) % TONES.length]}`}>{initials(current.name)}</span>
                     <div className="min-w-0">
                       <div className="truncate text-[17px] font-semibold">{current.name}</div>
@@ -173,13 +182,8 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
                 </div>
               ) : (
                 <form action="/api/session" method="post" onSubmit={submit} aria-labelledby="signin-title">
-                  <h2 id="signin-title" className="text-[20px] font-semibold tracking-[-0.01em]">Sign in</h2>
-                  <p className="mt-1.5 text-[14px] leading-relaxed text-(--mk-muted)">
-                    Every demo person signs in with password<code className="whitespace-nowrap rounded bg-(--mk-teal-tint) px-1.5 py-0.5 font-mono text-[13px] font-medium text-(--mk-teal-deep)">{DEMO_PASSWORD}</code>
-                  </p>
                   {nextInput}
-
-                  <label htmlFor="signin-email" className="mt-5 block text-[14px] font-medium">Email</label>
+                  <label htmlFor="signin-email" className="block text-[14px] font-medium">Email</label>
                   <input
                     ref={emailRef}
                     id="signin-email"
@@ -252,6 +256,10 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
                   </button>
                 </form>
               )}
+              <p className="mt-auto flex items-center gap-2 pt-5 text-[13px] text-(--mk-muted)">
+                <Lock aria-hidden className="size-3.5 shrink-0 text-(--mk-teal)" />
+                Private demo data, resets at midnight Pacific.
+              </p>
             </div>
 
             <Picker cards={cards} selected={match?.id} next={next} onPick={pick} onGo={() => window.clearTimeout(scrollTimer.current)} />
@@ -306,7 +314,7 @@ function Avatar({ c, i, on, pending }: { c: Card; i: number; on?: boolean; pendi
   );
 }
 
-// The compact people list beside the form: one radio group, a row per person. Arrow keys, Home and
+// The people list inside the sign-in card: one radio group, a row per person. Arrow keys, Home and
 // End move through it (one tab stop once hydrated). Click fills the form; double-click signs in.
 function Picker({ cards, selected, next, onPick, onGo }: { cards: Card[]; selected?: string; next?: string; onPick: (c: Card, focusForm?: boolean) => void; onGo: () => void }) {
   // Before hydration (or without JavaScript) every row is a plain tab stop and a one-click sign-in.
@@ -324,15 +332,15 @@ function Picker({ cards, selected, next, onPick, onGo }: { cards: Card[]; select
     if (c) onPick(c, false);
   };
   return (
-    <div className="rounded-2xl bg-white p-4 text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] sm:p-5">
+    <section aria-labelledby="picker-title" className="order-1 px-4 pb-4 pt-4 sm:px-5 sm:pb-5 lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-(--mk-line) lg:px-5 lg:py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-1">
-        <h2 id="picker-title" className="text-[16px] font-semibold tracking-[-0.01em]">Pick a person</h2>
-        <p className="text-[13px] text-(--mk-muted)">Click to fill the form · double-click to sign in</p>
+        <h3 id="picker-title" className="text-[14px] font-semibold">Pick a person</h3>
+        <p id="picker-hint" className="text-[13px] text-(--mk-muted)">Click to fill the form · double-click to sign in</p>
       </div>
-      <div role="radiogroup" aria-labelledby="picker-title" onKeyDown={keys} className="mt-2">
+      <div role="radiogroup" aria-labelledby="picker-title" aria-describedby="picker-hint" onKeyDown={keys} className="mt-2">
         {GROUPS.map((g) => (
           <div key={g.label} role="group" aria-labelledby={`picker-${g.label}`} className="mt-2 first:mt-0">
-            <h3 id={`picker-${g.label}`} className="px-1 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label}</h3>
+            <h4 id={`picker-${g.label}`} className="px-1 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label}</h4>
             <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
               {cards.filter((c) => c.portal === g.portal).map((c) => (
                 <PersonRow key={c.id} c={c} i={cards.indexOf(c)} on={selected === c.id} tabStop={!hydrated || stop === c.id} next={next} onPick={onPick} onGo={onGo} />
@@ -341,7 +349,7 @@ function Picker({ cards, selected, next, onPick, onGo }: { cards: Card[]; select
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
