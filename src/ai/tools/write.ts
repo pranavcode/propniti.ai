@@ -103,8 +103,10 @@ export function fixProposal(issue: Record<string, unknown>, extraWhy?: string): 
   const effects = LEDGER.test(table) || !isTable(table) || manual
     ? [{ kind: "task", title: `Fix ${rule.replace(/[._]/g, " ")} on ${id}`, detail: `${why.join(" ")}\nEvidence: ${JSON.stringify(evidence)}\nSuggested: ${JSON.stringify(fix.changes ?? (fix.action ? { action: fix.action, ...fix.params } : fix.params) ?? {})}`, assignee_role: assignee, priority: "High", property_id: issue.property_id ?? null }]
     : rule === "vendors.unverified_bank_change"
+      // Not a fix: the open issue is the payment hold (money.ts, bankHold), so it stays open until the
+      // callback (vendors.confirm_bank_change) closes it. Approving only stops work and assigns the call.
       ? [
-          { kind: "update", table: "vendors", id, changes: { status: "Inactive" }, fix: true, issue_id: issue.id },
+          { kind: "update", table: "vendors", id, changes: { status: "Inactive" } },
           { kind: "task", title: `Verify bank change for vendor ${id} by phone (number on file, not the one in the request)`, detail: why.join(" "), assignee_role: "accountant", priority: "High" },
         ]
       : fix.merge_into
