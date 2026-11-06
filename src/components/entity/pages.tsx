@@ -15,6 +15,7 @@ import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
 import { getPlatform } from "@/lib/platform";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/format";
+import { safeHref } from "@/lib/links";
 import { cn } from "@/lib/utils";
 import { fieldRows, hintsFor, valueText, type FieldHint } from "@/lib/fieldText";
 import { Term } from "@/components/app/Term";
@@ -35,8 +36,6 @@ import { bulkActions, columnKind, formFields, parentValues, refHref, statusTabs,
 const KPI_COLS = ["", "lg:grid-cols-4", "lg:grid-cols-2", "lg:grid-cols-3", "lg:grid-cols-4"];
 const ctxOf = (s: Session): QueryCtx => ({ db: getPlatform().db, ws: s.ws, actor: s.actor });
 const errMsg = (e: unknown) => (e instanceof QueryError ? e.message : "This list couldn't load. Try again, or clear the filters.");
-// Links from stored data: same-site paths and http(s) only, never javascript: or data: URLs.
-const safeHref = (u: unknown) => (typeof u === "string" && /^(\/(?!\/)|https?:\/\/)/i.test(u) ? u : undefined);
 const attempt = <T,>(p: Promise<T>) => p.then((res) => ({ res, error: null as string | null }), (e) => ({ res: null, error: errMsg(e) }));
 
 async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promise<KpiData[]> {
