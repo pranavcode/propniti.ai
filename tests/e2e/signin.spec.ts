@@ -108,6 +108,9 @@ test.describe("sign in", () => {
 
     await go(page, "/login");
     await expect(page.getByText("You're signed in as")).toBeVisible();
+    // Headings don't skip a level: h1, then an h2 (hidden) before the people list's h3.
+    expect(await page.locator("h1, h2, h3").evaluateAll((hs) => hs.map((h) => h.tagName))).toEqual(expect.arrayContaining(["H1", "H2", "H3"]));
+    await expect(page.getByRole("heading", { level: 2, name: "Signed in" })).toBeAttached();
     await page.getByRole("link", { name: "Switch person" }).click();
     await expect(email(page)).toBeVisible();
     await go(page, "/login");

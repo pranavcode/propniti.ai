@@ -144,7 +144,11 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
           <div className="mt-5 grid overflow-hidden rounded-2xl bg-white text-(--mk-text) shadow-[0_24px_60px_-20px_oklch(0.1_0.03_208/0.6)] [reading-flow:grid-order] lg:mt-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_1fr]">
             <div className="px-5 pt-5 sm:px-6 sm:pt-6 lg:col-start-1 lg:row-start-1">
               {!switching && current ? (
-                <p className="text-[14px] text-(--mk-muted)">You&apos;re signed in as</p>
+                <>
+                  {/* Keeps the heading order (h1, h2, then the list's h3) when the "Sign in" title is hidden. */}
+                  <h2 className="sr-only">Signed in</h2>
+                  <p className="text-[14px] text-(--mk-muted)">You&apos;re signed in as</p>
+                </>
               ) : (
                 <>
                   <h2 id="signin-title" className="text-[20px] font-semibold tracking-[-0.01em]">Sign in</h2>
