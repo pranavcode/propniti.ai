@@ -1,12 +1,14 @@
 import { DEMO_PASSWORD, getPersona, personaByEmail, personaCookie, PN_AS, safeNext, type Persona } from "@/auth/personas";
+import { secureAttr } from "@/lib/cookie";
 import { rateLimit, readBodyLimited } from "@/lib/guard";
+import { COOKIE } from "@/server/workspace";
 import { sameOrigin } from "../e/_lib/http";
 
 // Demo sign-in and "Switch role": sets the pn_as cookie and lands on the persona's home.
 // Two ways in, both plain form posts (or JSON) so they work before hydration:
 //   email + password: a demo account (the password is published on the sign-in page);
 //   persona: the one-click cards and "View as" buttons.
-// DELETE signs out (clears the persona).
+// DELETE signs out (clears the persona and the workspace cookie).
 
 const noStore = { "Cache-Control": "no-store" };
 const fields = ["persona", "email", "password", "next"] as const;
@@ -73,5 +75,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "Cross-site request refused" }, { status: 403 });
-  return Response.json({ ok: true }, { headers: { "Set-Cookie": `${PN_AS}=; Path=/; SameSite=Lax; Max-Age=0`, "Cache-Control": "no-store" } });
+  // Sign-out also drops the workspace (pn_ws), so the next person on this browser starts clean.
+  const headers = new Headers(noStore);
+  headers.append("Set-Cookie", `${PN_AS}=; Path=/; SameSite=Lax; Max-Age=0${secureAttr()}`);
+  headers.append("Set-Cookie", `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureAttr()}`);
+  return Response.json({ ok: true }, { headers });
 }

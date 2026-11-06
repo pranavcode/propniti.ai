@@ -23,6 +23,9 @@ export function exitPersona() {
   const id = document.cookie.split(/;\s*/).find((c) => c.startsWith(`${PN_AS}=`))?.slice(PN_AS.length + 1);
   rememberPersona(id, true);
   document.cookie = `${PN_AS}=; Path=/; Max-Age=0; SameSite=Lax${secureAttr()}`;
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload drops persona state
-  window.location.assign("/login");
+  // The workspace cookie is HttpOnly, so the server clears it (and pn_as again).
+  return fetch("/api/session", { method: "DELETE" }).catch(() => {}).finally(() => {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload drops persona state
+    window.location.assign("/login");
+  });
 }
