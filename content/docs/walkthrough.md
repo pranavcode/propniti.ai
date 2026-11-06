@@ -1,12 +1,12 @@
 A tour of Propniti at [propniti.ai](https://propniti.ai), with one section per staff persona, portal and the public listings site.
 
-**Start here.** Open [propniti.ai/login](https://propniti.ai/login) and sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (shared by all accounts). Or click one of the 13 people in *Pick a person* to fill the form; double-click to sign in at once. To switch later, use *Switch role (demo)* in the avatar menu or *Switch* in the banner.
+Open [propniti.ai/login](https://propniti.ai/login) and sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (shared by all accounts). Or click one of the 13 people in *Pick a person* to fill the form; double-click to sign in at once. To switch later, use *Switch role (demo)* in the avatar menu or *Switch* in the banner.
 
-**First visit.** Each persona's home opens with a welcome screen once a demo day: what Propniti does for the role, *What's new* and up to three things waiting. *Help › Show welcome screen* brings it back. Sidebar dots mark features you haven't opened, a card offers a tour once per session, and the *Ask Propniti* panel opens once a day.
+Each persona's home opens with a welcome screen once a demo day: what Propniti does for the role, *What's new* and up to three things waiting. *Help › Show welcome screen* brings it back. Sidebar dots mark features you haven't opened, a card offers a tour once per session, and the *Ask Propniti* panel opens once a day.
 
-**About the data.** Sample data: 30 properties in Austin, Dallas, Atlanta and Phoenix. "Today" is 4 November 2026, with books closed through October. Your changes go into a private copy that resets at midnight Pacific. No real payments or messages are sent.
+Everything is sample data: 30 properties in Austin, Dallas, Atlanta and Phoenix. "Today" is 4 November 2026, with books closed through October. Your changes go into a private copy that resets at midnight Pacific. No real payments or messages are sent.
 
-**About the AI.** AI output is labelled **AI** (a live model, just now), **AI · saved** (stored from an earlier run) or **Rules** (fixed rules). Record summaries say **Rules · from this record's current figures**, **Generated** or **Precomputed**. Figures come from the data, so wording can differ between runs but numbers can't.
+AI output is labelled **AI** (a live model, just now), **AI · saved** (stored from an earlier run) or **Rules** (fixed rules). Record summaries say **Rules · from this record's current figures**, **Generated** or **Precomputed**. Figures come from the data, so wording can differ between runs but numbers can't.
 
 ## 1. Things every staff page shares
 
@@ -23,9 +23,9 @@ A tour of Propniti at [propniti.ai](https://propniti.ai), with one section per s
 | Inbox | `/app/inbox` (or press I): conversations waiting on you, proposals you can decide, alerts. *Reply* opens the conversation; *Review* opens the proposal |
 | My tasks | `/app/tasks`: tasks for you or your role, in *Open*, *Overdue*, *Today*, *Upcoming* and *Done* views. Click the circle to mark one done |
 | Agents | `/app/agents` (the eight agents), `/app/automations` (what runs when), `/app/ai/approvals` (proposals), `/app/ai/activity` (runs) |
-| Out of scope | A record outside your scope opens a page that says so |
+| Out of scope | A record outside your scope shows "This record isn't in your scope or doesn't exist" |
 | Downloads | *Download* on lists, reports and owner statements: *CSV*, *Excel (.xlsx)* or *PDF*, up to 10,000 rows, matching the screen. *Include Propniti branding* adds a logo and footer to Excel and PDF |
-| Feedback | A thin bar shows page loads. A line such as "Showing 608 warning open issues · Clear" follows a filter click. Toasts confirm approvals and bulk actions; changed sections show "Updated just now" |
+| Feedback | A thin bar shows page loads. A filter click adds a line such as "Showing 608 warning open issues · Clear"; changed sections show "Updated just now". Toasts confirm approvals and bulk actions |
 | Theme | *Light*, *Dark* or *System* (the default) from the top bar or ⌘K |
 | Copilot | `/app/copilot`, the full-page assistant. Each persona starts with *Sample* conversations, such as "Who is 30+ days late on rent?"; follow-ups continue in your private copy |
 
@@ -51,8 +51,6 @@ All 30 properties. Lands on `/app`, the portfolio home.
 4. Click *What-if*, try *Rent +3%*, then *Explain this scenario*.
 5. Under a red KPI such as *Occupancy*, click *Improve with AI* to see why it's red and what agents can do. *Have agents do this* starts them.
 6. Approve or reject proposals in *Waiting for your decision*.
-
-AI here: *Explain*, the what-if narration, *Improve with AI* and agent proposals.
 
 ### Guided setup
 
@@ -91,7 +89,7 @@ AI here: *Explain*, the what-if narration, *Improve with AI* and agent proposals
 3. Use the quick actions *Concessions to approve* and *Work orders past SLA*.
 4. Open `/app/settings/import` and click *Try samples* on a tool tile (for example AppFolio), or upload a CSV, TSV or Excel file. Review the column matches and AI suggestions, then *Preview import* and *Import N records*. *Undo import* reverses it.
 
-AI here: per-property *Explain*, import suggestions and concession proposals (concessions over $500 need a regional manager).
+Concessions over $500 need a regional manager, so the agents' concession proposals come to Priya.
 
 ![Priya's regional home with the property comparison table](/docs/walkthrough/screens/priya-home.webp#2880x1800)
 
@@ -107,12 +105,10 @@ Three Austin communities. Lands on `/app/today`.
 2. Click *Leases ending in 60 days* and peek at a row.
 3. On a red KPI such as delinquency, click *Improve with AI*, then *Have agents do this*.
 4. In *Approvals*, open *Why?* on a Collections reminder for its reasons, records and confidence. Approve or reject.
-5. In *Inbox → Messages*, *Needs reply* means the resident wrote last. Click *Reply*, *Suggest a reply*, edit, *Send*.
+5. In *Inbox → Messages*, *Needs reply* means the resident wrote last. Click *Reply*, then *Suggest a reply*, edit the draft and *Send*.
 6. In *My tasks → Overdue*, mark one done, then *Undo*. Try *Snooze* and *Reassign*.
 7. Open a lease's *Abstraction* tab and click *Abstract lease on file*. It cites pages and flags mismatched dates; *Apply fix* corrects the record.
 8. In *Announcements → New*, pick a property, *Draft with AI*, review and send.
-
-AI here: Collections and Renewals proposals, suggested replies, lease abstraction and announcement drafts.
 
 ![Marcus's Today page with briefing, KPIs and approvals](/docs/walkthrough/screens/marcus-today.webp#2880x1800)
 
@@ -132,9 +128,7 @@ The same three Austin properties. Lands on `/app/leasing/today`.
 2. Check *Today's tours* and *Follow-ups due*. The Leasing agent proposes follow-ups for prospects not contacted in three days.
 3. On the *Pipeline board*, move a prospect to *Tour* (*Undo* moves it back). Send a follow-up or *Send all*; *Rewrite with AI* edits a draft.
 4. Open a listing, click *Draft with AI*, then *Use draft, then edit*. Wording that fails the fair-housing check blocks the save.
-5. In *Renewals*, pick a draft offer and click *Ask the Renewals agent*. It prices toward market, capped at +5%. Accept or edit, *Draft with AI*, *Send offer*.
-
-AI here: the Leasing and Renewals agents, listing drafts and the fair-housing check.
+5. In *Renewals*, pick a draft offer and click *Ask the Renewals Agent*. It prices toward market, capped at +5%. Accept or edit it, click *Draft with AI*, then *Send offer*.
 
 ![Lena's leasing day with tours and follow-ups](/docs/walkthrough/screens/lena-leasing-today.webp#2880x1800)
 
@@ -149,7 +143,7 @@ Decides applications. Lands on `/app/leasing/broker`, the *Broker desk*.
 3. Click *Approve with conditions*, add the required reason and confirm.
 4. Check *Fair-housing language* for flagged listing wording.
 
-Criminal history isn't scored; it goes to a person. Applications from the public site are scored moments after submission (see [section 15](#15-public-listings-site)).
+Criminal history isn't scored; it goes to a person. Applications from the public site are usually scored right away (see [section 15](#15-public-listings-site)).
 
 ![Broker desk with applications and AI recommendations](/docs/walkthrough/screens/rachel-broker-desk.webp#2880x1800)
 
@@ -166,8 +160,6 @@ All owner entities. Lands on `/app/finance`.
 5. In *Budget vs actual*, click ✦ on a row to explain a variance.
 6. In *Reports*, type a question such as "show me utilities by property for Q3 vs budget" and click *Build report*.
 7. Open a bank reconciliation and *Accept match* on a suggestion.
-
-AI here: invoice reading, the Payables agent, statement and variance explanations, and the report builder.
 
 ![Grace's finance home](/docs/walkthrough/screens/grace-finance-home.webp#2880x1800)
 
@@ -187,7 +179,7 @@ AI here: invoice reading, the Payables agent, statement and variance explanation
 6. In *Technician view*, *Start job* and log 30 minutes.
 7. Open `/app/compliance` for insurance certificates, permits, inspections and the expiries timeline.
 
-AI here: the Maintenance triage and Compliance agents. The PO check is rules.
+The PO check uses fixed rules, not a model.
 
 ![Tom's maintenance home with triage queue](/docs/walkthrough/screens/tom-maintenance-home.webp#2880x1800)
 
@@ -233,8 +225,8 @@ Any staff persona with AI access; Marcus works well.
 
 1. Open `/app/agents`. Each card shows goal, status, counters, last and next run, model and schedule in plain words ("Daily at 14:00 UTC · on Payment returned").
 2. Click *Run now* on the Collections agent. A side sheet streams steps such as "Looked up 14 residents"; *Technical details* shows raw input and output. *Open the full run* opens `/app/ai/runs/<id>`.
-3. The *Autonomy* select offers *Approve first* or *Auto within policy*. Only a principal, regional manager or admin can change it.
-4. The *Approval policies* table shows what agents may apply alone and when the owner decides.
+3. Under a card, check the *Autonomy* select: *Approve first* or *Auto within policy*. Only a principal, regional manager or admin can change it.
+4. Read the *Approval policies* table to see what agents may apply on their own and when the owner decides.
 5. In `/app/ai/approvals` (*Needs you*, *Handled automatically*, *Waiting on others*, *Decided*), filter by agent, risk or record type and click *Approve all low-risk matching*. *Notify approver* nudges whoever decides. Life-safety items go only to the regional manager or principal.
 6. `/app/ai/activity` lists runs with trigger (*Schedule*, *Event*, *Run now* or *Assistant*), model, tokens and summary.
 7. `/app/automations` shows agents on, the next sweep, waiting events, each agent's triggers and 30-day runs and failures, and the approval and built-in rules.
@@ -304,7 +296,7 @@ No sign-in. Open [propniti.ai/listings](https://propniti.ai/listings).
 2. Under *Ask about this unit*, ask "What's the total to move in?". Fair-housing, safety or school questions get a fixed *Fair housing policy* answer.
 3. Under *Schedule a tour*, pick a type, day and time, then *Book tour*.
 4. Click *Apply now*, complete the five steps and *Submit application*.
-5. Within moments, the status page's *AI screening summary* shows the Leasing agent's score. *Open the broker's approvals* jumps to that proposal.
+5. The status page's *AI screening summary* shows the Leasing agent's score, usually right away. *Open the broker's approvals* jumps to that proposal.
 
 ![Public listing with pricing, fees and Ask about this unit](/docs/walkthrough/screens/public-listing.webp#2880x1800)
 
