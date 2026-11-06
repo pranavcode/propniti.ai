@@ -12,7 +12,7 @@ const Body = z.object({
 
 export async function POST(request: Request) {
   return guarded(async () => {
-    const w = await writeSession(request, Body, "write", { staff: true });
+    const w = await writeSession(request, Body, "ai", { staff: true });
     if (w instanceof Response) return w;
     const data = dataOf(w.s);
     await emitEvent(data, { type: w.body.type, payload: w.body.payload });
