@@ -8,7 +8,7 @@ import { AGENT_ORDER, getAgent } from "./agents/registry";
 import { loadAgents } from "./orchestrator";
 import { approverLabel, decidableSql, staffDecision } from "./decide";
 import { computeFix, proposalSource, type AiSource } from "./rules";
-import { fixProposal, queueReason } from "./tools/write";
+import { fixProposal, queueReason, type FixOption } from "./tools/write";
 import { nextRun } from "./cron";
 import { eff, get, isTable, parseJson, scopeClause, sql, TABLES, type DataCtx, type Table } from "./data";
 import { agentConfigs, lastSweep, loadPolicies } from "./orchestrator";
@@ -448,13 +448,15 @@ export async function issuesPage(data: DataCtx, f: IssueFilters & { status?: str
     }
     const changes = (fix?.changes ?? {}) as Record<string, unknown>;
     if (rec) before = Object.fromEntries(Object.keys(changes).map((k) => [k, rec[k] ?? null]));
-    const needsPerson = queueReason(fixProposal({ ...i, suggested_fix: JSON.stringify(fix ?? {}) }), data.actor.role);
+    // Fixes a person chooses between: each option's before and after, from the record now.
+    const options = Array.isArray(fix?.options) ? (fix.options as FixOption[]).map((o) => ({ label: o.label, why: o.why ?? null, after: o.changes, before: rec ? Object.fromEntries(Object.keys(o.changes).map((k) => [k, rec[k] ?? null])) : null })) : undefined;
+    const needsPerson = queueReason(fixProposal({ ...i, suggested_fix: JSON.stringify(options?.length ? { ...fix, changes: options[0].after } : fix ?? {}) }), data.actor.role);
     const def = getEntity(table);
     const hints = hintsFor(def);
     return {
-      ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, needsPerson, href: hrefOf(table, String(i.entity_id)),
+      ...i, evidence: parseJson(i.evidence, {}), suggested_fix: fix, before, after: changes, ...(options && { options }), needsPerson, href: hrefOf(table, String(i.entity_id)),
       entity_label: def?.label.one ?? humanizeKey(table), record: recordTitle(table, rec, titles),
-      fields: Object.fromEntries(Object.keys(changes).filter((k) => hints[k]).map((k) => [k, hints[k]])),
+      fields: Object.fromEntries([...Object.keys(changes), ...(options ?? []).flatMap((o) => Object.keys(o.after))].filter((k) => hints[k]).map((k) => [k, hints[k]])),
     };
   }));
   return { rows: out, total: total[0]?.n ?? 0, page, size };

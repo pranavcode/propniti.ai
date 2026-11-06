@@ -2,9 +2,10 @@ import { z } from "zod";
 import { applyFixes, dismissIssue } from "@/ai/datafix";
 import { DB_BUSY, dataOf, guarded, json, writeSession } from "@/ai/http";
 
-const Body = z.object({ action: z.enum(["apply", "dismiss"]), note: z.string().max(300).default("") });
+const Body = z.object({ action: z.enum(["apply", "dismiss"]), note: z.string().max(300).default(""), option: z.number().int().min(0).max(9).optional() });
 
 // FixPreview buttons: apply the suggested fix (audited, logged with before/after) or dismiss it.
+// option picks one of the fix's options when the rule offers a choice.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return guarded(async () => {
     const { id } = await params;
@@ -16,7 +17,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const r = await dismissIssue(data, s.persona, id, body.note);
       return r.ok ? json(r, { setCookie: s.setCookie }) : json({ error: r.message }, { status: r.status ?? 400 });
     }
-    const r = await applyFixes(data, s.persona, [id], { safeOnly: false });
+    const r = await applyFixes(data, s.persona, [id], { safeOnly: false, option: body.option });
     const one = r.results[0];
     if (one?.ok) return json({ ok: true, message: one.message, runId: r.runId }, { setCookie: s.setCookie });
     // Not applied but waiting in the approvals inbox: accepted, not an error.
