@@ -40,7 +40,7 @@ Propniti finds wrong operations data that money decisions rely on, shows why it'
 
 ## Personas
 
-All names and companies are fictional. Sign in at [propniti.ai/login](https://propniti.ai/login) with a demo account, or pick a person from the list beside the form. Switch later from the avatar menu (*Switch role (demo)*). `/demo` redirects to `/login`.
+All names and companies are fictional. Sign in at [propniti.ai/login](https://propniti.ai/login) with a demo account, or pick a person from the list in the same card. Switch later from the avatar menu (*Switch role (demo)*). `/demo` redirects to `/login`.
 
 Accounts are `<id>@propniti.demo` (for example `marcus@propniti.demo`) with the password `propniti-demo`. In *Pick a person*, a click fills the form and a double-click signs in. `/login?as=<id>` prefills a person.
 
@@ -137,6 +137,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Technician view: start a job, log time, mark done | Built | |
 | Vendor invoice check against the purchase order, then *Approve and pay* | Built | Rules: totals within 2%, line sums, photos. Blocked on an unverified bank change or above the owner's limit |
 | Compliance: certificates of insurance, permits, inspections, legal cases, with an expiries timeline | Built | Legal cases are hidden from roles without access |
+| Set a vendor to Inactive or Do not use while it has open emergency or life-safety work orders | Built | Only the principal or a regional manager. Others reassign the jobs first. Agent proposals that do this go to them too |
 
 ### Finance
 
@@ -174,7 +175,9 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 | Help articles at `/app/help/<id>` | Built | Assistant citations link here |
 | Readable run steps with linked record names; raw input and output under *Technical details* | Built | Out-of-scope records show their type only |
 | AI summaries on records from current figures; *Summarize with AI* where none exists | Built | See [Source labels](#source-labels) |
-| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* (up to 50) | Built | Fixes touching money, fraud or legal status wait in the approvals inbox |
+| Data Health: score, issues by rule and property, before/after fixes, *Apply N safe fixes* (up to 50) | Built | Fixes touching money, fraud or legal status wait in the approvals inbox. Property-scoped roles see issues on their properties, plus issues on records with no property (such as vendors) that they can read |
+| Leases still Active after their end date | Built | A person picks *Mark as ended* or *Switch to month-to-month*; either goes to the approvals inbox |
+| Model failures show a plain message, never the provider's error | Built | The assistant says it used the rule-based answer. Other AI requests say "The AI service didn't respond. Try again in a minute." |
 | Automations (`/app/automations`): each agent's schedule, events, autonomy and recent runs; the sweep; approval and built-in rules | Built | |
 
 ### Portals and public site
@@ -193,7 +196,7 @@ Status is Built (works end to end on propniti.ai), Partial (the note says what's
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| Users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | The principal can add people but can't grant the admin role |
+| Company profile, users, roles matrix, approval policies with change history, state rules, audit log, notifications | Built | The principal and admins edit the company profile. The principal can add people but can't grant the admin role |
 | Import of properties, units, residents, leases, owners, vendors and aged balances | Built | See [Import](#import) |
 | Guided setup at `/app/onboarding` | Built | See [Guided setup](#guided-setup) |
 | Integrations | Partial | Status cards only; no outside service is called |

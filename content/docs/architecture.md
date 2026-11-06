@@ -112,7 +112,7 @@ Every table has a `workspace_id`.
 - **Named actions** (`src/extensions/*/actions.ts`), keyed `<entity>.<verb>`, carry workflow and money changes. Status and approval fields are `system` fields only actions set. Ledger tables (charges, payments, credits, deposits, bank accounts and transactions, reconciliations, journal entries, owner distributions) accept actions only.
 - **Locked records.** `lockedWhen` refuses edits and deletes of paid bills, sent renewal offers, decided concessions and ended leases.
 - **Role × module matrix** (`src/auth/personas.ts`): none, read, write or approve. A record type's own role lists narrow it.
-- **Scope.** Reads filter to the persona's properties in SQL, and writes check scope inside the batch. Portal personas get only rows tied to their own record.
+- **Scope.** Reads filter to the persona's properties in SQL, and writes check scope inside the batch. Data Health issues also show on records with no property (such as vendors) when the role can read that record type. Portal personas get only rows tied to their own record.
 - **Paging.** 25, 50 or 100 rows (default 50), with keyset cursors where cheap. Downloads stop at 10,000 rows.
 
 ## Money
@@ -197,6 +197,7 @@ Sweeps cover up to 10 visitor workspaces active in the last 30 minutes, never th
 - **Deduplication.** One open proposal per agent, record and action.
 - **Approval** (`src/ai/effects.ts`, `src/ai/http.ts`). The server re-checks scope, the record's key fields against the snapshot, the action's precondition and the approver's role. A guarded `ai_decisions` insert runs it once.
 - **Decision rule** (`src/ai/decide.ts`, enforced by `canDecide`). Buttons, *Needs you* counts and the server share it. Life-safety items go only to the property's regional manager or the principal. It applies in the approvals inbox, the record action route (`/api/e/<entity>/<id>/actions/<action>`), Data Health and *Dispatch as suggested*. A proposal the caller can't decide stays queued (202 with the proposal id) if it involves money, legal or safety or isn't low risk; a refused low-risk proposal returns 403.
+- **Vendors on life-safety jobs** (`src/ai/life-safety.ts`). Setting a vendor to Inactive or Do not use while it has open emergency or life-safety work orders is a life-safety decision. The record API refuses it for other roles (403), and an agent proposal that does it goes to the regional manager or principal.
 
 ### Improve with AI
 
@@ -233,6 +234,7 @@ The app has no real accounts and moves no real money.
 | Paying a changed bank account | Payment hold until a different person verifies the change |
 | AI acting on data | Proposals only; registered actions only; re-checks before running; one `canDecide` rule on every path |
 | Leaking database internals | D1 and SQLite errors show "The database is busy; try again in a moment" (503); detail goes to the server log |
+| Leaking model provider errors | Model failures show "The AI service didn't respond. Try again in a minute." (503), or the assistant uses the rule-based answer and says so; detail goes to the server log |
 | Imports | Role and scope checks per record type, payload caps, one locked batch, guarded undo |
 | AI file detection | The model sees file names, headers and 3 rows per file, and may only name a tool and record type |
 | Data Health fixes | Fixes touching money, fraud or legal status always queue for approval, whoever clicks (an admin's fixes too) |
