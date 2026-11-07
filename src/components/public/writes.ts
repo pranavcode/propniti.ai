@@ -8,6 +8,7 @@ import { getPlatform } from "@/lib/platform";
 import type { Db } from "@/lib/platform/types";
 import { parseBody } from "@/lib/requests";
 import { assertTable } from "@/server/effective";
+import { demoIsoIn } from "@/lib/clock";
 import { cookieHeader, nowIso, resolveWorkspace } from "@/server/workspace";
 import { sameOrigin } from "@/ai/session";
 import { getListing, leasingAgent, tourSlots } from "./data";
@@ -16,7 +17,18 @@ import type { ApplyRequest, TourRequest } from "./schemas";
 // Public writes: a visitor's tour request or application lands in their own demo workspace (the
 // overlay), where the staff app shows it to the leasing agent and the broker.
 
-type Ctx<T> = { db: Db; ws: string; body: T; nowMs: number };
+type Ctx<T> = { db: Db; ws: string; body: T; nowMs: number; request: Request };
+
+// Agent runs the public site may start at once per workspace an hour. Past this, or past the
+// visitor's AI rate limit, an application waits for the 15-minute sweep, which scores the waiting
+// ones together in one run.
+const EVENT_RUNS_PER_HOUR = 10;
+
+async function mayRunNow(db: Db, ws: string, request: Request) {
+  const r = await db.prepare("SELECT count(*) AS n FROM agent_runs WHERE workspace_id = ? AND trigger_kind = 'event' AND started_at >= ?").bind(ws, demoIsoIn(-3_600_000)).first<{ n: number }>();
+  if ((r?.n ?? 0) >= EVENT_RUNS_PER_HOUR) return false;
+  return !(await rateLimit(request, "ai"));
+}
 
 // One overlay row. Column names come from this file only; values are bound.
 async function insert(db: Db, ws: string, table: string, row: Record<string, unknown>) {
@@ -44,7 +56,7 @@ export async function publicWrite<S extends z.ZodType>(request: Request, schema:
   const r = await resolveWorkspace(db, request, nowMs, true, !!writeLimiter, false);
   if (r instanceof Response) return r;
   try {
-    const out = await apply({ db, ws: r.ws!, body, nowMs });
+    const out = await apply({ db, ws: r.ws!, body, nowMs, request });
     return reply(out.body, out.status, r.setCookie);
   } catch (err) {
     console.error("[listings] write failed:", err);
@@ -73,7 +85,7 @@ export async function scheduleTour({ db, ws, body, nowMs }: Ctx<TourRequest>, li
 
 const CREDIT: Record<string, string> = { Excellent: "Pass", Good: "Pass", Fair: "Conditional", "Thin file": "Conditional", Poor: "Conditional" };
 
-export async function submitApplication({ db, ws, body, nowMs }: Ctx<ApplyRequest>, listingId: string) {
+export async function submitApplication({ db, ws, body, nowMs, request }: Ctx<ApplyRequest>, listingId: string) {
   const l = await getListing(ws, listingId);
   if (!l) return { status: 404, body: { error: "This listing is no longer available." } };
   const { personal: p, residence: r, income: i, documents, consent } = body;
@@ -106,7 +118,7 @@ export async function submitApplication({ db, ws, body, nowMs }: Ctx<ApplyReques
   // for and against and puts a recommendation in the broker's approvals queue.
   const data = { db, ws, actor: SYSTEM_ACTOR };
   const eventId = await emitEvent(data, { type: "application.submitted", entityType: "applications", entityId: ids.application, propertyId: l.property_id });
-  after(async () => {
+  if (await mayRunNow(db, ws, request)) after(async () => {
     // Score this application now, not via the queue; waitUntil work is cut off after 30 seconds
     // on Workers, so the run gets 25.
     const { runs } = await drainEvents(db, ws, Date.now(), 1, 25_000, { eventIds: [eventId] });

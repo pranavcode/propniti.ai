@@ -7,7 +7,7 @@ import { getPlatform } from "@/lib/platform";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { allAgents, AGENT_ORDER } from "@/ai/agents";
 import { agentName } from "@/ai/ui/labels";
-import { canEditPolicies } from "@/ai/policy-editors";
+import { canEditOrgPolicies, canEditPolicies } from "@/ai/policy-editors";
 import { wizardOptions } from "@/extensions/import/options";
 import { IMPORT_TABLES, mayCreate } from "@/extensions/import/server";
 import { orgId, one, prefsData, rows } from "@/extensions/settings/data";
@@ -59,6 +59,7 @@ export default async function OnboardingPage() {
     options,
     canImportProperties: mayCreate(session.actor.role, "properties"),
     canEditPolicies: canEditPolicies(session.actor.role),
+    canEditOrgPolicies: canEditOrgPolicies(session.actor),
     canInvite: canInvite(session.actor.role),
     setupKeys: ["company", "import", "payments", "roles", "team"].filter((k) => setupAllowed(session.actor.role, k)),
     stats: { units: stats.units, unitsFrom: stats.unitsFrom, ...stats.counts! },

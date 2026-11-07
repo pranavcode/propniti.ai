@@ -7,7 +7,7 @@ import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
 import { formatMoney, formatNumber, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { list, metrics } from "@/server/query";
+import { canReadMetric, list, metrics } from "@/server/query";
 import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { ChartCard, DashboardGrid, GridItem, KpiRow, type ChartPoint } from "@/components/app/dashboard";
@@ -38,10 +38,12 @@ export default async function PortfolioDashboard() {
   if (empty) return <EmptyPage title="Portfolio" meta={session.persona.scope.label} state={empty} role={session.actor.role} what="occupancy, NOI and your property cards" />;
   const closed = { month: LAST_CLOSED, months: 12 };
   const settle = <T,>(p: Promise<T>) => p.then((v) => v, () => null);
+  // Vacancy loss is a leasing figure; roles without leasing (accountant, maintenance) don't get the tile.
+  const showVac = canReadMetric(session.actor.role, "leasing.vacancy_loss");
   const [noi, occ, vac, econ, metro, status, props] = await Promise.all([
     settle(metrics(q, "portfolio.noi", closed)),
     settle(metrics(q, "portfolio.occupancy", closed)),
-    settle(metrics(q, "leasing.vacancy_loss", closed)),
+    showVac ? settle(metrics(q, "leasing.vacancy_loss", closed)) : undefined,
     settle(metrics(q, "portfolio.economic_occupancy", closed)),
     settle(metrics(q, "portfolio.by_metro", { month: LAST_CLOSED })),
     settle(metrics(q, "portfolio.unit_status")),
@@ -50,7 +52,7 @@ export default async function PortfolioDashboard() {
   const statusPts = (status?.points ?? []).sort((a, b) => STATUS_ORDER.indexOf(String(a.status)) - STATUS_ORDER.indexOf(String(b.status))).map((p) => ({ ...p, color: STATUS_COLOR[String(p.status)] })) as ChartPoint[];
   const occupancyPts = (occ?.points ?? []).map((p) => ({ ...p, label: label(String(p.month)) })) as ChartPoint[];
   const noiPts = (noi?.points ?? []).map((p) => ({ ...p, label: label(String(p.month)) })) as ChartPoint[];
-  const failed = [noi, occ, vac, econ, metro, status, props].some((x) => x == null);
+  const failed = [noi, occ, showVac ? vac : true, econ, metro, status, props].some((x) => x == null);
   const role = session.actor.role;
 
   return (
@@ -71,7 +73,7 @@ export default async function PortfolioDashboard() {
         <KpiRow>
           <ExplainableKpi metric="portfolio.noi" label="NOI" format="money" value={noi?.value ?? null} previous={noi?.previous ?? null} spark={noi?.spark} href="/app/properties?sort=-noi_month" footnote={noi?.note ?? monthLong(LAST_CLOSED)} />
           <ExplainableKpi metric="portfolio.occupancy" label="Occupancy" format="pct" value={occ?.value ?? null} previous={occ?.previous ?? null} spark={occ?.spark} href="/app/units?f.status=Vacant" footnote={occ?.source === "live records" ? "Physical, today" : "Physical, month end"} />
-          <ExplainableKpi metric="leasing.vacancy_loss" label="Vacancy loss" format="money" value={vac?.value ?? null} previous={vac?.previous ?? null} spark={vac?.spark} goodWhen="down" href="/app/units?view=vacant" footnote={vac?.note ?? "Rent lost on empty units"} />
+          {showVac && <ExplainableKpi metric="leasing.vacancy_loss" label="Vacancy loss" format="money" value={vac?.value ?? null} previous={vac?.previous ?? null} spark={vac?.spark} goodWhen="down" href="/app/units?view=vacant" footnote={vac?.note ?? "Rent lost on empty units"} />}
           <ExplainableKpi metric="portfolio.economic_occupancy" label="Economic occupancy" format="pct" value={econ?.value ?? null} previous={econ?.previous ?? null} spark={econ?.spark} href="/app/units?view=below-market" footnote={`${statusPts.find((p) => p.status === "Vacant")?.units ?? 0} of ${status?.value ?? 0} units vacant today`} help="Rent actually earned over gross potential rent: vacancy, concessions and bad debt all pull it down." />
         </KpiRow>
 

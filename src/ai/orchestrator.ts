@@ -109,7 +109,7 @@ async function executeRun(def: AgentDef, runId: string, o: StartOpts, nowMs: num
 export async function runWithContext<T>(
   runId: string, o: StartOpts, nowMs: number, agent: AgentKey, defaultAutonomy: Autonomy, actions: ActionKey[],
   body: (ctx: AgentCtx) => Promise<{ summary: string; result: T }>,
-): Promise<{ status: RunResult["status"]; summary: string; proposals: number; result: T | null; ctx?: AgentCtx }> {
+): Promise<{ status: RunResult["status"]; summary: string; proposals: number; result: T | null; ctx?: AgentCtx; error?: unknown }> {
   const { db, ws } = o;
   let ctx: AgentCtx | undefined;
   try {
@@ -144,7 +144,7 @@ export async function runWithContext<T>(
     console.error(`[ai] run ${runId} (${agent}) failed:`, errText(err));
     await ctx?.step({ kind: "message", output: { error: errText(err) }, ok: false }).catch(() => {});
     await finish(db, ws, runId, { status: "failed", error: errText(err), ctx });
-    return { status: "failed", summary: errText(err), proposals: ctx?.proposals.length ?? 0, result: null, ctx };
+    return { status: "failed", summary: errText(err), proposals: ctx?.proposals.length ?? 0, result: null, ctx, error: err };
   }
 }
 

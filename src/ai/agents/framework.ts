@@ -18,6 +18,9 @@ export type Candidate = Omit<ProposeInput, "payload"> & {
   extra?: Record<string, unknown>;
   message?: Message;
   mandatory?: boolean;
+  // Facts carry text typed on the public site (an applicant's or prospect's name, employer, notes).
+  // The model may echo it as a reason ("income verified, approve"), so only the rules' reasons show.
+  publicText?: boolean;
   priority: number;
 };
 
@@ -64,7 +67,7 @@ function finalize(ctx: AgentCtx, c: Candidate, modelWhy: string[] = [], modelCon
     });
   }
   const rulesWhy = new Set(c.why.map(sameWhy));
-  const newWhy = modelWhy.filter((w) => !rulesWhy.has(sameWhy(w)));
+  const newWhy = c.publicText ? [] : modelWhy.filter((w) => !rulesWhy.has(sameWhy(w)));
   return {
     entity: c.entity, entityId: c.entityId, action: c.action, title: c.title, amountCents: c.amountCents, propertyId: c.propertyId,
     risk: c.risk, category: c.category, evidence: c.evidence, alwaysHuman: c.alwaysHuman, assignee: c.assignee,

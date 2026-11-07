@@ -1,4 +1,5 @@
 import type { EntityKey, ModuleKey, Role, Scope } from "@/entities/types";
+import { secureAttr } from "@/lib/cookie";
 
 // Demo personas (plan §5): 9 internal/platform roles plus 4 portals. All names are fictional.
 // Sign-in is a demo: each persona has a published email and one shared password (or a one-click
@@ -209,10 +210,15 @@ export const LAST_PERSONA = "pn_last_persona";
 // pn_as cookie: the persona the visitor is acting as. Not a security boundary (it's a demo
 // switcher); scope is still enforced server-side for whichever persona is chosen.
 export const PN_AS = "pn_as";
-export const personaCookie = (id: string) => `${PN_AS}=${encodeURIComponent(id)}; Path=/; SameSite=Lax; Max-Age=2592000`;
+export const personaCookie = (id: string) => `${PN_AS}=${encodeURIComponent(id)}; Path=/; SameSite=Lax; Max-Age=2592000${secureAttr()}`;
+// A malformed value (bad percent-encoding) falls back to the default persona instead of a 500.
 export function personaFromCookieHeader(header: string | null | undefined): Persona {
   const raw = header?.split(/;\s*/).find((c) => c.startsWith(`${PN_AS}=`));
-  return getPersona(raw ? decodeURIComponent(raw.slice(PN_AS.length + 1)) : undefined) ?? getPersona(DEFAULT_PERSONA)!;
+  let id: string | undefined;
+  try {
+    id = raw ? decodeURIComponent(raw.slice(PN_AS.length + 1)) : undefined;
+  } catch {}
+  return getPersona(id) ?? getPersona(DEFAULT_PERSONA)!;
 }
 
 // Role × module access (Settings → Roles shows this matrix). EntityDef.permissions narrows it

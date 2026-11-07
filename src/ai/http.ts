@@ -85,6 +85,7 @@ async function ownsProposal(s: Pick<AiSession, "db" | "ws" | "persona">, p: Row)
   const owner = s.persona.record?.entity === "owners" ? s.persona.record.id : null;
   if (!owner || !p.property_id) return false;
   const data = { db: s.db, ws: s.ws, actor: { personaId: s.persona.id, name: s.persona.name, role: s.persona.role, scope: s.persona.scope, propertyIds: "all" as const } };
-  const r = await sql<{ n: number }>(data, "SELECT count(*) AS n FROM {properties} pr JOIN {owner_entities} e ON e.id = pr.owner_entity_id WHERE pr.id = ? AND e.owner_id = ?", [String(p.property_id), owner]);
+  // The owner_id join is the check; property scope (none for a portal user) doesn't apply.
+  const r = await sql<{ n: number }>(data, "SELECT count(*) AS n FROM {properties} pr JOIN {owner_entities} e ON e.id = pr.owner_entity_id WHERE pr.id = ? AND e.owner_id = ?", [String(p.property_id), owner], { unscoped: true });
   return (r[0]?.n ?? 0) > 0;
 }

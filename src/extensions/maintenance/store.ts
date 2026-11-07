@@ -34,11 +34,18 @@ async function columnsOf(db: Db, table: string) {
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 const toSql = (v: unknown) => (v === undefined ? null : typeof v === "boolean" ? Number(v) : v !== null && typeof v === "object" ? JSON.stringify(v) : v);
 
-export async function insertStmt(db: Db, ws: string, table: string, row: Row): Promise<DbStatement> {
+// `onlyIf` inserts the row only while another row matches `where` (alias e), so the insert can share
+// a batch with the update that makes it true.
+export async function insertStmt(db: Db, ws: string, table: string, row: Row, onlyIf?: { table: string; id: string; where: string }): Promise<DbStatement> {
   const cols = await columnsOf(db, table);
   const full: Row = { ...row, workspace_id: ws };
   const keys = Object.keys(full).filter((k) => cols.includes(k) && full[k] !== undefined);
-  return db.prepare(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`).bind(...keys.map((k) => toSql(full[k])));
+  const values = keys.map((k) => toSql(full[k]));
+  if (!onlyIf) return db.prepare(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`).bind(...values);
+  const n = keys.length;
+  return db
+    .prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map((_, i) => `?${i + 1}`).join(", ")} WHERE EXISTS (SELECT 1 FROM ${overlaySql(onlyIf.table, `?${n + 1}`)} AS e WHERE e.id = ?${n + 2} AND (${onlyIf.where}))`)
+    .bind(...values, ws, onlyIf.id);
 }
 
 // Copy-on-write update of one row; `guard` is SQL on the current row (alias e). Returns false when

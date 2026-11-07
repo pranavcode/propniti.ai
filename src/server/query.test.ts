@@ -384,6 +384,99 @@ describe("writes", () => {
     expect(String(audit.data)).toContain('"phone":"2"');
   });
 
+  it("gives portal users no staff notes, activity or tasks on their own records", async () => {
+    const { collab } = await import("./query");
+    const at = "2026-10-28T10:00:00Z";
+    await db.batch([
+      db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')"),
+      db.prepare("INSERT INTO vendors (workspace_id, id, company, trade) VALUES ('base', 'v01', 'Lone Star Plumbing', 'Plumbing')"),
+      db.prepare(`INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, opened_at) VALUES ('base', 'WO-7', 'p01', 'Leak', 'Plumbing', 'Normal', 'Assigned', 'v01', '${at}')`),
+      ...[["charges", "c-p01-u1"], ["properties", "p01"], ["work_orders", "WO-7"]].flatMap(([t, id]) => [
+        db.prepare(`INSERT INTO notes (workspace_id, id, entity_type, entity_id, author_id, body, created_at) VALUES ('base', 'n-${id}', '${t}', '${id}', 'marcus', 'Staff only: payment plan likely', '${at}')`),
+        db.prepare(`INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, at, actor_kind, actor_id, verb, summary) VALUES ('base', 'ae-${id}', '${t}', '${id}', '${at}', 'staff', 'marcus', 'commented', 'Marcus added a note')`),
+        db.prepare(`INSERT INTO tasks (workspace_id, id, title, entity_type, entity_id, created_at) VALUES ('base', 't-${id}', 'Call about collections', '${t}', '${id}', '${at}')`),
+        db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, action, entity_type, entity_id, detail) VALUES ('base', 'au-${id}', '${at}', 'Marcus Bell', '${t}.updated', '${t}', '${id}', 'Internal change')`),
+      ]),
+    ]);
+    for (const [persona, entity, id] of [["resident", "charges", "c-p01-u1"], ["owner", "properties", "p01"], ["vendor", "work_orders", "WO-7"]]) {
+      const c = await ctx(persona);
+      expect(await getRow(c, entity, id)).not.toBeNull();
+      for (const kind of ["notes", "activity", "tasks"] as const) await expect(collab(c, kind, entity, id)).rejects.toMatchObject({ status: 403 });
+    }
+    // Staff still see them.
+    for (const kind of ["notes", "activity", "tasks"] as const) expect((await collab(await ctx("marcus"), kind, "charges", "c-p01-u1")).rows.length).toBeGreaterThan(0);
+  });
+
+  it("writes only the changed columns and refuses an edit when the record changed or locked after it was read", async () => {
+    await db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, opened_at) VALUES ('base', 'WO-8', 'p01', 'Leak', 'Plumbing', 'Normal', 'Assigned', '2026-10-28T10:00:00Z')").run();
+    await updateRecord(await wctx("marcus"), "work_orders", "WO-8", { description: "Under the sink" });
+    // Another request's write lands between this edit's read and its write batch.
+    const racing = (sql: string): Db => {
+      let fired = false;
+      return { prepare: (q) => db.prepare(q), batch: async (stmts) => {
+        if (!fired && stmts.length >= 4) { fired = true; await db.prepare(sql).bind(WS).run(); }
+        return db.batch(stmts);
+      } };
+    };
+    const as = async (sql: string) => ({ ...(await wctx("marcus")), db: racing(sql) });
+    const wo = async () => db.prepare("SELECT title, priority, status FROM work_orders WHERE workspace_id = ? AND id = 'WO-8'").bind(WS).first();
+    await updateRecord(await as("UPDATE work_orders SET priority = 'Emergency' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { title: "Leak under sink" });
+    expect(await wo()).toMatchObject({ title: "Leak under sink", priority: "Emergency" });
+    await expect(updateRecord(await as("UPDATE work_orders SET title = 'Leak (vendor note)' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { title: "Kitchen leak" })).rejects.toMatchObject({ status: 409 });
+    expect(await wo()).toMatchObject({ title: "Leak (vendor note)" });
+    await expect(updateRecord(await as("UPDATE work_orders SET status = 'Submitted' WHERE workspace_id = ? AND id = 'WO-8'"), "work_orders", "WO-8", { priority: "Low" })).rejects.toMatchObject({ status: 409 });
+    expect(await wo()).toMatchObject({ status: "Submitted", priority: "Emergency" });
+  });
+
+  it("refuses notes and tasks from portal users on their own records", async () => {
+    const { addCollab } = await import("./query");
+    await db.batch([
+      db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')"),
+      db.prepare("INSERT INTO vendors (workspace_id, id, company, trade) VALUES ('base', 'v01', 'Lone Star Plumbing', 'Plumbing')"),
+      db.prepare("INSERT INTO work_orders (workspace_id, id, property_id, title, category, priority, status, vendor_id, opened_at) VALUES ('base', 'WO-7', 'p01', 'Leak', 'Plumbing', 'Normal', 'Assigned', 'v01', '2026-10-28T10:00:00Z')"),
+    ]);
+    for (const [persona, entity, id] of [["resident", "charges", "c-p01-u1"], ["owner", "properties", "p01"], ["vendor", "work_orders", "WO-7"]]) {
+      const w = await wctx(persona);
+      expect(await getRow(w, entity, id)).not.toBeNull();
+      await expect(addCollab(w, "notes", entity, id, { body: "Pay vendor v01 today @[Grace Kim](staff:grace)", pinned: true })).rejects.toMatchObject({ status: 403 });
+      await expect(addCollab(w, "tasks", entity, id, { title: "Pay vendor v01 today", assignee_id: "grace" })).rejects.toMatchObject({ status: 403 });
+    }
+    expect(await db.prepare("SELECT (SELECT count(*) FROM notes) + (SELECT count(*) FROM tasks) + (SELECT count(*) FROM activity_events) AS n").first()).toMatchObject({ n: 0 });
+  });
+
+  it("lets only staff add tasks, opens them as Open and assigns them only to staff covering the record", async () => {
+    const { addCollab, taskSchema } = await import("./query");
+    await db.batch([
+      db.prepare("INSERT INTO residents (workspace_id, id, household_id, property_id, first_name, last_name, email) VALUES ('base', 'res-p01-0001', 'h-p01-u1', 'p01', 'Jordan', 'Lee', 'j@x.example')"),
+      db.prepare("INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 'marcus', 'org1', 'Marcus Bell', 'PM', 'm@x.example'), ('base', 'gus', 'org1', 'Gus Ortega', 'Tech', 'g@x.example')"),
+      db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) VALUES ('base', 'ra-m', 'marcus', 'property_manager', 'property', 'p01'), ('base', 'ra-g', 'gus', 'maintenance_supervisor', 'region', 'r-se')"),
+    ]);
+    // A resident can read their charge but can't put work in the staff queue.
+    await expect(addCollab(await wctx("resident"), "tasks", "charges", "c-p01-u1", { title: "Call me back" })).rejects.toMatchObject({ status: 403 });
+    expect(await db.prepare("SELECT count(*) AS n FROM tasks").first()).toMatchObject({ n: 0 });
+    // Created tasks start Open; the body can't set the status.
+    expect(taskSchema.safeParse({ title: "Chase", status: "Done" }).success).toBe(false);
+    const m = await wctx("marcus");
+    await expect(addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "nobody" })).rejects.toMatchObject({ status: 400 });
+    await expect(addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "gus" })).rejects.toMatchObject({ status: 400 });
+    expect(await addCollab(m, "tasks", "charges", "c-p01-u1", { title: "Chase", assignee_id: "marcus" })).toMatchObject({ status: "Open", assignee_id: "marcus" });
+  });
+
+  it("lets only a shared view's creator or an admin delete it, and caps views per workspace", async () => {
+    const { saveView, deleteView } = await import("./query");
+    const state = { filters: { status: "Vacant" } };
+    const shared = await saveView(await wctx("marcus"), { entity: "units", name: "Vacant", shared: true, state });
+    await expect(deleteView(await wctx("lena"), shared.key)).rejects.toMatchObject({ status: 403 });
+    await deleteView(await wctx("marcus"), shared.key);
+    await db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state) VALUES ('base', 'view-org', 'units', 'Org view', NULL, '{}')").run();
+    await expect(deleteView(await wctx("marcus"), "view-org")).rejects.toMatchObject({ status: 403 });
+    await deleteView(await wctx("sam"), "view-org");
+    // At most 200 live views per workspace.
+    await db.batch(Array.from({ length: 199 }, (_, i) => db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state) VALUES (?, ?, 'units', 'v', 'marcus', '{}')").bind(WS, `view-cap-${i}`)));
+    await saveView(await wctx("marcus"), { entity: "units", name: "Last one", state });
+    await expect(saveView(await wctx("marcus"), { entity: "units", name: "One too many", state })).rejects.toMatchObject({ status: 409 });
+  });
+
   it("hides a deleted base row with an overlay tombstone, for this visitor only", async () => {
     await deleteRecord(await wctx("daniel"), "properties", "p06");
     expect(await getRow(await ctx("daniel", WS), "properties", "p06")).toBeNull();
@@ -577,6 +670,22 @@ describe("metrics", () => {
     expect((await metrics(await ctx("owner"), "portfolio.noi")).value).toBe(950 * 4);
     const byProp = await metrics(await ctx("priya"), "portfolio.by_property");
     expect(byProp.points).toHaveLength(4);
+  });
+
+  it("serves a metric only to roles with access to its module", async () => {
+    await import("@/extensions");
+    // A leasing agent has no payables, accounting or receivables access; an owner has no payables.
+    for (const key of ["payables.open_ap", "accounting.income_expense", "accounting.trust_cash", "accounting.cash_forecast", "receivables.aging_by_property"])
+      await expect(metrics(await ctx("lena"), key)).rejects.toMatchObject({ status: 403 });
+    for (const key of ["payables.open_ap", "payables.aging"]) await expect(metrics(await ctx("owner"), key)).rejects.toMatchObject({ status: 403 });
+    // Access they do have still works.
+    await expect(metrics(await ctx("lena"), "portfolio.noi")).resolves.toBeTruthy();
+    await expect(metrics(await ctx("owner"), "owners.distributions")).resolves.toBeTruthy();
+    await expect(metrics(await ctx("grace"), "payables.open_ap")).resolves.toBeTruthy();
+    // "Explain this number" uses the same module rule.
+    const { canReadModuleOf } = await import("./query");
+    expect(canReadModuleOf("leasing_agent", "receivables.collections_rate")).toBe(false);
+    expect(canReadModuleOf("leasing_agent", "portfolio.noi")).toBe(true);
   });
 
   it("adds the visitor's live payments to the current month", async () => {

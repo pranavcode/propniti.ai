@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEMO_PASSWORD, demoEmail, personaByEmail, safeNext } from "@/auth/personas";
-import { POST } from "./route";
+import { DELETE, POST } from "./route";
 
 // No Workers rate limiter here, so rateLimit() uses its in-memory window ("shared" key: 300 a minute).
 vi.mock("@/lib/platform", () => ({ getPlatform: () => ({}) }));
@@ -82,6 +82,16 @@ describe("POST /api/session with email and password", () => {
     expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: "https://evil.example" })).status).toBe(403);
     expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: null })).status).toBe(403);
   });
+
+  it("refuses an http origin in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: `http://${host}` })).status).toBe(403);
+      expect((await post({ email: "marcus@propniti.demo", password: DEMO_PASSWORD }, { origin: `https://${host}` })).status).toBe(303);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe("POST /api/session with a persona (the cards)", () => {
@@ -91,6 +101,33 @@ describe("POST /api/session with a persona (the cards)", () => {
     expect(res.headers.get("location")).toBe("/app/maintenance/turnovers");
     expect(res.headers.get("set-cookie")).toContain("pn_as=tom");
     expect((await post({ persona: "mallory" })).status).toBe(400);
+  });
+});
+
+describe("DELETE /api/session (sign out)", () => {
+  const signOut = (origin: string | null = `http://${host}`) => DELETE(new Request(`http://${host}/api/session`, { method: "DELETE", headers: origin ? { host, origin } : { host } }));
+
+  it("clears the persona and the workspace cookies", async () => {
+    const res = await signOut();
+    expect(res.status).toBe(200);
+    const cookies = res.headers.getSetCookie();
+    expect(cookies).toHaveLength(2);
+    expect(cookies[0]).toBe("pn_as=; Path=/; SameSite=Lax; Max-Age=0");
+    expect(cookies[1]).toBe("pn_ws=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  });
+
+  it("marks both Secure in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const cookies = (await signOut(`https://${host}`)).headers.getSetCookie();
+      expect(cookies.every((c) => c.endsWith("; Secure") && c.includes("Max-Age=0"))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("refuses cross-site sign-out", async () => {
+    expect((await signOut("https://evil.example")).status).toBe(403);
   });
 });
 

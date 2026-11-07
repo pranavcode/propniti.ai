@@ -37,6 +37,7 @@ beforeAll(async () => {
     "INSERT INTO state_rules (workspace_id, id, state, rule, value, note, effective_from) VALUES ('base', 'sr-tx-grace_days-20230101', 'TX', 'grace_days', '1', 'Old grace period', '2023-01-01'), ('base', 'sr-tx-grace_days-20240901', 'TX', 'grace_days', '2', 'Tex. Prop. Code §92.019', '2024-09-01')",
     "INSERT INTO approval_policies (workspace_id, id, owner_entity_id, category, limit_cents, approver_role, owner_approval_over_cents, always_human) VALUES ('base', 'apol-maintenance-spend', NULL, 'Maintenance spend', 100000, 'property_manager', 500000, 0)",
     "INSERT INTO approval_policies (workspace_id, id, owner_entity_id, category, limit_cents, approver_role, owner_approval_over_cents, always_human) VALUES ('base', 'apol-legal', NULL, 'Legal', NULL, 'principal', NULL, 1)",
+    "INSERT INTO approval_policies (workspace_id, id, owner_entity_id, category, limit_cents, approver_role, owner_approval_over_cents, always_human) VALUES ('base', 'apol-oe01-maintenance', 'oe01', 'Maintenance spend', 50000, 'property_manager', 250000, 0)",
     "INSERT INTO staff (workspace_id, id, org_id, name, title, email) VALUES ('base', 'sam', 'org-summit', 'Sam Okafor', 'Administrator', 'sam.okafor@summitresidential.example')",
   ]) await db().prepare(s).run();
 });
@@ -81,8 +82,21 @@ describe("approval policies", () => {
   });
 
   it("lets principals, regional managers and admins change policies through one route, and nobody else", async () => {
-    for (const p of ["daniel", "priya", "sam"]) expect((await editPolicy(p, { owner_approval_over_cents: 600000, approver_role: "accountant" })).status, p).toBe(200);
+    for (const p of ["daniel", "sam"]) expect((await editPolicy(p, { owner_approval_over_cents: 600000, approver_role: "accountant" })).status, p).toBe(200);
     for (const p of ["marcus", "grace", "tom", "nadia"]) expect((await editPolicy(p, { limit_cents: 9000 })).status, p).toBe(403);
+    // A regional manager edits owners' policies inside their region, not the org default.
+    expect((await editPolicy("priya", { limit_cents: 60000 }, "apol-oe01-maintenance")).status).toBe(200);
+    expect((await editPolicy("priya", { limit_cents: 9000 })).status).toBe(403);
+  });
+
+  it("keeps an owner approval threshold on maintenance spend", async () => {
+    expect((await editPolicy("daniel", { owner_approval_over_cents: null })).status).toBe(400);
+    expect((await editPolicy("daniel", { owner_approval_over_cents: null }, "apol-oe01-maintenance")).status).toBe(400);
+  });
+
+  it("caps the owner approval threshold at $100,000", async () => {
+    expect((await editPolicy("daniel", { owner_approval_over_cents: 10_000_001 })).status).toBe(400);
+    expect((await editPolicy("daniel", { owner_approval_over_cents: 10_000_000 })).status).toBe(200);
   });
 
   it("closes the generic record API to policy edits", async () => {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Calculator, Check, Loader2, Pencil } from "lucide-react";
+import { ORG_POLICY_TEXT } from "@/ai/policy-editors";
 import { formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,7 @@ export function RulesStep({ data, state, save, footer, complete }: StepProps) {
   const [error, setError] = useState<string | null>(null);
   const st = data.stats;
   const canEdit = data.canEditPolicies;
+  const canEditLimits = data.canEditOrgPolicies;
 
   async function write(id: string, url: string, body: unknown) {
     setError(null);
@@ -118,9 +120,10 @@ export function RulesStep({ data, state, save, footer, complete }: StepProps) {
 
         <section aria-labelledby="onb-policies">
           <h3 id="onb-policies" className="mb-2 text-[13px] font-semibold">Approval limits</h3>
+          {canEdit && !canEditLimits && <p className="mb-2 text-[12px] text-muted-foreground">{ORG_POLICY_TEXT}</p>}
           <ul className="divide-y rounded-md border">
             {data.policies.map((s) => (
-              <PolicyRow key={s.id} s={s} canEdit={canEdit} decision={decided[s.id]} onKeep={() => keep(s.id)}
+              <PolicyRow key={s.id} s={s} canEdit={canEditLimits} decision={decided[s.id]} onKeep={() => keep(s.id)}
                 onSave={(limit, owner) => write(s.id, `/api/ai/policies/${encodeURIComponent(s.id)}`, { limit_cents: cents(limit), owner_approval_over_cents: cents(owner) })} />
             ))}
           </ul>

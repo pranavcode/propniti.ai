@@ -26,6 +26,8 @@ export type OnboardingData = {
   options: WizardOptions;
   canImportProperties: boolean;
   canEditPolicies: boolean;
+  // The approval limits here are the organization defaults: org-wide editors only.
+  canEditOrgPolicies: boolean;
   canInvite: boolean;
   setupKeys: string[]; // checklist items this role can tick
 

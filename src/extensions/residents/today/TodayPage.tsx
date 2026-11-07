@@ -5,7 +5,8 @@ import { ApprovalsInbox } from "@/ai/ui/ApprovalsInbox";
 import { pageData } from "@/ai/ui/server";
 import { proposalsPage } from "@/ai/views";
 import { agingByProperty } from "@/extensions/receivables/queries";
-import { metrics } from "@/server/query";
+import { can } from "@/entities";
+import { canReadMetric, metrics } from "@/server/query";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
 import { Button } from "@/components/ui/button";
@@ -49,10 +50,13 @@ export async function TodayPage() {
   if (empty) return <EmptyPage title={personaGreeting(persona)} meta={`${persona.title} · ${persona.scope.label}`} state={empty} role={actor.role} what="your residents, rent and work orders" />;
   const today = await asOfDate(ctx.db);
   const p = (col: string) => scopeIn(actor, col);
+  // Rent owed and collections are receivables figures: only roles that read charges see them here.
+  const rent = can(actor.role, "read", "charges");
+  const coll = canReadMetric(actor.role, "receivables.collections_rate");
 
   const [late, runs, auto, needs, leases, wo, threads, issues, insurance, unread, initialQueue, kColl, kExp, exp, woPri] = await Promise.all([
     // Same live aging the receivables pages show (cached per scope), so the figures agree across modules.
-    settle(agingByProperty(ctx), []),
+    rent ? settle(agingByProperty(ctx), []) : [],
     settle(sql<{ agent_key: string; n: number }>(ctx, "SELECT agent_key, count(*) AS n FROM {agent_runs} WHERE started_at >= datetime(?, '-1 day') GROUP BY agent_key ORDER BY n DESC", [today]), []),
     settle(sql<{ n: number }>(ctx, `SELECT count(*) AS n FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= datetime(?, '-1 day') AND ${p("property_id").sql}`, [today, ...p("property_id").binds]), []),
     settle(sql<{ n: number; high: number }>(ctx, `SELECT count(*) AS n, sum(risk = 'High') AS high FROM {ai_proposals} pr WHERE queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = pr.id) AND ${decidableSql(actor.role, "pr").sql} AND ${p("pr.property_id").sql}`, [...decidableSql(actor.role, "pr").params, ...p("pr.property_id").binds]), []),
@@ -69,7 +73,7 @@ export async function TodayPage() {
     settle(sql<{ lapsed: number; expiring: number }>(ctx, `SELECT sum(status = 'Lapsed') AS lapsed, sum(status = 'Expiring') AS expiring FROM {renters_insurance} WHERE ${p("property_id").sql}`, p("property_id").binds), []),
     settle(sql<{ n: number }>(ctx, `SELECT count(*) AS n FROM {message_threads} WHERE status = 'Open' AND unread = 1 AND ${p("property_id").sql}`, p("property_id").binds), []),
     settle(proposalsPage(data, { queue: "needs_you", size: 6 }), null),
-    settle(metrics(ctx, "receivables.collections_rate"), null),
+    coll ? settle(metrics(ctx, "receivables.collections_rate"), null) : null,
     settle(metrics(ctx, "residents.expiring_60"), null),
     settle(metrics(ctx, "residents.expirations"), null),
     settle(metrics(ctx, "residents.wo_by_priority"), null),
@@ -193,15 +197,15 @@ export async function TodayPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Past-due balance" format="money" goodWhen="down" value={lateCents / 100} href="/app/receivables/delinquency" help="Unpaid charges past their due date, all aging buckets, as of today." footnote={`${lateHouseholds} household${lateHouseholds === 1 ? "" : "s"} · ${usd(over30)} over 30 days`} />
-        <KpiCard label="Collections rate" format="pct" goodWhen="up" {...kpi(kColl)} footnote={kColl?.note} href="/app/receivables/payments" help="Collected this month as a share of what was charged." />
+        {rent && <KpiCard label="Past-due balance" format="money" goodWhen="down" value={lateCents / 100} href="/app/receivables/delinquency" help="Unpaid charges past their due date, all aging buckets, as of today." footnote={`${lateHouseholds} household${lateHouseholds === 1 ? "" : "s"} · ${usd(over30)} over 30 days`} />}
+        {coll && <KpiCard label="Collections rate" format="pct" goodWhen="up" {...kpi(kColl)} footnote={kColl?.note} href="/app/receivables/payments" help="Collected this month as a share of what was charged." />}
         <KpiCard label="Leases ending in 60 days" format="count" goodWhen="down" value={kExp?.value ?? null} href="/app/leases?view=expiring-60" footnote={`${formatNumber(leases.length)} without a renewal offer`} />
         <KpiCard label="Open work orders" format="count" goodWhen="down" value={Number(w.open)} href={`/app/maintenance/work-orders?${WO_OPEN_Q}`} footnote={`${w.late ?? 0} past SLA · ${w.urgent ?? 0} urgent`} />
       </div>
 
-      <CollapsibleSection id="charts" title="Charts" summary="3 charts" description="Select a bar for the records behind it.">
+      <CollapsibleSection id="charts" title="Charts" summary={`${rent ? 3 : 2} charts`} description="Select a bar for the records behind it.">
       <div className="grid gap-3 lg:grid-cols-3">
-        <ChartCard title="Delinquency aging" description="Past-due balance by days late" kind="bar" data={lateCents ? aging : []} x="bucket" series={[{ key: "amount", label: "Past due", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={220} help="Click a bucket for the charges in it." />
+        {rent && <ChartCard title="Delinquency aging" description="Past-due balance by days late" kind="bar" data={lateCents ? aging : []} x="bucket" series={[{ key: "amount", label: "Past due", format: "money" }]} drill="/app/receivables/charges?f.aging={bucket}" height={220} help="Click a bucket for the charges in it." />}
         <ChartCard title="Lease expirations by month" description="Active and on-notice leases, next 12 months" kind="bar" data={(exp?.points ?? []) as never} x="label" series={[{ key: "count", label: "Leases ending", format: "count" }]} drill="/app/leases?f.end_on.min={from}&f.end_on.max={to}&f.status=Active,Notice" height={220} />
         <ChartCard title="Open work orders by priority" description="Within SLA and past SLA" kind="stacked" data={(woPri?.points ?? []) as never} x="priority" series={[{ key: "within", label: "Within SLA", format: "count", color: "var(--chart-1)" }, { key: "past_sla", label: "Past SLA", format: "count", color: "var(--tone-danger)" }]} drill={`/app/maintenance/work-orders?${WO_OPEN_Q}&f.priority={priority}`} height={220} />
       </div>

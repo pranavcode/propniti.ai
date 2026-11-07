@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, LogOut, UserRoundCog } from "lucide-react";
+import { secureAttr } from "@/lib/cookie";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,7 +28,7 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import type { Density, ShellData, Theme } from "./types";
 
-const setCookie = (k: string, v: string) => (document.cookie = `${k}=${v}; Path=/; Max-Age=31536000; SameSite=Lax`);
+const setCookie = (k: string, v: string) => (document.cookie = `${k}=${v}; Path=/; Max-Age=31536000; SameSite=Lax${secureAttr()}`);
 
 // The app frame: sidebar, top bar, "Viewing as" banner, main content and the assistant dock.
 // `assistant` is the dock body (lane E); `children` is the page.

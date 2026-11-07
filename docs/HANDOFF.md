@@ -75,6 +75,23 @@ Earlier on 2026-11-04, in four batches after the morning PRs (#3–#11):
 | 3 | #31 | Chat history, *Ask about this*, Do mode starts agents, *Right now*; welcome splash, tour toasts, new-feature dots, daily panel auto-open; approvals, bulk, leasing, money and operations friction fixes; one decide rule with life-safety approvals by regional manager or principal; collection rate per month's charges; Title Case agent names |
 | 4 | #32 | *Improve with AI* on red KPIs; glossary definitions on labels and `/app/help/<id>` pages; KPI and chart card layout; compact *Pick a person* sign-in; docs restyle and v2 content; updated help articles (base `2026-11-04.17`) |
 
+## Security batch (batch 9)
+
+Branch `batch/nine`: three security branches merged, plus follow-ups. Each control and fix is listed in `docs/security-review.md`.
+
+- **Money and write paths** (`fix/sec-money-writes`): a work order pays only the vendor who invoiced it; whoever entered an invoice or bill can't approve it; approval-policy edits are limited to the editor's properties (the organization defaults need an org-wide editor, the maintenance owner threshold can't be cleared); staff notes, tasks and activity are refused to portal users; record edits write only changed columns, guarded in the batch; statement matches are guarded in SQL; late-fee values are bounded; metrics follow module access; record payment, pay rent, deposits and payment moves re-check role and scope; shared views are deleted only by their creator or an admin, 200 per workspace; the import AI request is capped.
+- **AI** (`fix/sec-ai`): AI reads use each entity's property rule and read permission; ledger and metrics tools check entity access; portal personas get no property-wide AI reads; bulk AI actions, event and manual sweep routes, budget explanations (now on click) and public application scoring count against the AI rate limit; proposals from public input show only rules' reasons.
+- **Web and auth** (`fix/sec-web-auth`): plain HTTP on `propniti.ai` redirects to https and http-origin writes are refused; cookies are Secure on HTTPS; sign-out clears the workspace cookie; document links refuse `//`, `/\` and control characters; CI actions are pinned to SHAs with a read-only token.
+- **Review fixes:** the home briefing and the `/app/today` page leave rent owed and collections out for roles that can't read charges; the portfolio and residents dashboards request only metrics the role can read, and the leasing and broker desks show only to roles with leasing access; a vendor invoice's status change and events share one batch; approved proposals can't update records past their lock state; the owner approval threshold is capped at $100,000; bill-line and message scope read the parent as the workspace sees it; refused AI reads are recognised by error type; the sign-in help says signing out resets demo changes (the `/app/help` page reads the code; the assistant's stored copy updates at the next reseed).
+- **Follow-ups:** `workersDev: false`; the AI routes use the same `sameOrigin` rule (https-only in production); work-order photo links use `safeHref`; the Settings, Agents and guided-setup approval-limit controls are read-only, with the reason, where the server would refuse (organization defaults for a regional manager, owner policies outside the editor's scope).
+- `BASE_VERSION` is unchanged, so no reseed.
+
+### Infrastructure plan (lead, after the batch 9 deploy)
+
+- Give the preview Worker its own D1 database instead of sharing `propniti-v2` with production: create it, apply the migrations and load the base, then point `propniti-v2-preview` at it.
+- The production `workers.dev` host stops answering once batch 9 deploys (`workersDev: false`).
+- Still for the owner to decide: the zone's "Always Use HTTPS" setting and HSTS preload submission (see `docs/security-review.md`, open infrastructure items).
+
 ## In flight
 
 | Workstream | Branch / worktree | Status | Next |
@@ -131,6 +148,8 @@ Earlier on 2026-11-04, in four batches after the morning PRs (#3–#11):
   - `AS_OF` stays fixed. The app uses one demo clock instead of moving the seed date.
   - The $55 application fee goes into the property's trust account as owner income.
   - Autonomy has two levels: Approve first, Auto within policy.
+- **2026-11-07**
+  - Production Worker answers only on its custom domains: `workersDev: false` in `cloudflare.config.ts` (the workers.dev host skipped the HTTPS redirect and zone rules). Takes effect on the next deploy.
 
 ## Resume here
 

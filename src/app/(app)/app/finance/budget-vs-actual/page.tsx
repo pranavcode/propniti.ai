@@ -27,7 +27,6 @@ export default async function BudgetVsActualPage({ searchParams }: Props) {
   const year = years.includes(Number(one(sp.year))) ? Number(one(sp.year)) : years[0] ?? 2026;
   const property = props.some((p) => p.id === one(sp.property)) ? one(sp.property) : null;
   const type = one(sp.type) === "Income" ? "Income" : "Expense";
-  const params = Object.fromEntries(Object.entries({ property: property ?? "", year: one(sp.year), type: one(sp.type) }).filter(([, v]) => v));
 
   return (
     <div>
@@ -37,7 +36,7 @@ export default async function BudgetVsActualPage({ searchParams }: Props) {
         <BvaFilters properties={props} years={years.length ? years : [year]} property={property ?? ""} year={year} type={type} />
       </PageHeader>
       <PageBody>
-        <Bva session={session} year={year} type={type} property={property} explain={one(sp.explain) || null} params={params} />
+        <Bva session={session} year={year} type={type} property={property} />
       </PageBody>
     </div>
   );

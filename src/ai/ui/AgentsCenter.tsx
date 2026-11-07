@@ -16,7 +16,7 @@ import type { AgentCard as Card } from "@/ai/views";
 import type { ApprovalPolicy, Autonomy } from "@/ai/types";
 import { ProposalCard } from "./RunView";
 import { AGENT_LABEL, api, toTrace, useRunStream } from "./client";
-import { POLICY_EDITORS_TEXT } from "../policy-editors";
+import { ORG_POLICY_TEXT, POLICY_EDITORS_TEXT } from "../policy-editors";
 
 const ICONS: Record<string, React.ReactNode> = {
   collections: <Banknote />, leasing: <KeyRound />, renewals: <RefreshCw />, maintenance_triage: <Wrench />, ap: <FileSpreadsheet />,
@@ -51,7 +51,7 @@ function LiveRun({ runId, agent, onClose }: { runId: string; agent: string; onCl
   );
 }
 
-export function AgentsCenter({ agents, status, sweep, canManage, canRun, canEditPolicies }: { agents: (Card & { runsText: string })[]; status: Status; sweep: { lastAgoMin: number | null; nextInMin: number }; canManage: boolean; canRun: boolean; canEditPolicies: boolean }) {
+export function AgentsCenter({ agents, status, sweep, canManage, canRun, canEditPolicies, canEditOrgPolicies }: { agents: (Card & { runsText: string })[]; status: Status; sweep: { lastAgoMin: number | null; nextInMin: number }; canManage: boolean; canRun: boolean; canEditPolicies: boolean; canEditOrgPolicies: boolean }) {
   const router = useRouter();
   const [live, setLive] = useState<{ runId: string; agent: string } | null>(null);
   const [cards, setCards] = useState(agents);
@@ -113,7 +113,7 @@ export function AgentsCenter({ agents, status, sweep, canManage, canRun, canEdit
         ))}
       </section>
 
-      <PolicyEditor policies={status.policies} canEdit={canEditPolicies} onSaved={() => router.refresh()} />
+      <PolicyEditor policies={status.policies} canEdit={canEditOrgPolicies} note={canEditPolicies ? ORG_POLICY_TEXT : POLICY_EDITORS_TEXT} onSaved={() => router.refresh()} />
       {live && <LiveRun runId={live.runId} agent={live.agent} onClose={() => { setLive(null); router.refresh(); }} />}
     </div>
   );
@@ -133,7 +133,8 @@ function DollarInput({ value, placeholder, onChange, label }: { value: string; p
   );
 }
 
-function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolicy & { id?: string })[]; canEdit: boolean; onSaved: () => void }) {
+// These are the organization defaults (loadPolicies), so editing needs an org-wide editor.
+function PolicyEditor({ policies, canEdit, note, onSaved }: { policies: (ApprovalPolicy & { id?: string })[]; canEdit: boolean; note: string; onSaved: () => void }) {
   const [draft, setDraft] = useState<Record<string, { limit: string; owner: string }>>({});
   if (!policies.length) return null;
   const save = async (p: ApprovalPolicy & { id?: string }) => {
@@ -155,7 +156,7 @@ function PolicyEditor({ policies, canEdit, onSaved }: { policies: (ApprovalPolic
         <h2 className="font-semibold">Approval policies</h2>
         <span className="text-[12px] text-muted-foreground">What agents may apply on their own (autonomy “Auto within policy”), and when the owner decides. Legal and safety always need a person.</span>
       </div>
-      {!canEdit && <p className="border-b px-4 py-2 text-[12px] text-muted-foreground">{POLICY_EDITORS_TEXT}</p>}
+      {!canEdit && <p className="border-b px-4 py-2 text-[12px] text-muted-foreground">{note}</p>}
       <ScrollX>
       <table className="w-full text-[13px]">
         <thead className="text-left text-[11.5px] text-muted-foreground">

@@ -39,6 +39,9 @@ export type ToolDef<I = unknown, O = unknown> = {
   output: ZodType<O>;
   mode: "read" | "write";
   roles: Role[];                          // personas whose agents/chat may call it
+  // The entity a tool reads with its own SQL (not through list/get, which check it): the caller's
+  // role must be able to read it, as on the entity API.
+  reads?: EntityKey;
   // True when this call must become a proposal for a person (money, legal, safety, over limit).
   requiresApproval: (input: I, policies: ApprovalPolicy[]) => boolean;
   run: (ctx: RunContext, input: I) => Promise<O>;

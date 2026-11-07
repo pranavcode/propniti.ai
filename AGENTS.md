@@ -75,7 +75,11 @@ Small, focused commits. Imperative, sentence-case subject with no prefix or trai
 
 - No secrets in code. Keys go in `.env.local` (ignored) or `npx wrangler secret put`.
 - New public routes need a rate limit (`rateLimit()` from `guard.ts`) and a body cap. New demo-data writes go through `write()`, which checks the same origin.
-- Render model and user text as React text. `dangerouslySetInnerHTML` is used only for the repo's own docs markdown (`src/app/docs/[slug]/page.tsx`).
+- Render model and user text as React text. `dangerouslySetInnerHTML` has three uses; don't add a fourth without a security review:
+  - `src/app/docs/[slug]/page.tsx`: the repo's own markdown in `content/docs/`, bundled at build time.
+  - `src/components/app/ThemePreload.tsx`: the pre-paint theme script. Its only input is the theme mode, narrowed to `light`, `dark` or `system` by `themeMode()` and written with `JSON.stringify`.
+  - `src/components/ui/chart.tsx` (`ChartStyle`): CSS variables from the chart config. Keys and colors come from code, except donut keys (category values); those charts render only in the browser, where `<style>` text can't open a tag or run script.
+- Links from stored data go through `safeHref` / `SAFE_LINK` (`src/lib/links.ts`) on write and on render. Write origin checks use `sameOrigin` (`src/lib/https.ts`).
 - Update `docs/security-review.md` when a control changes.
 
 ## Deploy
