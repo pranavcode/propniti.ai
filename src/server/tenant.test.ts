@@ -12,7 +12,8 @@ import { companyState } from "@/extensions/onboarding/empty";
 import { effective as paramEffective, isLakeside, LAKESIDE_BASE, LAKESIDE_WS } from "./effective";
 import { actorFor } from "./permissions";
 import { emptyDb, seed, WS } from "./query.fixture";
-import { effective, list, metrics, type WriteCtx } from "./query";
+import { distinctValues, effective, list, metrics, type WriteCtx } from "./query";
+import { NEEDS_HISTORY } from "@/extensions/core-metrics";
 import { nextMidnight, resolveWorkspace, tenantWs } from "./workspace";
 
 // Two orgs in one database: Summit's base ('base', the fixture's 6 properties) and Lakeside's
@@ -142,6 +143,16 @@ describe("Summit never sees Lakeside", () => {
     }
     expect((await list(daniel, "properties", { q: "Lakeview" })).total).toBe(0);
     expect(await n(`SELECT count(*) AS n FROM ${paramEffective("properties")}`, WS)).toBe(6);
+
+    // With no monthly history yet, current-state KPIs come from the records and history-based ones
+    // say they need a month; metro tabs follow Lakeside's own properties. Summit is unchanged.
+    expect((await metrics(alex, "portfolio.occupancy")).value).toBe(1);
+    expect((await metrics(alex, "portfolio.units")).value).toBe(2);
+    expect(await metrics(alex, "portfolio.noi")).toMatchObject({ value: null, note: NEEDS_HISTORY });
+    expect(await metrics(alex, "receivables.collections_rate")).toMatchObject({ value: null, note: NEEDS_HISTORY });
+    expect((await metrics(daniel, "portfolio.noi")).note).toBeUndefined();
+    expect(await distinctValues(alex, "properties", "metro")).toEqual(["Austin"]);
+    expect((await distinctValues(daniel, "properties", "metro")).sort()).toEqual(["Atlanta", "Austin", "Dallas", "Phoenix"]);
 
     // Undo works inside Lakeside and leaves it empty.
     await undo(alex, done.batch);

@@ -69,16 +69,26 @@ test("an empty company: guided setup imports sample files, invites the property 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Check and finish", exact: true })).toBeVisible();
 
-  // Lakeside's lists hold only what was imported.
+  // Lakeside's lists hold only what was imported: tabs for its own metro only, current-state KPIs
+  // from the records, history-based ones waiting for a month, and no broken photos.
   await go(page, "/app/properties");
-  for (const name of IMPORTED) await expect(page.getByRole("main")).toContainText(name);
-  await expect(page.getByRole("main")).not.toContainText(SUMMIT);
+  const main = page.getByRole("main");
+  for (const name of IMPORTED) await expect(main).toContainText(name);
+  await expect(main).not.toContainText(SUMMIT);
+  for (const metro of ["Dallas", "Atlanta", "Phoenix"]) await expect(main.getByText(metro, { exact: true })).toHaveCount(0);
+  await expect(main.getByText("Austin", { exact: true }).first()).toBeVisible();
+  await expect(main).toContainText("83.3%");
+  await expect(main).toContainText("Needs a month of activity");
+  expect(await main.locator("img").evaluateAll((imgs) => imgs.filter((i) => !(i as HTMLImageElement).naturalWidth).length)).toBe(0);
+  await expect(page.getByRole("button", { name: /Finish setup/ })).toBeVisible();
 
   // 5. Switch to Maya: her properties are the two she was invited to.
   await as(context, "maya");
   await go(page, "/app/properties");
   await expect(page.getByRole("main")).toContainText(IMPORTED[0]!);
   expect(await total(page, "properties")).toBe(2);
+  // Setup is the principal's: Maya sees no checklist.
+  await expect(page.getByRole("button", { name: /Finish setup/ })).toHaveCount(0);
   await go(page, "/app/today");
   await expect(page.getByRole("heading", { name: /Maya/ })).toBeVisible();
   await expect(page.getByTestId("nothing-yet")).toHaveCount(0);

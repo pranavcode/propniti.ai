@@ -98,6 +98,7 @@ registerEntity({
   list: {
     defaultSort: ["name", "asc"],
     statusTabs: "metro",
+    tabsFromData: true,
     savedViews: [
       { key: "texas", label: "Texas", filters: { state: "TX" } },
       { key: "below-92", label: "Occupancy below 92%", filters: { "occupancy.max": "0.92" }, sort: ["occupancy", "asc"] },

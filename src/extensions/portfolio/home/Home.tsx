@@ -18,6 +18,7 @@ import { ExplainableKpi, ExplainLink } from "../ui/Explain";
 import { ApprovalQueue, CompareTable, HomeAsk } from "./client";
 import { briefing, compareRows, homeMetrics, LAST_CLOSED, type BriefingItem, type CompareRow, type HomeMetrics } from "./data";
 import { monthTick } from "@/components/app/dashboard/fmt";
+import { Thumb } from "@/components/app/display";
 
 // AI-first homes for the principal (org-wide) and the regional manager (one region). Briefing and
 // approvals first, then explainable KPIs, then charts that drill to the rows behind them.
@@ -100,9 +101,9 @@ function Kpis({ m, regional }: { m: HomeMetrics; regional: boolean }) {
   const delinquent = <ImprovableKpi metric="receivables.aging_live" label="Delinquent" format="money" value={k.delinquency.value} previous={k.delinquency.previous} deltaLabel="vs month end" spark={k.delinquency.spark} goodWhen="down" href="/app/receivables/delinquency" footnote="Past due today · all aging buckets" help="Open charges past their due date as of today, in every aging bucket: the same figure as Finance and the delinquency page. Compared with the balance at the last month-end close." />;
   return (
     <KpiRow className="xl:grid-cols-5">
-      <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={foot} help="Net operating income: rent and other income collected, less operating expenses." />
+      <ExplainableKpi deltaLabel="" metric="portfolio.noi" label="NOI" format="money" value={k.noi.value} previous={k.noi.previous} spark={k.noi.spark} goodWhen="up" href="/app/properties?sort=-noi_month" footnote={k.noi.note ?? foot} help="Net operating income: rent and other income collected, less operating expenses." />
       <ExplainableKpi deltaLabel="" metric="portfolio.occupancy" label="Occupancy" format="pct" value={k.occupancy.value} previous={k.occupancy.previous} spark={k.occupancy.spark} goodWhen="up" href="/app/units?f.status=Vacant" footnote={k.economic.value != null ? `Economic ${formatPct(k.economic.value, 1)}` : foot} help="Physical occupancy: occupied and on-notice units over rentable units." />
-      <ExplainableKpi deltaLabel="" metric="receivables.collections_rate" label="Collections rate" format="pct" value={k.collections.value} previous={k.collections.previous} spark={k.collections.spark} goodWhen="up" href="/app/receivables/payments" footnote="Collected over charged" help="Share of the month's rent and fees paid so far. Payments go to the oldest charge first, so paying down an older balance counts for that older month." />
+      <ExplainableKpi deltaLabel="" metric="receivables.collections_rate" label="Collections rate" format="pct" value={k.collections.value} previous={k.collections.previous} spark={k.collections.spark} goodWhen="up" href="/app/receivables/payments" footnote={k.collections.note ?? "Collected over charged"} help="Share of the month's rent and fees paid so far. Payments go to the oldest charge first, so paying down an older balance counts for that older month." />
       {regional
         ? <ExplainableKpi deltaLabel="" metric="maintenance.sla" label="Within SLA" format="pct" value={k.sla.value} previous={k.sla.previous} spark={k.sla.spark} goodWhen="up" href="/app/maintenance/work-orders?view=past-sla" footnote="Of work orders due" help="Work orders completed by their SLA due time, over work orders due in the month. Open jobs past due count as missed." />
         : delinquent}
@@ -208,8 +209,7 @@ function Watchlist({ rows }: { rows: CompareRow[] }) {
         {list.map((r) => (
           <li key={r.id}>
             <Link href={`/app/properties/${r.id}?tab=financials`} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40">
-              {/* eslint-disable-next-line @next/next/no-img-element -- 400px WebP thumb */}
-              <img src={r.photo} alt="" width={36} height={36} loading="lazy" className="size-9 shrink-0 rounded-md object-cover ring-1 ring-border" />
+              <Thumb src={r.photo} size={36} className="rounded-md" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">{r.name}</span>
                 <span className="block text-[11.5px] text-muted-foreground tabular-nums">{formatMoney(r.noi, "whole")} vs {formatMoney(r.budget, "whole")} budget</span>

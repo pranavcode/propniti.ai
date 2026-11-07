@@ -333,6 +333,18 @@ function aggKey(def: EntityDef, actor: Actor, ws: Ws, q: ListOptions): string | 
   return JSON.stringify([baseOf(ws.id), def.key, actor.role, who, q.q ?? "", q.filters ?? {}, q.where ?? null]);
 }
 
+// Distinct values of a field in the reader's scope, for status tabs that follow the data (a new
+// company's metros, not the demo portfolio's).
+export async function distinctValues(ctx: QueryCtx, entity: EntityKey | string, key: string): Promise<string[]> {
+  const def = getDef(entity);
+  assertRead(def, ctx.actor.role);
+  const f = field(def, key, ctx.actor.role);
+  const ws = await readWs(ctx);
+  const scope = scopeWhere(def, ctx.actor, ws);
+  const res = await ctx.db.prepare(`SELECT DISTINCT ${expr(def, key, f, ws)} AS v FROM ${effective(def.table, ws)} AS ${def.table}${whereSql(scope)} LIMIT 50`).bind(...scope.params).all<{ v: unknown }>();
+  return res.results.map((r) => r.v).filter((v): v is string => typeof v === "string" && v !== "");
+}
+
 export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOptions = {}): Promise<ListOut> {
   const def = getDef(entity);
   const { db, actor } = ctx;

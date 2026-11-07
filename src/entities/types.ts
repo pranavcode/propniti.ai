@@ -203,6 +203,7 @@ export type EntityDef = {
   list: {
     defaultSort: [string, "asc" | "desc"];
     statusTabs?: string;                 // enum field whose values become tabs with counts
+    tabsFromData?: boolean;              // tabs only for values the reader's records have (metros), not every enum value
     savedViews?: View[];
     bulkActions?: ActionKey[];
     footer?: Agg[];

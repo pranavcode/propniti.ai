@@ -69,9 +69,9 @@ export default async function PortfolioDashboard() {
       <PageBody>
         {failed && <ErrorBanner title="Some figures didn't load" message="The rest of the page is current. Reload to try again." />}
         <KpiRow>
-          <ExplainableKpi metric="portfolio.noi" label="NOI" format="money" value={noi?.value ?? null} previous={noi?.previous ?? null} spark={noi?.spark} href="/app/properties?sort=-noi_month" footnote={monthLong(LAST_CLOSED)} />
-          <ExplainableKpi metric="portfolio.occupancy" label="Occupancy" format="pct" value={occ?.value ?? null} previous={occ?.previous ?? null} spark={occ?.spark} href="/app/units?f.status=Vacant" footnote="Physical, month end" />
-          <ExplainableKpi metric="leasing.vacancy_loss" label="Vacancy loss" format="money" value={vac?.value ?? null} previous={vac?.previous ?? null} spark={vac?.spark} goodWhen="down" href="/app/units?view=vacant" footnote="Rent lost on empty units" />
+          <ExplainableKpi metric="portfolio.noi" label="NOI" format="money" value={noi?.value ?? null} previous={noi?.previous ?? null} spark={noi?.spark} href="/app/properties?sort=-noi_month" footnote={noi?.note ?? monthLong(LAST_CLOSED)} />
+          <ExplainableKpi metric="portfolio.occupancy" label="Occupancy" format="pct" value={occ?.value ?? null} previous={occ?.previous ?? null} spark={occ?.spark} href="/app/units?f.status=Vacant" footnote={occ?.source === "live records" ? "Physical, today" : "Physical, month end"} />
+          <ExplainableKpi metric="leasing.vacancy_loss" label="Vacancy loss" format="money" value={vac?.value ?? null} previous={vac?.previous ?? null} spark={vac?.spark} goodWhen="down" href="/app/units?view=vacant" footnote={vac?.note ?? "Rent lost on empty units"} />
           <ExplainableKpi metric="portfolio.economic_occupancy" label="Economic occupancy" format="pct" value={econ?.value ?? null} previous={econ?.previous ?? null} spark={econ?.spark} href="/app/units?view=below-market" footnote={`${statusPts.find((p) => p.status === "Vacant")?.units ?? 0} of ${status?.value ?? 0} units vacant today`} help="Rent actually earned over gross potential rent: vacancy, concessions and bad debt all pull it down." />
         </KpiRow>
 

@@ -12,7 +12,7 @@ import { fillTemplate } from "@/components/app/data-table/params";
 import { StatusBadge } from "@/components/app/display";
 import { DataHealthBadge, type HealthIssue } from "@/components/app/ai/DataHealthBadge";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
-import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
+import { collab, distinctValues, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
 import { getPlatform } from "@/lib/platform";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promis
     const base = { key: k.key, metric: k.metric, property, label: k.label, format: k.format, goodWhen: k.goodWhen, drill: k.drill && property ? `${k.drill}${k.drill.includes("?") ? "&" : "?"}f.property_id=${property}` : k.drill, help: k.help?.summary };
     try {
       const m = await metrics(ctx, k.metric, { property });
-      return { ...base, value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], asOf: m.asOf };
+      return { ...base, value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], asOf: m.asOf, note: m.note };
     } catch (e) {
       return { ...base, value: null, previous: null, spark: [], error: errMsg(e) };
     }
@@ -87,11 +87,15 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
   if (!can(role, "read", def.key)) return <Denied def={def} />;
   const sp = withView(def, searchParams);
   const q: ListQuery = parseListQuery(sp);
-  const [{ res, error }, facets, kpis] = await Promise.all([
+  const tabs = statusTabs(def, role);
+  const [{ res, error }, facets, kpis, present] = await Promise.all([
     attempt(list(ctx, def.key, q)),
     facetOptions(ctx, def.key, q).catch(() => ({})),
     kpiData(ctx, (def.kpis ?? []).slice(0, 4)),
+    tabs && def.list.tabsFromData ? distinctValues(ctx, def.key, tabs.field).catch(() => null) : null,
   ]);
+  // Tabs that follow the data show only the values the reader's records have, known ones first.
+  const shownTabs = tabs && present ? { ...tabs, options: [...tabs.options.filter((o) => present.includes(o.value)), ...present.filter((v) => !tabs.options.some((o) => o.value === v)).sort().map((v) => ({ value: v, tone: "neutral" as const }))] } : tabs;
   const createFields = can(role, "create", def.key) ? formFields(def, role, "create") : null;
   // An empty list in a company with no data yet (or for someone with no properties yet) says how
   // data arrives, rather than offering to create the first record by hand.
@@ -112,7 +116,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
         size={res?.size ?? 50}
         counts={res?.counts}
         footer={res?.footer}
-        statusTabs={statusTabs(def, role)}
+        statusTabs={shownTabs}
         facets={tableFacets(def, role, facets)}
         rowHref={`${def.route}/{id}`}
         exportHref={`/api/e/${def.key}/export.csv`}
@@ -298,7 +302,8 @@ export async function RecordView({ def, id, row: loaded, searchParams, session }
     <div className="space-y-4 p-4 md:p-6">
       <div className="flex flex-wrap items-start gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public; the Workers build has no image optimizer */}
-        {hero && <img src={hero} alt="" className="h-24 w-36 shrink-0 rounded-lg object-cover ring-1 ring-border" />}
+        {hero ? <img src={hero} alt="" className="h-24 w-36 shrink-0 rounded-lg object-cover ring-1 ring-border" />
+          : def.key === "properties" && <span aria-hidden className="grid h-24 w-36 shrink-0 place-items-center rounded-lg bg-muted ring-1 ring-border"><def.icon className="size-8 text-muted-foreground/50" /></span>}
         <div className="min-w-0 flex-1">
           <h1 className="flex flex-wrap items-center gap-2 text-[20px] font-semibold tracking-tight">
             {title}
