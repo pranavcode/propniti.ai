@@ -27,7 +27,8 @@ export type PortalRole = (typeof PORTAL_ROLES)[number];
 export const INTERNAL_ROLES = ROLES.filter((r): r is Exclude<Role, PortalRole> => !(PORTAL_ROLES as readonly string[]).includes(r));
 
 // Org → Region → Portfolio (owner entity) → Property. "self" = portal users see their own records.
-export type ScopeKind = "platform" | "org" | "region" | "owner_entity" | "portfolio" | "property" | "self";
+// "invited": the properties an invite assigned to the persona (looked up by its demo email).
+export type ScopeKind = "platform" | "org" | "region" | "owner_entity" | "portfolio" | "property" | "self" | "invited";
 
 // The one status-colour mapping (brief §5.1). CSS: bg-tone-<tone>/10 text-tone-<tone>.
 // success: Paid/Active/Occupied · warning: Pending/Notice/Due soon · danger: Overdue/Failed/Eviction

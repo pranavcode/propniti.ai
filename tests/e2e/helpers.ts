@@ -11,11 +11,11 @@ const TOUR_IDS = ["app-basics", "applicant-portal", "broker", "feature-ask", "fe
 export const TOURS = JSON.stringify(Object.fromEntries(TOUR_IDS.map((t) => [t, { tour: t, step: 0, status: "Dismissed", updatedAt: "2026-11-04T00:00:00Z" }])));
 // Welcome splash off for every staff persona and every new feature already seen, so neither the
 // splash, a "new" dot nor a feature-tour toast covers the page (welcome.spec.ts clears them).
-export const WELCOME_OFF = JSON.stringify(Object.fromEntries(["daniel", "priya", "marcus", "lena", "rachel", "grace", "tom", "sam", "nadia"].map((p) => [p, "never"])));
+export const WELCOME_OFF = JSON.stringify(Object.fromEntries(["daniel", "priya", "marcus", "lena", "rachel", "grace", "tom", "sam", "nadia", "alex", "maya"].map((p) => [p, "never"])));
 export const FEATURES_SEEN = JSON.stringify({ seen: ["inbox", "tasks", "automations", "import"] });
 // The Ask Propniti panel already opened on its own today (the demo day turns at midnight Pacific).
 const DEMO_DAY = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-export const ASK_AUTO_DONE = JSON.stringify(Object.fromEntries(["daniel", "priya", "marcus", "lena", "rachel", "grace", "tom", "sam", "nadia"].map((p) => [p, DEMO_DAY])));
+export const ASK_AUTO_DONE = JSON.stringify(Object.fromEntries(["daniel", "priya", "marcus", "lena", "rachel", "grace", "tom", "sam", "nadia", "alex", "maya"].map((p) => [p, DEMO_DAY])));
 // Chat bubble tips off, so no nudge covers the page (chat-bubble.spec.ts turns them back on).
 export const TIPS_OFF = JSON.stringify({ off: true });
 

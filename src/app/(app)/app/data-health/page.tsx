@@ -6,6 +6,8 @@ import { DataHealthCenter } from "@/ai/ui/DataHealthCenter";
 import { pageData } from "@/ai/ui/server";
 import { dataHealth, issuesPage } from "@/ai/views";
 import { healthFilters } from "@/ai/filters";
+import { companyState } from "@/extensions/onboarding/empty";
+import { NothingYet } from "@/extensions/onboarding/ui/NothingYet";
 
 export const metadata = { title: "Data health · Propniti" };
 
@@ -16,7 +18,7 @@ export default async function DataHealthPage({ searchParams }: { searchParams: P
   const { data } = await pageData();
   // Links from records, drawers, PM Today and reconciliation use ?f.entity_id= and ?f.rule_id=.
   const filters = healthFilters(sp);
-  const [health, issues] = await Promise.all([dataHealth(data), issuesPage(data, { ...filters, page: Number(sp.page) || 1 })]);
+  const [health, issues, empty] = await Promise.all([dataHealth(data), issuesPage(data, { ...filters, page: Number(sp.page) || 1 }), companyState(data)]);
   return (
     <div>
       <PageHeader
@@ -25,9 +27,14 @@ export default async function DataHealthPage({ searchParams }: { searchParams: P
         description="Know your portfolio is right. Rules check the records money decisions depend on; each problem comes with a fix, its reasons and a confidence, and every fix is logged with before and after."
         actions={<Button asChild size="sm" variant="outline"><Link href="/app/ai/activity?agent=data_health">Data Health Agent runs</Link></Button>}
       />
-      <div className="mt-5">
-        <DataHealthCenter health={JSON.parse(JSON.stringify(health))} issues={JSON.parse(JSON.stringify(issues))} filters={filters} />
-      </div>
+      {/* No records yet: a score of 100 would mean nothing, so say how data arrives instead. */}
+      {empty ? (
+        <div className="mt-5 px-4 md:px-6"><NothingYet state={empty} role={data.actor.role} what="data checks on your records" /></div>
+      ) : (
+        <div className="mt-5">
+          <DataHealthCenter health={JSON.parse(JSON.stringify(health))} issues={JSON.parse(JSON.stringify(issues))} filters={filters} />
+        </div>
+      )}
     </div>
   );
 }

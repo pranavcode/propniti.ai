@@ -8,7 +8,7 @@ import type { TourDef } from "../tour/types";
 export type ShellNavItem = { key: string; label: string; href: string; icon: ReactNode; group?: string; count?: number; countTone?: "default" | "attention"; ai?: boolean; help?: string };
 export type ShellNavSection = { section: NavSection; label: string; items: ShellNavItem[] };
 
-export type ShellPersona = { id: string; name: string; title: string; role: Role; scopeLabel: string; home: string; portal?: boolean };
+export type ShellPersona = { id: string; name: string; title: string; role: Role; scopeLabel: string; home: string; portal?: boolean; org?: string };
 
 export type ShellSearchEntity = { key: string; label: string; one: string; route: string; titleField: string; icon: ReactNode };
 export type ShellAction = { key: string; label: string; href: string; icon?: ReactNode; hint?: string };

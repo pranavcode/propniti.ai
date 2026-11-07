@@ -26,6 +26,8 @@ import { actionButtons, healthIssues, statusKeyOf } from "./peek";
 import { Composer } from "./Composer";
 import { withActorNames } from "@/server/actors";
 import { bulkActions, columnKind, formFields, parentValues, refHref, statusTabs, tableColumns, tableFacets } from "./spec";
+import { companyState } from "@/extensions/onboarding/empty";
+import { nothingYet } from "@/extensions/onboarding/ui/NothingYet";
 
 // Generic list, record and module pages (plan §4), rendered on the server from the registry.
 // Static routes under src/app/(app)/app/ override these for custom pages.
@@ -91,6 +93,9 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
     kpiData(ctx, (def.kpis ?? []).slice(0, 4)),
   ]);
   const createFields = can(role, "create", def.key) ? formFields(def, role, "create") : null;
+  // An empty list in a company with no data yet (or for someone with no properties yet) says how
+  // data arrives, rather than offering to create the first record by hand.
+  const fresh = res && res.total === 0 ? await companyState(ctx) : null;
   return (
     <div className="space-y-4 p-4 md:p-6">
       <PageHeader def={def} />
@@ -114,7 +119,7 @@ export async function ListView({ def, searchParams, session }: { def: EntityDef;
         views={def.list.savedViews}
         bulkActions={bulkActions(def, role)}
         searchPlaceholder={`Search ${def.label.many.toLowerCase()}…`}
-        empty={{ title: `No ${def.label.many.toLowerCase()} yet`, description: def.help?.summary, action: createFields ? { label: `New ${def.label.one.toLowerCase()}`, href: `${def.route}?new=1` } : undefined }}
+        empty={fresh ? nothingYet(fresh, role, def.label.many.toLowerCase()) : { title: `No ${def.label.many.toLowerCase()} yet`, description: def.help?.summary, action: createFields ? { label: `New ${def.label.one.toLowerCase()}`, href: `${def.route}?new=1` } : undefined }}
         error={error}
         create={createFields ? { fields: createFields } : undefined}
       />

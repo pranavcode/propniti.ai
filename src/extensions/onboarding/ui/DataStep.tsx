@@ -23,6 +23,9 @@ import { ContinueButton, type StepProps } from "./Onboarding";
 type Entry = { file: ImportFile; rules: Detection; ai?: AiDetection; tool: ToolKey; kind: Kind };
 
 const SAMPLES = ["appfolio-rent-roll.csv", "appfolio-tenant-directory.csv", "buildium-vendors.csv"];
+// A company with no properties yet also needs the owners and the property list, so each property
+// has an owner entity and a portfolio to go in.
+const STARTER = ["appfolio-owner-directory.csv", "appfolio-property-directory.csv", ...SAMPLES];
 const LABELS: Record<string, [string, string]> = {
   properties: ["property", "properties"], units: ["unit", "units"], residents: ["resident", "residents"], leases: ["lease", "leases"],
   owners: ["owner", "owners"], owner_entities: ["owner entity", "owner entities"], vendors: ["vendor", "vendors"], deposits: ["deposit", "deposits"],
@@ -58,6 +61,7 @@ export function DataStep({ data, state, save, footer, complete }: StepProps) {
   const [errors, setErrors] = useState<string[]>([]);
   const [start, setStart] = useState<WizardStart | null>(null);
   const [imported, setImported] = useState(!!state.import);
+  const samples = data.properties.length ? SAMPLES : STARTER;
 
   async function add(list: { name: string; bytes: () => Promise<Uint8Array> }[]) {
     setReading("Reading files…");
@@ -94,7 +98,7 @@ export function DataStep({ data, state, save, footer, complete }: StepProps) {
   }
 
   const fromInput = (files: File[]) => add(files.map((f) => ({ name: f.name, bytes: async () => new Uint8Array(await f.arrayBuffer()) })));
-  const loadSamples = () => add(SAMPLES.map((name) => ({ name, bytes: async () => new Uint8Array(await (await fetch(`/samples/${name}`)).arrayBuffer()) })));
+  const loadSamples = () => add(samples.map((name) => ({ name, bytes: async () => new Uint8Array(await (await fetch(`/samples/${name}`)).arrayBuffer()) })));
   const update = (id: string, patch: Partial<Pick<Entry, "tool" | "kind">>) => setEntries((xs) => xs.map((e) => (e.file.id === id ? { ...e, ...patch } : e)));
 
   async function handOff() {
@@ -163,7 +167,7 @@ export function DataStep({ data, state, save, footer, complete }: StepProps) {
             onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; void fromInput(list); }} />
           <div className="flex flex-wrap justify-center gap-2">
             <Button onClick={() => input.current?.click()} disabled={!!reading || entries.length >= MAX_FILES}><FileUp /> Choose files</Button>
-            <Button variant="outline" onClick={() => void loadSamples()} disabled={!!reading || entries.length + SAMPLES.length > MAX_FILES}><FileSpreadsheet /> Try sample files</Button>
+            <Button variant="outline" onClick={() => void loadSamples()} disabled={!!reading || entries.length + samples.length > MAX_FILES}><FileSpreadsheet /> Try sample files</Button>
           </div>
           <p className="text-[11.5px] text-muted-foreground">Sample files are synthetic test data from AppFolio and Buildium layouts, not real people or properties.</p>
         </div>

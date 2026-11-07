@@ -1,4 +1,5 @@
 import { MANAGEMENT_FEE_RATE } from "../lib/ledger";
+import { LAKESIDE, lakesideTables } from "./lakeside";
 import { BANKS, COMMERCIAL_TENANTS, ENTITIES, FIRST, GL, LAST, METRO_STATE, ORG_ID, ORG_NAME, OWNERS, PROPERTY_SITE, STAFF, TECHS, UNICODE_NAMES, VENDORS, gl } from "./catalog";
 import { AS_OF, BASE_VERSION, CURRENT_PERIOD, FIRST_PERIOD } from "./constants";
 import { generateExtras } from "./extras";
@@ -21,7 +22,8 @@ const WIN = monthStart(FIRST_PERIOD);
 export type Value = string | number | null;
 export type R = Record<string, Value>;
 export type Tables = Record<string, R[]>;
-export type Base = { tables: Tables; balances: { account_id: string; cleared_cents: number }[]; meta: Record<string, string> };
+// `lakeside` is the second demo org's base (workspace 'base-lakeside', src/seed/lakeside.ts).
+export type Base = { tables: Tables; balances: { account_id: string; cleared_cents: number }[]; meta: Record<string, string>; lakeside: Tables };
 
 // ---------------------------------------------------------------------------------------------
 // Internal model
@@ -119,7 +121,7 @@ export function generate(): Base {
   }
   // Planted lease-document mismatches, so lease abstraction can be tested against a known list.
   const meta = { base_version: BASE_VERSION, as_of: AS_OF, first_period: FIRST_PERIOD, generated_at: `${AS_OF}T06:00:00Z`, lease_doc_mismatches: JSON.stringify(ctx.planted["leases.abstract_mismatch"] ?? []) };
-  return { tables: t, balances: [...balances].sort().map(([account_id, cleared_cents]) => ({ account_id, cleared_cents })), meta };
+  return { tables: t, balances: [...balances].sort().map(([account_id, cleared_cents]) => ({ account_id, cleared_cents })), meta, lakeside: lakesideTables() };
 }
 
 export const INFLOW = new Set(["Rent", "Deposit", "Other receipt"]);
@@ -232,6 +234,7 @@ export function baseHash(b: Base) {
     h2 = Math.imul(h2 ^ hash32(`${s}#`), 2246822519) >>> 0;
   };
   for (const name of Object.keys(b.tables).sort()) for (const row of b.tables[name]) feed(name + JSON.stringify(row));
+  for (const name of Object.keys(b.lakeside).sort()) for (const row of b.lakeside[name]) feed(`lakeside:${name}${JSON.stringify(row)}`);
   feed(JSON.stringify(b.balances));
   return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
 }
@@ -250,6 +253,8 @@ function org(c: Ctx) {
     ["org-northgate", "Northgate Realty Group", "Growth", "Past due", 18, 960],
   ];
   for (const [id, name, plan, status, seats, units] of others) add("orgs", { id, name, plan, status, seats, units_managed: units, created_at: "2024-06-01T16:00:00Z" });
+  // The second demo org, listed for the platform admin; its own rows live in base-lakeside.
+  add("orgs", { ...LAKESIDE });
   add("regions", { id: "r-tx", org_id: ORG_ID, name: "Texas", states: '["TX"]' });
   add("regions", { id: "r-se", org_id: ORG_ID, name: "Southeast", states: '["GA"]' });
   add("regions", { id: "r-sw", org_id: ORG_ID, name: "Southwest", states: '["AZ"]' });

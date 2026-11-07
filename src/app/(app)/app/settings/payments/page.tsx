@@ -6,7 +6,7 @@ import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { Money } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { NoAccess, settingsSession } from "@/extensions/settings/pages";
-import { ORG_ID, prefsData, rows } from "@/extensions/settings/data";
+import { orgId, prefsData, rows } from "@/extensions/settings/data";
 import { canSettings } from "@/extensions/settings/nav";
 import { INTEGRATIONS } from "@/extensions/settings/integrations";
 
@@ -31,7 +31,7 @@ export default async function PaymentsPage() {
   const [policies, caps, prefs] = await Promise.all([
     rows<Policy>(ctx, "SELECT l.id, l.property_id, p.name AS property, p.state, l.grace_days, l.kind, l.flat_cents, l.pct, l.daily_cents, l.max_cents FROM {late_fee_policies} l LEFT JOIN {properties} p ON p.id = l.property_id ORDER BY l.property_id IS NOT NULL, p.name LIMIT 100"),
     rows<{ state: string; value: string }>(ctx, "SELECT s.state, s.value FROM {state_rules} s WHERE s.rule = 'late_fee_cap_pct' AND s.effective_from = (SELECT max(x.effective_from) FROM {state_rules} x WHERE x.state = s.state AND x.rule = s.rule AND x.effective_from <= $AS_OF)"),
-    prefsData(ctx, ORG_ID),
+    prefsData(ctx, orgId(ctx)),
   ]);
   const capOf = (state: string | null) => Number(caps.find((c) => c.state === state)?.value ?? 0);
   const integ = (prefs.integrations ?? {}) as Record<string, { status?: string }>;

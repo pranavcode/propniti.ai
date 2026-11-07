@@ -1,4 +1,5 @@
 import { effective } from "@/server/query";
+import { baseOf } from "@/server/effective";
 import type { MetricKey, Row } from "@/entities/types";
 import { registerMetric, type MetricCtx, type MetricParams, type MetricResult } from "./metrics";
 
@@ -47,7 +48,7 @@ export async function monthSeries(ctx: MetricCtx, params: MetricParams): Promise
   const to = params.month ?? ctx.asOf;
   const from = addMonths(to, -Math.max(1, Math.min(24, params.months ?? 12)) + 1);
   const s = scopeSql(ctx, params);
-  const res = await ctx.db.prepare(`SELECT month, ${SUMS.map((c) => `coalesce(sum(${c}), 0) AS ${c}`).join(", ")}, coalesce(sum(occupancy_econ * gpr_cents), 0) AS econ_weighted FROM metrics_monthly WHERE workspace_id = 'base' AND month BETWEEN ? AND ?${s.sql} GROUP BY month ORDER BY month`).bind(from, to, ...s.binds).all<MonthSums>();
+  const res = await ctx.db.prepare(`SELECT month, ${SUMS.map((c) => `coalesce(sum(${c}), 0) AS ${c}`).join(", ")}, coalesce(sum(occupancy_econ * gpr_cents), 0) AS econ_weighted FROM metrics_monthly WHERE workspace_id = '${baseOf(ctx.ws)}' AND month BETWEEN ? AND ?${s.sql} GROUP BY month ORDER BY month`).bind(from, to, ...s.binds).all<MonthSums>();
   const rows = res.results.map((r) => ({ ...r, month: String(r.month) }));
   const last = rows[rows.length - 1];
   if (last && last.month === ctx.asOf) {

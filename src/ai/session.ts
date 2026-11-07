@@ -1,5 +1,5 @@
 import type { Actor } from "@/entities/types";
-import { personaFromCookieHeader, type Persona } from "@/auth/personas";
+import { inLakeside, personaFromCookieHeader, type Persona } from "@/auth/personas";
 import { getPlatform } from "@/lib/platform";
 import { actorFor } from "@/server/permissions";
 import type { Db } from "@/lib/platform/types";
@@ -24,8 +24,10 @@ export async function aiSession(request: Request, opts: { write?: boolean } = {}
   const persona = personaFromCookieHeader(request.headers.get("cookie"));
   let ws = readCookie(request);
   let setCookie: string | undefined;
-  if (opts.write || ws) {
-    const r = await resolveWorkspace(db, request, nowMs, !!opts.write, !!writeLimiter);
+  // Lakeside personas always get their own workspace: the "base" fallback below is Summit's data.
+  const lakeside = inLakeside(persona);
+  if (opts.write || ws || lakeside) {
+    const r = await resolveWorkspace(db, request, nowMs, !!opts.write || lakeside, !!writeLimiter);
     if (r instanceof Response) return r;
     ws = r.ws;
     setCookie = r.setCookie;

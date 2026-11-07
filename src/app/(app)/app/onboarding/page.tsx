@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Rocket } from "lucide-react";
 import { currentSession } from "@/auth/session";
-import { PERSONAS } from "@/auth/personas";
+import { demoEmail, inLakeside, PERSONAS, type Persona } from "@/auth/personas";
 import { getEntity, INTERNAL_ROLES } from "@/entities";
 import { getPlatform } from "@/lib/platform";
 import { PageBody, PageHeader } from "@/components/app/page";
@@ -10,7 +10,7 @@ import { agentName } from "@/ai/ui/labels";
 import { canEditPolicies } from "@/ai/policy-editors";
 import { wizardOptions } from "@/extensions/import/options";
 import { IMPORT_TABLES, mayCreate } from "@/extensions/import/server";
-import { ORG_ID, one, prefsData, rows } from "@/extensions/settings/data";
+import { orgId, one, prefsData, rows } from "@/extensions/settings/data";
 import { canInvite } from "@/extensions/settings/nav";
 import { loadState, portfolioStats, setupAllowed } from "@/extensions/onboarding/server";
 import { canOnboard, ONBOARD_ROLES } from "@/extensions/onboarding/state";
@@ -21,6 +21,11 @@ import { ReadOnly } from "@/extensions/onboarding/ui/ReadOnly";
 export const metadata: Metadata = { title: "Set up your portfolio · Propniti" };
 
 const roleTitle = (r: string) => PERSONAS.find((p) => p.role === r)?.title ?? r.replace(/_/g, " ");
+// In Lakeside, the colleague whose demo account the invite unlocks (her scope is what she's invited to).
+const invitable = (me: Persona) => {
+  const p = inLakeside(me) ? PERSONAS.find((x) => inLakeside(x) && x.scope.kind === "invited") : undefined;
+  return p && { name: p.name, email: demoEmail(p.id), title: p.title, role: p.role };
+};
 
 export default async function OnboardingPage() {
   const session = await currentSession();
@@ -33,8 +38,8 @@ export default async function OnboardingPage() {
   const [options, stats, org, prefs, policies, agentRows, staff, regions, properties] = await Promise.all([
     wizardOptions(session),
     portfolioStats(ctx, state),
-    one<{ name: string }>(ctx, "SELECT name FROM {orgs} WHERE id = ?", [ORG_ID]),
-    prefsData(ctx, ORG_ID),
+    one<{ name: string }>(ctx, "SELECT name FROM {orgs} WHERE id = ?", [orgId(ctx)]),
+    prefsData(ctx, orgId(ctx)),
     rows<{ id: string; category: string; limit_cents: number | null; owner_approval_over_cents: number | null; approver_role: string; always_human: number }>(ctx, "SELECT id, category, limit_cents, owner_approval_over_cents, approver_role, always_human FROM {approval_policies} WHERE owner_entity_id IS NULL ORDER BY category"),
     rows<{ id: string; autonomy: string }>(ctx, "SELECT id, autonomy FROM {agent_definitions}"),
     rows<{ id: string; name: string; title: string; active: number; last_active_at: string | null; roles: string | null }>(ctx, "SELECT s.id, s.name, s.title, s.active, s.last_active_at, (SELECT group_concat(DISTINCT ra.role) FROM {role_assignments} ra WHERE ra.staff_id = s.id) AS roles FROM {staff} s ORDER BY s.active DESC, s.name LIMIT 60"),
@@ -65,6 +70,7 @@ export default async function OnboardingPage() {
     regions: regions.map((r) => ({ value: r.id, label: r.name })),
     properties: properties.map((p) => ({ value: p.id, label: `${p.name} · ${p.metro}`, imported: /-i[0-9a-f]{10}-/.test(p.id) })),
     routes: Object.fromEntries(IMPORT_TABLES.flatMap((t) => { const r = getEntity(t)?.route; return r ? [[t, r]] : []; })),
+    demoInvite: invitable(session.persona),
   };
   return (
     <>

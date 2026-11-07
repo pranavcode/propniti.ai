@@ -379,7 +379,7 @@ export function DataTable(props: DataTableProps) {
           {rows.length === 0 && !error && (
             filtersActive
               ? <EmptyState kind="filtered" title={`No matching ${label.many.toLowerCase()}`} description="Try a different search, or adjust or clear the filters." action={{ label: "Clear filters", onClick: clearAll }} />
-              : <EmptyState kind="table" title={empty?.title ?? `No ${label.many.toLowerCase()} yet`} description={empty?.description} action={empty?.action} />
+              : <EmptyState kind="table" title={empty?.title ?? `No ${label.many.toLowerCase()} yet`} description={empty?.description} action={empty?.action} secondary={empty?.secondary} />
           )}
         </div>
         <EdgeFades {...tableEdges} />

@@ -1,7 +1,7 @@
 import "server-only";
 import { allEntities, can, getEntity } from "@/entities";
 import { actionsFor, getAction } from "@/extensions/actions";
-import { PERMISSIONS, type Persona } from "@/auth/personas";
+import { demoEmail, PERMISSIONS, type Persona } from "@/auth/personas";
 import { ROLES, type Actor, type EntityKey, type ModuleKey, type Role } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { settleIfDue } from "./money";
@@ -31,6 +31,16 @@ export async function scopeProperties(db: Db, ws: string | null, persona: Person
       return q(`SELECT id FROM ${props} WHERE portfolio_id IN (SELECT value FROM json_each(?)) ORDER BY id`, ids);
     case "owner_entity":
       return q(`SELECT id FROM ${props} WHERE owner_entity_id IN (SELECT value FROM json_each(?)) ORDER BY id`, ids);
+    case "invited": {
+      // The role assignments of the staff row the principal's invite created for this persona's
+      // demo email, in the persona's own workspace. No invite yet: no properties.
+      const ra = (await db.prepare(`SELECT ra.scope_kind AS kind, ra.scope_id AS id FROM ${effective("role_assignments", ws)} ra JOIN ${effective("staff", ws)} s ON s.id = ra.staff_id WHERE lower(s.email) = ? AND ra.role = ?`)
+        .bind(demoEmail(persona.id), persona.role).all<{ kind: string; id: string }>()).results;
+      if (ra.some((r) => r.kind === "org")) return "all";
+      const regions = JSON.stringify(ra.filter((r) => r.kind === "region").map((r) => r.id));
+      const direct = ra.filter((r) => r.kind === "property").map((r) => String(r.id));
+      return [...new Set([...direct, ...(await q(`SELECT id FROM ${props} WHERE region_id IN (SELECT value FROM json_each(?)) ORDER BY id`, regions))])].sort();
+    }
     case "self": {
       const rec = persona.record;
       if (!rec) return [];

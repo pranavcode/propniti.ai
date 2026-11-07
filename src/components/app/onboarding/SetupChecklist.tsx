@@ -5,6 +5,8 @@ import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { LAKESIDE_ORG } from "@/auth/personas";
+import { useShellMaybe } from "../shell/context";
 
 // First-run org setup checklist (plan addendum: company, bank, import, team, roles, payments).
 // Progress is kept in localStorage behind useSetupProgress; lane C can back it with the server.
@@ -21,8 +23,10 @@ export const SETUP_ITEMS: SetupItem[] = [
 ];
 
 export function useSetupProgress(items: SetupItem[] = SETUP_ITEMS) {
-  const [overrides, setOverrides] = useLocalStorage<Record<string, boolean>>("pn_setup", {});
-  const list = items.map((i) => ({ ...i, done: overrides[i.key] ?? !!i.done }));
+  // Lakeside (the empty demo org) starts with nothing done and keeps its own progress.
+  const fresh = useShellMaybe()?.data.persona.org === LAKESIDE_ORG;
+  const [overrides, setOverrides] = useLocalStorage<Record<string, boolean>>(fresh ? "pn_setup_lakeside" : "pn_setup", {});
+  const list = items.map((i) => ({ ...i, done: overrides[i.key] ?? (!fresh && !!i.done) }));
   const done = list.filter((i) => i.done).length;
   return { items: list, done, total: list.length, setDone: (key: string, v: boolean) => setOverrides((o) => ({ ...o, [key]: v })) };
 }

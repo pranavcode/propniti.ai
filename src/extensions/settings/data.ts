@@ -1,12 +1,15 @@
 import "server-only";
 import { AS_OF as AS_OF_SQL } from "@/entities/common";
 import { AS_OF } from "@/seed/constants";
+import { LAKESIDE_ORG } from "@/auth/personas";
+import { isLakeside } from "@/server/effective";
 import { effective, type QueryCtx } from "@/server/query";
 
 // Small read helpers for the settings pages. Tables are named as {table} and expand to the
 // visitor's effective rows (overlay over base).
 
-export const ORG_ID = "org-summit";
+// The org whose settings a request reads and writes: Lakeside in a Lakeside workspace, else Summit.
+export const orgId = (ctx: { ws: string | null }) => (isLakeside(ctx.ws) ? LAKESIDE_ORG : "org-summit");
 
 export function expandSql(ctx: QueryCtx, sql: string) {
   return sql.replace(/\{([a-z_][a-z0-9_]*)\}/g, (_, t: string) => effective(t, ctx.ws)).replace(/\$AS_OF/g, AS_OF_SQL);

@@ -8,7 +8,7 @@ import { DEMO_PASSWORD, LAST_PERSONA } from "@/auth/personas";
 import { Wordmark } from "@/components/Logo";
 import { MK_VARS } from "@/components/marketing/ui";
 
-export type Card = { id: string; name: string; title: string; role: string; scope: string; sees: string; email: string; portal: boolean };
+export type Card = { id: string; name: string; title: string; role: string; scope: string; sees: string; email: string; portal: boolean; group: Group };
 type Err = { field: "email" | "password" | "form"; message: string };
 
 // Avatar tones from the brand palette: teal and its neighbours, light fill with dark text.
@@ -280,8 +280,8 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
           {GROUPS.map((g) => (
             <div key={g.label} className="mt-6">
               <h3 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label} <span className="font-normal normal-case tracking-normal">· {g.blurb}</span></h3>
-              <ul className={`mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 ${g.portal ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-                {cards.filter((c) => c.portal === g.portal).map((c) => (
+              <ul className={`mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 ${g.key === "portal" ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+                {cards.filter((c) => c.group === g.key).map((c) => (
                   <li key={c.id} className="rounded-xl bg-white p-4 ring-1 ring-(--mk-line)">
                     <div className="flex items-center gap-3">
                       <Avatar c={c} i={cards.indexOf(c)} />
@@ -304,9 +304,11 @@ export function SignIn({ cards, next, initialEmail, initialPassword, error: init
   );
 }
 
-const GROUPS = [
-  { label: "Staff", portal: false, blurb: "roles inside a property management company" },
-  { label: "Portals", portal: true, blurb: "owners, residents, vendors and applicants see only their own records" },
+type Group = "staff" | "portal" | "empty";
+const GROUPS: { key: Group; label: string; blurb: string }[] = [
+  { key: "staff", label: "Staff", blurb: "roles inside a property management company" },
+  { key: "portal", label: "Portals", blurb: "owners, residents, vendors and applicants see only their own records" },
+  { key: "empty", label: "New company (empty)", blurb: "start from zero: import files and set up" },
 ];
 const noop = () => () => {};
 
@@ -343,10 +345,10 @@ function Picker({ cards, selected, next, onPick, onGo }: { cards: Card[]; select
       </div>
       <div role="radiogroup" aria-labelledby="picker-title" aria-describedby="picker-hint" onKeyDown={keys} className="mt-2">
         {GROUPS.map((g) => (
-          <div key={g.label} role="group" aria-labelledby={`picker-${g.label}`} className="mt-2 first:mt-0">
-            <h4 id={`picker-${g.label}`} className="px-1 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label}</h4>
+          <div key={g.label} role="group" aria-labelledby={`picker-${g.key}`} className="mt-2 first:mt-0">
+            <h4 id={`picker-${g.key}`} className="px-1 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-(--mk-muted)">{g.label}{g.key === "empty" && <span className="font-normal normal-case tracking-normal"> · Start from zero: import files and set up</span>}</h4>
             <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-              {cards.filter((c) => c.portal === g.portal).map((c) => (
+              {cards.filter((c) => c.group === g.key).map((c) => (
                 <PersonRow key={c.id} c={c} i={cards.indexOf(c)} on={selected === c.id} tabStop={!hydrated || stop === c.id} next={next} onPick={onPick} onGo={onGo} />
               ))}
             </div>

@@ -31,7 +31,7 @@ test.describe("sign in", () => {
     for (const box of [await picker.boundingBox(), await page.getByRole("button", { name: "Sign in", exact: true }).boundingBox()]) {
       expect(box && box.y >= 0 && box.y + box.height <= 900).toBe(true);
     }
-    await expect(picker.getByRole("radio")).toHaveCount(13);
+    await expect(picker.getByRole("radio")).toHaveCount(15);
 
     await page.getByRole("radio", { name: "Daniel Reyes, Principal" }).focus();
     await page.keyboard.press("ArrowDown");

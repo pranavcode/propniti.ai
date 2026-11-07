@@ -16,7 +16,8 @@ const EMPTY = { name: "", email: "", title: "", role: "property_manager", scope_
 export function TeamStep({ data, state, save, footer, complete }: StepProps) {
   const setup = useSetupProgress();
   const imported = data.properties.filter((p) => p.imported).map((p) => p.value);
-  const [v, setV] = useState({ ...EMPTY, scope_ids: imported });
+  const demo = data.demoInvite && !data.team.some((t) => t.name === data.demoInvite!.name) ? data.demoInvite : null;
+  const [v, setV] = useState({ ...EMPTY, ...demo, scope_ids: imported });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const invited = state.team?.invited ?? [];
@@ -45,7 +46,9 @@ export function TeamStep({ data, state, save, footer, complete }: StepProps) {
       <div className="flex flex-col gap-5 px-4 py-5 sm:px-5">
         <p className="flex items-start gap-2 rounded-md border border-tone-info/30 bg-tone-info/[0.05] px-3 py-2.5 text-[12.5px]">
           <Info className="mt-0.5 size-3.5 shrink-0 text-tone-info" aria-hidden />
-          <span>Demo: people you add here are created in your private demo workspace only. No email is sent and they can&apos;t sign in. Everything resets at midnight Pacific.</span>
+          {demo
+            ? <span>Demo: the form is filled in for {demo.name}, a property manager. Add her with the properties she covers, then switch to her from your avatar menu to see just those properties. No email is sent. Everything resets at midnight Pacific.</span>
+            : <span>Demo: people you add here are created in your private demo workspace only. No email is sent and they can&apos;t sign in. Everything resets at midnight Pacific.</span>}
         </p>
 
         {data.canInvite ? (
