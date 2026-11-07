@@ -66,10 +66,11 @@ export function eff(table: Table, ws: string): { sql: string; params: unknown[] 
   };
 }
 
-// Tables with no entity def and no property column of their own, scoped through their parent record.
-const SCOPE_VIA: Partial<Record<Table, (alias: string) => string>> = {
-  messages: (a) => `(SELECT mt.property_id FROM message_threads mt WHERE mt.id = ${a}.thread_id LIMIT 1)`,
-  bill_lines: (a) => `(SELECT b.property_id FROM bills b WHERE b.id = ${a}.bill_id LIMIT 1)`,
+// Tables with no entity def and no property column of their own, scoped through their parent record
+// as the visitor's workspace sees it (an overlay row replaces the base one).
+const SCOPE_VIA: Partial<Record<Table, (alias: string, ws: string) => { sql: string; params: unknown[] }>> = {
+  messages: (a, ws) => { const e = eff("message_threads", ws); return { sql: `(SELECT mt.property_id FROM ${e.sql} mt WHERE mt.id = ${a}.thread_id LIMIT 1)`, params: e.params }; },
+  bill_lines: (a, ws) => { const e = eff("bills", ws); return { sql: `(SELECT b.property_id FROM ${e.sql} b WHERE b.id = ${a}.bill_id LIMIT 1)`, params: e.params }; },
 };
 
 // Tables with no def and no property that every staff role may read row by row. Other such tables
@@ -133,7 +134,8 @@ export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: str
       params: [JSON.stringify(ctx.actor.propertyIds), types, ...issues.params, types],
     };
   }
-  return { sql: `${via ? via(alias) : `${alias}.${col}`} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ctx.actor.propertyIds)] };
+  const v = via ? via(alias, ctx.ws) : { sql: `${alias}.${col}`, params: [] };
+  return { sql: `${v.sql} IN (SELECT value FROM json_each(?))`, params: [...v.params, JSON.stringify(ctx.actor.propertyIds)] };
 }
 
 // The entity def for a table, when one exists: its read permission and hidden fields apply to AI

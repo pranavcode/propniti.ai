@@ -46,6 +46,18 @@ const tool = (key: string, data: DataCtx, input: unknown) => {
 };
 
 describe("AI reads follow each entity's property scope", () => {
+  it("scopes bill lines by the bill as this workspace sees it, not another workspace's copy", async () => {
+    const { db, raw } = fixture();
+    // Another visitor's overlay moves b-atl to Austin; it must not widen Marcus's reads here.
+    raw.exec(`INSERT INTO workspaces (id, kind, created_at, last_seen_at) VALUES ('other-ws-000000000000000001', 'demo', 0, 0);
+      INSERT INTO bills (workspace_id, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents, status) VALUES
+        ('other-ws-000000000000000001', 'b-atl', 'p01', 'oe01', 'v01', 'ATL-1', '2026-10-28', '2026-11-15', 9000, 'Pending approval');
+      DELETE FROM bills WHERE workspace_id = 'base' AND id = 'b-atl';
+      INSERT INTO bills (workspace_id, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents, status) VALUES
+        ('base', 'b-atl', 'p10', 'oe02', 'v01', 'ATL-1', '2026-10-28', '2026-11-15', 9000, 'Pending approval');`);
+    expect(ids((await list({ db, ws: WS, actor: MARCUS }, "bill_lines")).rows)).toEqual(["bl1", "bl2"]);
+  });
+
   it("scopes owner distributions, bank transactions and bill lines like the entity API", async () => {
     const { db } = fixture();
     const m = { db, ws: WS, actor: MARCUS };
