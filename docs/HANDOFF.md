@@ -86,6 +86,31 @@ Branch `batch/nine`: three security branches merged, plus follow-ups. Each contr
 - **Follow-ups:** `workersDev: false`; the AI routes use the same `sameOrigin` rule (https-only in production); work-order photo links use `safeHref`; the Settings, Agents and guided-setup approval-limit controls are read-only, with the reason, where the server would refuse (organization defaults for a regional manager, owner policies outside the editor's scope).
 - `BASE_VERSION` is unchanged, so no reseed.
 
+## Batch 10: portal journeys and an empty company
+
+Branch `batch/ten` (from `main` at `4d2084b`): `feat/portal-journeys` and `feat/empty-company` merged, plus review fixes. Not pushed or deployed yet.
+
+- **Portal journeys** (`feat/portal-journeys`): applicant and resident journey trackers. The applicant uploads documents (or a sample file), submits, e-signs the lease and sees the move-in date; staff order and record screening, send the lease and schedule move-in. The resident reports a repair with a phone photo and rates the fix, sends renters insurance (staff can reject it with a note), answers or counters a renewal and e-signs it, and gives notice (staff book the move-out inspection). Resident photos are stored with the work order and served from `/api/photos/<id>`. New migration `0009_portal_journeys.sql`.
+- **Empty company** (`feat/empty-company`): a second demo org, Lakeside Property Co. (personas Alex Morgan, principal, and Maya Chen, property manager), with no portfolio, to try imports and guided setup from zero. It has its own base (`base-lakeside`) and overlay (`<visitor id>.lakeside`) and reads only shared reference tables from Summit's base. Figures with no monthly history read from live records or say "Needs a month of activity". `BASE_VERSION` `.21`.
+- **Review fixes:** hand-written SQL names the org's own base (`baseOf(ws)`, `baseSql()`, `ANY_BASE`), with a test that fails on a new literal `'base'`; resident photos are served inline and uncached, and only when the bytes match the declared type; applicant documents are taken only through the upload route (`ActionDef.route`); a new document of a type replaces the earlier one; work order photo lists leave the photo data out; sign-out deletes the visitor's workspaces in both orgs.
+
+Measured on `batch/ten` (2026-11-07):
+
+| Check | Result |
+|---|---|
+| Unit tests | 1,429 in 166 files, 1 skipped |
+| Lint and typecheck | Clean |
+| Builds | `npm run build` and `npm run build:vinext` pass |
+| E2E (local D1 at `.21`, `dev:vinext`) | 93 / 93 across portal-journeys, empty-company, owners-portals, maintenance, leasing, onboarding, import, portfolio, nav, signin, platform, residents. Full suite: 198 tests in 36 specs |
+| Live AI evals | Not run (no AI prompt changes in this batch) |
+
+Deploy, in this order, after merging to `main`:
+
+1. Apply migration 0009 remotely before deploying: `npx cf d1 migrations apply b9dff387-c845-44c8-b735-5e8bf3946623`. It only adds nullable columns, so the live code keeps working.
+2. Deploy: `npm run deploy:vinext`. Note the previous Worker version for rollback.
+3. Reseed to `.21` straight away (see *Reseed* above). It wipes visitors' changes and loads both bases. The `.21` load is 518,228 rows in 1,671 statements (83.1 MB). Check the printed `base_version` is `2026-11-04.21`.
+4. Warm up and smoke test: a Summit persona home, the applicant and resident portals, and Alex Morgan (Lakeside) on `/app/onboarding` and `/app/import`.
+
 ### Infrastructure plan (lead, after the batch 9 deploy)
 
 - Give the preview Worker its own D1 database instead of sharing `propniti-v2` with production: create it, apply the migrations and load the base, then point `propniti-v2-preview` at it.
