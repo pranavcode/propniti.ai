@@ -6,6 +6,9 @@ import { AS_OF } from "@/seed/constants";
 import { effective, overlayUpsertSql } from "@/server/effective";
 import { eventStmt, notifyStmt, payApplicationFee, payRent, uid } from "@/server/money";
 import { nowIso } from "@/server/workspace";
+import { MAX_UPLOAD_BYTES, UPLOAD_TYPES } from "@/lib/upload";
+import { REQUIRED_TO_SUBMIT } from "./portal/journeys";
+import { SAMPLE_DOCS, type SampleDocKey } from "./portal/sample-files";
 import { registerAction } from "../actions";
 import { dollars, notifyManager, ownerLimitCents } from "./actions";
 
@@ -21,7 +24,8 @@ const Photo = z.string().max(30_000).regex(/^data:image\/(jpeg|png|webp);base64,
 const WO_COLS = ["id", "deleted", "property_id", "unit_id", "service_request_id", "pm_schedule_id", "turnover_id", "title", "description", "category", "priority", "source", "status", "vendor_id", "assignee_id", "estimate_cents", "cost_cents", "sla_due_at", "opened_at", "scheduled_at", "completed_at", "permission_to_enter"];
 const THREAD_COLS = ["id", "deleted", "property_id", "party_kind", "party_id", "subject", "entity_type", "entity_id", "assigned_to", "status", "last_message_at", "unread"];
 const RESIDENT_COLS = ["id", "deleted", "household_id", "property_id", "first_name", "last_name", "email", "phone", "preferred_channel", "language", "is_primary", "status", "autopay", "risk_score"];
-const OFFER_COLS = ["id", "deleted", "lease_id", "property_id", "version", "term_months", "rent_cents", "current_rent_cents", "market_rent_cents", "status", "sent_at", "responded_at", "expires_on"];
+const OFFER_COLS = ["id", "deleted", "lease_id", "property_id", "version", "term_months", "rent_cents", "current_rent_cents", "market_rent_cents", "status", "sent_at", "responded_at", "expires_on", "resident_note", "signed_at"];
+const LEASE_COLS = ["id", "deleted", "property_id", "unit_id", "household_id", "application_id", "renewal_of", "kind", "status", "start_on", "end_on", "move_in_on", "move_out_on", "notice_on", "term_months", "rent_cents", "deposit_cents", "escalations", "nnn_share_pct", "cam_cents", "tax_cents", "insurance_cents", "signed_by", "signed_at", "document_id"];
 
 const ok = (message: string, href?: string): ActionResult => ({ status: 200, message, href });
 const no = (status: 400 | 404 | 409, error: string): ActionResult => ({ status, error });
@@ -193,7 +197,9 @@ registerAction({
   label: "Respond to renewal offer",
   entity: "residents",
   roles: ["resident"],
-  input: z.object({ offerId: Id, decision: z.enum(["Accepted", "Declined"]) }),
+  // Countered asks the office for different terms; the note says what.
+  input: z.object({ offerId: Id, decision: z.enum(["Accepted", "Countered", "Declined"]), note: z.string().trim().max(500).default("") })
+    .refine((v) => v.decision !== "Countered" || v.note.length >= 3, { message: "Say what you'd like instead", path: ["note"] }),
   handler: async (ctx, row, input) => {
     const offer = await one<{ id: string; lease_id: string; property_id: string; term_months: number; rent_cents: number; status: string; expires_on: string | null }>(ctx,
       `SELECT o.* FROM ${effective("renewal_offers")} AS o JOIN ${effective("leases")} AS l ON l.id = o.lease_id WHERE o.id = ?2 AND l.household_id = ?3`, input.offerId, row.household_id);
@@ -201,17 +207,104 @@ registerAction({
     if (offer.expires_on && offer.expires_on < AS_OF) return no(409, "This offer has expired. Message the office for a new one.");
     const at = nowIso(ctx.nowMs);
     const [r] = await ctx.db.batch([
-      ctx.db.prepare(overlayUpsertSql("renewal_offers", OFFER_COLS, { status: "?3", responded_at: "?4" }, "e.status = 'Sent'")).bind(ctx.ws, offer.id, input.decision, at),
+      ctx.db.prepare(overlayUpsertSql("renewal_offers", OFFER_COLS, { status: "?3", responded_at: "?4", resident_note: "?5" }, "e.status = 'Sent'")).bind(ctx.ws, offer.id, input.decision, at, input.note || null),
     ]);
     if (!r.meta.changes) return no(409, `This offer is already ${offer.status.toLowerCase()}.`);
-    // Accepting one term declines the other open terms on the same lease.
-    const others = input.decision === "Accepted" ? (await ctx.db.prepare(`SELECT o.id FROM ${effective("renewal_offers")} AS o WHERE o.lease_id = ?2 AND o.status = 'Sent' AND o.id <> ?3`).bind(ctx.ws, offer.lease_id, offer.id).all<{ id: string }>()).results : [];
+    // Accepting or countering one term closes the other open terms on the same lease.
+    const others = input.decision !== "Declined" ? (await ctx.db.prepare(`SELECT o.id FROM ${effective("renewal_offers")} AS o WHERE o.lease_id = ?2 AND o.status = 'Sent' AND o.id <> ?3`).bind(ctx.ws, offer.lease_id, offer.id).all<{ id: string }>()).results : [];
+    const verb = input.decision.toLowerCase();
     await ctx.db.batch([
       ...others.map((o) => ctx.db.prepare(overlayUpsertSql("renewal_offers", OFFER_COLS, { status: "'Declined'", responded_at: "?3" }, "e.status = 'Sent'")).bind(ctx.ws, o.id, at)),
-      eventStmt(ctx.db, ctx.ws, at, `renewal.${input.decision.toLowerCase()}`, "renewal_offers", offer.id, offer.property_id, { lease_id: offer.lease_id, rent_cents: offer.rent_cents, term_months: offer.term_months }),
-      notifyManager(ctx, offer.property_id, `Renewal ${input.decision.toLowerCase()}`, `${String(row.first_name)} ${String(row.last_name)} ${input.decision.toLowerCase()} the ${offer.term_months}-month renewal at ${dollars(offer.rent_cents)}.`, `/app/leases/${offer.lease_id}`, ["leases", offer.lease_id]),
+      eventStmt(ctx.db, ctx.ws, at, `renewal.${verb}`, "renewal_offers", offer.id, offer.property_id, { lease_id: offer.lease_id, rent_cents: offer.rent_cents, term_months: offer.term_months, note: input.note }),
+      notifyManager(ctx, offer.property_id, `Renewal ${verb}`, `${String(row.first_name)} ${String(row.last_name)} ${verb} the ${offer.term_months}-month renewal at ${dollars(offer.rent_cents)}.${input.note ? ` Note: ${input.note}` : ""}`, `/app/leases/${offer.lease_id}`, ["leases", offer.lease_id]),
     ]);
-    return ok(input.decision === "Accepted" ? `Accepted: ${offer.term_months} months at ${dollars(offer.rent_cents)} a month. We'll send the renewal to sign.` : "Declined. The office will contact you about move-out.");
+    return ok(input.decision === "Accepted" ? `Accepted: ${offer.term_months} months at ${dollars(offer.rent_cents)} a month. Sign your renewal next.`
+      : input.decision === "Countered" ? "Counter-offer sent. The office replies here with updated terms." : "Declined. Give your move-out notice when you know your date.");
+  },
+});
+
+// A demo e-signature on an accepted renewal: the resident types their full name and agrees.
+registerAction({
+  key: "residents.sign_renewal",
+  label: "Sign renewal",
+  entity: "residents",
+  roles: ["resident"],
+  input: z.object({ offerId: Id, signature: z.string().trim().min(3).max(120), agree: z.literal(true, { error: "Tick the box to agree" }) }),
+  handler: async (ctx, row, input) => {
+    const name = `${String(row.first_name)} ${String(row.last_name)}`;
+    if (input.signature.replace(/\s+/g, " ").toLowerCase() !== name.toLowerCase()) return no(400, `Type your full name as it appears on the lease: ${name}.`);
+    const offer = await one<{ id: string; lease_id: string; property_id: string; term_months: number; rent_cents: number; status: string; signed_at: string | null }>(ctx,
+      `SELECT o.* FROM ${effective("renewal_offers")} AS o JOIN ${effective("leases")} AS l ON l.id = o.lease_id WHERE o.id = ?2 AND l.household_id = ?3`, input.offerId, row.household_id);
+    if (!offer) return no(404, "Offer not found");
+    const at = nowIso(ctx.nowMs);
+    const [r] = await ctx.db.batch([ctx.db.prepare(overlayUpsertSql("renewal_offers", OFFER_COLS, { signed_at: "?3" }, "e.status = 'Accepted' AND e.signed_at IS NULL")).bind(ctx.ws, offer.id, at)]);
+    if (!r.meta.changes) return no(409, offer.signed_at ? "You already signed this renewal." : "Accept the renewal before signing it.");
+    await ctx.db.batch([
+      ctx.db.prepare("INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, extracted, uploaded_by, uploaded_at) VALUES (?1, ?2, ?3, 'leases', ?4, ?5, ?6, 'application/pdf', 'Lease', ?7, ?8, ?9, ?8, ?10)")
+        .bind(ctx.ws, uid("doc"), offer.property_id, offer.lease_id, `Renewal, ${offer.term_months} months, e-signed by ${name}`, `/app/leases/${offer.lease_id}`, `Lease ${offer.lease_id} › Documents`, row.id, JSON.stringify({ offer_id: offer.id, signature: input.signature, signed_at: at, method: "Portal e-signature (demo)" }), at),
+      eventStmt(ctx.db, ctx.ws, at, "renewal.signed", "renewal_offers", offer.id, offer.property_id, { lease_id: offer.lease_id }),
+      notifyManager(ctx, offer.property_id, "Renewal signed", `${name} signed the ${offer.term_months}-month renewal at ${dollars(offer.rent_cents)}. Countersign and set up the new term.`, `/app/leases/${offer.lease_id}`, ["leases", offer.lease_id]),
+    ]);
+    return ok("Renewal signed. The office countersigns and sends you a copy.");
+  },
+});
+
+// Notice to vacate: at least 30 days out (the lease's notice period), at most a year. Any open
+// renewal offer is declined with it.
+export const NOTICE_DAYS = 30;
+registerAction({
+  key: "residents.give_notice",
+  label: "Give move-out notice",
+  entity: "residents",
+  roles: ["resident"],
+  input: z.object({ moveOutOn: z.iso.date(), reason: z.string().trim().max(300).default("") }),
+  handler: async (ctx, row, input) => {
+    const days = Math.round((Date.parse(input.moveOutOn) - Date.parse(AS_OF)) / 86_400_000);
+    if (days < NOTICE_DAYS) return no(400, `Your lease asks for ${NOTICE_DAYS} days' notice. Pick a date on or after ${new Date(Date.parse(AS_OF) + NOTICE_DAYS * 86_400_000).toISOString().slice(0, 10)}.`);
+    if (days > 366) return no(400, "Pick a move-out date within the next year.");
+    const lease = await one<{ id: string; property_id: string; status: string; notice_on: string | null }>(ctx,
+      `SELECT l.id, l.property_id, l.status, l.notice_on FROM ${effective("leases")} AS l WHERE l.household_id = ?2 AND l.status IN ('Active', 'Month-to-month', 'Notice') ORDER BY l.start_on DESC LIMIT 1`, row.household_id);
+    if (!lease) return no(409, "We couldn't find an active lease for you. Call the office.");
+    const at = nowIso(ctx.nowMs);
+    const [r] = await ctx.db.batch([ctx.db.prepare(overlayUpsertSql("leases", LEASE_COLS, { status: "'Notice'", notice_on: "?3", move_out_on: "?4" }, "e.status IN ('Active', 'Month-to-month') AND e.notice_on IS NULL")).bind(ctx.ws, lease.id, AS_OF, input.moveOutOn)]);
+    if (!r.meta.changes) return no(409, "You've already given notice on this lease. Message the office to change the date.");
+    const open = (await ctx.db.prepare(`SELECT o.id FROM ${effective("renewal_offers")} AS o WHERE o.lease_id = ?2 AND o.status = 'Sent'`).bind(ctx.ws, lease.id).all<{ id: string }>()).results;
+    const name = `${String(row.first_name)} ${String(row.last_name)}`;
+    await ctx.db.batch([
+      ...open.map((o) => ctx.db.prepare(overlayUpsertSql("renewal_offers", OFFER_COLS, { status: "'Declined'", responded_at: "?3" }, "e.status = 'Sent'")).bind(ctx.ws, o.id, at)),
+      eventStmt(ctx.db, ctx.ws, at, "lease.notice_given", "leases", lease.id, lease.property_id, { move_out_on: input.moveOutOn, reason: input.reason }),
+      ctx.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?1, ?2, 'leases', ?3, ?4, ?5, 'resident', ?6, 'notice_given', ?7, '{}')")
+        .bind(ctx.ws, uid("act"), lease.id, lease.property_id, at, row.id, `${name} gave notice in the resident portal: moving out ${input.moveOutOn}${input.reason ? ` (${input.reason})` : ""}`),
+      notifyManager(ctx, lease.property_id, "Notice to vacate", `${name} gave notice: moving out ${input.moveOutOn}. Schedule the move-out inspection.`, `/app/leases/${lease.id}`, ["leases", lease.id]),
+    ]);
+    return ok(`Notice received. Your move-out date is ${input.moveOutOn}. The team schedules your inspection next.`);
+  },
+});
+
+// Stars for a finished repair, once per request, shown to the maintenance team.
+registerAction({
+  key: "residents.rate_request",
+  label: "Rate a repair",
+  entity: "residents",
+  roles: ["resident"],
+  input: z.object({ workOrderId: Id, stars: z.number().int().min(1).max(5), comment: z.string().trim().max(500).default("") }),
+  handler: async (ctx, row, input) => {
+    const w = await one<{ id: string; title: string; status: string; property_id: string; vendor_id: string | null }>(ctx,
+      `SELECT w.id, w.title, w.status, w.property_id, w.vendor_id FROM ${effective("work_orders")} AS w WHERE w.id = ?2 AND w.id IN (SELECT sr.work_order_id FROM ${effective("service_requests")} AS sr WHERE sr.resident_id = ?3)`, input.workOrderId, row.id);
+    if (!w) return no(404, "Request not found");
+    if (!["Completed", "Paid"].includes(w.status)) return no(409, "You can rate a repair once it's done.");
+    const at = nowIso(ctx.nowMs);
+    // One rating per request and resident: a fixed id, and no base rating either.
+    const [r] = await ctx.db.batch([ctx.db.prepare(`INSERT INTO ratings (workspace_id, id, by_kind, by_id, subject_kind, subject_id, property_id, stars, comment, at)
+      SELECT ?1, ?2, 'resident', ?3, 'work_orders', ?4, ?5, ?6, ?7, ?8 WHERE NOT EXISTS (SELECT 1 FROM ${effective("ratings")} AS x WHERE x.subject_kind = 'work_orders' AND x.subject_id = ?4 AND x.by_id = ?3)
+      ON CONFLICT (workspace_id, id) DO NOTHING`).bind(ctx.ws, `rt-${w.id}-${String(row.id)}`, row.id, w.id, w.property_id, input.stars, input.comment, at)]);
+    if (!r.meta.changes) return no(409, "You already rated this repair. Thanks!");
+    await ctx.db.batch([
+      ctx.db.prepare("INSERT INTO wo_events (workspace_id, id, work_order_id, property_id, at, actor_kind, actor_id, kind, status, detail) VALUES (?1, ?2, ?3, ?4, ?5, 'resident', ?6, 'Rating', NULL, ?7)")
+        .bind(ctx.ws, uid("woe"), w.id, w.property_id, at, row.id, JSON.stringify({ stars: input.stars, comment: input.comment })),
+      ...(input.stars <= 2 ? [notifyManager(ctx, w.property_id, `Low rating on ${w.id}`, `${String(row.first_name)} rated "${w.title}" ${input.stars} of 5.${input.comment ? ` "${input.comment}"` : ""}`, `/app/maintenance/work-orders/${w.id}`, ["work_orders", w.id])] : []),
+    ]);
+    return ok(input.stars >= 4 ? "Thanks for the rating!" : "Thanks. The maintenance team will follow up.");
   },
 });
 
@@ -324,28 +417,104 @@ messageAction("vendors", "vendor", "vendor", async (ctx, row) => (await one<{ p:
 // ---------------------------------------------------------------------------------------------
 
 export const APPLICANT_DOCS = ["Photo ID", "Pay stub", "Second pay stub", "Employer letter", "Bank statement"] as const;
+// Asked for only when the decision makes a guarantor a condition.
+export const OPTIONAL_DOCS = ["Guarantor letter"] as const;
+const DOC_TYPES = [...APPLICANT_DOCS, ...OPTIONAL_DOCS] as const;
+const APP_COLS = ["id", "deleted", "property_id", "unit_id", "listing_id", "applicant_id", "co_applicants", "stage", "desired_move_in", "rent_cents", "income_to_rent", "score", "scoring_factors", "recommendation", "decided_by", "decided_at", "fee_paid", "submitted_at", "decision_reason", "lease_sent_at", "lease_signed_at", "move_in_on"];
+const sql = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
 const application = (ctx: ActionContext, applicantId: unknown) =>
-  one<{ id: string; property_id: string; stage: string }>(ctx, `SELECT a.id, a.property_id, a.stage FROM ${effective("applications")} AS a WHERE a.applicant_id = ?2 ORDER BY a.submitted_at DESC LIMIT 1`, applicantId);
+  one<{ id: string; property_id: string; stage: string; fee_paid: number; lease_sent_at: string | null; lease_signed_at: string | null; property: string }>(ctx, `SELECT a.id, a.property_id, a.stage, a.fee_paid, a.lease_sent_at, a.lease_signed_at, p.name AS property FROM ${effective("applications")} AS a JOIN ${effective("properties")} AS p ON p.id = a.property_id WHERE a.applicant_id = ?2 ORDER BY coalesce(a.submitted_at, '9999') DESC LIMIT 1`, applicantId);
+
+// The file itself reaches /portal/applicant/documents/upload, which checks its size and signature
+// (JPEG, PNG, WebP or PDF) and passes only these facts on; the bytes are discarded.
+export const UploadDocument = z.object({
+  docType: z.enum(DOC_TYPES),
+  fileName: z.string().trim().min(1).max(120),
+  mime: z.enum(UPLOAD_TYPES),
+  bytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+  sample: z.enum(Object.keys(SAMPLE_DOCS) as [SampleDocKey, ...SampleDocKey[]]).optional(),
+});
 
 registerAction({
   key: "applicants.upload_document",
   label: "Upload document",
   entity: "applicants",
   roles: ["applicant"],
-  input: z.object({ docType: z.enum(APPLICANT_DOCS), fileName: z.string().trim().min(1).max(120) }),
+  input: UploadDocument,
   handler: async (ctx, row, input) => {
     const app = await application(ctx, row.id);
     if (!app) return no(404, "We couldn't find your application");
     if (["Denied", "Withdrawn", "Leased"].includes(app.stage)) return no(409, `Your application is ${app.stage.toLowerCase()}; no more documents are needed.`);
+    // A sample upload links to its public copy, so staff open the same file the applicant sent.
+    const sample = input.sample ? SAMPLE_DOCS[input.sample] : null;
+    if (sample && sample.docType !== input.docType) return no(400, `That sample is a ${sample.docType.toLowerCase()}, not a ${input.docType.toLowerCase()}.`);
     const at = nowIso(ctx.nowMs);
     await ctx.db.batch([
-      ctx.db.prepare("INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, uploaded_by, uploaded_at) VALUES (?1, ?2, ?3, 'applications', ?4, ?5, ?6, 'application/pdf', ?7, ?8, ?9, ?9, ?10)")
-        .bind(ctx.ws, uid("doc"), app.property_id, app.id, input.fileName, `/app/leasing/applications/${app.id}`, input.docType, `Application ${app.id} › Documents`, row.id, at),
-      eventStmt(ctx.db, ctx.ws, at, "application.document_added", "applications", app.id, app.property_id, { doc_type: input.docType }),
-      notifyManager(ctx, app.property_id, "Application document received", `${String(row.first_name)} ${String(row.last_name)} uploaded: ${input.docType}.`, `/app/leasing/applications/${app.id}`, ["applications", app.id]),
+      ctx.db.prepare("INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, extracted, uploaded_by, uploaded_at) VALUES (?1, ?2, ?3, 'applications', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?10, ?12)")
+        .bind(ctx.ws, uid("doc"), app.property_id, app.id, input.fileName, sample?.file ?? `/app/leasing/applications/${app.id}`, input.mime, input.docType, `Application ${app.id} › Documents`, row.id, JSON.stringify({ bytes: input.bytes, sample: !!sample }), at),
+      eventStmt(ctx.db, ctx.ws, at, "application.document_added", "applications", app.id, app.property_id, { doc_type: input.docType, sample: !!sample }),
+      notifyManager(ctx, app.property_id, "Application document received", `${String(row.first_name)} ${String(row.last_name)} uploaded: ${input.docType}${sample ? " (sample file)" : ""}.`, `/app/leasing/applications/${app.id}?tab=documents`, ["applications", app.id]),
     ]);
     return ok(`${input.docType} received. The leasing team will message you if anything else is needed.`);
+  },
+});
+
+registerAction({
+  key: "applicants.submit_application",
+  label: "Submit application",
+  entity: "applicants",
+  roles: ["applicant"],
+  input: z.object({}),
+  handler: async (ctx, row) => {
+    const app = await application(ctx, row.id);
+    if (!app) return no(404, "We couldn't find your application");
+    if (app.stage !== "Started") return no(409, "Your application is already submitted.");
+    // The guard decides: still Started, fee paid and the documents screening needs first on file.
+    const docs = REQUIRED_TO_SUBMIT.map((d) => `EXISTS (SELECT 1 FROM ${effective("documents")} AS d WHERE d.entity_type = 'applications' AND d.entity_id = e.id AND d.doc_type = ${sql(d)})`).join(" AND ");
+    const at = nowIso(ctx.nowMs);
+    const [r] = await ctx.db.batch([ctx.db.prepare(overlayUpsertSql("applications", APP_COLS, { stage: "'Submitted'", submitted_at: "?3" }, `e.stage = 'Started' AND e.fee_paid = 1 AND ${docs}`)).bind(ctx.ws, app.id, at)]);
+    if (!r.meta.changes) {
+      const now = await application(ctx, row.id);
+      if (now?.stage !== "Started") return no(409, "Your application is already submitted.");
+      return no(409, now.fee_paid ? `Upload your ${REQUIRED_TO_SUBMIT.join(" and ").toLowerCase()} first.` : "Pay the application fee first.");
+    }
+    await ctx.db.batch([
+      eventStmt(ctx.db, ctx.ws, at, "application.submitted", "applications", app.id, app.property_id, { applicant_id: row.id }),
+      ctx.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?1, ?2, 'applications', ?3, ?4, ?5, 'applicant', ?6, 'submitted', ?7, '{}')")
+        .bind(ctx.ws, uid("act"), app.id, app.property_id, at, row.id, `${String(row.first_name)} ${String(row.last_name)} submitted the application from the applicant portal`),
+      notifyManager(ctx, app.property_id, "Application submitted", `${String(row.first_name)} ${String(row.last_name)} submitted an application for ${app.property}. Order screening next.`, `/app/leasing/applications/${app.id}`, ["applications", app.id]),
+    ]);
+    return ok("Application submitted. The leasing team starts screening within 1 business day.");
+  },
+});
+
+// A demo e-signature: the applicant types their full name and agrees. It binds the lease the office
+// sent (stage Approved or Conditional, lease sent, not yet signed); a second click signs nothing.
+registerAction({
+  key: "applicants.sign_lease",
+  label: "Sign lease",
+  entity: "applicants",
+  roles: ["applicant"],
+  input: z.object({ signature: z.string().trim().min(3).max(120), agree: z.literal(true, { error: "Tick the box to agree" }) }),
+  handler: async (ctx, row, input) => {
+    const app = await application(ctx, row.id);
+    if (!app) return no(404, "We couldn't find your application");
+    const name = `${String(row.first_name)} ${String(row.last_name)}`;
+    if (input.signature.replace(/\s+/g, " ").toLowerCase() !== name.toLowerCase()) return no(400, `Type your full name as it appears on the lease: ${name}.`);
+    if (!app.lease_sent_at) return no(409, "Your lease hasn't been sent yet. The office sends it after approval.");
+    const at = nowIso(ctx.nowMs);
+    const [r] = await ctx.db.batch([ctx.db.prepare(overlayUpsertSql("applications", APP_COLS, { stage: "'Leased'", lease_signed_at: "?3" }, "e.stage IN ('Approved', 'Conditional') AND e.lease_sent_at IS NOT NULL AND e.lease_signed_at IS NULL")).bind(ctx.ws, app.id, at)]);
+    if (!r.meta.changes) return no(409, app.lease_signed_at ? "You already signed this lease." : `Your application is ${app.stage.toLowerCase()}, so there's no lease to sign.`);
+    await ctx.db.batch([
+      ctx.db.prepare("INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, extracted, uploaded_by, uploaded_at) VALUES (?1, ?2, ?3, 'applications', ?4, ?5, ?6, 'application/pdf', 'Lease', ?7, ?8, ?9, ?8, ?10)")
+        .bind(ctx.ws, uid("doc"), app.property_id, app.id, `Lease, e-signed by ${name}`, `/app/leasing/applications/${app.id}`, `Application ${app.id} › Documents`, row.id, JSON.stringify({ signature: input.signature, signed_at: at, method: "Portal e-signature (demo)" }), at),
+      eventStmt(ctx.db, ctx.ws, at, "application.lease_signed", "applications", app.id, app.property_id, { applicant_id: row.id }),
+      ctx.db.prepare("INSERT INTO activity_events (workspace_id, id, entity_type, entity_id, property_id, at, actor_kind, actor_id, verb, summary, data) VALUES (?1, ?2, 'applications', ?3, ?4, ?5, 'applicant', ?6, 'lease_signed', ?7, '{}')")
+        .bind(ctx.ws, uid("act"), app.id, app.property_id, at, row.id, `${name} e-signed the lease in the applicant portal`),
+      notifyManager(ctx, app.property_id, "Lease signed", `${name} signed the lease for ${app.property}. Schedule the move-in.`, `/app/leasing/applications/${app.id}`, ["applications", app.id]),
+    ]);
+    return ok("Lease signed. The office confirms your move-in day next.");
   },
 });
 

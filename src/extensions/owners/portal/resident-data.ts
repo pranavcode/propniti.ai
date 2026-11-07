@@ -8,9 +8,9 @@ import { row, rows, type PortalCtx } from "./context";
 export type Me = { id: string; first_name: string; last_name: string; email: string; phone: string; autopay: number; household_id: string; property_id: string };
 export type Lease = { id: string; unit_id: string; property_id: string; status: string; start_on: string; end_on: string | null; term_months: number | null; rent_cents: number; deposit_cents: number; move_in_on: string | null; unit: string; sqft: number; beds: number | null; baths: number | null; unit_photos: string; property: string; street: string; city: string; state: string; zip: string; photos: string };
 export type OpenCharge = { id: string; description: string; period: string; due_on: string; amount_cents: number; balance_cents: number; status: "Overdue" | "Due" | "Processing" };
-export type Request = { id: string; title: string; description: string; category: string; priority: string; status: string; opened_at: string; scheduled_at: string | null; completed_at: string | null; vendor: string | null; photos: string | null };
-export type Offer = { id: string; lease_id: string; term_months: number; rent_cents: number; current_rent_cents: number; market_rent_cents: number | null; status: string; sent_at: string | null; expires_on: string | null };
-export type Insurance = { id: string; carrier: string; policy_number: string; liability_cents: number; starts_on: string; expires_on: string; status: string };
+export type Request = { id: string; title: string; description: string; category: string; priority: string; status: string; opened_at: string; scheduled_at: string | null; completed_at: string | null; vendor: string | null; photos: string | null; reached: string; stars: number | null; rated_at: string | null };
+export type Offer = { id: string; lease_id: string; term_months: number; rent_cents: number; current_rent_cents: number; market_rent_cents: number | null; status: string; sent_at: string | null; responded_at: string | null; expires_on: string | null; signed_at: string | null; resident_note: string | null };
+export type Insurance = { id: string; carrier: string; policy_number: string; liability_cents: number; starts_on: string; expires_on: string; status: string; review_note: string | null; uploaded_at: string | null };
 export type Doc = { id: string; name: string; doc_type: string | null; url: string; uploaded_at: string };
 
 export async function me(c: PortalCtx) {
@@ -56,26 +56,49 @@ export async function ledger(c: PortalCtx, householdId: string, page: number, si
 // since their lease started (an earlier tenant's requests stay private).
 export async function requests(c: PortalCtx, unitId: string | null, since: string | null) {
   return rows<Request>(c, `SELECT w.id, w.title, w.description, w.category, w.priority, w.status, w.opened_at, w.scheduled_at, w.completed_at, v.company AS vendor,
-      (SELECT json_group_array(ph.url) FROM {photos} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id) AS photos
+      (SELECT json_group_array(ph.url) FROM {photos} ph WHERE ph.entity_type = 'work_orders' AND ph.entity_id = w.id) AS photos,
+      (SELECT json_group_object(x.status, x.at) FROM (SELECT e.status, min(e.at) AS at FROM {wo_events} e WHERE e.work_order_id = w.id AND e.status IS NOT NULL GROUP BY e.status) x) AS reached,
+      (SELECT rt.stars FROM {ratings} rt WHERE rt.subject_kind = 'work_orders' AND rt.subject_id = w.id AND rt.by_id = ?1) AS stars,
+      (SELECT rt.at FROM {ratings} rt WHERE rt.subject_kind = 'work_orders' AND rt.subject_id = w.id AND rt.by_id = ?1) AS rated_at
     FROM {work_orders} w LEFT JOIN {vendors} v ON v.id = w.vendor_id
-    WHERE w.id IN (SELECT sr.work_order_id FROM {service_requests} sr WHERE sr.resident_id = ?) OR (w.unit_id = ? AND w.source = 'Resident' AND w.opened_at >= coalesce(?, '9999'))
+    WHERE w.id IN (SELECT sr.work_order_id FROM {service_requests} sr WHERE sr.resident_id = ?1) OR (w.unit_id = ?2 AND w.source = 'Resident' AND w.opened_at >= coalesce(?3, '9999'))
     ORDER BY w.opened_at DESC LIMIT 50`, c.me, unitId, since);
 }
 
 export const OPEN_WO = ["New", "Triaged", "Assigned", "Scheduled", "In progress", "On hold", "Submitted"];
 
 export async function offers(c: PortalCtx, leaseId: string) {
-  return rows<Offer>(c, "SELECT o.id, o.lease_id, o.term_months, o.rent_cents, o.current_rent_cents, o.market_rent_cents, o.status, o.sent_at, o.expires_on FROM {renewal_offers} o WHERE o.lease_id = ? AND o.status <> 'Draft' ORDER BY o.version DESC, o.term_months DESC", leaseId);
+  return rows<Offer>(c, "SELECT o.id, o.lease_id, o.term_months, o.rent_cents, o.current_rent_cents, o.market_rent_cents, o.status, o.sent_at, o.responded_at, o.expires_on, o.signed_at, o.resident_note FROM {renewal_offers} o WHERE o.lease_id = ? AND o.status <> 'Draft' ORDER BY o.version DESC, o.term_months DESC", leaseId);
 }
 
 export async function insurance(c: PortalCtx, leaseId: string) {
-  return row<Insurance>(c, "SELECT i.id, i.carrier, i.policy_number, i.liability_cents, i.starts_on, i.expires_on, i.status FROM {renters_insurance} i WHERE i.lease_id = ? ORDER BY i.expires_on DESC LIMIT 1", leaseId);
+  return row<Insurance>(c, `SELECT i.id, i.carrier, i.policy_number, i.liability_cents, i.starts_on, i.expires_on, i.status, i.review_note,
+      (SELECT max(d.uploaded_at) FROM {documents} d WHERE d.entity_type = 'renters_insurance' AND d.entity_id = i.id) AS uploaded_at
+    FROM {renters_insurance} i WHERE i.lease_id = ? ORDER BY i.expires_on DESC LIMIT 1`, leaseId);
 }
 
 export async function documents(c: PortalCtx, leaseId: string) {
   return rows<Doc>(c, `SELECT d.id, d.name, d.doc_type, d.url, d.uploaded_at FROM {documents} d
     WHERE (d.entity_type = 'leases' AND d.entity_id = ?) OR (d.entity_type = 'residents' AND d.entity_id = ?) ORDER BY d.uploaded_at DESC LIMIT 50`, leaseId, c.me);
 }
+
+// The move-out path after notice: the move-out inspection booked since the notice, and the deposit
+// statement once accounting sends it.
+export async function moveOut(c: PortalCtx, lease: Lease & { notice_on?: string | null; move_out_on?: string | null }) {
+  const l = await row<{ notice_on: string | null; move_out_on: string | null }>(c, "SELECT l.notice_on, l.move_out_on FROM {leases} l WHERE l.id = ?", lease.id);
+  if (!l?.notice_on) return { notice_on: null, move_out_on: null, inspection_on: null, inspection_status: null, disposition: null };
+  const [insp, disp] = await Promise.all([
+    row<{ scheduled_on: string; status: string }>(c, "SELECT i.scheduled_on, i.status FROM {inspections} i WHERE i.unit_id = ? AND i.kind = 'Move-out' AND i.scheduled_on >= ? ORDER BY i.scheduled_on LIMIT 1", lease.unit_id, l.notice_on),
+    row<{ status: string; sent_on: string | null; due_on: string; refund_cents: number }>(c, "SELECT x.status, x.sent_on, x.due_on, x.refund_cents FROM {deposit_dispositions} x JOIN {deposits} d ON d.id = x.deposit_id WHERE d.lease_id = ? ORDER BY x.due_on DESC LIMIT 1", lease.id),
+  ]);
+  return { notice_on: l.notice_on, move_out_on: l.move_out_on, inspection_on: insp?.scheduled_on ?? null, inspection_status: insp?.status ?? null, disposition: disp };
+}
+
+export const requestFacts = (w: Request) => ({
+  status: w.status, opened_at: w.opened_at, scheduled_at: w.scheduled_at, completed_at: w.completed_at,
+  reached: (() => { try { return JSON.parse(w.reached || "{}") as Record<string, string>; } catch { return {}; } })(),
+  rated: w.stars ? { stars: w.stars, at: w.rated_at ?? "" } : null,
+});
 
 export const parsePhotos = (json: string | null | undefined): string[] => {
   try {

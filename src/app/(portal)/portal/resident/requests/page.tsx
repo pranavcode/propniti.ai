@@ -1,11 +1,15 @@
 import { CalendarClock, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AS_OF } from "@/seed/constants";
 import { StatusBadge } from "@/components/app/display";
 import { portalCtx } from "@/extensions/owners/portal/context";
-import { currentLease, me, OPEN_WO, parsePhotos, requests } from "@/extensions/owners/portal/resident-data";
+import { currentLease, me, OPEN_WO, parsePhotos, requestFacts, requests } from "@/extensions/owners/portal/resident-data";
+import { requestJourney } from "@/extensions/owners/portal/journeys";
+import { JourneyBar } from "@/extensions/owners/portal/ui/Journey";
+import { RateRequest } from "@/extensions/owners/portal/ui/resident/RateRequest";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { NewRequest } from "@/extensions/owners/portal/ui/resident/NewRequest";
-import { fmtDay, fmtWhen, RequestTimeline } from "@/extensions/owners/portal/ui/resident/bits";
+import { fmtDay, fmtWhen } from "@/extensions/owners/portal/ui/resident/bits";
 
 export default async function ResidentRequests({ searchParams }: { searchParams: Promise<{ new?: string; wo?: string }> }) {
   const c = await portalCtx("resident");
@@ -22,6 +26,9 @@ export default async function ResidentRequests({ searchParams }: { searchParams:
   const item = (w: (typeof list)[number]) => {
     const photos = parsePhotos(w.photos);
     const hot = sp.wo === w.id;
+    const j = requestJourney(requestFacts(w));
+    // Ask for a rating on repairs finished in the last 30 days, not on years of history.
+    const recent = !w.completed_at || Date.parse(w.completed_at) > Date.parse(AS_OF) - 30 * 86_400_000;
     return (
       <li key={w.id} id={w.id} className={cn("scroll-mt-20 rounded-xl border bg-card p-4 transition-shadow", hot && "border-primary/50 ring-2 ring-primary/20")}>
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -36,7 +43,12 @@ export default async function ResidentRequests({ searchParams }: { searchParams:
         </div>
         {w.description && w.description !== w.title && <p className="mt-2 line-clamp-3 text-[13px] text-muted-foreground">{w.description}</p>}
         {w.scheduled_at && OPEN_WO.includes(w.status) && <p className="mt-2 flex items-center gap-1.5 text-[12.5px] font-medium"><CalendarClock className="size-4 text-primary" />Visit {fmtWhen(w.scheduled_at)}{w.vendor ? ` · ${w.vendor}` : ""}</p>}
-        <RequestTimeline className="mt-3" status={w.status} openedAt={w.opened_at} scheduledAt={w.scheduled_at} completedAt={w.completed_at} />
+        <JourneyBar className="mt-3" journey={j} label={`${w.id} progress`} />
+        <div className="mt-3 rounded-lg bg-muted/50 px-3 py-2.5">
+          <p className="text-[13px] font-medium">{j.next.title}</p>
+          <p className="text-[12.5px] text-muted-foreground">{j.next.body}</p>
+          {j.next.you && recent && <div className="mt-2"><p className="mb-1 text-[12.5px] font-medium">How did it go?</p><RateRequest me={c.me} workOrderId={w.id} /></div>}
+        </div>
         {photos.length > 0 && (
           <div className="mt-3 flex gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element -- photos are small data URLs or static webp */}

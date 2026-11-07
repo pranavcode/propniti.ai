@@ -3,11 +3,13 @@ import { AlertTriangle, ArrowRight, CalendarClock, CreditCard, FileSignature, Sh
 import { Button } from "@/components/ui/button";
 import { Money, StatusBadge } from "@/components/app/display";
 import { portalCtx } from "@/extensions/owners/portal/context";
-import { currentLease, daysUntil, insurance, me, nextRentDue, offers, OPEN_WO, openCharges, parsePhotos, requests } from "@/extensions/owners/portal/resident-data";
+import { currentLease, daysUntil, insurance, me, nextRentDue, offers, OPEN_WO, openCharges, parsePhotos, requestFacts, requests } from "@/extensions/owners/portal/resident-data";
+import { requestJourney } from "@/extensions/owners/portal/journeys";
+import { JourneyBar } from "@/extensions/owners/portal/ui/Journey";
 import { AskCard } from "@/extensions/owners/portal/ui/resident/AskCard";
 import { InsuranceUpload } from "@/extensions/owners/portal/ui/resident/InsuranceUpload";
 import { AS_OF } from "@/seed/constants";
-import { Card, fmtDay, fmtWhen, RequestTimeline } from "@/extensions/owners/portal/ui/resident/bits";
+import { Card, fmtDay, fmtWhen } from "@/extensions/owners/portal/ui/resident/bits";
 
 const greeting = () => {
   const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Chicago" }));
@@ -32,7 +34,7 @@ export default async function ResidentHome() {
   const open = reqs.filter((w) => OPEN_WO.includes(w.status));
   const sent = offerList.filter((o) => o.status === "Sent");
   const hero = parsePhotos(lease?.photos)[0]?.replace(/-400\.webp$/, ".webp") ?? (lease ? `/img/props/${lease.property_id}.webp` : null);
-  const insWarn = policy && policy.status !== "Pending verification" && (policy.status === "Lapsed" || policy.status === "Expiring" || daysUntil(policy.expires_on) <= 30);
+  const insWarn = policy && policy.status !== "Pending verification" && (policy.status === "Rejected" || policy.status === "Lapsed" || policy.status === "Expiring" || daysUntil(policy.expires_on) <= 30);
 
   return (
     <div className="space-y-4">
@@ -61,7 +63,7 @@ export default async function ResidentHome() {
         <div role="status" className="flex items-start gap-3 rounded-xl border border-tone-warning/40 bg-tone-warning/10 p-4">
           <ShieldAlert className="mt-0.5 size-5 shrink-0 text-tone-warning" aria-hidden />
           <div className="min-w-0 flex-1 text-[13px]">
-            <p className="font-semibold">{policy.status === "Lapsed" || daysUntil(policy.expires_on) < 0 ? "Your renters insurance has lapsed" : `Your renters insurance expires ${fmtDay(policy.expires_on)}`}</p>
+            <p className="font-semibold">{policy.status === "Rejected" ? "The office couldn't verify your renters insurance" : policy.status === "Lapsed" || daysUntil(policy.expires_on) < 0 ? "Your renters insurance has lapsed" : `Your renters insurance expires ${fmtDay(policy.expires_on)}`}</p>
             <p className="text-muted-foreground">Your lease requires active coverage. Upload the declarations page from your insurer and the office will verify it.</p>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -97,7 +99,7 @@ export default async function ResidentHome() {
                       {(w.priority === "Emergency" || w.priority === "Urgent") && <StatusBadge value={w.priority} tone={w.priority === "Emergency" ? "danger" : "warning"} />}
                     </div>
                     {w.scheduled_at && <p className="mt-0.5 flex items-center gap-1 text-[12px] text-muted-foreground"><CalendarClock className="size-3.5" />Visit {fmtWhen(w.scheduled_at)}{w.vendor ? ` · ${w.vendor}` : ""}</p>}
-                    <RequestTimeline className="mt-2" status={w.status} openedAt={w.opened_at} scheduledAt={w.scheduled_at} completedAt={w.completed_at} />
+                    <JourneyBar className="mt-2" journey={requestJourney(requestFacts(w))} label={`${w.id} progress`} />
                   </Link>
                 </li>
               ))}
@@ -119,7 +121,7 @@ export default async function ResidentHome() {
               <div><dt className="text-[11.5px] text-muted-foreground">Monthly rent</dt><dd className="font-medium"><Money value={lease.rent_cents} cents tone="none" /></dd></div>
               <div><dt className="text-[11.5px] text-muted-foreground">Lease ends</dt><dd className="font-medium tabular-nums">{fmtDay(lease.end_on, true)}</dd></div>
               <div><dt className="text-[11.5px] text-muted-foreground">Apartment</dt><dd className="font-medium">#{lease.unit}{lease.beds != null ? ` · ${lease.beds} bed` : ""}</dd></div>
-              <div><dt className="text-[11.5px] text-muted-foreground">Renters insurance</dt><dd className="font-medium">{policy ? <StatusBadge value={policy.status} tone={policy.status === "Active" ? "success" : policy.status === "Lapsed" ? "danger" : policy.status === "Pending verification" ? "info" : "warning"} /> : <span className="inline-flex items-center gap-1 text-tone-warning"><AlertTriangle className="size-3.5" />None on file</span>}</dd></div>
+              <div><dt className="text-[11.5px] text-muted-foreground">Renters insurance</dt><dd className="font-medium">{policy ? <StatusBadge value={policy.status} tone={policy.status === "Active" ? "success" : policy.status === "Lapsed" || policy.status === "Rejected" ? "danger" : policy.status === "Pending verification" ? "info" : "warning"} /> : <span className="inline-flex items-center gap-1 text-tone-warning"><AlertTriangle className="size-3.5" />None on file</span>}</dd></div>
               <div className="col-span-2 pt-1"><Link href="/portal/resident/lease" className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline">Lease, documents and renewal<ArrowRight className="size-3.5" /></Link></div>
             </dl>
           ) : <p className="text-[13px] text-muted-foreground">We couldn&apos;t find an active lease. Message the office if this looks wrong.</p>}

@@ -11,6 +11,7 @@ const HINT: Record<string, string> = {
   "Second pay stub": "The pay stub before that",
   "Employer letter": "A letter confirming your job and salary",
   "Bank statement": "Your latest monthly statement",
+  "Guarantor letter": "Only if you have a guarantor, or the office asks for one",
 };
 
 // Required documents with their status, an upload for each, and everything received so far.
@@ -21,13 +22,14 @@ export default async function ApplicantDocuments() {
   if (!app) return <NoApplication />;
   const docs = await applicationDocs(c, app.id);
   const list = checklist(docs);
-  const missing = list.filter((x) => !x.doc).length;
+  const required = list.filter((x) => !x.optional);
+  const missing = required.filter((x) => !x.doc).length;
   return (
     <>
-      <PortalTitle title="Documents" description={missing ? `${missing} of ${list.length} still needed for your application at ${app.property}. PDFs and phone photos both work.` : `We have everything we need for your application at ${app.property}.`} />
+      <PortalTitle title="Documents" description={missing ? `${missing} of ${required.length} still needed for your application at ${app.property}. PDFs and phone photos up to 4 MB both work. No paperwork handy? Use "Try a sample file".` : `We have everything we need for your application at ${app.property}.`} />
       <section aria-label="Required documents" className="overflow-hidden rounded-xl border bg-card">
         <ul className="divide-y">
-          {list.map((x) => <DocUpload key={x.type} me={c.me} type={x.type} received={x.doc ? { name: x.doc.name, uploaded_at: x.doc.uploaded_at } : null} hint={HINT[x.type] ?? ""} />)}
+          {list.map((x) => <DocUpload key={x.type} type={x.type} optional={x.optional} received={x.doc ? { name: x.doc.name, uploaded_at: x.doc.uploaded_at } : null} hint={HINT[x.type] ?? ""} />)}
         </ul>
       </section>
       <section aria-labelledby="got-h" className="mt-5 rounded-xl border bg-card">
