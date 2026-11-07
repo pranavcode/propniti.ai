@@ -12,7 +12,7 @@ import { amountsIn } from "./tools/write";
 import { REMINDER_LIMIT } from "./ui/rightNow";
 import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
 import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
-import { errText, modelLoop, modelTimeout, type AgentCtx } from "./runtime";
+import { errText, modelLoop, modelTimeout, ReadDenied, type AgentCtx } from "./runtime";
 import { plainError } from "./trace";
 import type { ToolKey } from "./types";
 import "./agents";
@@ -157,7 +157,8 @@ async function rulesChat(ctx: AgentCtx, q: string): Promise<RulesOut | null> {
     const r = await ctx.call<{ total: number; rows: Row[] }>("data.issues", { status: "open", size: 10 });
     return { answer: `${r.total} open data issue${r.total === 1 ? "" : "s"}. ${r.rows.slice(0, 5).map((i) => `${humanizeKey(String(i.rule_id).split(".").pop()!)} on ${getEntity(String(i.entity_type))?.label.one.toLowerCase() ?? String(i.entity_type).replace(/_/g, " ")} ${i.entity_id}`).join("; ")}.`, citations: [{ label: "Data health", href: "/app/data-health" }] };
   }
-  if (/\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
+  // Run counts cover the whole organisation (runs have no property); portal users don't get them.
+  if (ctx.data.actor.scope.kind !== "self" && /\b(agents?|ai)\b.*\b(do|did|save|saved|ran|run)\b/i.test(q)) {
     const runs = await sql<{ agent_key: string; n: number; proposals: number }>(ctx.data, "SELECT r.agent_key, count(*) AS n, (SELECT count(*) FROM {ai_proposals} p WHERE p.agent = r.agent_key) AS proposals FROM {agent_runs} r GROUP BY r.agent_key ORDER BY n DESC", [], { unscoped: true });
     const saved = (await monthly(ctx.data, { months: 1 })).reduce((s, r) => s + Number(r.ai_minutes_saved ?? 0), 0);
     return { answer: `Agents ran ${runs.reduce((s, r) => s + r.n, 0)} times: ${runs.map((r) => `${agentName(r.agent_key)} ${r.n}`).join(", ")}.${saved ? ` They saved about ${Math.round(saved / 60)} hours last month.` : ""}`, citations: [{ label: "AI activity", href: "/app/ai/activity" }] };
@@ -362,7 +363,9 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
 
   const ctx = run.ctx;
   // run.summary is the raw failure, kept for the trace; the reply says it in plain words.
-  const res = run.result ?? { out: { answer: `Something went wrong, so there's no answer this time: ${plainError(run.summary)}. Try again in a minute.`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
+  // A refused read (the role can't open charges, say) is an answer, not a failure to retry.
+  const denied = run.error instanceof ReadDenied ? run.error.message : undefined;
+  const res = run.result ?? { out: { answer: denied ? `${denied}, so I can't answer that.` : `Something went wrong, so there's no answer this time: ${plainError(run.summary)}. Try again in a minute.`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
   const steps = await db.prepare("SELECT tool_key, input, output, latency_ms, ok, kind FROM agent_steps WHERE workspace_id = ? AND run_id = ? AND kind IN ('tool_call', 'tool_result') ORDER BY idx").bind(ws, runId).all<{ tool_key: string; input: string | null; output: string | null; latency_ms: number | null; ok: number; kind: string }>();
   const trace: TraceItem[] = [];
   for (let i = 0; i < steps.results.length; i++) {

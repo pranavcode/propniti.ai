@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { sessionFromRequest } from "@/auth/session";
 import { rateLimit } from "@/lib/guard";
+import { sameOrigin } from "@/lib/https";
 import { getPlatform } from "@/lib/platform";
 import { parseBody } from "@/lib/requests";
 import { QueryError, type QueryCtx, type WriteCtx } from "@/server/query";
@@ -33,16 +34,7 @@ export async function readCtx(request: Request): Promise<QueryCtx> {
   return { db: getPlatform().db, ws: s.ws, actor: s.actor };
 }
 
-// Browsers send Origin on every POST/PATCH/DELETE; a mismatch means another site sent it.
-export function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host === (request.headers.get("host") ?? new URL(request.url).host);
-  } catch {
-    return false;
-  }
-}
+export { sameOrigin };
 
 export type Written<T> = { ctx: WriteCtx; body: T; setCookie?: string };
 

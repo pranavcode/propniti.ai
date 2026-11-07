@@ -619,7 +619,7 @@ Good to know: you see your own tasks and your role's unassigned tasks, never oth
 3. Choose **Sign in as …**. You land on that persona's home page.
 4. Next time, the page remembers the last person. If you're already signed in, choose **Continue as …** or **Switch person**.
 
-Good to know: these are demo accounts, not real ones, and anyone can sign in as anyone. To change persona later, open the avatar menu and choose **Switch role (demo)**; **Sign out of demo** returns you to /login. Your changes stay in a private copy that resets at midnight Pacific.`,
+Good to know: these are demo accounts, not real ones, and anyone can sign in as anyone. To change persona later, open the avatar menu and choose **Switch role (demo)**; **Sign out of demo** returns you to /login and starts you over: your changes sit in a private copy, and signing out (or midnight Pacific) resets it.`,
     tags: ["sign in", "login", "demo", "password", "persona"],
     entity_type: null,
     route: "/login",

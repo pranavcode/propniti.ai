@@ -62,6 +62,28 @@ describe("reconciliation", () => {
     expect((await match.handler(ctx, b3, { transfer_id: "t-plumb" })).status).toBe(400);
   });
 
+  it("matches a transfer to one statement line on a double click across two lines, in SQL", async () => {
+    await db.prepare(bt("b4", "2026-10-15", "ACH DEBIT LONE STAR PLUMBING", -48000, null)).run();
+    const match = getAction("bank_transactions.match")!;
+    const line = async (id: string) => ({ ...(await row("bank_transactions", id)), match: "Unmatched", amount: -480 });
+    const [l2, l4] = [await line("b2"), await line("b4")];
+    const r = await Promise.all([match.handler(ctx, l2, { transfer_id: "t-plumb" }), match.handler(ctx, l4, { transfer_id: "t-plumb" })]);
+    expect(r.map((x) => x.status).sort()).toEqual([200, 409]);
+    const n = await db.prepare("SELECT count(*) AS n FROM bank_transactions WHERE workspace_id = ? AND transfer_id = 't-plumb'").bind(WS).first<{ n: number }>();
+    expect(n?.n).toBe(1);
+    // The same line clicked twice also links once.
+    await db.prepare(tr("t-plumb2", "Vendor payout", 48000, "Lone Star Plumbing", "2026-10-14", "BILL-20003")).run();
+    const other = r[0].status === 200 ? l4 : l2;
+    expect((await Promise.all([match.handler(ctx, other, { transfer_id: "t-plumb2" }), match.handler(ctx, other, { transfer_id: "t-plumb2" })])).map((x) => x.status).sort()).toEqual([200, 409]);
+  });
+
+  it("refuses a match whose amounts differ", async () => {
+    await db.prepare(tr("t-near", "Rent", 31300, "Operating trust", "2026-10-21")).run();
+    const b3 = { ...(await row("bank_transactions", "b3")), match: "Unmatched", amount: 313.37 };
+    expect((await getAction("bank_transactions.match")!.handler(ctx, b3, { transfer_id: "t-near" })).status).toBe(400);
+    expect((await row("bank_transactions", "b3"))?.transfer_id).toBeNull();
+  });
+
   it("remembers a rejected suggestion across loads", async () => {
     const reject = getAction("bank_transactions.reject_match")!;
     const b2 = { ...(await row("bank_transactions", "b2")), match: "Unmatched", amount: -480 };

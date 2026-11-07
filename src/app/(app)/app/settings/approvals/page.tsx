@@ -11,7 +11,8 @@ import { ChangeHistory } from "@/extensions/settings/History";
 import { NoAccess, settingsSession } from "@/extensions/settings/pages";
 import { rows } from "@/extensions/settings/data";
 import { canSettings } from "@/extensions/settings/nav";
-import { canEditPolicies } from "@/ai/policy-editors";
+import { canEditOrgPolicies, canEditPolicies, ORG_POLICY_TEXT } from "@/ai/policy-editors";
+import { policyEditRefusal } from "@/ai/policy-scope";
 import { autonomyLevel } from "@/ai/automations";
 import { EditPolicy, type PolicyRow } from "@/extensions/settings/ui/forms";
 import { agentName } from "@/ai/ui/labels";
@@ -39,8 +40,11 @@ function Rule({ p, canEdit }: { p: P; canEdit: boolean }) {
   );
 }
 
-function Table({ items, canEdit }: { items: P[]; canEdit: boolean }) {
+// Why a policy editor can't edit this table (scope), shown above it.
+function Table({ items, canEdit, refusal }: { items: P[]; canEdit: boolean; refusal?: string | null }) {
   return (
+    <>
+    {refusal && <p className="mb-2 text-[12px] text-muted-foreground">{refusal}</p>}
     <div className="overflow-x-auto rounded-lg border bg-card">
       <table className="w-full min-w-[640px] table-fixed text-[13px]">
         <thead className="bg-muted/50 text-left text-[12px] text-muted-foreground">
@@ -49,6 +53,7 @@ function Table({ items, canEdit }: { items: P[]; canEdit: boolean }) {
         <tbody>{items.sort((a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category)).map((p) => <Rule key={p.id} p={p} canEdit={canEdit} />)}</tbody>
       </table>
     </div>
+    </>
   );
 }
 
@@ -64,6 +69,8 @@ export default async function ApprovalsPage() {
   const defaults = all.filter((p) => !p.owner_entity_id);
   const overrides = new Map<string, P[]>();
   for (const p of all.filter((x) => x.owner_entity_id)) overrides.set(p.applies_to, [...(overrides.get(p.applies_to) ?? []), p]);
+  const defaultsRefusal = canEdit && !canEditOrgPolicies(session.actor) ? ORG_POLICY_TEXT : null;
+  const ownerRefusal = new Map(await Promise.all([...overrides].map(async ([owner, items]) => [owner, canEdit ? await policyEditRefusal(ctx.db, ctx.ws ?? "base", session.actor, items[0], {}) : null] as const)));
   return (
     <>
       <PageHeader icon={<ShieldCheck />} title="Approval policies" description="How much agents and staff may approve alone, who approves above that, and when the owner signs off. Agents read these before they act: anything over a limit becomes a proposal for a person." />
@@ -73,11 +80,11 @@ export default async function ApprovalsPage() {
         ) : (
           <>
             <Section title="Org defaults" description="Apply to every owner entity without an override. Agents currently apply these org defaults to every owner, including those with an override below.">
-              <Table items={defaults} canEdit={canEdit} />
+              <Table items={defaults} canEdit={canEdit && !defaultsRefusal} refusal={defaultsRefusal} />
             </Section>
             {[...overrides.entries()].map(([owner, items]) => (
               <Section key={owner} title={owner} description="Owner agreement override. Categories not listed use the org default.">
-                <Table items={items} canEdit={canEdit} />
+                <Table items={items} canEdit={canEdit && !ownerRefusal.get(owner)} refusal={ownerRefusal.get(owner)} />
               </Section>
             ))}
           </>

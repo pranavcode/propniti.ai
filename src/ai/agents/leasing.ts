@@ -55,6 +55,7 @@ export default defineAgent({
         facts: { applicant: name, rent_cents: rent, monthly_income_cents: (d.monthly_income_cents as number) ?? null, income_to_rent: Number(s.ratio.toFixed(2)), credit_band: (d.credit_band as string) ?? null, score: s.score, recommendation: s.recommendation },
         evidence: [{ entity_type: "applicants", entity_id: String(d.applicant_id), label: name }, { entity_type: "applications", entity_id: String(d.id), label: `Application ${d.id}` }],
         effects: [{ kind: "update", table: "applications", id: String(d.id), changes: { stage, recommendation: s.recommendation, score: s.score, scoring_factors: JSON.stringify(s.factors), decided_at: demoNowIso() } }],
+        publicText: true,
         priority: (d.id === fresh ? 10_000 : 500) + daysBetween(String(d.submitted_at ?? ctx.today).slice(0, 10), ctx.today),
       };
     });
@@ -80,7 +81,7 @@ function followUp(today: string, p: Row): Candidate {
     title: `Follow up with ${p.name} — no contact in ${days} days`, why: [`Stage ${p.stage}, last contact ${String(p.last_contact_at).slice(0, 10)}`, p.budget_cents ? `Budget ${money(Number(p.budget_cents))}` : "Came in through " + (p.source || "the website")],
     confidence: 0.85, risk: "Low", facts: { prospect: String(p.name), days_since_contact: days, budget_cents: (p.budget_cents as number) ?? null, desired_beds: (p.desired_beds as number) ?? null },
     message: { party_kind: "prospect", party_id: String(p.id), subject: "Still looking for a new home?", body: `Hi ${String(p.name).split(" ")[0]}, thanks again for your interest. We have homes available that fit what you told us. Would you like to book a tour this week? Just reply with a time that works.` },
-    effects: [], priority: 100 + days,
+    effects: [], publicText: true, priority: 100 + days,
   };
 }
 

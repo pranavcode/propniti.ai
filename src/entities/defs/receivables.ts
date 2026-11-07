@@ -3,6 +3,7 @@
 // Ledger tables (charges, payments, credits, deposits) are read-only through the generic API and
 // change only through named actions that go through the guarded money functions.
 import { Banknote, Gavel, HandCoins, Landmark, Receipt } from "lucide-react";
+import { z } from "zod";
 import { AS_OF, FINANCE, LEADERS } from "../common";
 import { chargeOpenStoredSql, chargeStatusStoredSql } from "@/server/data";
 import { registerEntity } from "../registry";
@@ -278,11 +279,13 @@ registerEntity({
     label: { type: "text", label: "Policy", sortable: true, list: { default: true, width: 240 }, sql: "CASE WHEN late_fee_policies.property_id IS NULL THEN 'Organization default' ELSE coalesce((SELECT p.name FROM {properties} p WHERE p.id = late_fee_policies.property_id), late_fee_policies.property_id) END" },
     property_id: { type: "ref", ref: "properties", label: "Property", facet: true, list: { default: false }, editable: ACCOUNTING, help: { summary: "Leave empty for the organization default, which covers every property without its own policy." } },
     kind: { type: "enum", label: "Fee type", required: true, facet: true, list: { default: true }, editable: ACCOUNTING, enum: [{ value: "Flat", tone: "neutral" }, { value: "Percent", tone: "neutral" }, { value: "Flat + daily", tone: "neutral" }] },
-    grace_days: { type: "number", label: "Grace days", required: true, list: { default: true, align: "right" }, editable: ACCOUNTING, help: { summary: "Days after the due date before a fee may post. Texas requires rent to be unpaid two full days." } },
-    flat: { type: "money", label: "Flat fee", column: "flat_cents", list: { default: true, align: "right" }, editable: ACCOUNTING },
-    pct: { type: "number", label: "Percent of rent", list: { default: true, align: "right" }, editable: ACCOUNTING },
-    daily: { type: "money", label: "Daily fee", column: "daily_cents", list: { default: false, align: "right" }, editable: ACCOUNTING },
-    max: { type: "money", label: "Maximum", column: "max_cents", list: { default: true, align: "right" }, editable: ACCOUNTING, help: { summary: "The policy's own cap. The state cap also applies; the fee is the lower of the two." } },
+    grace_days: { type: "number", label: "Grace days", required: true, list: { default: true, align: "right" }, editable: ACCOUNTING, zod: z.number().int().min(0).max(31), help: { summary: "Days after the due date before a fee may post. Texas requires rent to be unpaid two full days." } },
+    // Bounds keep a fee sane without a maximum: at most $1,000 flat, 25% of rent or $100 a day, and
+    // a fee posts once per lease per month (the state cap still applies on top).
+    flat: { type: "money", label: "Flat fee", column: "flat_cents", list: { default: true, align: "right" }, editable: ACCOUNTING, zod: z.number().finite().min(0).max(1_000) },
+    pct: { type: "number", label: "Percent of rent", list: { default: true, align: "right" }, editable: ACCOUNTING, zod: z.number().finite().min(0).max(25) },
+    daily: { type: "money", label: "Daily fee", column: "daily_cents", list: { default: false, align: "right" }, editable: ACCOUNTING, zod: z.number().finite().min(0).max(100) },
+    max: { type: "money", label: "Maximum", column: "max_cents", list: { default: true, align: "right" }, editable: ACCOUNTING, zod: z.number().finite().min(0).max(5_000), help: { summary: "The policy's own cap. The state cap also applies; the fee is the lower of the two." } },
     summary: { type: "text", label: "Summary", sql: "CASE late_fee_policies.kind WHEN 'Flat' THEN '$' || printf('%.2f', late_fee_policies.flat_cents / 100.0) || ' after ' || late_fee_policies.grace_days || ' days' WHEN 'Percent' THEN late_fee_policies.pct || '% of rent after ' || late_fee_policies.grace_days || ' days' ELSE '$' || printf('%.2f', late_fee_policies.flat_cents / 100.0) || ' + $' || printf('%.2f', late_fee_policies.daily_cents / 100.0) || '/day after ' || late_fee_policies.grace_days || ' days' END" },
   },
   relations: [{ name: "property", entity: "properties", fk: "property_id", kind: "one" }],

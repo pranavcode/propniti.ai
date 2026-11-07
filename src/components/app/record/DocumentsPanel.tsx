@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, Eye, FileImage, FileSpreadsheet, FileText, Sparkles } from "lucide-react";
 import { formatPct } from "@/lib/format";
+import { safeHref } from "@/lib/links";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,7 +22,8 @@ function DocIcon({ mime }: { mime: string }) {
 }
 
 export function DocumentsPanel({ entity, id, initial }: { entity: string; id: string; initial?: DocumentRow[] }) {
-  const { rows, loading, error, reload } = useCollab<DocumentRow>(entity, id, "documents", initial);
+  const { rows: loaded, loading, error, reload } = useCollab<DocumentRow>(entity, id, "documents", initial);
+  const rows = loaded.map((d) => ({ ...d, url: safeHref(d.url) ?? null }));
   const [preview, setPreview] = useState<DocumentRow | null>(null);
 
   if (error) return <ErrorBanner title="Couldn't load documents" message={error} onRetry={reload} />;

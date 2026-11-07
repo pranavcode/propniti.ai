@@ -29,9 +29,9 @@ const isOpen = (r: Row) => (OPEN_STATUSES as readonly string[]).includes(String(
 export const SLA_HOURS: Record<string, number> = { Emergency: 4, Urgent: 24, Normal: 72, Low: 168 };
 const addHours = (iso: string, h: number) => new Date(Date.parse(iso) + h * 3_600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
 
-async function woEvent(c: ActionContext, wo: Row, kind: string, detail: object, status?: string) {
+async function woEvent(c: ActionContext, wo: Row, kind: string, detail: object, status?: string, onlyIfWhere?: string) {
   const vendor = c.actor.role === "vendor";
-  return insertStmt(c.db, c.ws, "wo_events", { id: newId("woe"), work_order_id: wo.id, property_id: wo.property_id, at: nowIso(c.nowMs), actor_kind: vendor ? "vendor" : "staff", actor_id: vendor ? wo.vendor_id : c.actor.personaId, kind, status: status ?? null, detail });
+  return insertStmt(c.db, c.ws, "wo_events", { id: newId("woe"), work_order_id: wo.id, property_id: wo.property_id, at: nowIso(c.nowMs), actor_kind: vendor ? "vendor" : "staff", actor_id: vendor ? wo.vendor_id : c.actor.personaId, kind, status: status ?? null, detail }, onlyIfWhere ? { table: "work_orders", id: String(wo.id), where: onlyIfWhere } : undefined);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -323,14 +323,17 @@ registerAction({
   handler: async (c, r, input) => {
     const lines = input.lines.map((l) => ({ description: l.description, amount_cents: Math.round(l.amount * 100) }));
     const total = Math.round(input.total * 100);
-    const [res] = await c.db.batch([await updateStmt(c.db, c.ws, "work_orders", String(r.id), { status: "Submitted", cost_cents: total }, "e.status IN ('Assigned', 'Scheduled', 'In progress', 'On hold', 'Submitted')")]);
-    if (!res.meta.changes) return conflict(`${r.id} can't take an invoice now.`);
     const { po, photos } = await invoiceInputs(c.db, c.ws, String(r.id));
     const v = validateInvoice(po, { lines, total_cents: total, photos });
-    await c.db.batch([
-      await woEvent(c, r, "Submission", { invoice_number: input.invoice_number, lines, total_cents: total, source: input.source, read_confidence: input.read_confidence ?? null }, "Submitted"),
-      await woEvent(c, r, "Validation", { ...v, source: "rules" }),
+    // One batch: the events land only if the status change did (the guard admits only these statuses,
+    // so the work order is Submitted afterwards exactly when the update ran).
+    const submitted = "e.status = 'Submitted'";
+    const [res] = await c.db.batch([
+      await updateStmt(c.db, c.ws, "work_orders", String(r.id), { status: "Submitted", cost_cents: total }, "e.status IN ('Assigned', 'Scheduled', 'In progress', 'On hold', 'Submitted')"),
+      await woEvent(c, r, "Submission", { invoice_number: input.invoice_number, vendor_id: r.vendor_id, lines, total_cents: total, source: input.source, read_confidence: input.read_confidence ?? null }, "Submitted", submitted),
+      await woEvent(c, r, "Validation", { ...v, source: "rules" }, undefined, submitted),
     ]);
+    if (!res.meta.changes) return conflict(`${r.id} can't take an invoice now.`);
     return ok(v.issues.length ? `Invoice recorded. ${v.summary}` : `Invoice recorded and matches the PO. Ready to approve.`);
   },
 });

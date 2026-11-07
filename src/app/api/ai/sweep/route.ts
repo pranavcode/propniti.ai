@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       const report = await sweep(getPlatform().db, Date.now(), undefined, { cron: true, deadlineMs: 120_000 });
       return json({ ok: true, report });
     }
-    const w = await writeSession(request, null);
+    const w = await writeSession(request, null, "ai");
     if (w instanceof Response) return w;
     if (PERMISSIONS[w.s.actor.role].intelligence !== "approve") return json({ error: `${w.s.persona.title} can't start a sweep` }, { status: 403 });
     const report = await sweep(w.s.db, Date.now(), waitUntil, { force: true, deadlineMs: 25_000, workspaces: [w.s.ws] });

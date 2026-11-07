@@ -50,7 +50,7 @@ registerTab({
   component: async ({ row }) => {
     const session = await currentSession();
     const property = String(row.property_id);
-    return <Bva session={session} year={Number(row.year)} type="Expense" property={property} explain={null} params={{ property, year: String(row.year) }} basePath="/app/finance/budget-vs-actual" />;
+    return <Bva session={session} year={Number(row.year)} type="Expense" property={property} />;
   },
 });
 

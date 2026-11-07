@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { demoNowIso } from "@/lib/clock";
 import { cachedBriefing, generateBriefing } from "../summaries";
 import { setModelForTests } from "../providers";
-import { DANIEL, openFixture, TODAY } from "./fixture";
+import { DANIEL, MARCUS, openFixture, TODAY } from "./fixture";
 
 afterEach(() => {
   setModelForTests(undefined);
@@ -51,5 +51,20 @@ describe("home briefing", () => {
     // …a balance change does.
     raw.prepare("UPDATE charges SET paid_cents = amount_cents WHERE id = 'c-big'").run();
     expect(await cachedBriefing(data, "daniel")).toMatchObject({ source: "rules" });
+  });
+});
+
+describe("home briefing rent figures", () => {
+  // Review: the briefing read rent owed directly, so roles without charge access saw it.
+  it("leaves rent owed out for a leasing agent, who can't read charges", async () => {
+    setModelForTests(null);
+    const { data } = setup();
+    const lena = { ...MARCUS, personaId: "lena", name: "Lena Ortiz", role: "leasing_agent" as const };
+    const b = await generateBriefing({ ...data, actor: lena }, "lena", { writeTo: "none" });
+    expect(b.facts).not.toHaveProperty("residents_late");
+    expect(b.facts).not.toHaveProperty("late_balance");
+    expect(b.summary).not.toMatch(/owe|rent/);
+    expect(b.summary).toMatch(/data issues are open/);
+    expect((await generateBriefing(data, "daniel", { writeTo: "none" })).facts).toHaveProperty("residents_late");
   });
 });

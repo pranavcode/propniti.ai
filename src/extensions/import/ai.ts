@@ -19,7 +19,7 @@ export const AiRequest = z.object({
     kind: z.enum(KINDS),
     headers: z.array(z.string().max(80)).max(AI_CAPS.columns),
     unmapped: z.array(z.number().int().min(0).max(AI_CAPS.columns)).max(AI_CAPS.columns),
-    mapped: z.record(z.string(), z.number().int().min(0).max(AI_CAPS.columns)),
+    mapped: z.record(z.string().max(40), z.number().int().min(0).max(AI_CAPS.columns)).refine((m) => Object.keys(m).length <= AI_CAPS.columns, "Too many mapped fields"),
     samples: z.array(z.object({ line: z.number().int().min(0), cells: z.array(cell).max(AI_CAPS.columns) })).max(AI_CAPS.sampleRows),
     flagged: z.array(z.object({ line: z.number().int().min(0), field: z.string().max(30), value: cell, why: z.string().max(120) })).max(AI_CAPS.flagged),
   })).min(1).max(AI_CAPS.files),
@@ -133,8 +133,12 @@ export async function suggest(req: AiRequest): Promise<AiResult> {
   const est = estimate(req, info);
   const rules = (note: string): AiResult => ({ live: false, source: "Rules", model: RULES.model, note, estimate: est, mappings: [], suggestions: [], notes: [] });
   if (!model) return rules("No AI model is configured, so columns were matched and checked by rules only.");
+  // Trimming drops samples and flagged cells only; headers and field names alone can still be over
+  // the budget, and then the model is not called at all.
+  const message = userMessage(req);
+  if (message.length > AI_CAPS.totalChars) return rules("These files are too large to send to the AI, so columns were matched and checked by rules only. Try fewer files or columns at once.");
   try {
-    const { value, usage } = await model.structured(Reply, SYSTEM, userMessage(req), { timeoutMs: TIMEOUT_MS });
+    const { value, usage } = await model.structured(Reply, SYSTEM, message, { timeoutMs: TIMEOUT_MS });
     return { live: true, source: info.label, model: info.model, usage, estimate: est, ...validateReply(req, value) };
   } catch (err) {
     console.error("[import] AI suggestions failed, using rules:", err instanceof Error ? err.message : err);
