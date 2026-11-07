@@ -8,7 +8,8 @@ import { dataOf, guarded, json, writeSession } from "@/ai/http";
 
 const Body = z.object({
   limit_cents: z.number().int().min(0).max(100_000_000).nullable().optional(),
-  owner_approval_over_cents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  // At most $100,000: a higher threshold would mean the owner effectively never signs off.
+  owner_approval_over_cents: z.number().int().min(0).max(10_000_000).nullable().optional(),
   approver_role: z.enum(INTERNAL_ROLES.filter((r) => r !== "platform_admin") as [Role, ...Role[]]).optional(),
   always_human: z.boolean().optional(),
 });

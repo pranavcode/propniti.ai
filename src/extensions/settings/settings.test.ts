@@ -94,6 +94,11 @@ describe("approval policies", () => {
     expect((await editPolicy("daniel", { owner_approval_over_cents: null }, "apol-oe01-maintenance")).status).toBe(400);
   });
 
+  it("caps the owner approval threshold at $100,000", async () => {
+    expect((await editPolicy("daniel", { owner_approval_over_cents: 10_000_001 })).status).toBe(400);
+    expect((await editPolicy("daniel", { owner_approval_over_cents: 10_000_000 })).status).toBe(200);
+  });
+
   it("closes the generic record API to policy edits", async () => {
     await expect(updateRecord(await wctx("sam"), "approval_policies", "apol-maintenance-spend", { limit: 9000 })).rejects.toMatchObject({ status: 405 });
     await expect(updateRecord(await wctx("nadia"), "approval_policies", "apol-maintenance-spend", { limit: 9000 })).rejects.toMatchObject({ status: 405 });
