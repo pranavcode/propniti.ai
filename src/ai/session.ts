@@ -9,11 +9,11 @@ import { cookieHeader, readCookie, resolveWorkspace } from "@/server/workspace";
 // cookie see the shared base; anything that writes (runs, proposals, decisions) needs the
 // visitor's own workspace, which `create` makes on first use.
 
-// Scope comes from lane C's resolver. Vendor and applicant portals are matched row by row elsewhere,
-// so the AI gives them no property-wide reads.
+// Scope comes from lane C's resolver. Portal personas are matched row by row in their portals, so
+// the AI gives them no property-wide reads (a resident's property id would show every resident's balance).
 export async function aiActor(db: Db, ws: string, persona: Persona): Promise<Actor> {
   const actor = await actorFor(db, ws === "base" ? null : ws, persona);
-  return persona.portal && actor.propertyIds === "all" ? { ...actor, propertyIds: [] } : actor;
+  return persona.portal ? { ...actor, propertyIds: [] } : actor;
 }
 
 export type AiSession = { db: Db; ws: string; actor: Actor; persona: Persona; setCookie?: string; nowMs: number };

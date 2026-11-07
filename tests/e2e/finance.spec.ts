@@ -44,7 +44,7 @@ test("1099 preparation finds reportable vendors and budget vs actual explains a 
   await expect(page.getByRole("table")).toBeVisible();
   await go(page, `${BASE}/app/finance/budget-vs-actual`);
   await expect(page.getByRole("heading", { name: /Budget vs actual/ })).toBeVisible();
-  await page.getByRole("link", { name: /Explain/ }).first().click();
+  await page.getByRole("button", { name: /Explain the variance/ }).first().click();
   await expect(page.getByText(/Rule-based|AI/).first()).toBeVisible();
 });
 

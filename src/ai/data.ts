@@ -10,8 +10,9 @@ import type { Db } from "@/lib/platform/types";
 
 export type DataCtx = { db: Db; ws: string; actor: Actor };
 
-// Tables the AI may read, with the column that scopes them to a property (null = org-level).
-// Identifiers in SQL come only from this map and from column names read back from the database.
+// Tables the AI may read, with the column that scopes them to a property (null = org-level). A
+// table with an entity def is scoped by the def's scopePath instead (see scopeClause).
+// Identifiers in SQL come only from this map, from defs and from column names read back from the database.
 export const TABLES = {
   properties: "id", units: "property_id", unit_types: "property_id", buildings: "property_id", residents: "property_id", households: "property_id",
   leases: "property_id", charges: "property_id", payments: "property_id", credits: "property_id",
@@ -65,11 +66,30 @@ export function eff(table: Table, ws: string): { sql: string; params: unknown[] 
   };
 }
 
-// Tables with no property column of their own, scoped through their parent record.
+// Tables with no entity def and no property column of their own, scoped through their parent record.
 const SCOPE_VIA: Partial<Record<Table, (alias: string) => string>> = {
   messages: (a) => `(SELECT mt.property_id FROM message_threads mt WHERE mt.id = ${a}.thread_id LIMIT 1)`,
-  applicants: (a) => `(SELECT ap.property_id FROM applications ap WHERE ap.applicant_id = ${a}.id LIMIT 1)`,
+  bill_lines: (a) => `(SELECT b.property_id FROM bills b WHERE b.id = ${a}.bill_id LIMIT 1)`,
 };
+
+// Tables with no def and no property that every staff role may read row by row. Other such tables
+// (AI decisions, summaries, run logs, fix logs) mention records from any property, so only org-wide
+// roles read their rows; internal queries still join them through sql().
+const ANY_SCOPE = new Set<Table>(["help_articles", "data_rules", "agent_definitions"]);
+
+const defOf = (table: Table) => allEntities().find((d) => d.table === table);
+
+// The def's scopePath as SQL over `alias`, with {table} expanded to the effective rows (the same
+// expression src/server/query.ts filters on).
+function defScope(path: string, table: Table, alias: string, ws: string): { sql: string; params: unknown[] } {
+  const params: unknown[] = [];
+  const sql = path.replace(new RegExp(`\\b${table}\\.`, "g"), `${alias}.`).replace(/\{([a-z_][a-z0-9_]*)\}/g, (_, t: string) => {
+    const e = eff(t as Table, ws);
+    params.push(...e.params);
+    return e.sql;
+  });
+  return { sql, params };
+}
 
 // Record types whose Data Health issues a property-scoped role sees whatever their property: types
 // with no property link (vendors) that the role can read, as the role sees those records themselves.
@@ -82,9 +102,19 @@ export function orgIssueTypes(role: Role): { any: string[]; noProperty: string[]
 
 // "property_id IN (…)" for the actor, or nothing for org-wide actors.
 export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: string; params: unknown[] } {
+  // Portal users (self scope) read only their own rows, which the AI layer doesn't model: no rows.
+  if (ctx.actor.scope.kind === "self") return { sql: "0", params: [] };
+  if (ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  const def = defOf(table);
+  if (def?.scopePath) {
+    const e = defScope(def.scopePath, table, alias, ctx.ws);
+    const ids = JSON.stringify(ctx.actor.propertyIds);
+    if (def.scopeNullVisible?.(ctx.actor.role)) return { sql: `((${e.sql}) IS NULL OR (${e.sql}) IN (SELECT value FROM json_each(?)))`, params: [...e.params, ...e.params, ids] };
+    return { sql: `(${e.sql}) IN (SELECT value FROM json_each(?))`, params: [...e.params, ids] };
+  }
   const col = TABLES[table];
   const via = SCOPE_VIA[table];
-  if ((!col && !via) || ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  if (!col && !via) return { sql: "1 = 1", params: [] };
   if (table === "data_issues") {
     const org = orgIssueTypes(ctx.actor.role);
     return {
@@ -109,8 +139,11 @@ export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: str
 // The entity def for a table, when one exists: its read permission and hidden fields apply to AI
 // reads too (the same rules the entity API enforces).
 function readRules(ctx: DataCtx, table: Table) {
-  const def = allEntities().find((d) => d.table === table);
-  if (!def) return (r: Row) => r;
+  const def = defOf(table);
+  if (!def) {
+    if (ctx.actor.propertyIds !== "all" && !TABLES[table] && !SCOPE_VIA[table] && !ANY_SCOPE.has(table)) throw new Error(`${ctx.actor.role.replace(/_/g, " ")} can't view ${table.replace(/_/g, " ")}`);
+    return (r: Row) => r;
+  }
   if (!can(ctx.actor.role, "read", def.key)) throw new Error(`${ctx.actor.role.replace(/_/g, " ")} can't view ${def.label.many.toLowerCase()}`);
   const hidden = Object.entries(def.fields).filter(([, f]) => f.hiddenFor?.includes(ctx.actor.role)).map(([k, f]) => f.column ?? k);
   return hidden.length ? (r: Row) => Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))) : (r: Row) => r;

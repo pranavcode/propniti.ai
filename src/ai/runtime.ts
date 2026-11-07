@@ -8,6 +8,7 @@ import { snapshotOf } from "./effects";
 import { addUsage, currentModel, fromWire, RULES, toWire, ZERO, type ChatModel, type ModelInfo, type Turn, type Usage } from "./providers";
 import { getTool } from "./tools/registry";
 import { getAction } from "@/extensions/actions";
+import { can, getEntity } from "@/entities/registry";
 import type { ApprovalPolicy, Autonomy, RunContext, Step, ToolDef, ToolKey } from "./types";
 import { z } from "zod";
 import { agentName } from "@/ai/ui/labels";
@@ -119,6 +120,7 @@ export async function createRunContext(opts: {
       const tool = getTool(key);
       if (!tool) throw new Error(`Unknown tool ${key}`);
       if (!tool.roles.includes(actor.role)) throw new Error(`${key} isn't available to the ${actor.role.replace(/_/g, " ")} role`);
+      if (tool.reads && !can(actor.role, "read", tool.reads)) throw new Error(`You don't have access to ${getEntity(tool.reads)?.label.many.toLowerCase() ?? tool.reads.replace(/_/g, " ")}`);
       await ctx.step({ kind: "tool_call", toolKey: key, input, ok: true });
       const t0 = Date.now();
       try {
