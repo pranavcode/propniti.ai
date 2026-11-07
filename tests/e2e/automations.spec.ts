@@ -93,6 +93,24 @@ test("approval policies are read-only on the Agents page for a property manager"
   await expect(page.getByRole("textbox", { name: /auto-approve limit in dollars/ })).toHaveCount(0);
 });
 
+test("a regional manager edits only her own owners' policies, and sees why the rest are read-only", async ({ page, context }) => {
+  await as(context, "priya");
+  await go(page, `${BASE}/app/settings/approvals`);
+  const section = (name: string) => page.locator("section").filter({ has: page.getByRole("heading", { name, exact: true }) });
+  await expect(section("Org defaults").getByText("Only an org-wide editor, the principal or an administrator, can change the organization defaults.")).toBeVisible();
+  await expect(section("Org defaults").getByRole("button", { name: /^Edit/ })).toHaveCount(0);
+  await expect(section("Peachtree Residential Partners, LLC").getByText("That owner's policy covers properties outside your scope")).toBeVisible();
+  await expect(section("Peachtree Residential Partners, LLC").getByRole("button", { name: /^Edit/ })).toHaveCount(0);
+  await expect(section("Bluebonnet Residential Fund II, LLC").getByRole("button", { name: /^Edit/ })).toHaveCount(1);
+  await page.screenshot({ path: "test-results/priya-approval-policies.png", fullPage: true });
+
+  await go(page, `${BASE}/app/agents`);
+  await expect(page.getByText("Only an org-wide editor, the principal or an administrator, can change the organization defaults.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /auto-approve limit in dollars/ })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: /^Autonomy for/ }).first()).toBeVisible();
+  await page.screenshot({ path: "test-results/priya-agents.png", fullPage: true });
+});
+
 test("approval policies page says agents apply the org defaults", async ({ page, context }) => {
   await as(context, "sam");
   await go(page, `${BASE}/app/settings/approvals`);
