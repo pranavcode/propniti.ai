@@ -12,7 +12,7 @@ import { amountsIn } from "./tools/write";
 import { REMINDER_LIMIT } from "./ui/rightNow";
 import { ABOUT_RECORD, ASKS_COST, costAnswer, recordAnswer, recordBrief, type RecordBrief } from "./about";
 import { fairHousingRefusal, screensByProtectedClass } from "@/extensions/leasing/fairHousing";
-import { errText, modelLoop, modelTimeout, type AgentCtx } from "./runtime";
+import { errText, modelLoop, modelTimeout, ReadDenied, type AgentCtx } from "./runtime";
 import { plainError } from "./trace";
 import type { ToolKey } from "./types";
 import "./agents";
@@ -364,7 +364,7 @@ export async function ask(o: { data: DataCtx; persona: Persona; question: string
   const ctx = run.ctx;
   // run.summary is the raw failure, kept for the trace; the reply says it in plain words.
   // A refused read (the role can't open charges, say) is an answer, not a failure to retry.
-  const denied = /You don't have access to [a-z ]+/.exec(String(run.summary ?? ""))?.[0];
+  const denied = run.error instanceof ReadDenied ? run.error.message : undefined;
   const res = run.result ?? { out: { answer: denied ? `${denied}, so I can't answer that.` : `Something went wrong, so there's no answer this time: ${plainError(run.summary)}. Try again in a minute.`, citations: [] } as RulesOut, live: false, note: "The run failed; see its trace." };
   const steps = await db.prepare("SELECT tool_key, input, output, latency_ms, ok, kind FROM agent_steps WHERE workspace_id = ? AND run_id = ? AND kind IN ('tool_call', 'tool_result') ORDER BY idx").bind(ws, runId).all<{ tool_key: string; input: string | null; output: string | null; latency_ms: number | null; ok: number; kind: string }>();
   const trace: TraceItem[] = [];
