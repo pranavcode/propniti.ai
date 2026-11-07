@@ -33,16 +33,7 @@ export async function aiSession(request: Request, opts: { write?: boolean } = {}
   return { db, ws: ws ?? "base", actor: await aiActor(db, ws ?? "base", persona), persona, setCookie, nowMs };
 }
 
-// Browsers send Origin on every POST; a mismatch means another site is submitting the request.
-export function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host === (request.headers.get("host") ?? new URL(request.url).host);
-  } catch {
-    return false;
-  }
-}
+export { sameOrigin } from "@/lib/https";
 
 export function json(body: unknown, init: { status?: number; setCookie?: string } = {}) {
   const headers = new Headers({ "Cache-Control": "no-store" });

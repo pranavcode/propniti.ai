@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { edgeGuard, secureOrigin } from "./https";
+import { describe, expect, it, vi } from "vitest";
+import { edgeGuard, sameOrigin, secureOrigin } from "./https";
 
 const req = (url: string, init: { method?: string; headers?: Record<string, string> } = {}) => new Request(url, { method: init.method ?? "GET", headers: init.headers });
 
@@ -46,5 +46,25 @@ describe("secureOrigin: the same-origin write check", () => {
     expect(secureOrigin("http://propniti.ai", "propniti.ai", false)).toBe(true);
     expect(secureOrigin("http://localhost:3000", "localhost:3000", true)).toBe(true);
     expect(secureOrigin("http://127.0.0.1:3000", "127.0.0.1:3000", true)).toBe(true);
+  });
+});
+
+describe("sameOrigin: one rule for the entity, session and AI routes", () => {
+  it("is the same function everywhere", async () => {
+    const [ai, e] = await Promise.all([import("@/ai/session"), import("@/app/api/e/_lib/http")]);
+    expect(ai.sameOrigin).toBe(sameOrigin);
+    expect(e.sameOrigin).toBe(sameOrigin);
+  });
+
+  it("refuses an http origin in production", () => {
+    const post = (origin: string) => new Request("https://propniti.ai/api/ai/nl-filter", { method: "POST", headers: { origin, host: "propniti.ai" } });
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(sameOrigin(post("http://propniti.ai"))).toBe(false);
+      expect(sameOrigin(post("https://propniti.ai"))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(sameOrigin(post("http://propniti.ai"))).toBe(true);
   });
 });

@@ -41,3 +41,7 @@ export function secureOrigin(origin: string | null, host: string, production: bo
     return false;
   }
 }
+
+// Browsers send Origin on every POST/PATCH/DELETE; a mismatch means another site sent it.
+export const sameOrigin = (request: Request) =>
+  secureOrigin(request.headers.get("origin"), request.headers.get("host") ?? new URL(request.url).host, process.env.NODE_ENV === "production");
