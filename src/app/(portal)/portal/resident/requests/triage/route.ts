@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { triage } from "@/ai/rules";
 import { rateLimit } from "@/lib/guard";
+import { sameOrigin } from "@/app/api/e/_lib/http";
 import { parseBody } from "@/lib/requests";
 import { AS_OF } from "@/seed/constants";
 import { portalCtx, rows } from "@/extensions/owners/portal/context";
@@ -9,15 +10,6 @@ import { portalCtx, rows } from "@/extensions/owners/portal/context";
 // cost range from past completed jobs of that trade at the resident's property. Nothing is saved.
 
 const Body = z.object({ text: z.string().trim().min(1).max(1000) });
-
-function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  try {
-    return !!origin && new URL(origin).host === (request.headers.get("host") ?? new URL(request.url).host);
-  } catch {
-    return false;
-  }
-}
 
 const pct = (sorted: number[], p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)))];
 

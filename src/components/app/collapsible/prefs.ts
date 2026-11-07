@@ -3,6 +3,8 @@
 // (no flash or layout jump on load). Keys are "<persona>.<section>"; sections are open by default.
 // No account sync: the cookie lives in this browser only, and the midnight demo reset leaves it alone.
 
+import { secureAttr } from "@/lib/cookie";
+
 export const LAYOUT_COOKIE = "pn_layout";
 const SEP = "|";
 const KEY = /^[\w-]+\.[\w-]+$/;
@@ -36,7 +38,7 @@ function readCookie(name: string): string | null {
 }
 
 function writeCookie(name: string, value: string, maxAge: number) {
-  try { document.cookie = `${name}=${value}; Path=/; Max-Age=${maxAge}; SameSite=Lax`; } catch { /* blocked */ }
+  try { document.cookie = `${name}=${value}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secureAttr()}`; } catch { /* blocked */ }
 }
 
 let current: ReadonlySet<string> | null = null;

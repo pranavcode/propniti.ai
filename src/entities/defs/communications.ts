@@ -5,6 +5,7 @@
 import { FileText } from "lucide-react";
 import { z } from "zod";
 import { agentName } from "@/ai/ui/labels";
+import { SAFE_LINK } from "@/lib/links";
 import { OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 import { AGENT_KEYS } from "../types";
@@ -42,7 +43,7 @@ registerEntity({
     uploaded_by: { system: true, type: "text", label: "Uploaded by", editable: [], sql: actorName("documents.uploaded_by") },
     mime: { type: "text", label: "File type" },
     // Only same-site paths or https links: the URL is rendered as a link.
-    url: { type: "text", label: "File", required: true, editable: [], zod: z.string().max(500).regex(/^(\/(?!\/)|https:\/\/)/, "Use a /path or an https:// link") },
+    url: { type: "text", label: "File", required: true, editable: [], zod: z.string().max(500).regex(SAFE_LINK, "Use a /path or an https:// link") },
     entity_type: { type: "text", label: "Record type", facet: true },
     entity_id: { type: "text", label: "Record" },
     extracted: { type: "json", label: "Extracted fields" },

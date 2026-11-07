@@ -9,9 +9,7 @@ import { AskRenewal } from "@/extensions/owners/portal/ui/resident/AskRenewal";
 import { askedThisWeek } from "@/extensions/residents/renewalAsk";
 import { AS_OF } from "@/seed/constants";
 import { Card, fmtDay } from "@/extensions/owners/portal/ui/resident/bits";
-
-// Same-site paths and https links only (documents can be imported from elsewhere).
-const safe = (u: string) => (u.startsWith("/") && !u.startsWith("//")) || u.startsWith("https://") ? u : undefined;
+import { safeHref } from "@/lib/links";
 
 export default async function ResidentLease() {
   const c = await portalCtx("resident");
@@ -68,7 +66,7 @@ export default async function ResidentLease() {
                   <li key={d.id} className="flex items-center gap-3 py-2.5">
                     <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <div className="min-w-0 flex-1">
-                      {safe(d.url) ? <a href={safe(d.url)} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-medium hover:text-primary hover:underline">{d.name}</a> : <p className="truncate text-[13px] font-medium">{d.name}</p>}
+                      {safeHref(d.url) ? <a href={safeHref(d.url)} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-medium hover:text-primary hover:underline">{d.name}</a> : <p className="truncate text-[13px] font-medium">{d.name}</p>}
                       <p className="text-[11.5px] text-muted-foreground">{d.doc_type ?? "Document"} · {fmtDay(d.uploaded_at, true)}</p>
                     </div>
                   </li>
