@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import type { Actor } from "@/entities/types";
 import { getPlatform } from "@/lib/platform";
 import { actorFor } from "@/server/permissions";
-import { readCookie } from "@/server/workspace";
+import { readCookie, tenantWs } from "@/server/workspace";
 import { DEFAULT_PERSONA, getPersona, PN_AS, personaFromCookieHeader, type Persona } from "./personas";
 
 // Who this request acts as. The persona comes from the pn_as cookie (a demo switcher, not a
@@ -42,13 +42,13 @@ export const currentSession = cache(async (): Promise<Session> => {
   const jar = await cookies();
   const persona = getPersona(jar.get(PN_AS)?.value) ?? getPersona(DEFAULT_PERSONA)!;
   const raw = jar.get("pn_ws")?.value;
-  const ws = raw && WS_ID.test(raw) ? raw : null;
+  const ws = tenantWs(raw && WS_ID.test(raw) ? raw : null, persona);
   return { persona, ws, actor: await actorFor(getPlatform().db, ws, persona) };
 });
 
 // Route handlers: same, from the request headers.
 export async function sessionFromRequest(request: Request): Promise<Session> {
   const persona = personaFromCookieHeader(request.headers.get("cookie"));
-  const ws = readCookie(request);
+  const ws = tenantWs(readCookie(request), persona);
   return { persona, ws, actor: await actorFor(getPlatform().db, ws, persona) };
 }

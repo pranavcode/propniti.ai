@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { asOfDate, scopeIn, sql } from "../server";
 import { AskToday } from "./AskToday";
 import { agentName } from "@/ai/ui/labels";
+import { companyState } from "@/extensions/onboarding/empty";
+import { EmptyPage } from "@/extensions/onboarding/ui/NothingYet";
 
 // Today: the property manager's home. An AI briefing computed from the persona's properties, the
 // approvals queue, the numbers that move day to day, and the conversations and data issues
@@ -44,6 +46,8 @@ export async function TodayPage() {
   const { data } = await pageData();
   const ctx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
   const { actor, persona } = session;
+  const empty = await companyState(ctx);
+  if (empty) return <EmptyPage title={personaGreeting(persona)} meta={`${persona.title} · ${persona.scope.label}`} state={empty} role={actor.role} what="your residents, rent and work orders" />;
   const today = await asOfDate(ctx.db);
   const p = (col: string) => scopeIn(actor, col);
   // Rent owed and collections are receivables figures: only roles that read charges see them here.
@@ -194,9 +198,9 @@ export async function TodayPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {rent && <KpiCard label="Past-due balance" format="money" goodWhen="down" value={lateCents / 100} href="/app/receivables/delinquency" help="Unpaid charges past their due date, all aging buckets, as of today." footnote={`${lateHouseholds} household${lateHouseholds === 1 ? "" : "s"} · ${usd(over30)} over 30 days`} />}
-        {coll && <KpiCard label="Collections rate" format="pct" goodWhen="up" {...kpi(kColl)} href="/app/receivables/payments" help="Collected this month as a share of what was charged." />}
+        {coll && <KpiCard label="Collections rate" format="pct" goodWhen="up" {...kpi(kColl)} footnote={kColl?.note} href="/app/receivables/payments" help="Collected this month as a share of what was charged." />}
         <KpiCard label="Leases ending in 60 days" format="count" goodWhen="down" value={kExp?.value ?? null} href="/app/leases?view=expiring-60" footnote={`${formatNumber(leases.length)} without a renewal offer`} />
-        <KpiCard label="Open work orders" format="count" goodWhen="down" value={Number(w.open)} href={`/app/maintenance/work-orders?${WO_OPEN_Q}`} footnote={`${w.late} past SLA · ${w.urgent} urgent`} />
+        <KpiCard label="Open work orders" format="count" goodWhen="down" value={Number(w.open)} href={`/app/maintenance/work-orders?${WO_OPEN_Q}`} footnote={`${w.late ?? 0} past SLA · ${w.urgent ?? 0} urgent`} />
       </div>
 
       <CollapsibleSection id="charts" title="Charts" summary={`${rent ? 3 : 2} charts`} description="Select a bar for the records behind it.">

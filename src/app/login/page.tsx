@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { DEMO_PASSWORD, demoEmail, getPersona, PERSONAS, PN_AS, safeNext, type Persona } from "@/auth/personas";
+import { DEMO_PASSWORD, demoEmail, getPersona, inLakeside, PERSONAS, PN_AS, safeNext, type Persona } from "@/auth/personas";
 import { SignIn, type Card } from "./SignIn";
 
 export const metadata: Metadata = { title: "Sign in · Propniti demo" };
@@ -20,6 +20,8 @@ const SEES: Record<string, string> = {
   tom: "The work-order board by SLA, make-ready turns, preventive maintenance and vendor insurance expiries.",
   sam: "Users, roles and the permission matrix, approval limits, state rules and the audit log.",
   nadia: "Every customer org, AI usage across them and data-health scores.",
+  alex: "Lakeside Property Co. on day one: no properties yet. Guided setup imports sample AppFolio files, sets approval rules and invites the team.",
+  maya: "Lakeside's property manager: sees nothing until Alex imports data and invites her, then only the properties she was given.",
   owner: "Owner portal: distributions, NOI and occupancy, repairs over the approval limit and statements.",
   resident: "Resident portal: rent due and autopay, maintenance requests and the lease.",
   vendor: "Vendor portal: assigned jobs, invoices and payments, and insurance status.",
@@ -40,7 +42,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<Pa
   const as = getPersona(sp.as);
   const field = sp.error === "email" || sp.error === "password" ? sp.error : undefined;
   const signedIn = getPersona((await cookies()).get(PN_AS)?.value);
-  const cards: Card[] = PERSONAS.map((p) => ({ id: p.id, name: p.name, title: p.title, role: roleLabel(p), scope: p.scope.label, sees: SEES[p.id] ?? "", email: demoEmail(p.id), portal: !!p.portal }));
+  const cards: Card[] = PERSONAS.map((p) => ({ id: p.id, name: p.name, title: p.title, role: roleLabel(p), scope: p.scope.label, sees: SEES[p.id] ?? "", email: demoEmail(p.id), portal: !!p.portal, group: p.portal ? "portal" : inLakeside(p) ? "empty" : "staff" }));
   return (
     <SignIn
       cards={cards}

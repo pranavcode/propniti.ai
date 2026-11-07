@@ -52,7 +52,8 @@ export async function publicWrite<S extends z.ZodType>(request: Request, schema:
   if (body instanceof Response) return body;
   const { db, writeLimiter } = getPlatform();
   const nowMs = Date.now();
-  const r = await resolveWorkspace(db, request, nowMs, true, !!writeLimiter);
+  // The public site is Summit's, whichever persona the visitor last picked.
+  const r = await resolveWorkspace(db, request, nowMs, true, !!writeLimiter, false);
   if (r instanceof Response) return r;
   try {
     const out = await apply({ db, ws: r.ws!, body, nowMs, request });

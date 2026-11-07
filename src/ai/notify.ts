@@ -1,5 +1,5 @@
 import { demoNowIso } from "@/lib/clock";
-import { PERSONAS, type Persona } from "@/auth/personas";
+import { PERSONAS, sameOrg, type Persona } from "@/auth/personas";
 import { scopeProperties } from "@/server/permissions";
 import { sql } from "./data";
 import { approverRoles, routeTo } from "./decide";
@@ -28,7 +28,7 @@ export async function notifyApprover(s: Who, id: string, nowIso = demoNowIso()):
   const able: Persona[] = [];
   const roles = approverRoles(p);
   for (const persona of PERSONAS) {
-    if (persona.portal || persona.id === s.persona.id || !roles.includes(persona.role)) continue;
+    if (persona.portal || persona.id === s.persona.id || !sameOrg(persona, s.persona) || !roles.includes(persona.role)) continue;
     const propertyIds = await scopeProperties(s.db, ws, persona);
     if (p.property_id && propertyIds !== "all" && !propertyIds.includes(String(p.property_id))) continue;
     const actor = { personaId: persona.id, name: persona.name, role: persona.role, scope: persona.scope, propertyIds };

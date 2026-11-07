@@ -5,6 +5,7 @@ import { sql, type DataCtx } from "@/ai/data";
 import { proposalsPage } from "@/ai/views";
 import { metrics, type QueryCtx } from "@/server/query";
 import { AS_OF } from "@/seed/constants";
+import { seededPhoto } from "@/entities/common";
 
 // Read model for the principal and regional homes. Every figure comes from the query layer or
 // metrics_monthly in the persona's scope; nothing here is model output.
@@ -18,8 +19,8 @@ export const LAST_CLOSED = addMonths(CURRENT_MONTH, -1);
 
 const safe = (p: Promise<MetricResult>) => p.catch((e: unknown) => ({ points: [], value: null, previous: null, spark: [], error: e instanceof Error ? e.message : "Couldn't load" } as MetricResult & { error: string }));
 
-export type Kpi = { value: number | null; previous: number | null; spark: number[]; error?: string };
-const kpi = (m: MetricResult & { error?: string }): Kpi => ({ value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], error: m.error });
+export type Kpi = { value: number | null; previous: number | null; spark: number[]; error?: string; note?: string };
+const kpi = (m: MetricResult & { error?: string }): Kpi => ({ value: m.value ?? null, previous: m.previous ?? null, spark: m.spark ?? [], error: m.error, note: m.note });
 
 // Delinquent is what is past due today (open charges past their due date, every aging bucket): the
 // figure Finance, Residents and the delinquency page show. It compares with the month-end balance
@@ -59,7 +60,7 @@ export type HomeMetrics = Awaited<ReturnType<typeof homeMetrics>>;
 
 // Comparison rows: last closed month per property with the month before for deltas, plus a photo.
 export type CompareRow = {
-  id: string; name: string; metro: string; photo: string; units: number; occupancy: number | null; economic: number | null; noi: number | null; budget: number | null;
+  id: string; name: string; metro: string; photo: string | undefined; units: number; occupancy: number | null; economic: number | null; noi: number | null; budget: number | null;
   vsBudget: number | null; noiPrev: number | null; collections: number | null; delinquent: number | null; woDue: number; breached: number; sla: number | null;
 };
 export function compareRows(m: HomeMetrics): CompareRow[] {
@@ -71,7 +72,7 @@ export function compareRows(m: HomeMetrics): CompareRow[] {
     const noi = num(p.noi), budget = num(p.budget_noi);
     const s = sla.get(id);
     return {
-      id, name: String(p.name), metro: String(p.metro), photo: `/img/props/${id}-400.webp`, units: Number(p.units ?? 0),
+      id, name: String(p.name), metro: String(p.metro), photo: seededPhoto(id), units: Number(p.units ?? 0),
       occupancy: num(p.occupancy), economic: num(p.economic_occupancy), noi, budget, vsBudget: noi != null && budget ? (noi - budget) / Math.abs(budget) : null,
       noiPrev: num(prev.get(id)?.noi), collections: num(p.collections_rate), delinquent: num(p.delinquent),
       woDue: Number(s?.due ?? 0), breached: Number(s?.missed ?? 0), sla: num(s?.value),

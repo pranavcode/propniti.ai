@@ -2,7 +2,7 @@ import { Banknote, CreditCard, Mail, Megaphone, MessageSquare, Plug, RefreshCcw 
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { RelativeDate, StatusBadge } from "@/components/app/display";
 import { NoAccess, settingsSession } from "@/extensions/settings/pages";
-import { ORG_ID, prefsData, rows } from "@/extensions/settings/data";
+import { orgId, prefsData, rows } from "@/extensions/settings/data";
 import { canEditSettings, canSettings } from "@/extensions/settings/nav";
 import { INTEGRATIONS } from "@/extensions/settings/integrations";
 import { IntegrationToggle } from "@/extensions/settings/ui/forms";
@@ -17,7 +17,7 @@ export default async function IntegrationsPage() {
   if (!canSettings(session.actor.role)) return <NoAccess />;
   const canEdit = canEditSettings(session.actor.role);
   const [prefs, banks] = await Promise.all([
-    prefsData(ctx, ORG_ID),
+    prefsData(ctx, orgId(ctx)),
     rows<{ id: string; name: string; kind: string; bank: string; last4: string }>(ctx, "SELECT id, name, kind, bank, last4 FROM {bank_accounts} ORDER BY kind, name LIMIT 50"),
   ]);
   const state = (prefs.integrations ?? {}) as Record<string, { status: string; at: string; by: string }>;

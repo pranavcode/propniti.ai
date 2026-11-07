@@ -4,7 +4,7 @@ import { z } from "zod";
 import { handle, json, writeCtx } from "@/app/api/e/_lib/http";
 import type { Role } from "@/entities/types";
 import type { WriteCtx } from "@/server/query";
-import { ORG_ID, one, parseJson } from "./data";
+import { orgId, one, parseJson } from "./data";
 import { canEditSettings } from "./nav";
 
 // Writes for settings that have no entity of their own (company profile, integrations,
@@ -34,7 +34,7 @@ export async function mergePrefs(ctx: WriteCtx, id: string, key: string, patch: 
 
 export function setupStep(ctx: WriteCtx, step: string, status: "Done" | "Todo" | "Skipped") {
   return ctx.db.prepare("INSERT INTO onboarding_progress (workspace_id, id, subject_kind, subject_id, step, status, done_at) VALUES (?, ?, 'org', ?, ?, ?, ?) ON CONFLICT (workspace_id, id) DO UPDATE SET status = excluded.status, done_at = excluded.done_at, deleted = 0")
-    .bind(ctx.ws, `onb-${step}`, ORG_ID, step, status, status === "Done" ? demoNowIso(ctx.nowMs) : null);
+    .bind(ctx.ws, `onb-${step}`, orgId(ctx), step, status, status === "Done" ? demoNowIso(ctx.nowMs) : null);
 }
 
 // POST handler wrapper: guarded write, a role check (admins only, or `allow`), JSON result. A

@@ -3,6 +3,7 @@ import type { Actor, ListResult, Role, Row } from "@/entities/types";
 import { allEntities, can } from "@/entities/registry";
 import { MAX_PAGE_SIZE } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
+import { baseOf, isLakeside, SHARED } from "@/server/effective";
 
 // Read/write access for the AI runtime. Reads see the visitor's overlay over the shared base
 // (plan §1, option B) and are always limited to the actor's properties. This mirrors the contract
@@ -57,9 +58,18 @@ export const isTable = (t: string): t is Table => Object.hasOwn(TABLES, t);
 
 // Overlay rows replace base rows with the same id; tombstones (deleted = 1) hide them.
 // Every placeholder is a plain `?`; eff() returns the params it needs in order.
+// A Lakeside workspace (the second demo org) sits on its own base and sees 'base' rows only from
+// the shared reference tables (src/server/effective.ts).
 export function eff(table: Table, ws: string): { sql: string; params: unknown[] } {
   if (ws === "base") return { sql: `(SELECT * FROM ${table} WHERE workspace_id = 'base' AND deleted = 0)`, params: [] };
   // One SELECT, not a UNION ALL, so SQLite can flatten it into joins and use the (workspace_id, id) index.
+  if (isLakeside(ws)) {
+    const shared = SHARED[table as keyof typeof SHARED];
+    return {
+      sql: `(SELECT * FROM ${table} WHERE (workspace_id IN (?, ?)${shared ? ` OR (workspace_id = 'base' AND ${shared})` : ""}) AND deleted = 0 AND (workspace_id = ? OR NOT EXISTS (SELECT 1 FROM ${table} o WHERE o.workspace_id = ? AND o.id = ${table}.id)))`,
+      params: [baseOf(ws), ws, ws, ws],
+    };
+  }
   return {
     sql: `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ?) AND deleted = 0 AND (workspace_id = ? OR NOT EXISTS (SELECT 1 FROM ${table} o WHERE o.workspace_id = ? AND o.id = ${table}.id)))`,
     params: [ws, ws, ws],

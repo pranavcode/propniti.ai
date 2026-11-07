@@ -12,7 +12,8 @@ export type MetricParams = {
 };
 
 // KPIs read value/previous/spark; charts read points (each point carries ChartDef.x and series keys).
-export type MetricResult = { value?: number | null; previous?: number | null; spark?: number[]; points: Row[]; asOf?: string; source?: string };
+// `note` says why a figure is missing, e.g. a new company with no closed month yet.
+export type MetricResult = { value?: number | null; previous?: number | null; spark?: number[]; points: Row[]; asOf?: string; source?: string; note?: string };
 
 export type MetricCtx = { db: Db; ws: string | null; actor: Actor; propertyIds: string[] | "all"; asOf: string };
 

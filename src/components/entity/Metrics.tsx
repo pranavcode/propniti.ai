@@ -37,7 +37,7 @@ function Spark({ values, good }: { values: number[]; good: boolean | null }) {
   );
 }
 
-export type KpiData = { key: string; metric?: string; property?: string; label: string; format: Fmt; value: number | null; previous: number | null; spark: number[]; goodWhen?: "up" | "down"; drill?: string; help?: string; asOf?: string; error?: string };
+export type KpiData = { key: string; metric?: string; property?: string; label: string; format: Fmt; value: number | null; previous: number | null; spark: number[]; goodWhen?: "up" | "down"; drill?: string; help?: string; asOf?: string; error?: string; note?: string };
 
 export function KpiTile({ k }: { k: KpiData }) {
   const imp = useImprove({ metric: k.metric ?? "", property: k.property, label: k.label, value: k.error ? null : k.value, previous: k.previous, goodWhen: k.goodWhen, format: k.format });
@@ -71,6 +71,7 @@ function Tile({ k, improving }: { k: KpiData; improving: boolean }) {
           <span className="truncate font-normal text-muted-foreground">vs last month</span>
         </span>
       ) : undefined}
+      footnote={!k.error && k.value == null && k.note ? k.note : undefined}
       spark={!k.error && k.spark.length > 1 ? <Spark values={k.spark} good={good} /> : undefined}
     />
   );

@@ -40,6 +40,8 @@ export type OnboardingData = {
   regions: Option[];
   properties: (Option & { imported: boolean })[];
   routes: Record<string, string>;
+  // A demo person the visitor can invite and then sign in as (Lakeside's property manager).
+  demoInvite?: { name: string; email: string; title: string; role: string };
 };
 
 const COPY: Record<StepKey, { title: string; description: string }> = {

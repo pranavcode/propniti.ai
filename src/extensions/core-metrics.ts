@@ -1,6 +1,7 @@
 import { effective } from "@/server/query";
+import { baseOf } from "@/server/effective";
 import type { MetricKey, Row } from "@/entities/types";
-import { registerMetric, type MetricCtx, type MetricParams, type MetricResult } from "./metrics";
+import { getMetric, registerMetric, type MetricCtx, type MetricParams, type MetricResult } from "./metrics";
 
 // Portfolio-wide metrics over metrics_monthly (base, precomputed by the generator) plus the
 // visitor's live overlay for the current month. Module lanes add their own with monthly() or
@@ -47,7 +48,7 @@ export async function monthSeries(ctx: MetricCtx, params: MetricParams): Promise
   const to = params.month ?? ctx.asOf;
   const from = addMonths(to, -Math.max(1, Math.min(24, params.months ?? 12)) + 1);
   const s = scopeSql(ctx, params);
-  const res = await ctx.db.prepare(`SELECT month, ${SUMS.map((c) => `coalesce(sum(${c}), 0) AS ${c}`).join(", ")}, coalesce(sum(occupancy_econ * gpr_cents), 0) AS econ_weighted FROM metrics_monthly WHERE workspace_id = 'base' AND month BETWEEN ? AND ?${s.sql} GROUP BY month ORDER BY month`).bind(from, to, ...s.binds).all<MonthSums>();
+  const res = await ctx.db.prepare(`SELECT month, ${SUMS.map((c) => `coalesce(sum(${c}), 0) AS ${c}`).join(", ")}, coalesce(sum(occupancy_econ * gpr_cents), 0) AS econ_weighted FROM metrics_monthly WHERE workspace_id = '${baseOf(ctx.ws)}' AND month BETWEEN ? AND ?${s.sql} GROUP BY month ORDER BY month`).bind(from, to, ...s.binds).all<MonthSums>();
   const rows = res.results.map((r) => ({ ...r, month: String(r.month) }));
   const last = rows[rows.length - 1];
   if (last && last.month === ctx.asOf) {
@@ -68,12 +69,20 @@ const collectionsRate = (m: MonthSums) => (m.charged_cents ? Math.min(1, m.colle
 // month, since the current one is only days old (collections and month-end delinquency too:
 // early in a month, rent just billed would read as delinquent); stocks (occupancy, open work
 // orders) end at the current month and include the visitor's live changes.
-export function monthly(key: MetricKey, label: string, value: (m: MonthSums) => number | null, series?: Record<string, (m: MonthSums) => number | null>, kind: "stock" | "flow" = "stock") {
+// A company with no monthly history yet (just imported) reads current-state figures from its live
+// records (`live`); figures that need a closed month say so instead.
+export const NEEDS_HISTORY = "Needs a month of activity";
+type Live = (ctx: MetricCtx, params: MetricParams) => Promise<number | null>;
+
+export function monthly(key: MetricKey, label: string, value: (m: MonthSums) => number | null, series?: Record<string, (m: MonthSums) => number | null>, kind: "stock" | "flow" = "stock", live?: Live) {
   return registerMetric({
     key,
     label,
     run: async (ctx, params): Promise<MetricResult> => {
       const rows = await monthSeries(ctx, kind === "flow" && !params.month ? { ...params, month: addMonths(ctx.asOf, -1) } : params);
+      if (!rows.length && !(await hasHistory(ctx))) {
+        return live ? { value: await live(ctx, params), previous: null, spark: [], points: [], asOf: ctx.asOf, source: "live records" } : { value: null, previous: null, spark: [], points: [], note: NEEDS_HISTORY };
+      }
       const vals = rows.map(value);
       const points = rows.map((m, i) => {
         const p: Row = { month: m.month, value: vals[i] };
@@ -105,13 +114,32 @@ export function byProperty(key: MetricKey, label: string, cols: Record<string, (
   });
 }
 
+// Whether the workspace's org has any monthly figures at all (Summit always does; a new company
+// before its first close has none), so a filter that matches nothing still reads as "no data".
+async function hasHistory(ctx: MetricCtx) {
+  return !!(await ctx.db.prepare(`SELECT 1 FROM metrics_monthly WHERE workspace_id IN ('${baseOf(ctx.ws)}', ?) LIMIT 1`).bind(ctx.ws ?? "~").first());
+}
+
+// Live unit counts in scope: rentable units and occupied or on-notice ones (as the property list).
+async function liveUnits(ctx: MetricCtx, params: MetricParams) {
+  const s = scopeSql(ctx, params);
+  return ctx.db.prepare(`SELECT count(*) AS units, coalesce(sum(status IN ('Occupied', 'Notice')), 0) AS occupied FROM ${effective("units", ctx.ws)} WHERE 1 = 1${s.sql}`).bind(...s.binds).first<{ units: number; occupied: number }>();
+}
+const liveOccupancy: Live = async (ctx, params) => { const u = await liveUnits(ctx, params); return u?.units ? u.occupied / u.units : null; };
+const liveUnitCount: Live = async (ctx, params) => (await liveUnits(ctx, params))?.units ?? 0;
+const liveDelinquency: Live = async (ctx, params) => (await getMetric("receivables.aging_live")?.run(ctx, params))?.value ?? null;
+const liveOpenWorkOrders: Live = async (ctx, params) => {
+  const s = scopeSql(ctx, params);
+  return Number((await ctx.db.prepare(`SELECT count(*) AS n FROM ${effective("work_orders", ctx.ws)} WHERE status NOT IN ('Completed', 'Paid', 'Cancelled')${s.sql}`).bind(...s.binds).first<{ n: number }>())?.n ?? 0);
+};
+
 const dollars = (c: number) => c / 100;
 const aging = (m: MonthSums) => m.aging_0_30_cents + m.aging_31_60_cents + m.aging_61_90_cents + m.aging_90p_cents;
 
 monthly("portfolio.occupancy", "Physical occupancy", (m) => ratio(m.occupied, m.units), {
   physical: (m) => ratio(m.occupied, m.units),
   economic: (m) => ratio(m.econ_weighted, m.gpr_cents),
-});
+}, "stock", liveOccupancy);
 monthly("portfolio.economic_occupancy", "Economic occupancy", (m) => ratio(m.econ_weighted, m.gpr_cents));
 monthly("portfolio.noi", "Net operating income", (m) => dollars(m.noi_cents), {
   noi: (m) => dollars(m.noi_cents),
@@ -122,7 +150,7 @@ monthly("portfolio.income_expense", "Charges paid vs expenses", (m) => dollars(m
   income: (m) => dollars(m.collected_cents),
   expenses: (m) => dollars(m.opex_cents),
 }, "flow");
-monthly("portfolio.units", "Units", (m) => m.units);
+monthly("portfolio.units", "Units", (m) => m.units, undefined, "stock", liveUnitCount);
 monthly("receivables.collections_rate", "Collections rate", collectionsRate, {
   charged: (m) => dollars(m.charged_cents),
   collected: (m) => dollars(m.collected_cents),
@@ -132,10 +160,10 @@ monthly("receivables.delinquency", "Delinquent balance", (m) => dollars(aging(m)
   d31_60: (m) => dollars(m.aging_31_60_cents),
   d61_90: (m) => dollars(m.aging_61_90_cents),
   d90p: (m) => dollars(m.aging_90p_cents),
-}, "flow");
+}, "flow", liveDelinquency);
 monthly("leasing.vacancy_loss", "Vacancy loss", (m) => dollars(m.vacancy_loss_cents), undefined, "flow");
 monthly("leasing.move_ins", "Move-ins", (m) => m.move_ins, { move_ins: (m) => m.move_ins, move_outs: (m) => m.move_outs }, "flow");
-monthly("maintenance.wo_open", "Open work orders", (m) => m.wo_open, { opened: (m) => m.wo_opened, open: (m) => m.wo_open, breached: (m) => m.wo_sla_breach });
+monthly("maintenance.wo_open", "Open work orders", (m) => m.wo_open, { opened: (m) => m.wo_opened, open: (m) => m.wo_open, breached: (m) => m.wo_sla_breach }, "stock", liveOpenWorkOrders);
 // SLA met rate: work orders completed by their SLA due time ÷ work orders due in the month (the
 // current month counts only what is due by the demo's today). Open jobs past due count as missed,
 // so the rate is always between 0 and 1. Live from work_orders, scoped like every list.

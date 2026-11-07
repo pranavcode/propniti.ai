@@ -2,6 +2,8 @@ import { clientKey } from "@/lib/guard";
 import type { Db } from "@/lib/platform/types";
 import { DEMO_RESET_TZ, DEMO_TODAY } from "@/lib/seed";
 import { demoNowIso, wallClock } from "@/lib/clock";
+import { LAKESIDE_ORG, personaFromCookieHeader, type Persona } from "@/auth/personas";
+import { LAKESIDE_WS, NO_WORKSPACE } from "./effective";
 import { randomId, type WorkspaceRow } from "./repo";
 
 // Each visitor gets a private overlay on the shared base data, found by a random id in an
@@ -33,6 +35,10 @@ export function readCookie(request: Request) {
   const id = raw?.slice(COOKIE.length + 1);
   return id && ID.test(id) ? id : null;
 }
+
+// The workspace a persona acts in. Lakeside personas (the empty second org) get the visitor's id
+// plus LAKESIDE_WS, so each org has its own overlay: "~.lakeside" until the visitor's first write.
+export const tenantWs = (raw: string | null, persona: Persona) => (persona.org === LAKESIDE_ORG ? `${raw ?? NO_WORKSPACE}${LAKESIDE_WS}` : raw);
 
 export const cookieHeader = (id: string) =>
   `${COOKIE}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
@@ -72,21 +78,25 @@ export type Resolved = { ws: string | null; setCookie?: string };
 // A new one is only created when `create` is set (a write) or the cookie came back to us, so
 // clients that never return cookies (crawlers) get seed data without a workspace per request.
 // Returns ws null when the caller should see seed data computed in memory.
-export async function resolveWorkspace(db: Db, request: Request, nowMs: number, create: boolean, onCloudflare: boolean): Promise<Resolved | Response> {
+// `lakeside` picks the Lakeside workspace (see tenantWs); by default it follows the persona cookie.
+// The cookie always holds the plain visitor id.
+export async function resolveWorkspace(db: Db, request: Request, nowMs: number, create: boolean, onCloudflare: boolean, lakeside = personaFromCookieHeader(request.headers.get("cookie")).org === LAKESIDE_ORG): Promise<Resolved | Response> {
   const cookieId = readCookie(request);
+  const suffix = lakeside ? LAKESIDE_WS : "";
   if (cookieId) {
+    const ws = cookieId + suffix;
     const row = await db
       .prepare(`SELECT expires_at, last_seen_at, created_by, base_version IS ${BASE_VERSION_SQL} AS current FROM workspaces WHERE id = ?1`)
-      .bind(cookieId)
+      .bind(ws)
       .first<{ expires_at: number | null; last_seen_at: number; created_by: string | null; current: number }>();
     // An overlay built on an older base is wiped and started fresh (ids rarely change, but seq does).
     if (row && row.current && (row.expires_at == null || row.expires_at > nowMs)) {
-      if (row.last_seen_at < nowMs - 60_000) await db.prepare("UPDATE workspaces SET last_seen_at = ?2 WHERE id = ?1").bind(cookieId, nowMs).run();
-      return { ws: cookieId };
+      if (row.last_seen_at < nowMs - 60_000) await db.prepare("UPDATE workspaces SET last_seen_at = ?2 WHERE id = ?1").bind(ws, nowMs).run();
+      return { ws };
     }
     if (row) {
-      await clone(db, cookieId, nowMs, row.created_by);
-      return { ws: cookieId };
+      await clone(db, ws, nowMs, row.created_by);
+      return { ws };
     }
   }
   const id = cookieId ?? randomId();
@@ -97,6 +107,6 @@ export async function resolveWorkspace(db: Db, request: Request, nowMs: number, 
   if ((recent?.n ?? 0) >= (ip.shared ? CREATE_LIMIT * 20 : CREATE_LIMIT)) {
     return create ? Response.json({ error: "Too many new demo sessions from your network. Try again in an hour." }, { status: 429, headers: { "Retry-After": "3600" } }) : { ws: null };
   }
-  await clone(db, id, nowMs, ip.hash);
-  return { ws: id, setCookie };
+  await clone(db, id + suffix, nowMs, ip.hash);
+  return { ws: id + suffix, setCookie };
 }

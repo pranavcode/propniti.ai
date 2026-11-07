@@ -7,6 +7,7 @@ import { AIBadge } from "@/components/app/ai";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/format";
 import { sql } from "@/ai/data";
+import { baseOf } from "@/server/effective";
 import { AGENT_LABEL, agentName, runStatusLabel } from "@/ai/ui/labels";
 import { PERMISSIONS } from "@/auth/personas";
 import { pageData } from "@/ai/ui/server";
@@ -31,7 +32,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const orgRows = (PERMISSIONS[data.actor.role].settings ?? "none") !== "none" ? "audit.property_id IS NULL OR " : "";
   const auditScope = ids === "all" ? { sql: orgRows ? "1 = 1" : "audit.property_id IS NOT NULL", params: [] as unknown[] } : { sql: `(${orgRows}audit.property_id IN (SELECT value FROM json_each(?)))`, params: [JSON.stringify(ids)] as unknown[] };
   const audit = tab === "audit"
-    ? await sql<Record<string, unknown>>(data, `SELECT at, actor, role, agent, model, action, entity_type, entity_id, detail FROM audit WHERE workspace_id IN (?, 'base') AND ${auditScope.sql} AND (agent IS NOT NULL OR action LIKE '%approved%' OR action LIKE '%rejected%' OR action LIKE 'agent.%' OR action LIKE 'data_issue.%' OR action LIKE 'approval_policy.%') ORDER BY at DESC LIMIT 50 OFFSET ${(page - 1) * 50}`, [data.ws, ...auditScope.params])
+    ? await sql<Record<string, unknown>>(data, `SELECT at, actor, role, agent, model, action, entity_type, entity_id, detail FROM audit WHERE workspace_id IN (?, '${baseOf(data.ws)}') AND ${auditScope.sql} AND (agent IS NOT NULL OR action LIKE '%approved%' OR action LIKE '%rejected%' OR action LIKE 'agent.%' OR action LIKE 'data_issue.%' OR action LIKE 'approval_policy.%') ORDER BY at DESC LIMIT 50 OFFSET ${(page - 1) * 50}`, [data.ws, ...auditScope.params])
     : [];
   const filters = [["", "All agents"], ...Object.entries(AGENT_LABEL)];
   return (

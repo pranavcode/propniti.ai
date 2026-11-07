@@ -13,6 +13,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AIBadge } from "@/components/app/ai";
 import { ErrorBanner, EmptyState } from "@/components/app/states";
 import { NO_CHANGE, simulateAll, type Baseline, type Levers, type Result } from "../whatif";
+import { seededPhoto } from "@/entities/common";
+import { Thumb } from "@/components/app/display";
 
 export type Scope = { kind: "portfolio" } | { kind: "metro"; metro: string } | { kind: "property"; property: string };
 type Narrative = { text: string; bullets: string[]; source: "live" | "rules"; model: string; runId: string; note?: string };
@@ -222,8 +224,10 @@ export function Simulator({ baselines, initialScope, initialLevers, period }: { 
                   <tr key={r.property_id} className="h-[var(--row-h,36px)] border-b last:border-0 hover:bg-muted/40">
                     <td className="w-[34%] max-w-0 px-3 py-1.5">
                       <Link href={`/app/properties/${r.property_id}`} className="group flex min-w-0 items-center gap-2.5">
-                        {/* eslint-disable-next-line @next/next/no-img-element -- static 400px thumb; the Workers build has no image optimizer */}
-                        <img src={`/img/props/${r.property_id}-400.webp`} alt="" loading="lazy" className="h-7 w-10 shrink-0 rounded object-cover ring-1 ring-border" />
+                        {seededPhoto(r.property_id)
+                          // eslint-disable-next-line @next/next/no-img-element -- static 400px thumb; the Workers build has no image optimizer
+                          ? <img src={seededPhoto(r.property_id)} alt="" loading="lazy" className="h-7 w-10 shrink-0 rounded object-cover ring-1 ring-border" />
+                          : <Thumb size={28} />}
                         <span className="min-w-0">
                           <span className="block truncate font-medium group-hover:text-primary">{r.name}</span>
                           <span className="block truncate text-[11.5px] text-muted-foreground">{r.metro}</span>

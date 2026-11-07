@@ -5,6 +5,10 @@ import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { LAKESIDE_ORG } from "@/auth/personas";
+import { canOnboard } from "@/extensions/onboarding/state";
+import { resetDay } from "@/lib/clock";
+import { useShellMaybe } from "../shell/context";
 
 // First-run org setup checklist (plan addendum: company, bank, import, team, roles, payments).
 // Progress is kept in localStorage behind useSetupProgress; lane C can back it with the server.
@@ -21,8 +25,11 @@ export const SETUP_ITEMS: SetupItem[] = [
 ];
 
 export function useSetupProgress(items: SetupItem[] = SETUP_ITEMS) {
-  const [overrides, setOverrides] = useLocalStorage<Record<string, boolean>>("pn_setup", {});
-  const list = items.map((i) => ({ ...i, done: overrides[i.key] ?? !!i.done }));
+  // Lakeside (the empty demo org) starts with nothing done and keeps its own progress, per demo day:
+  // its workspace resets at midnight Pacific, so its checklist does too.
+  const fresh = useShellMaybe()?.data.persona.org === LAKESIDE_ORG;
+  const [overrides, setOverrides] = useLocalStorage<Record<string, boolean>>(fresh ? `pn_setup_lakeside_${resetDay()}` : "pn_setup", {});
+  const list = items.map((i) => ({ ...i, done: overrides[i.key] ?? (!fresh && !!i.done) }));
   const done = list.filter((i) => i.done).length;
   return { items: list, done, total: list.length, setDone: (key: string, v: boolean) => setOverrides((o) => ({ ...o, [key]: v })) };
 }
@@ -38,9 +45,11 @@ function Ring({ value, size = 16 }: { value: number; size?: number }) {
 }
 
 // Sidebar pill: "Finish setup 4/6" with a progress ring. Hidden once everything is done.
+// Only the people who set the org up see it (principal, regional manager, admin).
 export function SetupPill({ collapsed, onClick }: { collapsed?: boolean; onClick: () => void }) {
   const { done, total } = useSetupProgress();
-  if (done === total) return null;
+  const role = useShellMaybe()?.data.persona.role;
+  if (done === total || !role || !canOnboard(role)) return null;
   const btn = (
     <button data-tour="setup" onClick={onClick} className={cn("flex items-center gap-2 rounded-md text-[12.5px] transition-colors hover:bg-sidebar-accent", collapsed ? "size-8 justify-center" : "h-8 w-full border border-sidebar-border bg-background px-2 shadow-xs")}>
       <Ring value={done / total} />

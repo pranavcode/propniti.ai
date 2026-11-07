@@ -15,6 +15,8 @@ import { EmptyState, ErrorBanner } from "@/components/app/states";
 import { ExplainableKpi, ExplainLink } from "@/extensions/portfolio/ui/Explain";
 import { LAST_CLOSED } from "@/extensions/portfolio/home/data";
 import { monthTick } from "@/components/app/dashboard/fmt";
+import { companyState } from "@/extensions/onboarding/empty";
+import { EmptyPage } from "@/extensions/onboarding/ui/NothingYet";
 
 // Portfolio module dashboard: the asset view of everything in scope. KPIs explain themselves,
 // charts drill to filtered lists, and every property shows as a photo card.
@@ -32,6 +34,8 @@ export default async function PortfolioDashboard() {
   if (!can(session.actor.role, "read", "properties")) {
     return <div className="p-6"><EmptyState title="The portfolio isn't part of your role" description="Switch role from your avatar menu to see the portfolio dashboard." action={{ label: "Go to your home", href: "/app" }} /></div>;
   }
+  const empty = await companyState(q);
+  if (empty) return <EmptyPage title="Portfolio" meta={session.persona.scope.label} state={empty} role={session.actor.role} what="occupancy, NOI and your property cards" />;
   const closed = { month: LAST_CLOSED, months: 12 };
   const settle = <T,>(p: Promise<T>) => p.then((v) => v, () => null);
   // Vacancy loss is a leasing figure; roles without leasing (accountant, maintenance) don't get the tile.
@@ -67,9 +71,9 @@ export default async function PortfolioDashboard() {
       <PageBody>
         {failed && <ErrorBanner title="Some figures didn't load" message="The rest of the page is current. Reload to try again." />}
         <KpiRow>
-          <ExplainableKpi metric="portfolio.noi" label="NOI" format="money" value={noi?.value ?? null} previous={noi?.previous ?? null} spark={noi?.spark} href="/app/properties?sort=-noi_month" footnote={monthLong(LAST_CLOSED)} />
-          <ExplainableKpi metric="portfolio.occupancy" label="Occupancy" format="pct" value={occ?.value ?? null} previous={occ?.previous ?? null} spark={occ?.spark} href="/app/units?f.status=Vacant" footnote="Physical, month end" />
-          {showVac && <ExplainableKpi metric="leasing.vacancy_loss" label="Vacancy loss" format="money" value={vac?.value ?? null} previous={vac?.previous ?? null} spark={vac?.spark} goodWhen="down" href="/app/units?view=vacant" footnote="Rent lost on empty units" />}
+          <ExplainableKpi metric="portfolio.noi" label="NOI" format="money" value={noi?.value ?? null} previous={noi?.previous ?? null} spark={noi?.spark} href="/app/properties?sort=-noi_month" footnote={noi?.note ?? monthLong(LAST_CLOSED)} />
+          <ExplainableKpi metric="portfolio.occupancy" label="Occupancy" format="pct" value={occ?.value ?? null} previous={occ?.previous ?? null} spark={occ?.spark} href="/app/units?f.status=Vacant" footnote={occ?.source === "live records" ? "Physical, today" : "Physical, month end"} />
+          {showVac && <ExplainableKpi metric="leasing.vacancy_loss" label="Vacancy loss" format="money" value={vac?.value ?? null} previous={vac?.previous ?? null} spark={vac?.spark} goodWhen="down" href="/app/units?view=vacant" footnote={vac?.note ?? "Rent lost on empty units"} />}
           <ExplainableKpi metric="portfolio.economic_occupancy" label="Economic occupancy" format="pct" value={econ?.value ?? null} previous={econ?.previous ?? null} spark={econ?.spark} href="/app/units?view=below-market" footnote={`${statusPts.find((p) => p.status === "Vacant")?.units ?? 0} of ${status?.value ?? 0} units vacant today`} help="Rent actually earned over gross potential rent: vacancy, concessions and bad debt all pull it down." />
         </KpiRow>
 
@@ -90,7 +94,7 @@ export default async function PortfolioDashboard() {
                     <Link href={`/app/properties/${p.id}`} className="group block overflow-hidden rounded-lg border bg-card transition-[border-color,box-shadow] hover:border-foreground/20 hover:shadow-[0_2px_10px_-4px_oklch(0_0_0/0.15)] focus-visible:ring-2 focus-visible:ring-ring/60 outline-none">
                       <div className="relative aspect-[16/9] overflow-hidden bg-muted">
                         {/* eslint-disable-next-line @next/next/no-img-element -- static WebP, no image optimizer on Workers */}
-                        <img src={String(p._image ?? `/img/props/${p.id}-400.webp`)} alt="" loading="lazy" width={400} height={225} className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" />
+                        {p._image ? <img src={String(p._image)} alt="" loading="lazy" width={400} height={225} className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none" /> : <Building aria-hidden className="absolute inset-0 m-auto size-8 text-muted-foreground/50" />}
                         <span className="absolute top-2 left-2 rounded bg-background/90 px-1.5 py-0.5 text-[11px] font-medium backdrop-blur">{String(p.metro)}</span>
                         {p.status !== "Stabilized" && <span className="absolute top-2 right-2 rounded bg-tone-info px-1.5 py-0.5 text-[11px] font-medium text-white">{String(p.status)}</span>}
                       </div>

@@ -5,7 +5,7 @@ import type { Row } from "@/entities/types";
 import { computeFix } from "@/ai/rules";
 import { isRunnableRule } from "@/ai/data-rules";
 import { effective, forgetOverlay, type QueryCtx, type WriteCtx } from "@/server/query";
-import { ORG_ID, prefsData } from "@/extensions/settings/data";
+import { orgId, prefsData } from "@/extensions/settings/data";
 import { mergePrefs, setupStep } from "@/extensions/settings/write";
 import { canInvite } from "@/extensions/settings/nav";
 import { canEditPolicies } from "@/ai/policy-editors";
@@ -18,13 +18,13 @@ import type { Stats } from "./suggest";
 // for the suggested limits, and the Data Health rules run over one import's records.
 
 export async function loadState(ctx: QueryCtx): Promise<OnboardingState> {
-  return parseState((await prefsData(ctx, ORG_ID)).onboarding);
+  return parseState((await prefsData(ctx, orgId(ctx))).onboarding);
 }
 
 export async function saveState(ctx: WriteCtx, patch: OnboardingPatch): Promise<OnboardingState> {
   const before = await loadState(ctx);
   const next = applyPatch(before, patch);
-  await mergePrefs(ctx, ORG_ID, "onboarding", next as Record<string, unknown>, `Onboarding: ${patch.done?.length ? `finished ${patch.done.join(", ")}` : patch.skipped?.length ? `skipped ${patch.skipped.join(", ")}` : "progress saved"}`);
+  await mergePrefs(ctx, orgId(ctx), "onboarding", next as Record<string, unknown>, `Onboarding: ${patch.done?.length ? `finished ${patch.done.join(", ")}` : patch.skipped?.length ? `skipped ${patch.skipped.join(", ")}` : "progress saved"}`);
   const newly = (patch.done ?? []).filter((k) => !before.done.includes(k));
   const keys = newly.flatMap(setupKeysFor).filter((k) => setupAllowed(ctx.actor.role, k));
   if (keys.length) await ctx.db.batch(keys.map((k) => setupStep(ctx, k, "Done")));

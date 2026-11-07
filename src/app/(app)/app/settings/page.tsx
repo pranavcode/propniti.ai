@@ -2,7 +2,7 @@ import Link from "@/components/Link";
 import { Settings } from "lucide-react";
 import { PageBody, PageHeader } from "@/components/app/page";
 import { settingsSession } from "@/extensions/settings/pages";
-import { ORG_ID, one, prefsData } from "@/extensions/settings/data";
+import { orgId, one, prefsData } from "@/extensions/settings/data";
 import { canSettings, settingsNav } from "@/extensions/settings/nav";
 import { INTEGRATIONS } from "@/extensions/settings/integrations";
 
@@ -25,7 +25,7 @@ export default async function SettingsHome() {
         (SELECT count(*) FROM {audit} WHERE at >= date($AS_OF, '-7 days')) AS audit7,
         (SELECT count(*) FROM {audit} WHERE agent IS NOT NULL AND at >= date($AS_OF, '-7 days')) AS ai7,
         (SELECT count(*) FROM {bank_accounts}) AS banks`),
-      prefsData(ctx, ORG_ID),
+      prefsData(ctx, orgId(ctx)),
     ])
     : [null, {}];
   const integ = (prefs as { integrations?: Record<string, { status: string }> }).integrations ?? {};

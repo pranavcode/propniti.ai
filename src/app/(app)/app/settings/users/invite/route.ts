@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { INTERNAL_ROLES } from "@/entities/types";
-import { ORG_ID, expandSql, rows } from "@/extensions/settings/data";
+import { orgId, expandSql, rows } from "@/extensions/settings/data";
 import { canEditSettings, canInvite } from "@/extensions/settings/nav";
 import { audit, settingsPost, setupStep } from "@/extensions/settings/write";
 
@@ -29,10 +29,10 @@ export const POST = settingsPost(body, async (ctx, b) => {
     }
   }
   const id = `s-${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  const scopes = b.scope_kind === "org" ? [ORG_ID] : b.scope_ids;
+  const scopes = b.scope_kind === "org" ? [orgId(ctx)] : b.scope_ids;
   const [created] = await ctx.db.batch([
     ctx.db.prepare(expandSql(ctx, "INSERT INTO staff (workspace_id, id, org_id, name, title, email, active, last_active_at) SELECT ?, ?, ?, ?, ?, ?, 0, NULL WHERE NOT EXISTS (SELECT 1 FROM {staff} s WHERE lower(s.email) = lower(?))"))
-      .bind(ctx.ws, id, ORG_ID, b.name, b.title, b.email, b.email),
+      .bind(ctx.ws, id, orgId(ctx), b.name, b.title, b.email, b.email),
     ...scopes.map((s) => ctx.db.prepare("INSERT INTO role_assignments (workspace_id, id, staff_id, role, scope_kind, scope_id) SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM staff WHERE workspace_id = ?1 AND id = ?3)").bind(ctx.ws, `ra-${id}-${s}`, id, b.role, b.scope_kind, s)),
   ]);
   if (!created.meta.changes) return { error: `${b.email} already has an account` };

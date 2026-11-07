@@ -62,29 +62,34 @@ const utf8 = new TextEncoder();
 const lit = (v: Value) => (v === null || v === undefined ? "NULL" : typeof v === "number" ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 
 // The base as SQL statements for D1: multi-row INSERTs kept under D1's 100 KB statement limit.
+// Both orgs' bases load: Summit's under 'base', Lakeside's under 'base-lakeside' (its own workspace
+// row, so its rows cascade like any workspace's but never expire).
 export function* baseSql(b: Base = baseData(), maxBytes = 60_000): Generator<string> {
-  yield "DELETE FROM workspaces WHERE id <> 'base';";
-  for (const t of baseTables(b)) yield `DELETE FROM ${t} WHERE workspace_id = 'base';`;
+  yield "DELETE FROM workspaces WHERE id NOT IN ('base', 'base-lakeside');";
+  for (const t of new Set([...baseTables(b), ...Object.keys(b.lakeside)])) yield `DELETE FROM ${t} WHERE workspace_id IN ('base', 'base-lakeside');`;
   yield "DELETE FROM base_balances;";
   yield "DELETE FROM meta;";
-  for (const t of baseTables(b)) {
-    for (const [cols, rows] of columnsOf(b.tables[t])) {
-      const head = `INSERT INTO ${t} (workspace_id, ${cols}) VALUES `;
-      const names = cols.split(",");
-      let parts: string[] = [];
-      let size = head.length;
-      for (const r of rows) {
-        const v = `('base', ${names.map((n) => lit(r[n])).join(", ")})`;
-        const bytes = utf8.encode(v).length;
-        if (parts.length && (size + bytes + 2 > maxBytes || parts.length >= 500)) {
-          yield head + parts.join(", ") + ";";
-          parts = [];
-          size = head.length;
+  yield "INSERT OR IGNORE INTO workspaces (id, kind, created_at, last_seen_at) VALUES ('base-lakeside', 'org', 0, 0);";
+  for (const [ws, tables] of [["base", b.tables], ["base-lakeside", b.lakeside]] as const) {
+    for (const t of Object.keys(tables)) {
+      for (const [cols, rows] of columnsOf(tables[t])) {
+        const head = `INSERT INTO ${t} (workspace_id, ${cols}) VALUES `;
+        const names = cols.split(",");
+        let parts: string[] = [];
+        let size = head.length;
+        for (const r of rows) {
+          const v = `('${ws}', ${names.map((n) => lit(r[n])).join(", ")})`;
+          const bytes = utf8.encode(v).length;
+          if (parts.length && (size + bytes + 2 > maxBytes || parts.length >= 500)) {
+            yield head + parts.join(", ") + ";";
+            parts = [];
+            size = head.length;
+          }
+          parts.push(v);
+          size += bytes + 2;
         }
-        parts.push(v);
-        size += bytes + 2;
+        if (parts.length) yield head + parts.join(", ") + ";";
       }
-      if (parts.length) yield head + parts.join(", ") + ";";
     }
   }
   yield `INSERT INTO base_balances (account_id, cleared_cents) VALUES ${b.balances.map((x) => `(${lit(x.account_id)}, ${x.cleared_cents})`).join(", ")};`;

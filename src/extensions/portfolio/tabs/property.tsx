@@ -82,10 +82,14 @@ export async function PropertyOverview({ id, row, actor }: TabProps) {
   if (!p) return <ErrorBanner message="This property couldn't load." />;
   const photos = photosOf(parseList(p.photos));
   const amenities = parseList(p.amenities);
-  const lat = Number(p.lat), lng = Number(p.lng);
-  const loc = Number.isFinite(lat) && Number.isFinite(lng) ? fromCenter(lat, lng, String(p.metro)) : null;
+  // Imported properties have no coordinates: show the address only, never a distance from 0°, 0°.
+  const coord = (v: unknown) => (v == null || v === "" ? NaN : Number(v));
+  const lat = coord(p.lat), lng = coord(p.lng);
+  const located = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  const loc = located ? fromCenter(lat, lng, String(p.metro)) : null;
   const avgRent = new Map(lease.map((l) => [l.unit_type_id, l.avg]));
-  const units = mix.reduce((s, m) => s + m.n, 0);
+  // The live unit count (the header's), not the floor-plan mix: imported units have no floor plan.
+  const units = row.units != null ? Number(row.units) : mix.reduce((s, m) => s + m.n, 0);
   const facts: [string, React.ReactNode][] = [
     ["Type", String(p.type)], ["Class", p.class ? `Class ${p.class}` : "—"], ["Year built", p.year_built ? String(p.year_built) : "—"],
     ["Stories", p.stories ? String(p.stories) : "—"], ["Buildings", formatNumber(Number(p.buildings))], ["Units", formatNumber(units)],
@@ -117,8 +121,8 @@ export async function PropertyOverview({ id, row, actor }: TabProps) {
               <p className="pl-5 text-muted-foreground">{String(p.city)}, {String(p.state)} {String(p.zip)}</p>
               {p.neighborhood ? <p className="mt-2 pl-5"><span className="text-muted-foreground">Neighborhood </span>{String(p.neighborhood)}</p> : null}
               {loc && <p className="pl-5"><span className="tabular-nums">{loc.miles.toFixed(1)} mi {loc.dir}</span> <span className="text-muted-foreground">of {loc.label}</span></p>}
-              {Number.isFinite(lat) && <p className="mt-2 pl-5 text-[11.5px] text-muted-foreground tabular-nums">{lat.toFixed(4)}°, {lng.toFixed(4)}°</p>}
-              {Number.isFinite(lat) && (
+              {located && <p className="mt-2 pl-5 text-[11.5px] text-muted-foreground tabular-nums">{lat.toFixed(4)}°, {lng.toFixed(4)}°</p>}
+              {located && (
                 <a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noreferrer" className="mt-1.5 ml-5 inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">
                   Open in maps <ExternalLink className="size-3" />
                 </a>

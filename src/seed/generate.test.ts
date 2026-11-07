@@ -219,7 +219,7 @@ describe("seed generator", () => {
   });
 
   it("seeds platform usage per org and a change history for policies and state rules", () => {
-    expect(new Set(T.org_usage_monthly.map((u) => u.org_id)).size).toBe(5);
+    expect(new Set(T.org_usage_monthly.map((u) => u.org_id)).size).toBe(6);
     const summit = T.org_usage_monthly.filter((u) => u.org_id === "org-summit");
     // Sample Copilot conversations (smp-…) are added after usage is counted.
     expect(summit.reduce((s, u) => s + (u.agent_runs as number), 0)).toBe(T.agent_runs.filter((r) => (r.started_at as string) >= "2025-09" && !String(r.id).startsWith("smp-")).length);

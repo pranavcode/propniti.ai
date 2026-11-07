@@ -11,7 +11,7 @@ import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { BULK_MATCH_CAP } from "@/lib/bulk";
 import { LIFE_SAFETY_ROLES, safetyJobs, VENDOR_OFF } from "@/ai/life-safety";
 import { EXPORT_CAP } from "@/lib/export/types";
-import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, overlayUpsertSql, TABLES } from "./effective";
+import { APPEND_ONLY, assertTable, baseOf, effective as baseEffective, isLakeside, NO_WORKSPACE, overlayUpsertSql, SHARED, TABLES, type Table } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
 // relation in one; every value is bound. Reads go through effective(): the visitor's overlay
@@ -29,7 +29,9 @@ export class QueryError extends Error {
 // Addendum 1: page sizes are 25/50/100.
 export const PAGE_SIZE_CAP = Math.min(MAX_PAGE_SIZE, 100);
 const IDENT = /^[a-z_][a-z0-9_]*$/;
-const WS_ID = /^[A-Za-z0-9_-]{22,64}$/;
+// A visitor's workspace id, or a Lakeside one (see effective.ts): the visitor's id, or "~" before
+// their first write, plus ".lakeside".
+const WS_ID = /^(?:[A-Za-z0-9_-]{22,64}|~(?=\.))(?:\.lakeside)?$/;
 
 function ident(name: string) {
   if (!IDENT.test(name)) throw new Error(`Bad identifier: ${name}`);
@@ -49,16 +51,22 @@ export type Ws = string | null | { id: string; overlay: Set<string> };
 // threading parameters; that is safe because it must match the cookie regex.
 export function effective(table: string, ws: Ws): string {
   assertTable(table);
+  const id = typeof ws === "object" && ws ? ws.id : ws;
+  const valid = id && WS_ID.test(id) ? id : null;
+  // The other org's rows are never in reach: a Lakeside workspace sits on base-lakeside and sees
+  // 'base' rows only from the shared reference tables.
+  const shared = isLakeside(valid) ? SHARED[table as Table] : undefined;
+  const base = `(workspace_id = '${baseOf(valid)}'${shared ? ` OR (workspace_id = 'base' AND ${shared})` : ""})`;
   // Fast path: the visitor has no overlay rows in this table, so its effective rows are the base
   // rows. Skips the anti-join, which costs ~350 ms per scan on the 130k-row ledger tables.
   // Base rows are never tombstoned (tombstones live in overlays), so no deleted = 0 here: that
   // keeps counts on the (workspace_id, …) indexes instead of reading every row.
-  if (typeof ws === "object" && ws && !ws.overlay.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id = 'base')`;
-  const id = typeof ws === "object" && ws ? ws.id : ws;
-  const w = `'${id && WS_ID.test(id) ? id : NO_WORKSPACE}'`;
-  if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}))`;
+  if (typeof ws === "object" && ws && !ws.overlay.has(table)) return `(SELECT * FROM ${table} WHERE ${base})`;
+  const w = `'${valid ?? NO_WORKSPACE}'`;
   if (table === "metrics_monthly") return baseEffective(table, w);
-  return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${w}) AND deleted = 0 AND (workspace_id = ${w} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${w} AND o.id = ${table}.id)))`;
+  const rows = isLakeside(valid) ? `(${base} OR workspace_id = ${w})` : `workspace_id IN ('base', ${w})`;
+  if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE ${rows})`;
+  return `(SELECT * FROM ${table} WHERE ${rows} AND deleted = 0 AND (workspace_id = ${w} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${w} AND o.id = ${table}.id)))`;
 }
 
 // Tables the visitor's overlay touches: one indexed probe per table in one query, cached per
@@ -69,6 +77,7 @@ export const forgetOverlay = (actor: Actor) => overlayCache.delete(actor);
 export async function readWs(ctx: QueryCtx): Promise<Ws> {
   const id = ctx.ws && WS_ID.test(ctx.ws) ? ctx.ws : null;
   if (!id) return { id: "", overlay: new Set() };
+  if (id.startsWith("~")) return { id, overlay: new Set() };
   let p = overlayCache.get(ctx.actor);
   if (!p) {
     // Rows of EXISTS columns, not a UNION: D1 allows only 5 terms in a compound SELECT and 100
@@ -321,7 +330,19 @@ function tablesRead(def: EntityDef): string[] {
 function aggKey(def: EntityDef, actor: Actor, ws: Ws, q: ListOptions): string | null {
   if (typeof ws !== "object" || !ws || q.rowsOnly || tablesRead(def).some((t) => ws.overlay.has(t))) return null;
   const who = actor.scope.kind === "self" ? `self:${actor.personaId}` : JSON.stringify(actor.propertyIds);
-  return JSON.stringify([def.key, actor.role, who, q.q ?? "", q.filters ?? {}, q.where ?? null]);
+  return JSON.stringify([baseOf(ws.id), def.key, actor.role, who, q.q ?? "", q.filters ?? {}, q.where ?? null]);
+}
+
+// Distinct values of a field in the reader's scope, for status tabs that follow the data (a new
+// company's metros, not the demo portfolio's).
+export async function distinctValues(ctx: QueryCtx, entity: EntityKey | string, key: string): Promise<string[]> {
+  const def = getDef(entity);
+  assertRead(def, ctx.actor.role);
+  const f = field(def, key, ctx.actor.role);
+  const ws = await readWs(ctx);
+  const scope = scopeWhere(def, ctx.actor, ws);
+  const res = await ctx.db.prepare(`SELECT DISTINCT ${expr(def, key, f, ws)} AS v FROM ${effective(def.table, ws)} AS ${def.table}${whereSql(scope)} LIMIT 50`).bind(...scope.params).all<{ v: unknown }>();
+  return res.results.map((r) => r.v).filter((v): v is string => typeof v === "string" && v !== "");
 }
 
 export async function list(ctx: QueryCtx, entity: EntityKey | string, q: ListOptions = {}): Promise<ListOut> {

@@ -1,6 +1,6 @@
 A tour of Propniti at [propniti.ai](https://propniti.ai), with one section per staff persona, portal and the public listings site.
 
-Open [propniti.ai/login](https://propniti.ai/login) and sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (shared by all accounts). Or click one of the 13 people in *Pick a person* to fill the form; double-click to sign in at once. To switch later, use *Switch role (demo)* in the avatar menu or *Switch* in the banner.
+Open [propniti.ai/login](https://propniti.ai/login) and sign in with a demo account, for example `marcus@propniti.demo` with the password `propniti-demo` (shared by all accounts). Or click one of the 15 people in *Pick a person* to fill the form (the last two work in an empty company, Lakeside Property Co., to try importing and setup from zero); double-click to sign in at once. To switch later, use *Switch role (demo)* in the avatar menu or *Switch* in the banner.
 
 Each persona's home opens with a welcome screen once a demo day: what Propniti does for the role, *What's new* and up to three things waiting. *Help › Show welcome screen* brings it back. Sidebar dots mark features you haven't opened, a card offers a tour once per session, and the *Ask Propniti* panel opens once a day.
 

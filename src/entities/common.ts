@@ -25,4 +25,7 @@ export function thumb(path: unknown): string | undefined {
   if (typeof path !== "string" || !path) return undefined;
   return path.endsWith("-400.webp") ? path : path.replace(/\.webp$/, "-400.webp");
 }
-export const propertyPhoto = (id: unknown, photos: unknown) => thumb(Array.isArray(photos) && photos[0] ? photos[0] : `/img/props/${String(id)}.webp`);
+// Only the seeded properties (p01–p30) have a photo on disk; an imported one has none until added,
+// and shows a building placeholder (Thumb) instead.
+export const seededPhoto = (id: unknown) => (/^p\d{2}$/.test(String(id)) ? `/img/props/${String(id)}-400.webp` : undefined);
+export const propertyPhoto = (id: unknown, photos: unknown) => thumb(Array.isArray(photos) && photos[0] ? photos[0] : seededPhoto(id));

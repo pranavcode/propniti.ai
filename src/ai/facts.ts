@@ -1,6 +1,7 @@
 import { AS_OF } from "@/seed/constants";
 import type { Row } from "@/entities/types";
 import { chargeOwedSql } from "@/server/data";
+import { baseOf } from "@/server/effective";
 import { daysBetween, sql, type DataCtx } from "./data";
 
 // Computed facts the agents and the assistant state as figures. The model never computes money:
@@ -88,6 +89,7 @@ export async function delinquency(ctx: DataCtx, today: string, f: { minDays?: nu
 
 // metrics_monthly rows (base only: it's precomputed by the seed), scoped to the actor's properties.
 export async function monthly(ctx: DataCtx, f: { metro?: string; propertyIds?: string[]; months?: number } = {}) {
+  const base = baseOf(ctx.ws);
   const params: unknown[] = [];
   const where: string[] = [];
   if (ctx.actor.propertyIds !== "all") {
@@ -104,8 +106,8 @@ export async function monthly(ctx: DataCtx, f: { metro?: string; propertyIds?: s
   }
   const { results } = await ctx.db
     .prepare(
-      `SELECT m.*, p.name AS property, p.metro FROM metrics_monthly m JOIN properties p ON p.id = m.property_id AND p.workspace_id = 'base'
-       WHERE m.workspace_id = 'base' AND m.month IN (SELECT DISTINCT month FROM metrics_monthly WHERE workspace_id = 'base' ORDER BY month DESC LIMIT ?)
+      `SELECT m.*, p.name AS property, p.metro FROM metrics_monthly m JOIN properties p ON p.id = m.property_id AND p.workspace_id = '${base}'
+       WHERE m.workspace_id = '${base}' AND m.month IN (SELECT DISTINCT month FROM metrics_monthly WHERE workspace_id = '${base}' ORDER BY month DESC LIMIT ?)
        ${where.length ? "AND " + where.join(" AND ") : ""} ORDER BY m.month, m.property_id`,
     )
     .bind(f.months ?? 13, ...params)
