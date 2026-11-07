@@ -10,6 +10,11 @@ import { randomId } from "@/server/repo";
 import { resolveWorkspace } from "@/server/workspace";
 import { effective } from "@/server/effective";
 import type { WriteCtx } from "@/server/query";
+import { GET as photo } from "@/app/api/photos/[id]/route";
+
+// The photo route reads through getPlatform(); point it at this file's database.
+const held = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock("@/lib/platform", async (orig) => ({ ...(await orig<object>()), getPlatform: () => ({ db: held.db }) }));
 
 // The portal journeys on the generated base: the applicant from a started application to a
 // scheduled move-in with staff steps in between, and the resident's repair rating, insurance
@@ -25,6 +30,7 @@ let db: Db;
 beforeAll(() => {
   for (const k of ["AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"]) vi.stubEnv(k, "");
   db = openSqlite(":memory:");
+  held.db = db;
 }, 600_000);
 afterAll(() => vi.unstubAllEnvs());
 
@@ -94,6 +100,26 @@ describe("applicant journey", () => {
     const other = await db.prepare("SELECT id FROM applicants WHERE workspace_id = 'base' AND id <> ?1 LIMIT 1").bind(APPLICANT).first<{ id: string }>();
     const r = await run(await ctx("applicant", ws), "applicants.submit_application", other!.id);
     expect(r.status).toBe(404);
+  });
+});
+
+describe("resident photos", () => {
+  it("are stored off the page and served same-site, only to people who can see the job", { timeout: 60_000 }, async () => {
+    const ws = await workspace();
+    const jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==";
+    const r = await run(await ctx("resident", ws), "residents.request_maintenance", RESIDENT, { description: "Water is leaking under the kitchen sink", location: "Kitchen", permissionToEnter: true, photos: [jpeg] });
+    const wo = /WO-\d+/.exec("message" in r ? String(r.message) : "")![0];
+    const p = await db.prepare("SELECT id, url, data FROM photos WHERE workspace_id = ?1 AND entity_id = ?2").bind(ws, wo).first<{ id: string; url: string; data: string }>();
+    expect(p).toEqual({ id: expect.any(String), url: `/api/photos/${p!.id}`, data: jpeg });
+    const get = (persona: string) => photo(new Request(`http://localhost${p!.url}`, { headers: { cookie: `pn_ws=${ws}; pn_as=${persona}` } }), { params: Promise.resolve({ id: p!.id }) });
+    for (const persona of ["resident", "tom", "marcus", "owner"]) {
+      const res = await get(persona);
+      expect(res.status, persona).toBe(200);
+      expect(res.headers.get("content-type")).toBe("image/jpeg");
+    }
+    // A vendor not on the job, an applicant, and no such photo.
+    for (const persona of ["vendor", "applicant"]) expect((await get(persona)).status, persona).toBe(404);
+    expect((await photo(new Request("http://localhost/api/photos/x", { headers: { cookie: `pn_ws=${ws}; pn_as=tom` } }), { params: Promise.resolve({ id: "ph-none" }) })).status).toBe(404);
   });
 });
 

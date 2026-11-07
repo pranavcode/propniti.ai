@@ -181,8 +181,9 @@ registerAction({
       ctx.db.prepare(`INSERT INTO work_orders (workspace_id, id, property_id, unit_id, service_request_id, title, description, category, priority, source, status, sla_due_at, opened_at, permission_to_enter)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'Resident', 'New', ?10, ?11, ?12)`)
         .bind(ctx.ws, woId, lease.property_id, lease.unit_id, srId, title, text, t.trade, t.priority, new Date(Date.parse(at) + slaHours * 3_600_000).toISOString(), at, input.permissionToEnter ? 1 : 0),
-      ...input.photos.map((url, i) => ctx.db.prepare("INSERT INTO photos (workspace_id, id, entity_type, entity_id, property_id, url, caption, stage, taken_at) VALUES (?1, ?2, 'work_orders', ?3, ?4, ?5, ?6, 'Before', ?7)")
-        .bind(ctx.ws, uid("ph"), woId, lease.property_id, url, `Resident photo ${i + 1}`, at)),
+      // The bytes stay in `data`; pages link to the same-site /api/photos/<id>, never to a data: URL.
+      ...input.photos.map((data, i) => { const id = uid("ph"); return ctx.db.prepare("INSERT INTO photos (workspace_id, id, entity_type, entity_id, property_id, url, data, caption, stage, taken_at) VALUES (?1, ?2, 'work_orders', ?3, ?4, ?5, ?6, ?7, 'Before', ?8)")
+        .bind(ctx.ws, id, woId, lease.property_id, `/api/photos/${id}`, data, `Resident photo ${i + 1}`, at); }),
       eventStmt(ctx.db, ctx.ws, at, "wo.created", "work_orders", woId, lease.property_id, { source: "Resident", category: t.trade, priority: t.priority, safety: t.safety }),
       notifyManager(ctx, lease.property_id, `New request: ${title}`, `#${lease.number}: ${t.priority} ${t.trade.toLowerCase()} request from the resident portal.`, `/app/maintenance/work-orders/${woId}`, ["work_orders", woId]),
     ];

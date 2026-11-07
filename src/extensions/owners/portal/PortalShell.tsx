@@ -23,7 +23,9 @@ export async function PortalShell({ role, brand, badges, children }: { role: Por
   const persona = portalPersona(role);
   return (
     <TooltipProvider delayDuration={200}>
-    <div className="min-h-screen bg-muted/30 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-20 print:bg-white print:pb-0">
+    {/* Bottom padding = the Ask AI button's top edge (tab bar 4.5rem + 2.75rem on phones, 1.5rem +
+        2.75rem on desktop) plus a 1rem gap, so the last card's text and buttons are never under it. */}
+    <div className="min-h-screen bg-muted/30 pb-[calc(8.25rem+env(safe-area-inset-bottom))] md:pb-[5.25rem] print:bg-white print:pb-0">
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur print:hidden">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
           <Link href={persona.home} className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">

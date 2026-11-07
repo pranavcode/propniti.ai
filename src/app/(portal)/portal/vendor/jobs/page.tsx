@@ -6,6 +6,7 @@ import { Money, StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
 import { portalCtx } from "@/extensions/owners/portal/context";
 import { JOB_TABS, job, jobCounts, jobs, type JobTab } from "@/extensions/owners/portal/vendor-data";
+import { extraDetail } from "@/extensions/owners/portal/text";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { JobActions } from "@/extensions/owners/portal/ui/vendor/JobActions";
 import { JobRow } from "@/extensions/owners/portal/ui/vendor/JobRow";
@@ -21,6 +22,7 @@ export default async function VendorJobs({ searchParams }: Props) {
   const sp = await searchParams;
   if (sp.id) {
     const j = await job(c, sp.id);
+    const detail = j ? extraDetail(j.title, j.description, { keepUnit: true }) : null;
     if (!j) return <EmptyState title="Job not found" description="It may have been reassigned. Check your job list." action={{ label: "Back to jobs", href: "/portal/vendor/jobs" }} />;
     return (
       <>
@@ -30,7 +32,7 @@ export default async function VendorJobs({ searchParams }: Props) {
           <div className="space-y-4">
             <section className="rounded-xl border bg-card p-4">
               <div className="flex flex-wrap gap-2"><StatusBadge value={j.status} /><StatusBadge value={j.priority} tone={j.priority === "Emergency" ? "danger" : j.priority === "Urgent" ? "warning" : "neutral"} /></div>
-              {j.description && <p className="mt-3 text-[13.5px] whitespace-pre-wrap text-pretty">{j.description}</p>}
+              {detail && <p className="mt-3 text-[13.5px] whitespace-pre-wrap text-pretty">{detail}</p>}
               {j.photos.length > 0 && (
                 <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {j.photos.map((p, i) => (

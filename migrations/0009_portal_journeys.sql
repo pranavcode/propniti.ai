@@ -10,3 +10,6 @@ ALTER TABLE renters_insurance ADD COLUMN review_note TEXT;
 -- renewal_offers: the resident's counter-offer note (status 'Countered') and the renewal e-signature.
 ALTER TABLE renewal_offers ADD COLUMN resident_note TEXT;
 ALTER TABLE renewal_offers ADD COLUMN signed_at TEXT;
+-- photos: a resident's phone photo, as a data:image URL. Its url is then /api/photos/<id>, a
+-- same-site link that checks the reader can see the work order, so no page links to data: URLs.
+ALTER TABLE photos ADD COLUMN data TEXT;

@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/app/display";
 import { portalCtx } from "@/extensions/owners/portal/context";
 import { currentLease, me, OPEN_WO, parsePhotos, requestFacts, requests } from "@/extensions/owners/portal/resident-data";
 import { requestJourney } from "@/extensions/owners/portal/journeys";
+import { extraDetail } from "@/extensions/owners/portal/text";
 import { JourneyBar } from "@/extensions/owners/portal/ui/Journey";
 import { RateRequest } from "@/extensions/owners/portal/ui/resident/RateRequest";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
@@ -27,6 +28,7 @@ export default async function ResidentRequests({ searchParams }: { searchParams:
     const photos = parsePhotos(w.photos);
     const hot = sp.wo === w.id;
     const j = requestJourney(requestFacts(w));
+    const detail = extraDetail(w.title, w.description);
     // Ask for a rating on repairs finished in the last 30 days, not on years of history.
     const recent = !w.completed_at || Date.parse(w.completed_at) > Date.parse(AS_OF) - 30 * 86_400_000;
     return (
@@ -41,7 +43,7 @@ export default async function ResidentRequests({ searchParams }: { searchParams:
             <StatusBadge value={w.status} />
           </div>
         </div>
-        {w.description && w.description !== w.title && <p className="mt-2 line-clamp-3 text-[13px] text-muted-foreground">{w.description}</p>}
+        {detail && <p className="mt-2 line-clamp-3 text-[13px] text-muted-foreground">{detail}</p>}
         {w.scheduled_at && OPEN_WO.includes(w.status) && <p className="mt-2 flex items-center gap-1.5 text-[12.5px] font-medium"><CalendarClock className="size-4 text-primary" />Visit {fmtWhen(w.scheduled_at)}{w.vendor ? ` · ${w.vendor}` : ""}</p>}
         <JourneyBar className="mt-3" journey={j} label={`${w.id} progress`} />
         <div className="mt-3 rounded-lg bg-muted/50 px-3 py-2.5">
