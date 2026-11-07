@@ -8,6 +8,7 @@ import { demoNowIso } from "@/lib/clock";
 import { formatAsOf } from "@/lib/format";
 import { editable, effective, forgetOverlay, QueryError, type QueryCtx, type WriteCtx } from "@/server/query";
 import { AS_OF } from "@/seed/constants";
+import { orgId } from "@/extensions/settings/data";
 import type { Payload } from "./assemble";
 import { glFor, key } from "./normalize";
 import { toolLabel } from "./presets";
@@ -166,7 +167,7 @@ export async function plan(ctx: QueryCtx, payload: Payload, opts: ImportOptions)
     scan<{ id: string; name: string; street: string; city: string; org_id: string; owner_entity_id: string }>(db, E("properties"), "t.id, t.name, t.street, t.city, t.org_id, t.owner_entity_id"),
     all<{ id: string }>(db, `SELECT id FROM ${E("bank_accounts")} WHERE kind = 'Deposit'`),
   ]);
-  const org = props[0]?.org_id ?? entities[0]?.org_id ?? "org-summit";
+  const org = props[0]?.org_id ?? entities[0]?.org_id ?? orgId(ctx);
   const ownerIds = new Map<string, string>();
   for (const o of owners) { ownerIds.set(key(o.name), o.id); if (o.email) ownerIds.set(o.email.toLowerCase(), o.id); }
   const entityIds = new Map(entities.map((e) => [key(e.name), e.id] as const));

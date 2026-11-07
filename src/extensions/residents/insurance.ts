@@ -1,12 +1,13 @@
 import { z } from "zod";
-import { ShieldCheck, Upload } from "lucide-react";
+import { ShieldCheck, ShieldX, Upload } from "lucide-react";
 import type { ActionContext, ActionResult, Row } from "@/entities/types";
 import { notifyManager } from "@/extensions/owners/actions";
 import { AS_OF } from "@/seed/constants";
 import { effective, overlayUpsertSql } from "@/server/effective";
-import { eventStmt } from "@/server/money";
+import { eventStmt, notifyStmt } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { registerAction } from "../actions";
+import { SAMPLE_DECLARATIONS } from "@/extensions/owners/portal/sample-files";
 
 // Renters insurance sent from the resident portal. The AI reads the declarations page (through
 // /api/ai/extract), the resident checks and confirms every field, and the policy is filed on their
@@ -14,8 +15,9 @@ import { registerAction } from "../actions";
 // read and discarded, like every other upload; the document row records its name and which fields
 // the AI read.
 
-const RI_COLS = ["id", "deleted", "lease_id", "property_id", "carrier", "policy_number", "liability_cents", "starts_on", "expires_on", "status"];
+const RI_COLS = ["id", "deleted", "lease_id", "property_id", "carrier", "policy_number", "liability_cents", "starts_on", "expires_on", "status", "review_note"];
 export const PENDING = "Pending verification";
+export const REJECTED = "Rejected";
 const FIELDS = ["carrier", "policyNumber", "liability", "startsOn", "expiresOn"] as const;
 
 export const InsuranceInput = z.strictObject({
@@ -28,6 +30,8 @@ export const InsuranceInput = z.strictObject({
   // Which fields the AI read and the resident kept unchanged, and who read them.
   aiFields: z.array(z.enum(FIELDS)).max(FIELDS.length).default([]),
   source: z.enum(["anthropic", "openai", "workers-ai", "mock", "manual"]).default("manual"),
+  // The demo's sample declarations page: the document links to its public copy so staff see it too.
+  sample: z.boolean().default(false),
 });
 
 const mimeOf = (name: string) => ({ pdf: "application/pdf", png: "image/png", webp: "image/webp" })[name.split(".").pop()?.toLowerCase() ?? ""] ?? "image/jpeg";
@@ -40,15 +44,16 @@ async function submit(ctx: ActionContext, resident: Row, i: z.infer<typeof Insur
     `SELECT l.id, l.property_id FROM ${effective("leases")} AS l JOIN ${effective("residents")} AS r ON r.household_id = l.household_id
      WHERE r.id = ?2 AND l.status IN ('Active', 'Notice', 'Month-to-month', 'Future') ORDER BY l.start_on DESC LIMIT 1`, resident.id);
   if (!lease) return { status: 404, error: "We couldn't find a current lease to file this policy on." };
-  // One record per lease and policy period: a resubmission corrects it while it's still pending.
+  // One record per lease and policy period: a resubmission corrects it while it's still pending, or
+// sends it back for review after the office rejected it.
   const id = `ri-${lease.id}-${i.expiresOn}`;
   const at = nowIso(ctx.nowMs);
   const [upsert] = await ctx.db.batch([
     ctx.db.prepare(`INSERT INTO renters_insurance (workspace_id, id, lease_id, property_id, carrier, policy_number, liability_cents, starts_on, expires_on, status)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, '${PENDING}')
-      ON CONFLICT (workspace_id, id) DO UPDATE SET carrier = excluded.carrier, policy_number = excluded.policy_number, liability_cents = excluded.liability_cents, starts_on = excluded.starts_on
-      WHERE renters_insurance.status = '${PENDING}' AND (renters_insurance.carrier, renters_insurance.policy_number, renters_insurance.liability_cents, renters_insurance.starts_on)
-        IS NOT (excluded.carrier, excluded.policy_number, excluded.liability_cents, excluded.starts_on)`)
+      ON CONFLICT (workspace_id, id) DO UPDATE SET carrier = excluded.carrier, policy_number = excluded.policy_number, liability_cents = excluded.liability_cents, starts_on = excluded.starts_on, status = '${PENDING}', review_note = NULL
+      WHERE renters_insurance.status = '${REJECTED}' OR (renters_insurance.status = '${PENDING}' AND (renters_insurance.carrier, renters_insurance.policy_number, renters_insurance.liability_cents, renters_insurance.starts_on)
+        IS NOT (excluded.carrier, excluded.policy_number, excluded.liability_cents, excluded.starts_on))`)
       .bind(ctx.ws, id, lease.id, lease.property_id, i.carrier, i.policyNumber, i.liability * 100, i.startsOn, i.expiresOn),
   ]);
   if (!upsert.meta.changes) {
@@ -59,9 +64,9 @@ async function submit(ctx: ActionContext, resident: Row, i: z.infer<typeof Insur
   await ctx.db.batch([
     ctx.db.prepare(`INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, extracted, uploaded_by, uploaded_at)
       VALUES (?1, ?2, ?3, 'renters_insurance', ?4, ?5, ?6, ?7, 'Renters insurance', ?8, 'resident', ?9, ?10, ?11)
-      ON CONFLICT (workspace_id, id) DO UPDATE SET name = excluded.name, mime = excluded.mime, extracted = excluded.extracted, uploaded_at = excluded.uploaded_at`)
-      .bind(ctx.ws, `doc-${id}`, lease.property_id, id, i.fileName, `/app/residents/insurance/${id}`, mimeOf(i.fileName), `Lease ${lease.id} › Insurance`,
-        JSON.stringify({ source: i.source, read_by_ai: i.aiFields, confirmed_by_resident: true }), String(resident.id), at),
+      ON CONFLICT (workspace_id, id) DO UPDATE SET name = excluded.name, url = excluded.url, mime = excluded.mime, extracted = excluded.extracted, uploaded_at = excluded.uploaded_at`)
+      .bind(ctx.ws, `doc-${id}`, lease.property_id, id, i.fileName, i.sample ? SAMPLE_DECLARATIONS.file : `/app/residents/insurance/${id}`, mimeOf(i.fileName), `Lease ${lease.id} › Insurance`,
+        JSON.stringify({ source: i.source, read_by_ai: i.aiFields, confirmed_by_resident: true, sample: i.sample }), String(resident.id), at),
     eventStmt(ctx.db, ctx.ws, at, "renters_insurance.uploaded", "renters_insurance", id, lease.property_id, { lease_id: lease.id, expires_on: i.expiresOn }),
     notifyManager(ctx, lease.property_id, "Renters insurance to verify", `${name} sent a ${i.carrier} policy (${i.policyNumber}), valid to ${i.expiresOn}. Check it against the declarations page.`, "/app/residents/insurance?view=to-verify", ["renters_insurance", id]),
   ]);
@@ -96,4 +101,30 @@ registerAction({
     return r.meta.changes ? { status: 200, message: `Policy ${String(row.policy_number)} verified.` } : { status: 409, error: "This policy isn't waiting for verification." };
   },
   help: { summary: "Confirms a resident-sent policy against its declarations page; it then counts as the lease's coverage.", article: "renters-insurance" },
+});
+
+// The office can't verify the policy (wrong person, address or dates, liability under the lease's
+// minimum). The reason shows on the resident's tracker and they upload a corrected page.
+registerAction({
+  key: "renters_insurance.reject",
+  label: "Reject policy",
+  entity: "renters_insurance",
+  roles: ["principal", "regional_manager", "property_manager", "leasing_agent"],
+  icon: ShieldX,
+  input: z.strictObject({ reason: z.string().trim().min(5, "Say what's wrong so the resident can fix it").max(300) }),
+  when: (r) => r.status === PENDING,
+  async handler(ctx, row, input) {
+    const at = nowIso(ctx.nowMs);
+    const [r] = await ctx.db.batch([
+      ctx.db.prepare(overlayUpsertSql("renters_insurance", RI_COLS, { status: `'${REJECTED}'`, review_note: "?3" }, `e.status = '${PENDING}'`)).bind(ctx.ws, String(row.id), input.reason),
+    ]);
+    if (!r.meta.changes) return { status: 409, error: "This policy isn't waiting for verification." };
+    const resident = await one<{ id: string }>(ctx, `SELECT r.id FROM ${effective("residents")} AS r JOIN ${effective("leases")} AS l ON l.household_id = r.household_id WHERE l.id = ?2 ORDER BY r.is_primary DESC LIMIT 1`, row.lease_id);
+    await ctx.db.batch([
+      eventStmt(ctx.db, ctx.ws, at, "renters_insurance.rejected", "renters_insurance", String(row.id), String(row.property_id), { reason: input.reason }),
+      ...(resident ? [notifyStmt(ctx.db, ctx.ws, at, resident.id, "Renters insurance needs another look", `The office couldn't verify policy ${String(row.policy_number)}: ${input.reason}`, "/portal/resident/lease#insurance", ["renters_insurance", String(row.id)])] : []),
+    ]);
+    return { status: 200, message: `Policy ${String(row.policy_number)} rejected. The resident sees why and can upload a corrected page.` };
+  },
+  help: { summary: "Sends a resident's policy back with the reason it couldn't be verified.", article: "renters-insurance" },
 });

@@ -3,7 +3,9 @@ import { DEMO_PASSWORD, demoEmail, personaByEmail, safeNext } from "@/auth/perso
 import { DELETE, POST } from "./route";
 
 // No Workers rate limiter here, so rateLimit() uses its in-memory window ("shared" key: 300 a minute).
-vi.mock("@/lib/platform", () => ({ getPlatform: () => ({}) }));
+// Sign-out's workspace delete goes to a stand-in that records the statement.
+const ran = vi.hoisted(() => [] as { sql: string; binds: unknown[] }[]);
+vi.mock("@/lib/platform", () => ({ getPlatform: () => ({ db: { prepare: (sql: string) => ({ bind: (...binds: unknown[]) => ({ run: async () => { ran.push({ sql, binds }); } }) }) } }) }));
 
 const host = "propniti.test";
 const post = (body: Record<string, string>, { json = false, origin = `http://${host}` }: { json?: boolean; origin?: string | null } = {}) => {
@@ -114,6 +116,13 @@ describe("DELETE /api/session (sign out)", () => {
     expect(cookies).toHaveLength(2);
     expect(cookies[0]).toBe("pn_as=; Path=/; SameSite=Lax; Max-Age=0");
     expect(cookies[1]).toBe("pn_ws=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+  });
+
+  it("deletes both orgs' workspaces for this visitor", async () => {
+    const id = "a".repeat(22);
+    ran.length = 0;
+    await DELETE(new Request(`http://${host}/api/session`, { method: "DELETE", headers: { host, origin: `http://${host}`, cookie: `pn_ws=${id}` } }));
+    expect(ran).toEqual([{ sql: "DELETE FROM workspaces WHERE id IN (?1, ?1 || ?2)", binds: [id, ".lakeside"] }]);
   });
 
   it("marks both Secure in production", async () => {

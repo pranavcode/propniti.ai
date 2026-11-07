@@ -42,6 +42,10 @@ Sign in at `/login` with `<persona id>@propniti.demo` (for example `marcus@propn
 | Jordan Lee | Resident (portal) | Own lease | `/portal/resident` |
 | Luis Ramirez | Vendor (portal) | Own jobs | `/portal/vendor` |
 | Priyanka Rao | Applicant (portal) | Own application | `/portal/applicant` |
+| Alex Morgan | Principal, Lakeside Property Co. | New company, no data yet | `/app/onboarding` until setup is finished |
+| Maya Chen | Property manager, Lakeside Property Co. | Properties Alex invites her to | `/app/today` |
+
+Alex and Maya work in a second, empty org, Lakeside Property Co., to try the journey from zero: Guided setup imports the sample files, then Alex invites Maya to the imported properties. Lakeside has its own workspace, so it never sees Summit's data, and Summit never sees Lakeside's.
 
 The public listings site (`/listings`) needs no sign-in.
 
@@ -118,8 +122,8 @@ The spec, architecture and walkthrough are at [propniti.ai/docs](https://propnit
 
 Measured on 2026-11-04.
 
-- **Vitest:** 1376 tests in 160 files (1 skipped): money, scope, queries, the seed, actions, agents, the assistant, and migrations on SQLite and local D1 (Miniflare).
-- **Playwright:** 192 browser tests in 34 flows in `tests/e2e/`, one per module plus portals, public listings and cross-cutting features. They run against `BASE_URL` (default `http://localhost:3201`): `npx playwright test tests/e2e/<flow>.spec.ts`.
+- **Vitest:** 1429 tests in 166 files (1 skipped): money, scope, queries, the seed, actions, agents, the assistant, and migrations on SQLite and local D1 (Miniflare).
+- **Playwright:** 198 browser tests in 36 flows in `tests/e2e/`, one per module plus portals, public listings and cross-cutting features. They run against `BASE_URL` (default `http://localhost:3201`): `npx playwright test tests/e2e/<flow>.spec.ts`.
 - **Coverage** (`npm run test:coverage`, scope `src/lib`, `src/server`, `src/app/api`): 70% of lines and 61% of branches.
 
 | Area | Lines | Branches |

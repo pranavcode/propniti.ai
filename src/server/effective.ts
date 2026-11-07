@@ -26,17 +26,48 @@ export function assertTable(table: string): asserts table is Table {
   if (!KNOWN.has(table)) throw new Error(`Unknown table: ${table}`);
 }
 
+// Lakeside Property Co., the second demo org, starts with no data. Its personas work in their own
+// overlay, the visitor's workspace id plus LAKESIDE_WS ("~.lakeside" before their first write),
+// over the base-lakeside rows. Of the shared base they see only the reference tables in SHARED.
+// Every query already filters on workspace_id, so this is the org boundary: neither org's queries
+// can reach the other's rows.
+export const LAKESIDE_WS = ".lakeside";
+export const LAKESIDE_BASE = "base-lakeside";
+export const isLakeside = (ws: string | null | undefined) => !!ws && ws.endsWith(LAKESIDE_WS);
+// The base workspace a workspace's overlay sits on.
+export const baseOf = (ws: string | null | undefined) => (isLakeside(ws) ? LAKESIDE_BASE : "base");
+// The same choice in SQL, for statements that bind the workspace id as a parameter (`ws` is SQL).
+// Both orgs' base workspaces. Code with no workspace at hand (ledger deltas over {table} rows,
+// which already hold only one org's base and overlay) tells base rows from overlay rows with it.
+export const ANY_BASE = `('base', '${LAKESIDE_BASE}')`;
+export const baseSql = (ws = "?1") => `(CASE WHEN substr(${ws}, -${LAKESIDE_WS.length}) = '${LAKESIDE_WS}' THEN '${LAKESIDE_BASE}' ELSE 'base' END)`;
+// Reference data both orgs read from 'base': product help, data and state rules, message templates,
+// the chart of accounts, agent definitions and the org-default approval and late-fee policies.
+export const SHARED: Partial<Record<Table, string>> = {
+  help_articles: "1 = 1", data_rules: "1 = 1", state_rules: "1 = 1", templates: "1 = 1", gl_accounts: "1 = 1", agent_definitions: "1 = 1",
+  approval_policies: "owner_entity_id IS NULL", late_fee_policies: "property_id IS NULL",
+};
+
+// Rows a workspace sees before overlay replacement, as a WHERE condition. `ws` is SQL (a numbered
+// parameter or a quoted literal), so the org is picked in SQL; SQLite still uses the
+// (workspace_id, …) indexes because the CASE depends only on the parameter.
+export function seen(table: string, ws = "?1") {
+  const lakeside = `substr(${ws}, -${LAKESIDE_WS.length}) = '${LAKESIDE_WS}'`;
+  const shared = SHARED[table as Table];
+  return `(workspace_id IN (${baseSql(ws)}, ${ws})${shared ? ` OR (workspace_id = 'base' AND ${lakeside} AND ${shared})` : ""})`;
+}
+
 // A parenthesised subquery to use in FROM. `ws` is the SQL for the visitor's workspace id: a
 // numbered parameter such as "?1" (bind the id, or NO_WORKSPACE). Alias the result yourself:
 //   SELECT u.* FROM ${effective("units")} AS u WHERE u.property_id = ?2
 export function effective(table: string, ws = "?1") {
   assertTable(table);
-  if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${ws}))`;
+  if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE ${seen(table, ws)})`;
   if (table === "metrics_monthly")
-    return `(SELECT * FROM metrics_monthly WHERE workspace_id = ${ws} UNION ALL SELECT * FROM metrics_monthly AS b WHERE b.workspace_id = 'base' AND NOT EXISTS (SELECT 1 FROM metrics_monthly AS o WHERE o.workspace_id = ${ws} AND o.property_id = b.property_id AND o.month = b.month))`;
+    return `(SELECT * FROM metrics_monthly WHERE workspace_id = ${ws} UNION ALL SELECT * FROM metrics_monthly AS b WHERE b.workspace_id = ${baseSql(ws)} AND NOT EXISTS (SELECT 1 FROM metrics_monthly AS o WHERE o.workspace_id = ${ws} AND o.property_id = b.property_id AND o.month = b.month))`;
   // One SELECT, not a UNION ALL: SQLite flattens it into the outer query, so a join on id uses the
   // (workspace_id, id) index instead of scanning a materialised copy for every outer row.
-  return `(SELECT * FROM ${table} WHERE workspace_id IN ('base', ${ws}) AND deleted = 0 AND (workspace_id = ${ws} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${ws} AND o.id = ${table}.id)))`;
+  return `(SELECT * FROM ${table} WHERE ${seen(table, ws)} AND deleted = 0 AND (workspace_id = ${ws} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${ws} AND o.id = ${table}.id)))`;
 }
 
 // Copy-on-write: moves the row into the overlay (copying the base row the first time) and applies

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PERSONAS } from "@/auth/personas";
+import { inLakeside, PERSONAS } from "@/auth/personas";
 import { generateBriefing, generateSummary, precomputeTargets } from "@/ai/summaries";
 import { SYSTEM_ACTOR } from "@/ai/orchestrator";
 import { getPlatform } from "@/lib/platform";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     if (s) rows.push(s);
   }
   if (body.briefings) {
-    for (const p of PERSONAS.filter((x) => !x.portal)) rows.push(await generateBriefing({ db, ws: "base", actor: await actorFor(db, null, p) }, p.id, { writeTo: "base" }));
+    for (const p of PERSONAS.filter((x) => !x.portal && !inLakeside(x))) rows.push(await generateBriefing({ db, ws: "base", actor: await actorFor(db, null, p) }, p.id, { writeTo: "base" }));
   }
   return Response.json({ rows });
 }

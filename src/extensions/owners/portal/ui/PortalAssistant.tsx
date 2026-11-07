@@ -55,8 +55,10 @@ export function PortalAssistant({ endpoint, prompts, samples = [], title = "Ask 
 
   return (
     <>
-      <Button data-tour="portal-ask" onClick={() => setOpen(true)} className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 h-11 rounded-full px-4 shadow-lg md:bottom-6 print:hidden">
-        <Sparkles />Ask AI
+      {/* Phones: a 44 px circle above the tab bar, so it covers as little of a card as it can. The
+          portal shell's bottom padding (PortalShell) clears it at the end of every page. */}
+      <Button data-tour="portal-ask" aria-label="Ask AI" onClick={() => setOpen(true)} className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 size-11 rounded-full p-0 shadow-lg md:bottom-6 md:h-11 md:w-auto md:px-4 print:hidden">
+        <Sparkles /><span className="sr-only md:not-sr-only">Ask AI</span>
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">

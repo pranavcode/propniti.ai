@@ -12,9 +12,12 @@ const OWNER_PORTAL: Role[] = ["owner"];
 
 // Latest precomputed month for the property (metrics_monthly), for list columns that would be
 // too costly to aggregate from 150k ledger rows per page.
-const latest = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id ORDER BY mm.month DESC LIMIT 1)`;
+const latest = (expr: string) => `(SELECT ${expr} FROM {metrics_monthly} mm WHERE mm.property_id = properties.id ORDER BY mm.month DESC LIMIT 1)`;
+// A property with no monthly history yet (just imported): what is past due today, from its open
+// charges, as the live aging (receivables.aging_live) counts it.
+const LIVE_PAST_DUE = `(SELECT coalesce(sum(c.amount_cents - c.paid_cents - c.pending_cents), 0) FROM {charges} c WHERE c.property_id = properties.id AND c.paid_cents + c.pending_cents < c.amount_cents AND c.due_on < ${AS_OF})`;
 // The last closed month: the month in progress has a full month of rent against a few days of expenses.
-const lastClosed = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id AND mm.month < substr(${AS_OF}, 1, 7) ORDER BY mm.month DESC LIMIT 1)`;
+const lastClosed = (expr: string) => `(SELECT ${expr} FROM {metrics_monthly} mm WHERE mm.property_id = properties.id AND mm.month < substr(${AS_OF}, 1, 7) ORDER BY mm.month DESC LIMIT 1)`;
 
 function monthName(period: string) {
   return new Date(`${period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -60,7 +63,7 @@ registerEntity({
     noi_month: { type: "money", label: "NOI (last month)", format: "compact", sortable: true, list: { default: true, align: "right" }, sql: lastClosed("mm.noi_cents"), help: { summary: "Net operating income for the last closed month: collected income less operating expenses.", article: "noi" } },
     noi_period: { type: "text", label: "NOI month", sql: lastClosed("mm.month") },
     delinquent: { type: "money", label: "Delinquent", format: "compact", sortable: true, list: { default: true, align: "right" },
-      sql: latest("mm.aging_0_30_cents + mm.aging_31_60_cents + mm.aging_61_90_cents + mm.aging_90p_cents"), help: { summary: "Unpaid resident balances past due, all aging buckets.", article: "delinquency" } },
+      sql: `coalesce(${latest("mm.aging_0_30_cents + mm.aging_31_60_cents + mm.aging_61_90_cents + mm.aging_90p_cents")}, ${LIVE_PAST_DUE})`, help: { summary: "Unpaid resident balances past due, all aging buckets.", article: "delinquency" } },
     open_work_orders: { type: "number", label: "Open WOs", sortable: true, list: { default: false, align: "right" },
       sql: "(SELECT count(*) FROM {work_orders} w WHERE w.property_id = properties.id AND w.status NOT IN ('Completed', 'Paid', 'Cancelled'))" },
     vacant_units: { type: "number", label: "Vacant units", sortable: true, list: { default: false, align: "right" }, sql: "(SELECT count(*) FROM {units} u WHERE u.property_id = properties.id AND u.status = 'Vacant')" },
@@ -98,6 +101,7 @@ registerEntity({
   list: {
     defaultSort: ["name", "asc"],
     statusTabs: "metro",
+    tabsFromData: true,
     savedViews: [
       { key: "texas", label: "Texas", filters: { state: "TX" } },
       { key: "below-92", label: "Occupancy below 92%", filters: { "occupancy.max": "0.92" }, sort: ["occupancy", "asc"] },
@@ -297,7 +301,7 @@ const ORG_WIDE: Role[] = ["platform_admin", "principal", "admin", "accountant", 
 const propsWhere = (cond: string) => `(SELECT count(*) FROM {properties} p WHERE ${cond})`;
 const unitsWhere = (cond: string) => `(SELECT count(*) FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE ${cond})`;
 const occWhere = (cond: string) => `(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.status <> 'Model' AND ${cond})`;
-const noiWhere = (cond: string) => `(SELECT sum(mm.noi_cents) FROM metrics_monthly mm JOIN {properties} p ON p.id = mm.property_id WHERE mm.workspace_id = 'base' AND ${cond} AND mm.month = (SELECT max(month) FROM metrics_monthly WHERE workspace_id = 'base' AND month < substr(${AS_OF}, 1, 7)))`;
+const noiWhere = (cond: string) => `(SELECT sum(mm.noi_cents) FROM {metrics_monthly} mm JOIN {properties} p ON p.id = mm.property_id WHERE ${cond} AND mm.month = (SELECT max(month) FROM {metrics_monthly} WHERE month < substr(${AS_OF}, 1, 7)))`;
 
 registerEntity({
   key: "regions",

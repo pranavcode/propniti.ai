@@ -27,7 +27,7 @@ registerPage({ key: "ai.automations", label: "Automations", href: "/app/automati
 registerPage({ key: "ai.data_health", label: "Data health", href: "/app/data-health", icon: HeartPulse, section: "intelligence", order: 6, roles: STAFF, ai: true });
 registerPage({ key: "settings.home", label: "Settings", href: "/app/settings", icon: Settings, section: "settings", order: 1, roles: withModule("settings") });
 
-const slim = (p: Persona): ShellPersona => ({ id: p.id, name: p.name, title: p.title, role: p.role, scopeLabel: p.scope.label, home: p.home, portal: p.portal });
+const slim = (p: Persona): ShellPersona => ({ id: p.id, name: p.name, title: p.title, role: p.role, scopeLabel: p.scope.label, home: p.home, portal: p.portal, org: p.org });
 
 // Everything the client shell needs, resolved for the current persona. `counts` keys are nav
 // hrefs (e.g. "/app/inbox": 12); lane C supplies them.

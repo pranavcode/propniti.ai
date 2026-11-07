@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AIBadge } from "@/components/app/ai";
 import { StatusBadge } from "@/components/app/display";
 import { usePortalAction } from "../usePortalAction";
+import { SAMPLE_PHOTOS, sampleFile } from "../../sample-files";
 
 type Triage = { trade: string; priority: string; safety: boolean; why: string[]; cost: { low_cents: number; high_cents: number; jobs: number } | null };
 
@@ -92,6 +93,19 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
     if (file.current) file.current.value = "";
   };
 
+  // One click: a sample photo (stamped SAMPLE) and, if the form is empty, its matching description.
+  const trySample = async (i: number) => {
+    const sp = SAMPLE_PHOTOS[i];
+    setPhotoError(null);
+    try {
+      const d = await shrink(await sampleFile(sp.file, sp.name));
+      setPhotos((p) => [...p, d].slice(0, 2));
+      if (!description.trim()) { setDescription(sp.text); setLocation(sp.location); }
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : "The sample photo didn't load");
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const r = await run("request_maintenance", { description, location, permissionToEnter: enter, photos });
@@ -142,6 +156,14 @@ export function RequestForm({ me, onDone }: { me: string; onDone?: () => void })
             )}
             <input ref={file} type="file" accept="image/jpeg,image/png,image/webp" multiple capture="environment" className="hidden" aria-label="Add photos" onChange={(e) => addPhotos(e.target.files)} />
           </div>
+          {photos.length < 2 && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+              No photo handy? Try a sample:
+              <button type="button" className="font-medium text-primary hover:underline" onClick={() => trySample(0)}>Leak under the sink</button>
+              <span aria-hidden>·</span>
+              <button type="button" className="font-medium text-primary hover:underline" onClick={() => trySample(1)}>AC not cooling</button>
+            </p>
+          )}
           {photoError && <p className="text-[12px] text-tone-danger" role="alert">{photoError}</p>}
         </div>
         <div className="flex flex-wrap gap-2">

@@ -6,6 +6,7 @@ import { AS_OF } from "@/seed/constants";
 import { CHARGE_IS_OPEN, chargeOpenStoredSql } from "@/server/data";
 import { RETURNED_PAYMENT_FEE_CENTS, settle } from "@/server/money";
 import { effective, type QueryCtx } from "@/server/query";
+import { baseOf } from "@/server/effective";
 
 // Receivables reads for the custom pages, tabs and widgets. Every figure is computed the same way
 // as the charges list (open = amount − good payments − credits; aged by due date, past due only),
@@ -240,7 +241,7 @@ export async function depositsInTransit(ctx: QueryCtx) {
   if (isSelfScope(ctx.actor)) return { count: 0, cents: 0 };
   const s = scopeSql(ctx.actor, "t.property_id");
   const r = await ctx.db
-    .prepare(`SELECT count(*) AS n, coalesce(sum(t.amount_cents), 0) AS cents FROM transfers AS t WHERE t.workspace_id IN ('base', ?) AND t.kind = 'Rent' AND (t.status = 'Pending' OR substr(t.cleared, 1, 10) > '${AS_OF}') AND ${s.sql}`)
+    .prepare(`SELECT count(*) AS n, coalesce(sum(t.amount_cents), 0) AS cents FROM transfers AS t WHERE t.workspace_id IN ('${baseOf(ctx.ws)}', ?) AND t.kind = 'Rent' AND (t.status = 'Pending' OR substr(t.cleared, 1, 10) > '${AS_OF}') AND ${s.sql}`)
     .bind(ctx.ws ?? "~", ...s.params)
     .first<{ n: number; cents: number }>();
   return { count: r?.n ?? 0, cents: r?.cents ?? 0 };

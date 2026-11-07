@@ -27,7 +27,8 @@ export type PortalRole = (typeof PORTAL_ROLES)[number];
 export const INTERNAL_ROLES = ROLES.filter((r): r is Exclude<Role, PortalRole> => !(PORTAL_ROLES as readonly string[]).includes(r));
 
 // Org → Region → Portfolio (owner entity) → Property. "self" = portal users see their own records.
-export type ScopeKind = "platform" | "org" | "region" | "owner_entity" | "portfolio" | "property" | "self";
+// "invited": the properties an invite assigned to the persona (looked up by its demo email).
+export type ScopeKind = "platform" | "org" | "region" | "owner_entity" | "portfolio" | "property" | "self" | "invited";
 
 // The one status-colour mapping (brief §5.1). CSS: bg-tone-<tone>/10 text-tone-<tone>.
 // success: Paid/Active/Occupied · warning: Pending/Notice/Due soon · danger: Overdue/Failed/Eviction
@@ -202,6 +203,7 @@ export type EntityDef = {
   list: {
     defaultSort: [string, "asc" | "desc"];
     statusTabs?: string;                 // enum field whose values become tabs with counts
+    tabsFromData?: boolean;              // tabs only for values the reader's records have (metros), not every enum value
     savedViews?: View[];
     bulkActions?: ActionKey[];
     footer?: Agg[];
@@ -284,6 +286,7 @@ export type ActionDef<I = unknown> = {
   bulk?: boolean;
   money?: boolean;                       // handler must go through src/server/money.ts
   ai?: boolean;                          // handler calls a model: the action route also applies the AI rate limit
+  route?: string;                        // runs only from this route (it checks what a JSON body can't, such as a file); the /api/e action routes refuse it
   handler: (ctx: ActionContext, row: Row, input: I) => Promise<ActionResult>;
   help?: HelpMeta;
 };

@@ -17,7 +17,7 @@ export async function ownerProperties(c: PortalCtx): Promise<OwnerProperty[]> {
   return rows<OwnerProperty>(c, `SELECT p.id, p.name, p.metro, p.neighborhood, p.type, p.class, p.unit_count AS units, p.year_built, p.photos, e.name AS entity,
       round(1.0 * m.occupied / nullif(m.units, 0), 4) AS occupancy, m.noi_cents, m.budget_noi_cents, m.collected_cents, m.charged_cents, m.wo_open
     FROM {properties} p JOIN {owner_entities} e ON e.id = p.owner_entity_id
-    LEFT JOIN metrics_monthly m ON m.workspace_id = 'base' AND m.property_id = p.id AND m.month = ?
+    LEFT JOIN {metrics_monthly} m ON m.property_id = p.id AND m.month = ?
     WHERE e.owner_id = ? ORDER BY p.name`, month, c.me);
 }
 
@@ -28,8 +28,8 @@ export async function ownerMonthly(c: PortalCtx, months = 12) {
   for (let i = 1; i < months; i++) from = prevMonth(from);
   const r = await rows<{ month: string; noi: number; budget: number | null; occupied: number; units: number; collected: number; charged: number }>(c,
     `SELECT m.month, sum(m.noi_cents) AS noi, sum(m.budget_noi_cents) AS budget, sum(m.occupied) AS occupied, sum(m.units) AS units, sum(m.collected_cents) AS collected, sum(m.charged_cents) AS charged
-     FROM metrics_monthly m JOIN {properties} p ON p.id = m.property_id JOIN {owner_entities} e ON e.id = p.owner_entity_id
-     WHERE m.workspace_id = 'base' AND e.owner_id = ? AND m.month BETWEEN ? AND ? GROUP BY m.month ORDER BY m.month`, c.me, from, to);
+     FROM {metrics_monthly} m JOIN {properties} p ON p.id = m.property_id JOIN {owner_entities} e ON e.id = p.owner_entity_id
+     WHERE e.owner_id = ? AND m.month BETWEEN ? AND ? GROUP BY m.month ORDER BY m.month`, c.me, from, to);
   return r.map((x) => ({ month: x.month, noi: x.noi / 100, budget: x.budget == null ? null : x.budget / 100, occupancy: x.units ? x.occupied / x.units : null, collections: x.charged ? x.collected / x.charged : null }));
 }
 

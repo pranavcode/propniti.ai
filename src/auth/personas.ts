@@ -20,7 +20,14 @@ export type Persona = {
   assistantPrompts: string[];            // suggested copilot questions
   portal?: boolean;
   record?: { entity: EntityKey; id: string }; // portal users: the record they are
+  org?: typeof LAKESIDE_ORG;             // set for the second demo org; everyone else is in Summit
 };
+
+// The second demo org: a company with no data yet, for going through imports and setup from zero.
+// Its personas work in their own workspace (src/server/effective.ts), so neither org sees the other.
+export const LAKESIDE_ORG = "org-lakeside";
+export const inLakeside = (p: Persona) => p.org === LAKESIDE_ORG;
+export const sameOrg = (a: Persona, b: Persona) => inLakeside(a) === inLakeside(b);
 
 const TEXAS = { kind: "region", ids: ["r-tx"], label: "Texas · 14 properties" } as const;
 const AUSTIN3 = { kind: "property", ids: ["p01", "p02", "p03"], label: "3 Austin properties" } as const;
@@ -116,6 +123,27 @@ export const PERSONAS: Persona[] = [
       { label: "Data health", href: "/app/data-health" },
     ],
     assistantPrompts: ["Which orgs have the most open data issues?", "How many AI actions ran this week?", "Which orgs are near their seat limit?"],
+  },
+  // Lakeside Property Co.: a new customer with nothing imported yet.
+  {
+    id: "alex", name: "Alex Morgan", title: "Principal", role: "principal", org: LAKESIDE_ORG,
+    scope: { kind: "org", label: "New company, no data yet" }, home: "/app",
+    quickActions: [
+      { label: "Guided setup", href: "/app/onboarding" },
+      { label: "Import data", href: "/app/settings/import" },
+      { label: "Invite a user", href: "/app/settings/users?new=1" },
+    ],
+    assistantPrompts: ["How do I import my rent roll?", "What does guided setup cover?", "Which files can I bring over from AppFolio?"],
+  },
+  {
+    id: "maya", name: "Maya Chen", title: "Property manager", role: "property_manager", org: LAKESIDE_ORG,
+    scope: { kind: "invited", label: "Properties she's invited to" }, home: "/app/today",
+    quickActions: [
+      { label: "Properties", href: "/app/properties" },
+      { label: "Residents", href: "/app/residents" },
+      { label: "Rent roll", href: "/app/leases" },
+    ],
+    assistantPrompts: ["Who is late on rent?", "Which leases expire in the next 90 days?", "Which units are vacant?"],
   },
   // Portals
   {

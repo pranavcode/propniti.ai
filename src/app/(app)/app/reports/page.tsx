@@ -7,6 +7,8 @@ import { getPlatform } from "@/lib/platform";
 import { asOfMonth } from "@/server/query";
 import { cn } from "@/lib/utils";
 import { PageBody, PageHeader } from "@/components/app/page";
+import { companyState } from "@/extensions/onboarding/empty";
+import { NothingYetBanner } from "@/extensions/onboarding/ui/NothingYet";
 import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { askReport } from "@/extensions/accounting/reports/ask";
@@ -36,7 +38,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const db = getPlatform().db;
   const ctx: Ctx = { db, ws: session.ws, actor: session.actor };
-  const scope = await scopeProperties(ctx);
+  const [scope, empty] = await Promise.all([scopeProperties(ctx), companyState(ctx)]);
   // The month before meta.as_of (the demo's today) is the last closed month.
   const LAST_CLOSED = addMonths(await asOfMonth(db), -1);
   const report = REPORTS.find((r) => r.key === sp.r);
@@ -71,6 +73,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </nav>
       </PageHeader>
       <PageBody>
+        {empty && <NothingYetBanner state={empty} role={session.actor.role} what="reports" />}
         <AskForm value={ask ?? ""} />
         {report && !ask && (report.period || report.property) && (
           <form method="get" className="flex flex-wrap items-end gap-2 text-[12.5px]" aria-label="Report filters">

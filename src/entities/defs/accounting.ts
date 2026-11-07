@@ -4,6 +4,7 @@ import { BookOpen, Gauge, HardHat, Landmark, ListChecks, NotebookTabs, PiggyBank
 import { AS_OF, issuesField } from "../common";
 import { registerEntity } from "../registry";
 import { formatDate } from "@/lib/format";
+import { ANY_BASE } from "@/server/effective";
 import type { Role } from "../types";
 
 const FIN: Role[] = ["principal", "regional_manager", "accountant"];
@@ -12,7 +13,7 @@ const FIN_PM: Role[] = ["principal", "regional_manager", "property_manager", "ac
 // Book balance = the generator's cleared base balance plus the visitor's own transfers.
 const BOOK = (account: string) => `(coalesce((SELECT cleared_cents FROM base_balances WHERE account_id = ${account}), 0)
   + coalesce((SELECT sum(CASE WHEN t.kind IN ('Rent', 'Deposit', 'Other receipt') THEN CASE WHEN t.status = 'Cleared' THEN t.amount_cents ELSE 0 END ELSE -t.amount_cents END)
-     FROM {transfers} t WHERE t.workspace_id <> 'base' AND t.bank_account_id = ${account} AND t.status <> 'Returned'), 0))`;
+     FROM {transfers} t WHERE t.workspace_id NOT IN ${ANY_BASE} AND t.bank_account_id = ${account} AND t.status <> 'Returned'), 0))`;
 
 // Bank records belong to an owner entity, not a property. They are scoped through one property of
 // that entity (properties_entity index). Every owner entity sits in a single region and only org-

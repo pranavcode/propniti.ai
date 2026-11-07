@@ -63,7 +63,7 @@ export async function health(db: Db) {
     db.prepare("SELECT count(*) AS n, min(created_at) AS oldest FROM events WHERE processed_at IS NULL AND deleted = 0").first<R>().catch(() => null),
     db.prepare("SELECT count(*) AS n FROM ai_proposals p WHERE p.queue_state = 'needs_you' AND p.deleted = 0 AND NOT EXISTS (SELECT 1 FROM ai_decisions d WHERE d.proposal_id = p.id AND d.workspace_id = p.workspace_id)").first<R>().catch(() => null),
     all<R>(db, "SELECT status, count(*) AS n FROM agent_runs WHERE status IN ('queued', 'running', 'waiting_approval') GROUP BY status").catch(() => []),
-    db.prepare("SELECT count(*) AS n, max(last_seen_at) AS last FROM workspaces WHERE id <> 'base'").first<R>().catch(() => null),
+    db.prepare("SELECT count(*) AS n, max(last_seen_at) AS last FROM workspaces WHERE kind = 'demo'").first<R>().catch(() => null),
     all<R>(db, "SELECT id, agent_key, started_at, error FROM agent_runs WHERE status = 'failed' ORDER BY started_at DESC LIMIT 5").catch(() => []),
   ]);
   let bytes: number | null = null;
@@ -87,7 +87,7 @@ const COUNTED = ["charges", "payments", "audit", "activity_events", "transfers",
 
 async function biggestTables(db: Db) {
   const rows = await Promise.all(COUNTED.map(async (t) => {
-    const r = await db.prepare(`SELECT count(*) AS n, sum(workspace_id <> 'base') AS overlay FROM ${t}`).first<R>().catch(() => null);
+    const r = await db.prepare(`SELECT count(*) AS n, sum(workspace_id NOT IN ('base', 'base-lakeside')) AS overlay FROM ${t}`).first<R>().catch(() => null);
     return { table: t, rows: n(r?.n), overlay: n(r?.overlay) };
   }));
   return rows.sort((a, b) => b.rows - a.rows).slice(0, 10);

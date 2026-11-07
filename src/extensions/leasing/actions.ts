@@ -1,6 +1,7 @@
 import { demoIsoIn, demoNowIso } from "@/lib/clock";
 import { z } from "zod";
-import { Ban, CalendarCheck, CalendarX, Check, Gavel, MoveRight, Pause, Send, Sparkles, TrendingDown, Upload, X } from "lucide-react";
+import { Ban, CalendarCheck, CalendarX, Check, ClipboardCheck, Gavel, MoveRight, Pause, ScanSearch, Send, Sparkles, TrendingDown, Upload, X } from "lucide-react";
+import { AS_OF } from "@/seed/constants";
 import { LEADERS, OPS } from "@/entities/common";
 import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
 import { registerAction } from "../actions";
@@ -265,17 +266,19 @@ registerAction({
     const decision = input.decision ?? (rec === "Approve" ? "Approved" : rec === "Deny" ? "Denied" : rec ? "Conditional" : undefined);
     if (!decision) return fail(400, "Choose approve, conditional or deny");
     if (decision !== "Approved" && !input.note && !rec) return fail(400, "Give a reason for a conditional approval or a denial. It goes in the adverse-action record.");
-    return decideApplication(ctx, row, decision, input.note);
+    return decideApplication(ctx, row, decision, input.note, input.note);
   },
 });
 
-async function decideApplication(ctx: ActionContext, row: Row, decision: "Approved" | "Conditional" | "Denied", note?: string): Promise<ActionResult> {
+// `reason` is what the applicant sees on their tracker for a conditional approval or a denial: only
+// what a person typed, never the AI's recommendation text.
+async function decideApplication(ctx: ActionContext, row: Row, decision: "Approved" | "Conditional" | "Denied", note?: string, reason?: string): Promise<ActionResult> {
   if (!OPEN_APP.includes(String(row.stage))) return fail(409, `This application is already ${String(row.stage).toLowerCase()}`);
   const followsAi = row.recommendation ? (row.recommendation === "Approve" ? "Approved" : row.recommendation === "Deny" ? "Denied" : "Conditional") === decision : null;
   const summary = `${decision} by ${ctx.actor.name}${row.recommendation ? ` (AI recommended ${String(row.recommendation).toLowerCase()}${followsAi === false ? "; overridden" : ""})` : ""}${note ? `: ${note}` : ""}`;
   try {
     await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb: "decided", summary, data: { decision, ai_recommendation: row.recommendation ?? null, note: note ?? "" } },
-      [{ table: "applications", id: String(row.id), changes: { stage: decision, decided_by: ctx.actor.personaId, decided_at: now(ctx) } }], [], `decide-${row.id}`);
+      [{ table: "applications", id: String(row.id), changes: { stage: decision, decided_by: ctx.actor.personaId, decided_at: now(ctx), decision_reason: decision === "Approved" ? null : reason?.trim() || null } }], [], `decide-${row.id}`);
   } catch (e) {
     if (e instanceof AlreadyDone) return fail(409, "Someone already decided this application");
     throw e;
@@ -296,9 +299,112 @@ for (const [verb, decision] of [["approve", "Approved"], ["deny", "Denied"]] as 
     when: (r) => OPEN_APP.includes(String(r.stage)),
     input: z.object({ note: z.string().trim().max(500).optional() }).passthrough(),
     confirm: { title: verb === "approve" ? "Approve this application?" : "Deny this application?", body: "Your decision is logged with the AI recommendation. Use the AI scoring tab to add conditions or a reason." },
-    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing Agent's recommendation" : undefined)),
+    handler: (ctx, row, input) => decideApplication(ctx, row, decision, input.note ?? (verb === "deny" ? "Accepted the Leasing Agent's recommendation" : undefined), input.note),
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// Applications: screening, then the lease and move-in after the decision. Each step runs once
+// (`once` key) and shows on the applicant's tracker in the portal.
+// ---------------------------------------------------------------------------------------------
+
+const notifyApplicant = async (ctx: ActionContext, row: Row, title: string, body: string) => {
+  const { notifyStmt } = await import("@/server/money");
+  await notifyStmt(ctx.db, ctx.ws, now(ctx), String(row.applicant_id), title, body, "/portal/applicant", ["applications", String(row.id)]).run();
+};
+const stepOnce = async (ctx: ActionContext, row: Row, once: string, verb: string, summary: string, changes: Row, inserts: Parameters<typeof commit>[3] = []) => {
+  try {
+    await commit(ctx, { entity: "applications", id: String(row.id), propertyId: row.property_id, verb, summary }, [{ table: "applications", id: String(row.id), changes }], inserts, once);
+    return null;
+  } catch (e) {
+    if (e instanceof AlreadyDone) return fail(409, "Someone already did this step");
+    throw e;
+  }
+};
+const hasDoc = async (ctx: ActionContext, appId: string, types: string[]) => {
+  const { effective } = await import("@/server/query");
+  const r = await ctx.db.prepare(`SELECT count(*) AS n FROM ${effective("documents", ctx.ws)} d WHERE d.entity_type = 'applications' AND d.entity_id = ? AND d.doc_type IN (SELECT value FROM json_each(?))`).bind(appId, JSON.stringify(types)).first<{ n: number }>();
+  return (r?.n ?? 0) > 0;
+};
+
+registerAction({
+  key: "applications.order_screening",
+  label: "Order screening",
+  entity: "applications",
+  roles: [...LEASING],
+  icon: ScanSearch,
+  when: (r) => r.stage === "Submitted",
+  confirm: { title: "Order background, credit and income checks?", body: "The demo uses a sample screening provider. The applicant sees that screening has started, never the results." },
+  help: { summary: "Sends the application to the screening provider for background, credit and income checks.", article: "screening-applicant-scores" },
+  async handler(ctx, row) {
+    if (row.stage !== "Submitted") return fail(409, `This application is ${String(row.stage).toLowerCase()}`);
+    const done = await stepOnce(ctx, row, `screen-${row.id}`, "screening_ordered", `Screening ordered by ${ctx.actor.name}`, { stage: "Screening" });
+    if (done) return done;
+    await notifyApplicant(ctx, row, "Screening started", "We've started your background, credit and income checks. They usually take 1–2 business days.");
+    return ok("Screening ordered. The applicant's tracker shows checks in progress.");
+  },
+});
+
+// The sample provider's report: clean background and credit; income counts as verified only when
+// the applicant sent a pay stub, bank statement or employer letter. A person still decides.
+registerAction({
+  key: "applications.record_screening",
+  label: "Record screening results",
+  entity: "applications",
+  roles: [...LEASING],
+  icon: ClipboardCheck,
+  when: (r) => r.stage === "Screening",
+  confirm: { title: "Record the screening report?", body: "Files the sample provider's summary (background, credit, income) and sends the application to the broker to decide." },
+  help: { summary: "Files the screening provider's summary and moves the application to review.", article: "screening-applicant-scores" },
+  async handler(ctx, row) {
+    if (row.stage !== "Screening") return fail(409, `This application is ${String(row.stage).toLowerCase()}`);
+    const verified = await hasDoc(ctx, String(row.id), ["Pay stub", "Second pay stub", "Bank statement", "Employer letter"]);
+    const ratio = row.income_to_rent == null ? null : Number(row.income_to_rent);
+    const decision = verified && (ratio == null || ratio >= 3) ? "Pass" : "Conditional";
+    const done = await stepOnce(ctx, row, `screened-${row.id}`, "screened", `Screening back: ${decision.toLowerCase()}${verified ? "" : " (income not verified: no income documents)"}`, { stage: "Review" },
+      [{ table: "screening_results", row: { id: newId("scr"), application_id: row.id, applicant_id: row.applicant_id, property_id: row.property_id, provider: "Sample Screening Co.", credit_band: "Good", score: null, eviction_found: 0, criminal_flag: 0, income_verified: verified ? 1 : 0, decision, completed_at: now(ctx) } }]);
+    if (done) return done;
+    await notifyApplicant(ctx, row, "Screening complete", "Your checks are back. The managing broker reviews your application next.");
+    return ok(`Screening recorded (${decision.toLowerCase()}). It's waiting on the broker's decision.`);
+  },
+});
+
+registerAction({
+  key: "applications.send_lease",
+  label: "Send lease to sign",
+  entity: "applications",
+  roles: [...LEASING],
+  icon: Send,
+  when: (r) => (r.stage === "Approved" || r.stage === "Conditional") && !r.lease_sent_at,
+  confirm: { title: "Send the lease to the applicant?", body: "It appears in their portal to read and e-sign. For a conditional approval, send it once the conditions are met." },
+  help: { summary: "Sends the lease to the approved applicant's portal to e-sign.", article: "screening-applicant-scores" },
+  async handler(ctx, row) {
+    if (row.stage !== "Approved" && row.stage !== "Conditional") return fail(409, "Only approved applications get a lease");
+    const done = await stepOnce(ctx, row, `lease-${row.id}`, "lease_sent", `Lease sent to sign by ${ctx.actor.name}`, { lease_sent_at: now(ctx) });
+    if (done) return done;
+    await notifyApplicant(ctx, row, "Your lease is ready to sign", "Read your lease and e-sign it in the applicant portal.");
+    return ok("Lease sent. The applicant can sign it in their portal.");
+  },
+});
+
+registerAction({
+  key: "applications.schedule_move_in",
+  label: "Schedule move-in",
+  entity: "applications",
+  roles: [...LEASING],
+  icon: CalendarCheck,
+  when: (r) => r.stage === "Leased" && !!r.lease_signed_at && !r.move_in_on,
+  confirm: { title: "Confirm the move-in day?", body: "Uses the applicant's requested date (or two weeks out if it has passed) and shows it on their tracker." },
+  help: { summary: "Confirms the signed applicant's move-in day.", article: "screening-applicant-scores" },
+  async handler(ctx, row) {
+    const asked = row.desired_move_in ? String(row.desired_move_in).slice(0, 10) : null;
+    const day = asked && asked > AS_OF ? asked : demoIsoIn(14 * 86_400_000, ctx.nowMs).slice(0, 10);
+    const done = await stepOnce(ctx, row, `movein-${row.id}`, "move_in_scheduled", `Move-in scheduled for ${day} by ${ctx.actor.name}`, { move_in_on: day });
+    if (done) return done;
+    await notifyApplicant(ctx, row, "Move-in scheduled", `Your move-in is on ${day}. Bring a photo ID; the office hands over keys after a short walk-through.`);
+    return ok(`Move-in scheduled for ${day}.`);
+  },
+});
 
 // ---------------------------------------------------------------------------------------------
 // Listings

@@ -25,5 +25,8 @@ export const demoNowIso = (realMs: number = Date.now()) => {
   return `${AS_OF}T${time < DAY_START ? DAY_START : time}Z`;
 };
 export const demoNow = (realMs: number = Date.now()) => new Date(demoNowIso(realMs));
+// The real calendar day in DEMO_RESET_TZ, which changes when visitor overlays reset (keys for
+// browser-side state that must reset with them).
+export const resetDay = (realMs: number = Date.now()) => new Date(wallClock(realMs, DEMO_RESET_TZ)).toISOString().slice(0, 10);
 // The demo instant `offsetMs` from now, as ISO (e.g. an SLA due in 4 hours, a 24-hour window).
 export const demoIsoIn = (offsetMs: number, realMs: number = Date.now()) => new Date(demoNow(realMs).getTime() + offsetMs).toISOString();

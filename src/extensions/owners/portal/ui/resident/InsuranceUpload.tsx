@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/app/forms/DateInput";
 import { usePortalAction } from "../usePortalAction";
+import { SAMPLE_DECLARATIONS, sampleFile } from "../../sample-files";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 const TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -29,17 +30,19 @@ export function InsuranceUpload({ me, today, label = "Upload declarations page",
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [read, setRead] = useState<{ values: Partial<Fields>; source: string; confidence?: number } | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [sample, setSample] = useState(false);
 
-  const reset = () => { setFile(null); setFields(EMPTY); setRead(null); setNote(null); };
+  const reset = () => { setFile(null); setFields(EMPTY); setRead(null); setNote(null); setSample(false); };
   const show = (o: boolean) => {
     if (reading || busy) return;
     setOpen(o);
     if (!o) reset();
   };
 
-  const onFile = async (f: File | null) => {
+  const onFile = async (f: File | null, isSample = false) => {
     reset();
     if (!f) return;
+    setSample(isSample);
     if (f.type && !TYPES.includes(f.type)) return setNote("Upload a PDF or a photo (JPEG, PNG or WebP).");
     if (f.size > MAX_BYTES) return setNote("That file is over 4 MB. Upload a smaller scan or photo.");
     setFile(f);
@@ -61,6 +64,9 @@ export function InsuranceUpload({ me, today, label = "Upload declarations page",
         setFields({ ...EMPTY, ...values });
         setRead({ values, source: out.source, confidence: x.confidence });
         if (Object.keys(values).length < 5) setNote("Some details couldn't be read. Fill in the empty fields from your declarations page.");
+      } else if (isSample) {
+        setFields({ ...SAMPLE_DECLARATIONS.values });
+        setNote("No AI model is set up here, so the details were filled in from the sample page's printed values. Check them and send.");
       } else {
         setNote(res.ok ? (x && !x.isDeclarations ? "This doesn't look like a renters insurance declarations page. Check the file, or type the details yourself." : out.note ?? "The page wasn't read automatically. Type the details from it.") : out.error ?? "We couldn't read that file. Type the details yourself.");
       }
@@ -79,7 +85,7 @@ export function InsuranceUpload({ me, today, label = "Upload declarations page",
     e.preventDefault();
     if (!valid || busy) return;
     const aiFields = (Object.keys(EMPTY) as Key[]).filter(aiKept);
-    const r = await run("submit_insurance", { carrier: fields.carrier.trim(), policyNumber: fields.policyNumber.trim(), liability, startsOn: fields.startsOn, expiresOn: fields.expiresOn, fileName: file!.name, aiFields, source: read ? read.source : "manual" });
+    const r = await run("submit_insurance", { carrier: fields.carrier.trim(), policyNumber: fields.policyNumber.trim(), liability, startsOn: fields.startsOn, expiresOn: fields.expiresOn, fileName: file!.name, aiFields, source: read ? read.source : "manual", sample });
     if (r.ok) show(false);
   };
 
@@ -109,6 +115,11 @@ export function InsuranceUpload({ me, today, label = "Upload declarations page",
               <span className="text-[13px]">{reading ? `Reading ${file?.name}…` : file ? file.name : "Choose the declarations page (PDF or photo, up to 4 MB)"}</span>
               <input id="ri-file" type="file" accept={TYPES.join(",")} className="sr-only" disabled={reading} onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
             </label>
+            {!file && !reading && (
+              <button type="button" className="-mt-2 self-start text-[12.5px] font-medium text-primary hover:underline" onClick={async () => {
+                try { await onFile(await sampleFile(SAMPLE_DECLARATIONS.file, SAMPLE_DECLARATIONS.name), true); } catch { setNote("The sample file didn't load. Try again."); }
+              }}>No declarations page handy? Try a sample file</button>
+            )}
             {read && (
               <p className="flex items-start gap-1.5 rounded-md bg-tone-ai/10 px-3 py-2 text-[12px] text-tone-ai">
                 <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden />

@@ -1,5 +1,6 @@
 import type { Role } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
+import { baseOf } from "@/server/effective";
 
 // Life-safety decisions (decide.ts) belong to the principal or the regional manager. Taking a vendor
 // off work while it still has open emergency or life-safety jobs is one: those jobs would sit
@@ -50,7 +51,7 @@ export async function safetyJobs(db: Db, ws: string, vendorIds: string[]): Promi
   if (!vendorIds.length) return 0;
   const r = await db
     .prepare(
-      `SELECT count(*) AS n FROM work_orders w WHERE w.workspace_id IN ('base', ?) AND w.deleted = 0 AND w.vendor_id IN (SELECT value FROM json_each(?))
+      `SELECT count(*) AS n FROM work_orders w WHERE w.workspace_id IN ('${baseOf(ws)}', ?) AND w.deleted = 0 AND w.vendor_id IN (SELECT value FROM json_each(?))
          AND (w.workspace_id = ? OR NOT EXISTS (SELECT 1 FROM work_orders o WHERE o.workspace_id = ? AND o.id = w.id))
          AND w.status NOT IN ('Completed', 'Paid', 'Cancelled') AND (w.priority = 'Emergency' OR w.category = 'Life safety')`,
     )

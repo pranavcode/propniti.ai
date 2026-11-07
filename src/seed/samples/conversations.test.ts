@@ -3,7 +3,7 @@ import "@/ai/actions";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { getPersona, PERSONAS } from "@/auth/personas";
+import { getPersona, inLakeside, PERSONAS } from "@/auth/personas";
 import { ask, threadMessages, threads as listThreads, unverified } from "@/ai/assistant";
 import { staffDecision } from "@/ai/decide";
 import { Payload } from "@/ai/effects";
@@ -53,6 +53,11 @@ describe.skipIf(write)("sample conversations", { timeout: 600_000 }, () => {
   it("gives every staff persona at least two threads and every portal persona at least one", () => {
     for (const p of PERSONAS) {
       const n = threads.filter((t) => t.user_id === p.id).length;
+      // Lakeside, the empty demo org, starts with no conversations (and can't see Summit's).
+      if (inLakeside(p)) {
+        expect(n, p.id).toBe(0);
+        continue;
+      }
       expect(n, p.id).toBeGreaterThanOrEqual(p.portal ? 1 : 2);
       expect(n, p.id).toBe(p.portal ? PORTAL_SCRIPT[p.role as keyof typeof PORTAL_SCRIPT].length : SCRIPT[p.id].length);
     }

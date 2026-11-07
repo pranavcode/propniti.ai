@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Ban, BadgeCheck, CircleDollarSign, Landmark, Send, ShieldCheck, Wand2 } from "lucide-react";
 import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
 import { approveBill, auditStmt, eventStmt, payBill, uid } from "@/server/money";
-import { effective, overlayUpsertSql } from "@/server/effective";
+import { baseSql, effective, overlayUpsertSql } from "@/server/effective";
 import { nowIso } from "@/server/workspace";
 import { registerAction } from "../actions";
 
@@ -197,7 +197,7 @@ async function confirmBankChange(ctx: ActionContext, vendor: string, input: z.in
   const open = await db.prepare(`SELECT di.id, di.evidence FROM ${effective("data_issues", "?1")} di WHERE di.rule_id = 'vendors.unverified_bank_change' AND di.entity_id = ?2 AND di.status = 'open'`).bind(ws, vendor).all<{ id: string; evidence: string }>();
   // Who entered the change comes from the append-only audit log, not the issue: an issue can be
   // dismissed from Data Health, which must not let the same person verify their own change.
-  const entered = await db.prepare("SELECT actor_id FROM audit WHERE workspace_id IN ('base', ?1) AND action = 'Vendor bank account changed' AND entity_id = ?2 AND at >= ?3 ORDER BY at DESC LIMIT 1")
+  const entered = await db.prepare(`SELECT actor_id FROM audit WHERE workspace_id IN (${baseSql()}, ?1) AND action = 'Vendor bank account changed' AND entity_id = ?2 AND at >= ?3 ORDER BY at DESC LIMIT 1`)
     .bind(ws, vendor, v.bank_changed_at).first<{ actor_id: string }>();
   const changedBy = entered?.actor_id ?? open.results.map((r) => { try { return (JSON.parse(r.evidence) as { changed_by?: string }).changed_by; } catch { return undefined; } }).find(Boolean);
   if (changedBy === ctx.actor.personaId) return { status: 403, error: "You entered this bank change, so someone else has to verify it" };

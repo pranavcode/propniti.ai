@@ -6,6 +6,7 @@ import { Banknote, Gavel, HandCoins, Landmark, Receipt } from "lucide-react";
 import { z } from "zod";
 import { AS_OF, FINANCE, LEADERS } from "../common";
 import { chargeOpenStoredSql, chargeStatusStoredSql } from "@/server/data";
+import { ANY_BASE } from "@/server/effective";
 import { registerEntity } from "../registry";
 import { formatDate } from "@/lib/format";
 import type { Role } from "../types";
@@ -117,7 +118,7 @@ registerEntity({
       { value: "ACH", tone: "neutral" }, { value: "Card", tone: "neutral" }, { value: "Check", tone: "neutral" }, { value: "Money order", tone: "neutral" }, { value: "Cash", tone: "neutral" },
     ] },
     // Base transfers are all Cleared or Returned, so only the visitor's own payments can be Processing.
-    status: { type: "enum", label: "Status", facet: true, list: { default: true }, sql: "CASE WHEN payments.nsf = 1 THEN 'Returned' WHEN payments.workspace_id <> 'base' AND EXISTS (SELECT 1 FROM {transfers} t WHERE t.id = payments.transfer_id AND t.status = 'Pending') THEN 'Processing' ELSE 'Cleared' END", enum: [
+    status: { type: "enum", label: "Status", facet: true, list: { default: true }, sql: `CASE WHEN payments.nsf = 1 THEN 'Returned' WHEN payments.workspace_id NOT IN ${ANY_BASE} AND EXISTS (SELECT 1 FROM {transfers} t WHERE t.id = payments.transfer_id AND t.status = 'Pending') THEN 'Processing' ELSE 'Cleared' END`, enum: [
       { value: "Cleared", tone: "success" }, { value: "Processing", tone: "info" }, { value: "Returned", tone: "danger" },
     ] },
     lease_id: { type: "ref", ref: "leases", label: "Lease", list: { default: true } },

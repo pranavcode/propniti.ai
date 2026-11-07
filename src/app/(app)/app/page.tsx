@@ -5,6 +5,11 @@ import { DashboardSkeleton } from "@/components/app/dashboard/DashboardSkeleton"
 import { pageData } from "@/ai/ui/server";
 import { Briefing } from "@/extensions/settings/briefing/Briefing";
 import { PortfolioHome } from "@/extensions/portfolio/home/Home";
+import { getPlatform } from "@/lib/platform";
+import { personaGreeting } from "@/lib/format";
+import { companyState, setupFinished } from "@/extensions/onboarding/empty";
+import { canOnboard } from "@/extensions/onboarding/state";
+import { EmptyPage } from "@/extensions/onboarding/ui/NothingYet";
 
 export const metadata = { title: "Home · Propniti" };
 
@@ -21,6 +26,12 @@ export default async function Home() {
   if (role === "accountant") redirect("/app/finance");
   // INTEGRATE: property_manager → the residents lane's Today page (/app/today) once it exists.
   if (role !== "principal" && role !== "regional_manager" && persona.home !== "/app" && role !== "admin" && role !== "platform_admin") redirect(persona.home);
+  // A company with no properties yet (Lakeside) lands in Guided setup until setup is finished;
+  // after that, home says what to do instead of showing empty charts.
+  const ctx = { db: getPlatform().db, ws: session.ws, actor: session.actor };
+  const empty = await companyState(ctx);
+  if (empty === "empty" && canOnboard(role) && !(await setupFinished(ctx))) redirect("/app/onboarding");
+  if (empty) return <EmptyPage title={personaGreeting(persona)} meta={`${persona.title} · ${persona.scope.label}`} state={empty} role={role} />;
   // Redirects above run before the stream starts; the home's queries load behind the skeleton.
   return (
     <Suspense fallback={<DashboardSkeleton />}>

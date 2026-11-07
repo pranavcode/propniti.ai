@@ -125,8 +125,10 @@ Rules for every lane:
   - The chosen persona is stored in the `pn_as` cookie; `currentPersona()` in `src/auth/session.ts` reads it on the server.
   - `PERMISSIONS` is the role × module matrix. The sign-in page has an email and password form (demo emails `<id>@propniti.demo`, one published password `DEMO_PASSWORD`, checked server-side in `/api/session`) above every persona as a one-click card.
   - The seed must use the ids personas reference: regions `r-tx`, `r-se`, `r-sw`; properties `p01`–`p30`; owner `ow01`; resident `res-p01-0001`; vendor `v01`; applicant `apl-0001`.
+  - Two personas belong to Lakeside Property Co. (`org: LAKESIDE_ORG`), an empty second org: `alex` (principal) and `maya` (property manager, scope `invited`: the properties a Lakeside invite to `maya@propniti.demo` names). Loops over `PERSONAS` that pick people to notify or act as must stay inside one org (`sameOrg`).
 - **Schema: `migrations/0002_v2.sql`.** It has 106 tables. The header explains the conventions:
   - `workspace_id = 'base'` rows are shared and read-only. A visitor's overlay rows replace base rows that have the same id, and a `deleted = 1` overlay row hides a base row.
+  - Lakeside's base is `workspace_id = 'base-lakeside'` (`src/seed/lakeside.ts`). Lakeside personas work in the visitor's id plus `.lakeside` (`tenantWs()`), which sees `base-lakeside` and, from `'base'`, only the reference tables in `SHARED` (`src/server/effective.ts`). Read through `effective()` or `eff()`; a hand-written `workspace_id = 'base'` read must use `baseOf(ws)` instead. `src/server/tenant.test.ts` and `src/ai/__tests__/tenant.test.ts` prove the two orgs never see each other.
   - Money is stored in `*_cents` integers.
   - `transfers` and `audit` are append-only.
   - Entity references are indexed columns, not foreign keys, because an overlay row may point at a base row.

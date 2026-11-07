@@ -1,5 +1,6 @@
 import type { Row } from "@/entities/types";
 import { effective } from "@/server/query";
+import { ANY_BASE } from "@/server/effective";
 import { registerMetric, type MetricCtx } from "../metrics";
 import { addMonths, asOfDate, scoped } from "../payables/metrics";
 
@@ -23,7 +24,7 @@ export async function trustCash(ctx: MetricCtx): Promise<number> {
   const r = await ctx.db
     .prepare(`SELECT coalesce((SELECT sum(cleared_cents) FROM base_balances WHERE account_id IN (SELECT value FROM json_each(?1))), 0)
       + coalesce((SELECT sum(CASE WHEN t.kind IN ('Rent', 'Deposit', 'Other receipt') THEN CASE WHEN t.status = 'Cleared' THEN t.amount_cents ELSE 0 END ELSE -t.amount_cents END)
-        FROM ${effective("transfers", ctx.ws)} t WHERE t.workspace_id <> 'base' AND t.status <> 'Returned' AND t.bank_account_id IN (SELECT value FROM json_each(?1))), 0) AS c`)
+        FROM ${effective("transfers", ctx.ws)} t WHERE t.workspace_id NOT IN ${ANY_BASE} AND t.status <> 'Returned' AND t.bank_account_id IN (SELECT value FROM json_each(?1))), 0) AS c`)
     .bind(JSON.stringify(ids))
     .first<{ c: number }>();
   return (r?.c ?? 0) / 100;

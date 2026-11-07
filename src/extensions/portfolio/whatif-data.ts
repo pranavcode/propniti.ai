@@ -2,6 +2,7 @@ import "server-only";
 import { AS_OF } from "@/seed/constants";
 import type { Db } from "@/lib/platform/types";
 import { effective } from "@/server/query";
+import { baseOf } from "@/server/effective";
 import type { Baseline } from "./whatif";
 
 // T12 baselines per property for the what-if simulator: the 12 closed months before the demo's
@@ -35,7 +36,7 @@ export async function loadBaselines(db: Db, ws: string | null, propertyIds: stri
        sum(m.gpr_cents) AS gpr_cents, sum(m.collected_cents) AS collected_cents, sum(m.vacancy_loss_cents) AS vacancy_loss_cents,
        sum(m.concessions_cents) AS concessions_cents, sum(m.opex_cents) AS opex_cents, sum(m.noi_cents) AS noi_cents
      FROM metrics_monthly m JOIN ${effective("properties", ws)} p ON p.id = m.property_id
-     WHERE m.workspace_id = 'base' AND m.month BETWEEN ? AND ?${where.map((w) => ` AND ${w}`).join("")}
+     WHERE m.workspace_id = '${baseOf(ws)}' AND m.month BETWEEN ? AND ?${where.map((w) => ` AND ${w}`).join("")}
      GROUP BY m.property_id, p.name, p.metro ORDER BY p.name`,
   ).bind(...binds).all<Baseline>();
   const rows = res.results.map((r) => ({

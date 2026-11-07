@@ -4,7 +4,7 @@ import { MANAGEMENT_FEE_RATE, SETTLE_MS } from "@/lib/ledger";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { AS_OF, CURRENT_PERIOD } from "@/seed/constants";
 import { AVAILABLE_SQL, CHARGE_IS_OPEN, OPEN_NET_SQL, chargeOpenSql, ownerStatement } from "./data";
-import { effective, overlayUpsertSql } from "./effective";
+import { baseSql, effective, overlayUpsertSql } from "./effective";
 import { nowIso } from "./workspace";
 
 // Money movement for v2 (plan §1, AGENTS.md money rules). Base history is read-only; every money
@@ -17,6 +17,8 @@ import { nowIso } from "./workspace";
 export type Outcome = { status: 200; message?: string } | { status: 400 | 403 | 404 | 409; error: string };
 
 const FEE_PCT = Math.round(MANAGEMENT_FEE_RATE * 100);
+// The org's base workspace, for the base-key checks (every statement here binds the workspace as ?1).
+const BASE = baseSql();
 const TRANSFER_COLS = "workspace_id, id, key, kind, bank_account_id, owner_entity_id, from_kind, from_id, from_name, to_kind, to_id, to_name, amount_cents, property_id, ref, status, created, settles_at, cleared";
 const BILL_COLS = ["id", "deleted", "property_id", "owner_entity_id", "vendor_id", "work_order_id", "po_id", "recurring_bill_id", "document_id", "invoice_number", "bill_date", "due_on", "amount_cents", "status", "approved_by", "approved_at"];
 const WO_COLS = ["id", "deleted", "property_id", "unit_id", "service_request_id", "pm_schedule_id", "turnover_id", "title", "description", "category", "priority", "source", "status", "vendor_id", "assignee_id", "estimate_cents", "cost_cents", "sla_due_at", "opened_at", "scheduled_at", "completed_at", "permission_to_enter"];
@@ -85,7 +87,7 @@ function forbidden(actor: Actor, modules: ModuleKey[], propertyId: string | null
   return null;
 }
 
-const transferAt = (db: Db, ws: string, key: string) => db.prepare("SELECT id, status FROM transfers WHERE workspace_id IN ('base', ?1) AND key = ?2 AND status <> 'Returned'").bind(ws, key).first<{ id: string; status: string }>();
+const transferAt = (db: Db, ws: string, key: string) => db.prepare(`SELECT id, status FROM transfers WHERE workspace_id IN (${BASE}, ?1) AND key = ?2 AND status <> 'Returned'`).bind(ws, key).first<{ id: string; status: string }>();
 
 // ---------------------------------------------------------------------------------------------
 // Settle: overlay transfers whose ACH window has passed clear on the next request.
@@ -235,7 +237,7 @@ export async function payRent(ctx: ActionContext, chargeId: string): Promise<Out
          SELECT ?1, ?2, 'rent:' || c.id, 'Rent', 'ba-' || ?4 || '-trust', ?4, 'household', c.household_id, ?5, 'trust', 'ba-' || ?4 || '-trust', 'Operating trust', ?6, c.property_id, c.id, 'Pending', ?7, ?8, NULL
          FROM ${effective("charges")} AS c
          WHERE c.id = ?3 AND ?6 > 0 AND ?6 = ${chargeOpenSql("c")}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'rent:' || ?3)
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'rent:' || ?3)
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, c.id, c.owner_entity_id, c.household_name ?? "Resident", c.open_cents, at, nowMs + SETTLE_MS),
@@ -273,7 +275,7 @@ export async function recordPayment(ctx: ActionContext, input: RecordPaymentInpu
          SELECT ?1, ?2, 'pmt:' || ?9, 'Rent', 'ba-' || ?4 || '-trust', ?4, 'household', c.household_id, ?5, 'trust', 'ba-' || ?4 || '-trust', 'Operating trust', ?6, c.property_id, c.id, 'Cleared', ?7, NULL, ?7
          FROM ${effective("charges")} AS c
          WHERE c.id = ?3 AND ?6 > 0 AND ?6 <= ${chargeOpenSql("c")}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'pmt:' || ?9)
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'pmt:' || ?9)
            AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ?1 AND key = 'rent:' || ?3 AND status = 'Pending')
          ON CONFLICT DO NOTHING`,
       )
@@ -382,7 +384,7 @@ const NO_FRAUD_HOLD = (vendor: string) => `NOT EXISTS (SELECT 1 FROM ${effective
 
 // Maker-checker: whoever entered or submitted a bill (from the append-only audit log, as for bank
 // changes) can't approve it. ?1 workspace, ?2 bill, ?3 approver.
-const NOT_BILL_MAKER = `NOT EXISTS (SELECT 1 FROM audit AS mk WHERE mk.workspace_id IN ('base', ?1) AND mk.entity_type = 'bills' AND mk.entity_id = ?2 AND mk.action IN ('bills.created', 'bills.submit') AND mk.actor_id = ?3)`;
+const NOT_BILL_MAKER = `NOT EXISTS (SELECT 1 FROM audit AS mk WHERE mk.workspace_id IN (${BASE}, ?1) AND mk.entity_type = 'bills' AND mk.entity_id = ?2 AND mk.action IN ('bills.created', 'bills.submit') AND mk.actor_id = ?3)`;
 
 export async function approveBill(ctx: ActionContext, billId: string): Promise<Outcome> {
   const { db, ws, nowMs, actor } = ctx;
@@ -427,7 +429,7 @@ export async function payBill(ctx: ActionContext, billId: string): Promise<Outco
          SELECT ?1, ?2, 'vendor:' || b.id, 'Vendor payout', ${trust}, b.owner_entity_id, 'trust', ${trust}, 'Operating trust', 'vendor', b.vendor_id, ?4, ?7, b.property_id, b.id, 'Pending', ?5, ?6, NULL
          FROM ${effective("bills")} AS b
          WHERE b.id = ?3 AND b.status IN ('Approved', 'Scheduled') AND b.amount_cents = ?7 AND b.amount_cents > 0 AND b.amount_cents <= ${AVAILABLE_SQL(trust)}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("b.vendor_id")}
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("b.vendor_id")}
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, billId, bill.company, at, nowMs + SETTLE_MS, bill.amount_cents),
@@ -519,7 +521,7 @@ export async function approveAndPayWorkOrder(ctx: ActionContext, woId: string): 
          SELECT ?1, ?2, 'vendor:' || w.id, 'Vendor payout', ?4, ?5, 'trust', ?4, 'Operating trust', 'vendor', w.vendor_id, ?6, ?7, w.property_id, w.id, 'Pending', ?8, ?9, NULL
          FROM ${effective("work_orders")} AS w
          WHERE w.id = ?3 AND w.status = 'Submitted' AND ?7 > 0 AND ?7 <= ${AVAILABLE_SQL("?4")}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")} AND ${OWNER_OK}
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'vendor:' || ?3) AND ${NO_FRAUD_HOLD("w.vendor_id")} AND ${OWNER_OK}
            AND coalesce((SELECT e.id FROM ${effective("wo_events")} AS e WHERE e.work_order_id = w.id AND e.kind = 'Submission' ORDER BY e.at DESC, e.seq DESC LIMIT 1), '') = ?12
            AND (?12 <> '' OR w.cost_cents = ?7) AND w.vendor_id = ${INVOICED_VENDOR("w.id")}
            AND NOT EXISTS (SELECT 1 FROM ${effective("wo_events")} AS mk WHERE mk.id = ?12 AND mk.work_order_id = w.id AND mk.actor_kind = 'staff' AND mk.actor_id = ?13)
@@ -574,7 +576,7 @@ export async function distributeOwner(ctx: ActionContext, ownerEntityId: string,
         `INSERT INTO transfers (${TRANSFER_COLS})
          SELECT ?1, ?2, 'owner:' || ?3, 'Owner payout', ?4, ?5, 'trust', ?4, 'Operating trust', 'owner', ?6, ?7, ?8, ?9, 'Statement ' || ?10, 'Pending', ?11, ?12, NULL
          WHERE ?8 > 0 AND ?8 = ${OPEN_NET_SQL("?5")} AND ?8 <= ${AVAILABLE_SQL("?4")}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'owner:' || ?3)
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'owner:' || ?3)
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, idempotencyKey, trust, ownerEntityId, oe.owner_id, oe.owner_name, st.net_cents, oe.property_id, CURRENT_PERIOD, at, nowMs + SETTLE_MS),
@@ -629,7 +631,7 @@ export async function payOwnerAdjustment(ctx: ActionContext, distributionId: str
         `INSERT INTO transfers (${TRANSFER_COLS})
          SELECT ?1, ?2, ?4, 'Owner payout', ?5, ?6, 'trust', ?5, 'Operating trust', 'owner', ?7, ?8, ?9, (SELECT min(p.id) FROM ${effective("properties")} AS p WHERE p.owner_entity_id = ?6), 'Statement ' || ?10 || ' correction', 'Pending', ?11, ?12, NULL
          WHERE ?9 > 0 AND ?9 = ${statementOwed} AND ?9 <= ${AVAILABLE_SQL("?5")}
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = ?4)
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = ?4)
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, d.id, key, trust, d.owner_entity_id, d.owner_id, d.owner_name, amountCents, d.period, at, nowMs + SETTLE_MS),
@@ -683,7 +685,7 @@ export async function payApplicationFee(ctx: ActionContext, applicationId: strin
          SELECT ?1, ?2, 'appfee:' || a.id, 'Other receipt', ?4, ?5, 'applicant', a.applicant_id, ?6, 'trust', ?4, 'Operating trust', ?7, a.property_id, a.id, 'Pending', ?8, ?9, NULL
          FROM ${effective("applications")} AS a
          WHERE a.id = ?3 AND a.fee_paid = 0 AND a.stage NOT IN ('Denied', 'Withdrawn', 'Leased')
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'appfee:' || ?3)
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'appfee:' || ?3)
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, a.id, trust, a.owner_entity_id, a.applicant_name, APPLICATION_FEE_CENTS, at, nowMs + SETTLE_MS),
@@ -762,7 +764,7 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
        SELECT ?1, ?2, ?3, 'Deposit refund', ?4, ?5, 'deposit', ?4, 'Security deposit account', ?6, ?7, ?8, ?9, ?10, ?11, 'Cleared', ?12, NULL, ?12
        FROM ${effective("deposits")} AS d
        WHERE d.id = ?13 AND d.status <> 'Settled' AND d.amount_cents = ?14 AND d.amount_cents <= ${AVAILABLE_SQL("?4")}
-         AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key IN ('depapply:' || d.lease_id, 'refund:' || d.lease_id))
+         AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key IN ('depapply:' || d.lease_id, 'refund:' || d.lease_id))
          AND (SELECT count(DISTINCT c.id) FROM json_each(?15) AS j JOIN ${effective("charges")} AS c ON c.id = json_extract(j.value, '$.id') AND c.lease_id = d.lease_id) = json_array_length(?15)
          AND (SELECT count(DISTINCT json_extract(j.value, '$.id')) FROM json_each(?15) AS j) = json_array_length(?15)
          AND NOT EXISTS (SELECT 1 FROM json_each(?15) AS j JOIN ${effective("charges")} AS c ON c.id = json_extract(j.value, '$.id')
@@ -816,7 +818,7 @@ export async function disposeDeposit(ctx: ActionContext, depositId: string, line
   );
   const [first] = await db.batch(steps);
   if (first.meta.changes) return { status: 200, message: `Disposition sent: ${dollars(applied)} applied, ${dollars(refund)} refunded.` };
-  const again = await db.prepare("SELECT 1 FROM transfers WHERE workspace_id IN ('base', ?1) AND key IN (?2, ?3)").bind(ws, `depapply:${d.lease_id}`, `refund:${d.lease_id}`).first();
+  const again = await db.prepare(`SELECT 1 FROM transfers WHERE workspace_id IN (${BASE}, ?1) AND key IN (?2, ?3)`).bind(ws, `depapply:${d.lease_id}`, `refund:${d.lease_id}`).first();
   if (again) return { status: 409, error: "This deposit's disposition was already sent." };
   return { status: 409, error: "A deduction is more than what's open on its charge. Refresh and check the amounts." };
 }
@@ -904,7 +906,7 @@ export async function markPaymentReturned(ctx: ActionContext, paymentId: string,
         `INSERT INTO transfers (${TRANSFER_COLS})
          SELECT ?1, ?2, 'return:' || p.id, 'Returned payment', ?4, ?5, 'trust', ?4, 'Operating trust', 'bank', p.household_id, 'Returned to the bank', p.amount_cents, p.property_id, p.id, 'Cleared', ?6, NULL, ?6
          FROM ${effective("payments")} AS p WHERE p.id = ?3 AND p.nsf = 0 AND p.amount_cents = ?7
-           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = 'base' AND key = 'return:' || ?3)
+           AND NOT EXISTS (SELECT 1 FROM transfers WHERE workspace_id = ${BASE} AND key = 'return:' || ?3)
          ON CONFLICT DO NOTHING`,
       )
       .bind(ws, id, pay.id, trust, pay.owner_entity_id, at, pay.amount_cents),

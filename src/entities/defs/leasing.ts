@@ -323,6 +323,11 @@ registerEntity({
     submitted_at: { type: "datetime", label: "Submitted", sortable: true, list: { default: true }, editable: [] },
     decided_by: { system: true, type: "ref", ref: "staff", label: "Decided by", facet: true, editable: [], zod: actionOnly },
     decided_at: { system: true, type: "datetime", label: "Decided", sortable: true, editable: [], zod: actionOnly },
+    decision_reason: { system: true, type: "text", label: "Reason shown to applicant", editable: [], zod: actionOnly, hiddenFor: ["admin"],
+      help: { summary: "The conditions or denial reason the broker typed. The applicant sees it on their tracker; screening details never show.", article: "fair-housing-applicant-scoring" } },
+    lease_sent_at: { system: true, type: "datetime", label: "Lease sent", editable: [], zod: actionOnly },
+    lease_signed_at: { system: true, type: "datetime", label: "Lease signed", editable: [], zod: actionOnly },
+    move_in_on: { system: true, type: "date", label: "Move-in scheduled", sortable: true, editable: [], zod: actionOnly },
     fee_paid: { system: true, type: "bool", label: "Fee paid", facet: true, editable: [], zod: z.literal(false, { error: "The fee is marked paid by the payment, not on create" }) },
     scoring_factors: { system: true, type: "json", label: "Score factors", editable: [], zod: actionOnly, hiddenFor: ["admin"] },
     // Co-applicants join through the applicant portal; a free list of ids here could pull in
@@ -351,7 +356,7 @@ registerEntity({
     facts: ["stage", "property_id", "unit_id", "rent", "income_to_rent", "screening", "score", "submitted_at"],
     tabs: [
       { custom: "leasing.scoring" },
-      { key: "overview", label: "Details", fields: ["stage", "property_id", "unit_id", "listing_id", "applicant_id", "rent", "income_to_rent", "desired_move_in", "submitted_at", "fee_paid", "decided_by", "decided_at"] },
+      { key: "overview", label: "Details", fields: ["stage", "property_id", "unit_id", "listing_id", "applicant_id", "rent", "income_to_rent", "desired_move_in", "submitted_at", "fee_paid", "decided_by", "decided_at", "decision_reason", "lease_sent_at", "lease_signed_at", "move_in_on"] },
       { key: "screening", label: "Screening", relation: "screening_results", roles: SCREENING_READERS },
     ],
     related: ["applicant", "unit", "listing"],
@@ -368,7 +373,7 @@ registerEntity({
   // for an arbitrary applicant id.
   permissions: { read: [...STAFF.filter((r) => r !== "maintenance_supervisor" && r !== "accountant"), "applicant"], create: ["applicant"], update: [...DECIDERS, "leasing_agent"], delete: [...LEADERS] },
   writes: "generic",
-  actions: ["applications.score", "applications.decide"],
+  actions: ["applications.order_screening", "applications.record_screening", "applications.score", "applications.decide", "applications.send_lease", "applications.schedule_move_in"],
   help: { summary: "Rental applications from submission through screening to the broker's decision. Scores use financial and rental-history facts only.", article: "screening-applicant-scores" },
 });
 

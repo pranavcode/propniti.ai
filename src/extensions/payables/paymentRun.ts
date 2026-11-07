@@ -3,7 +3,7 @@ import { approverRoles, routeTo } from "@/ai/decide";
 import { can } from "@/entities";
 import type { ActionContext } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
-import { effective } from "@/server/effective";
+import { baseSql, effective } from "@/server/effective";
 import { payBill } from "@/server/money";
 import { nowIso } from "@/server/workspace";
 import { bankHold } from "./actions";
@@ -44,7 +44,7 @@ async function approvedBills(ctx: Ctx, f: { ids?: string[]; pastDue?: boolean })
          CAST(julianday(?2) - julianday(b.due_on) AS INTEGER) AS days_past_due
        FROM ${effective("bills")} AS b JOIN ${effective("vendors")} AS v ON v.id = b.vendor_id JOIN ${effective("properties")} AS p ON p.id = b.property_id
        WHERE b.status = 'Approved'
-         AND NOT EXISTS (SELECT 1 FROM transfers AS t WHERE t.workspace_id IN ('base', ?1) AND t.key = 'vendor:' || b.id AND t.status <> 'Returned')
+         AND NOT EXISTS (SELECT 1 FROM transfers AS t WHERE t.workspace_id IN (${baseSql()}, ?1) AND t.key = 'vendor:' || b.id AND t.status <> 'Returned')
          ${f.pastDue ? "AND b.due_on < ?2" : ""}
          ${scope ? "AND b.property_id IN (SELECT value FROM json_each(?3))" : "AND ?3 IS NULL"}
          ${f.ids ? "AND b.id IN (SELECT value FROM json_each(?4))" : "AND ?4 IS NULL"}

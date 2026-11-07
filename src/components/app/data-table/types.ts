@@ -47,4 +47,4 @@ export type AiFilterFn = (text: string) => Promise<AiFilterResult>;
 
 export type SavedView = View & { shared?: boolean; mine?: boolean; builtIn?: boolean };
 
-export type EmptyCopy = { title: string; description?: string; action?: { label: string; href: string } };
+export type EmptyCopy = { title: string; description?: string; action?: { label: string; href: string }; secondary?: { label: string; href: string } };

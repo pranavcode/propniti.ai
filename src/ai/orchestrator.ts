@@ -5,6 +5,7 @@ import type { Db } from "@/lib/platform/types";
 import { allAgents, getAgent } from "./agents/registry";
 import { dueBetween } from "./cron";
 import { CHARGE_IS_OPEN } from "@/server/data";
+import { baseOf } from "@/server/effective";
 import { asOf, eff, insert, newId, parseJson, type DataCtx } from "./data";
 import { executeProposal } from "./effects";
 import { createRunContext, errText, offWorkProposal, type AgentCtx } from "./runtime";
@@ -247,8 +248,8 @@ export async function sweep(db: Db, nowMs: number, waitUntil?: (p: Promise<unkno
     }
     const configs = await agentConfigs(db, ws);
     const { results: last } = await db
-      .prepare("SELECT agent_key, max(started_at) AS at FROM agent_runs WHERE workspace_id IN (?, 'base') AND trigger_kind = 'schedule' GROUP BY agent_key")
-      .bind(ws)
+      .prepare("SELECT agent_key, max(started_at) AS at FROM agent_runs WHERE workspace_id IN (?, ?) AND trigger_kind = 'schedule' GROUP BY agent_key")
+      .bind(ws, baseOf(ws))
       .all<{ agent_key: string; at: string }>();
     const lastAt = new Map(last.map((l) => [l.agent_key, Date.parse(l.at)]));
     for (const cfg of configs.values()) {
