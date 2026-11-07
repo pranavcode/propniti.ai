@@ -4,7 +4,7 @@ import { getAction } from "@/extensions/actions";
 import { isAiAction } from "./action-keys";
 import { isPaymentHold, isVendorOff, LIFE_SAFETY_ROLES, offVendors, safetyJobs, safetyJobsNote } from "./life-safety";
 import { letterDates } from "./rules";
-import { can, getEntity } from "@/entities";
+import { allEntities, can, getEntity } from "@/entities";
 import { getRow } from "@/server/query";
 import { INTERNAL_ROLES, type ActionKey, type AgentKey, type Row } from "@/entities/types";
 import { DB_BUSY, eff, get, getRaw, insert, insertGated, isTable, newId, parseJson, publicError, upsertOverlayGated, type DataCtx, type Gate, type Table } from "./data";
@@ -89,7 +89,16 @@ async function planEffect(data: DataCtx, e: Effect, by: By, proposal: Row, gate:
   }
   // "$by" stands for whoever approved (approved_by and similar).
   const changes = Object.fromEntries(Object.entries(e.changes).map(([k, v]) => [k, v === "$by" ? by.id : v]));
-  const { stmt, before, after } = await upsertOverlayGated(data, e.table, e.id, changes, gate, { tombstone: e.tombstone });
+  // A proposal's record update stops where generic edits do (lockedWhen), e.g. reassigning a work
+  // order that was invoiced after the proposal was written. Data fixes keep their own rules.
+  const def = e.fix ? undefined : allEntities().find((d) => d.table === e.table);
+  const lock = def?.lockedWhen;
+  const unlocked = lock && (!lock.fields || Object.keys(changes).some((k) => lock.fields!.includes(k))) ? { field: def!.fields[lock.field]?.column ?? lock.field, in: lock.in } : undefined;
+  if (unlocked) {
+    const cur = await get(data, e.table, e.id);
+    if (cur && unlocked.in.includes(String(cur[unlocked.field]))) throw new Error(`This record is ${String(cur[unlocked.field])} now, so the proposal can't change it`);
+  }
+  const { stmt, before, after } = await upsertOverlayGated(data, e.table, e.id, changes, gate, { tombstone: e.tombstone, unlocked });
   const stmts = [stmt];
   if (e.fix && e.issue_id) {
     stmts.push(await insertGated(db, ws, "data_fix_log", { id: newId("fix"), issue_id: e.issue_id, entity_type: e.table, entity_id: e.id, before_json: JSON.stringify(before), after_json: JSON.stringify(e.tombstone ? { merged: true } : after), fixed_by: by.id, agent: proposal.agent ?? null, at: now }, gate));

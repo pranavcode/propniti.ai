@@ -282,7 +282,8 @@ export async function insertGated(db: Db, ws: string, table: Table | "audit", ro
 }
 
 // upsertOverlay as a gated statement (the current row is read now; the write happens in the batch).
-export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string, changes: Row, gate: Gate, opts: { tombstone?: boolean } = {}) {
+// `unlocked` keeps the write from landing on a row whose `field` is now one of `in` (EntityDef.lockedWhen).
+export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string, changes: Row, gate: Gate, opts: { tombstone?: boolean; unlocked?: { field: string; in: string[] } } = {}) {
   const cols = await columns(ctx.db, table);
   for (const k of Object.keys(changes)) if (!cols.has(k) || k === "seq" || k === "workspace_id" || k === "id") throw new Error(`Field ${table}.${k} can't be changed`);
   const e = eff(table, ctx.ws);
@@ -291,9 +292,11 @@ export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string,
   const next: Row = { ...current, ...changes, workspace_id: ctx.ws, id, deleted: opts.tombstone ? 1 : 0 };
   delete next.seq;
   const keys = Object.keys(next).filter((k) => cols.has(k));
+  const lock = opts.unlocked && cols.has(opts.unlocked.field) ? opts.unlocked : null;
+  const lockSql = lock ? ` AND NOT EXISTS (SELECT 1 FROM ${e.sql} l WHERE l.id = ? AND coalesce(l.${lock.field}, '') IN (SELECT value FROM json_each(?)))` : "";
   const stmt = ctx.db
-    .prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map(() => "?").join(", ")} ${gateSql} ON CONFLICT (workspace_id, id) DO UPDATE SET ${keys.filter((k) => k !== "workspace_id" && k !== "id").map((k) => `${k} = excluded.${k}`).join(", ")}`)
-    .bind(...keys.map((k) => toSql(next[k] ?? null)), ctx.ws, gate.decisionId);
+    .prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map(() => "?").join(", ")} ${gateSql}${lockSql} ON CONFLICT (workspace_id, id) DO UPDATE SET ${keys.filter((k) => k !== "workspace_id" && k !== "id").map((k) => `${k} = excluded.${k}`).join(", ")}`)
+    .bind(...keys.map((k) => toSql(next[k] ?? null)), ctx.ws, gate.decisionId, ...(lock ? [...e.params, id, JSON.stringify(lock.in)] : []));
   return { stmt, before: pick(current, Object.keys(changes)), after: pick(next, Object.keys(changes)) };
 }
 
