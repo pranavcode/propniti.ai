@@ -77,6 +77,21 @@ describe("vendor invoice → validate → approve and pay", () => {
     expect(t).toMatchObject({ n: 1, c: 34500 });
   });
 
+  it("writes the invoice events in the status change's batch, and none when the work order can't take one", async () => {
+    const invoice = { invoice_number: "LSP-9", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" };
+    const count = async () => (await db.prepare("SELECT count(*) AS n FROM wo_events WHERE workspace_id = ? AND work_order_id = 'WO-2' AND kind IN ('Submission', 'Validation')").bind(WS).first<{ n: number }>())?.n;
+    // Read as In progress, completed before the handler's write: the guard refuses, and no events land.
+    const actor = await actorFor(db, WS, getPersona("vendor")!);
+    const a = getAction("work_orders.submit_invoice")!;
+    const stale = (await getRow({ db, ws: WS, actor }, "work_orders", "WO-2"))!;
+    await db.prepare("UPDATE work_orders SET status = 'Completed' WHERE workspace_id = 'base' AND id = 'WO-2'").run();
+    expect(await a.handler({ db, ws: WS, actor, nowMs: NOW }, stale, a.input!.parse(invoice))).toMatchObject({ status: 409 });
+    expect(await count()).toBe(0);
+    await db.prepare("UPDATE work_orders SET status = 'In progress' WHERE workspace_id = 'base' AND id = 'WO-2'").run();
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "vendor")).toMatchObject({ status: 200 });
+    expect(await count()).toBe(2);
+  });
+
   it("vendors can submit their own invoice but never pay it", async () => {
     expect(await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-2", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" }, "vendor")).toMatchObject({ status: 200 });
     const vendor = await actorFor(db, WS, getPersona("vendor")!);
