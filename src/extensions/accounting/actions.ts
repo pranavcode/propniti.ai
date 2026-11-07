@@ -37,11 +37,21 @@ registerAction({
       .first<{ id: string; signed: number; bank_account_id: string; taken: number }>();
     if (!t) return { status: 404, error: "Ledger transfer not found" };
     if (t.bank_account_id !== row.bank_account_id) return { status: 400, error: "That transfer is on a different bank account" };
-    if (Math.sign(t.signed) !== Math.sign(Math.round(Number(row.amount) * 100))) return { status: 400, error: "A deposit can only match money in, and a withdrawal money out" };
+    const lineCents = Math.round(Number(row.amount) * 100);
+    if (Math.sign(t.signed) !== Math.sign(lineCents)) return { status: 400, error: "A deposit can only match money in, and a withdrawal money out" };
+    if (t.signed !== lineCents) return { status: 400, error: `The amounts differ by $${(Math.abs(t.signed - lineCents) / 100).toFixed(2)}. Match only the transfer for the same amount, and record the difference separately.` };
     if (t.taken) return { status: 409, error: "That transfer is already matched to another statement line" };
     const at = nowIso(ctx.nowMs);
-    const [upd] = await db.batch([db.prepare(overlayUpsertSql("bank_transactions", TX_COLS, { transfer_id: "?3" }, "e.transfer_id IS NULL")).bind(ws, line, t.id)]);
-    if (!upd.meta.changes) return { status: 409, error: "This line is already matched" };
+    // The SQL decides: the line is unmatched, the transfer is on the same account for the same signed
+    // amount, and no other line links to it (two lines matched at once link one).
+    const guard = `e.transfer_id IS NULL
+      AND EXISTS (SELECT 1 FROM ${effective("transfers", "?1")} t WHERE t.id = ?3 AND t.bank_account_id = e.bank_account_id AND (CASE WHEN t.kind IN ${INFLOW} THEN t.amount_cents ELSE -t.amount_cents END) = e.amount_cents)
+      AND NOT EXISTS (SELECT 1 FROM ${effective("bank_transactions", "?1")} b WHERE b.transfer_id = ?3 AND b.id <> e.id)`;
+    const [upd] = await db.batch([db.prepare(overlayUpsertSql("bank_transactions", TX_COLS, { transfer_id: "?3" }, guard)).bind(ws, line, t.id)]);
+    if (!upd.meta.changes) {
+      const now = await db.prepare(`SELECT b.transfer_id FROM ${effective("bank_transactions", "?1")} b WHERE b.id = ?2`).bind(ws, line).first<{ transfer_id: string | null }>();
+      return { status: 409, error: now?.transfer_id ? "This line is already matched" : "That transfer was just matched to another statement line" };
+    }
     const rec = input.reconciliation_id ?? null;
     const item = rec ? await db.prepare(`SELECT id FROM ${effective("reconciliation_items", "?1")} WHERE reconciliation_id = ?2 AND bank_transaction_id = ?3`).bind(ws, rec, line).first<{ id: string }>() : null;
     const issues = await db.prepare(`SELECT id FROM ${effective("data_issues", "?1")} WHERE rule_id = 'bank_transactions.unmatched_deposit' AND entity_id = ?2 AND status = 'open'`).bind(ws, line).all<{ id: string }>();

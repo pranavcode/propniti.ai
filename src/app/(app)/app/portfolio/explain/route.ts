@@ -2,6 +2,7 @@ import { z } from "zod";
 import { guarded, json, writeSession } from "@/ai/http";
 import { narrate } from "@/extensions/portfolio/ai";
 import { EXPLAINABLE, explainMetric, isExplainable } from "@/extensions/portfolio/explain";
+import { canReadModuleOf } from "@/server/query";
 
 // POST /app/portfolio/explain: "Explain this number" on a KPI. Runs the Owner Reporting Agent
 // over computed facts for the persona's scope (optionally one property) and returns the wording,
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     if (w instanceof Response) return w;
     const { s, body } = w;
     const metric = body.metric as keyof typeof EXPLAINABLE;
+    if (!canReadModuleOf(s.actor.role, metric)) return json({ error: "You can't view this number" }, { status: 403 });
     if (body.property && s.actor.propertyIds !== "all" && !s.actor.propertyIds.includes(body.property)) return json({ error: "That property isn't in your scope" }, { status: 404 });
     const r = await narrate(s, {
       input: { metric, property: body.property ?? null },

@@ -69,12 +69,39 @@ describe("bill money flow", () => {
     const submit = await runAction(w, getAction("bills.submit")!, id, { lines: [{ description: "Replace kitchen faucet, unit 412", gl_account_id: "gl-6000", amount: 480 }] });
     expect(submit.status).toBe(200);
     expect((await getRow(ctx, "bills", id))?.status).toBe("Pending approval");
-    expect((await runAction(w, getAction("bills.approve")!, id, {})).status).toBe(200);
+    const daniel = { ...w, actor: await resolveActor(db, getPersona("daniel")!, WS) };
+    expect((await runAction(daniel, getAction("bills.approve")!, id, {})).status).toBe(200);
     const pay = getAction("bills.pay")!;
     const results = await Promise.all([runAction(w, pay, id, {}), runAction(w, pay, id, {})]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
     const n = await db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = ?").bind(WS, `vendor:${id}`).first<{ n: number }>();
     expect(n?.n).toBe(1);
+  });
+
+  it("refuses approval by the person who entered or submitted the bill, in SQL too", async () => {
+    const grace = write();
+    const daniel = { ...grace, actor: await resolveActor(db, getPersona("daniel")!, WS) };
+    const draft = await createRecord(grace, "bills", { vendor_id: "v01", property_id: "p01", owner_entity_id: "oe01", invoice_number: "LSP-TEST-MC", bill_date: "2026-11-03", due_on: "2026-12-03", amount: 220, status: "Draft" });
+    const id = String(draft.id);
+    expect((await runAction(grace, getAction("bills.submit")!, id, { lines: [{ description: "Disposal", gl_account_id: "gl-6000", amount: 220 }] })).status).toBe(200);
+    expect(await runAction(grace, getAction("bills.approve")!, id, {})).toMatchObject({ status: 403 });
+    expect(await runAction(grace, getAction("bills.approve_and_pay")!, id, {})).toMatchObject({ status: 403 });
+    // The SQL guard decides even when the JavaScript check is skipped.
+    const { approveBill } = await import("@/server/money");
+    expect((await approveBill({ ...grace }, id)).status).toBe(403);
+    expect((await getRow(ctx, "bills", id))?.status).toBe("Pending approval");
+    const n = await db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = ?").bind(WS, `vendor:${id}`).first<{ n: number }>();
+    expect(n?.n).toBe(0);
+    expect((await runAction(daniel, getAction("bills.approve")!, id, {})).status).toBe(200);
+  });
+
+  it("pays a bill over the bill-payment limit only for a payables approver, the rule the payment run routes to", async () => {
+    const w = write();
+    const { payBill } = await import("@/server/money");
+    const over = await db.prepare("SELECT b.id FROM bills b WHERE b.workspace_id = 'base' AND b.status = 'Approved' AND b.property_id = 'p01' AND b.amount_cents > 500000 LIMIT 1").first<{ id: string }>();
+    const id = over?.id ?? String((await db.prepare("INSERT INTO bills (workspace_id, id, property_id, owner_entity_id, vendor_id, invoice_number, bill_date, due_on, amount_cents, status) VALUES (?, 'b-over-limit', 'p01', 'oe01', 'v01', 'LSP-BIG', '2026-11-01', '2026-11-20', 600000, 'Approved') RETURNING id").bind(WS).first<{ id: string }>())!.id);
+    for (const persona of ["marcus", "tom", "lena"]) expect((await payBill({ ...w, actor: await resolveActor(db, getPersona(persona)!, WS) }, id)).status).toBe(403);
+    expect(await db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = ?").bind(WS, `vendor:${id}`).first()).toMatchObject({ n: 0 });
   });
 
   it("refuses to create a bill in any status but Draft", async () => {
@@ -93,7 +120,8 @@ describe("bill money flow", () => {
     const refused = await runAction(w, getAction("bills.approve")!, id, {});
     expect(refused.status).toBe(409);
     expect(await runAction(w, getAction("bills.confirm_vendor_bank")!, id, { spoke_with: "Dana Whitaker", phone_on_file: true })).toMatchObject({ status: 200 });
-    expect((await runAction(w, getAction("bills.approve")!, id, {})).status).toBe(200);
+    const daniel = { ...w, actor: await resolveActor(db, getPersona("daniel")!, WS) };
+    expect((await runAction(daniel, getAction("bills.approve")!, id, {})).status).toBe(200);
   });
 
   it("recodes a line and records the before and after", async () => {
@@ -125,7 +153,7 @@ describe("vendor bank account changes", () => {
     expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(409);
     expect((await runAction(grace, confirm, "v03", { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(403);
     expect((await runAction(daniel, confirm, "v03", { spoke_with: "Ana Ruiz", phone_on_file: true })).status).toBe(200);
-    expect((await runAction(grace, getAction("bills.approve")!, String(draft.id), {})).status).toBe(200);
+    expect((await runAction(daniel, getAction("bills.approve")!, String(draft.id), {})).status).toBe(200);
   });
 });
 

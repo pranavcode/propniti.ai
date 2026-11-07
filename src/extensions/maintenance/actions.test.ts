@@ -5,7 +5,7 @@ import { getAction } from "@/extensions/actions";
 import type { ActionResult } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { actorFor } from "@/server/permissions";
-import { getRow } from "@/server/query";
+import { getRow, updateRecord } from "@/server/query";
 import { emptyDb, seed, WS } from "@/server/query.fixture";
 
 // Maintenance actions on the visitor overlay: double clicks change things once, money moves once.
@@ -67,7 +67,7 @@ describe("in-house dispatch", () => {
 
 describe("vendor invoice → validate → approve and pay", () => {
   it("records the invoice, flags lines over the PO and pays exactly once", async () => {
-    const r = await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-1", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }, { description: "Trip charge", amount: 45 }], total: 345, source: "manual" });
+    const r = await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-1", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }, { description: "Trip charge", amount: 45 }], total: 345, source: "manual" }, "vendor");
     expect(r).toMatchObject({ status: 200, message: expect.stringContaining("issue") });
     // Issues found: paying needs a reason.
     expect(await act("work_orders.approve_and_pay", "WO-2", {})).toMatchObject({ status: 409, error: expect.stringContaining("add a short note") });
@@ -81,6 +81,47 @@ describe("vendor invoice → validate → approve and pay", () => {
     expect(await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-2", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" }, "vendor")).toMatchObject({ status: 200 });
     const vendor = await actorFor(db, WS, getPersona("vendor")!);
     expect(getAction("work_orders.approve_and_pay")!.roles).not.toContain(vendor.role);
+  });
+});
+
+describe("payee is the vendor who invoiced", () => {
+  const invoice = { invoice_number: "LSP-9", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" };
+  const paidTo = (vendor: string) => db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND to_id = ?").bind(WS, vendor).first<{ n: number }>().then((r) => r?.n);
+
+  it("refuses a vendor swap through the record API on a submitted job, and pays nobody", async () => {
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "vendor")).toMatchObject({ status: 200 });
+    const tom = { db, ws: WS, actor: await actorFor(db, WS, getPersona("tom")!), nowMs: NOW };
+    await expect(updateRecord(tom, "work_orders", "WO-2", { vendor_id: "v02" })).rejects.toMatchObject({ status: expect.any(Number) });
+    await expect(updateRecord(tom, "work_orders", "WO-2", { title: "Toilet running (edited)" })).rejects.toMatchObject({ status: 409 });
+    expect((await getRow({ db, ws: WS, actor: tom.actor }, "work_orders", "WO-2"))?.vendor_id).toBe("v01");
+  });
+
+  it("pays only the vendor on the latest invoice, checked in SQL", async () => {
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "vendor")).toMatchObject({ status: 200 });
+    // Whatever path changes the job's vendor after the invoice, the payment insert refuses it.
+    await db.prepare("UPDATE work_orders SET vendor_id = 'v02' WHERE workspace_id = ? AND id = 'WO-2'").bind(WS).run();
+    expect(await act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 })).toMatchObject({ status: 409 });
+    expect(await paidTo("v02")).toBe(0);
+    const n = await db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = 'vendor:WO-2'").bind(WS).first<{ n: number }>();
+    expect(n?.n).toBe(0);
+  });
+});
+
+describe("maker-checker on invoices staff enter", () => {
+  const invoice = { invoice_number: "LSP-10", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" };
+
+  it("refuses the person who entered an invoice approving it, in SQL too, and lets someone else pay it once", async () => {
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "tom")).toMatchObject({ status: 200 });
+    expect(await act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 }, "tom")).toMatchObject({ status: 403 });
+    const n = () => db.prepare("SELECT count(*) AS n FROM transfers WHERE workspace_id = ? AND key = 'vendor:WO-2'").bind(WS).first<{ n: number }>().then((r) => r?.n);
+    expect(await n()).toBe(0);
+    expect(await twice(() => act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 }, "daniel"))).toEqual([200, 409]);
+    expect(await n()).toBe(1);
+  });
+
+  it("leaves vendor-submitted invoices to any approver", async () => {
+    expect(await act("work_orders.submit_invoice", "WO-2", invoice, "vendor")).toMatchObject({ status: 200 });
+    expect(await act("work_orders.approve_and_pay", "WO-2", { note: "Photos checked on site", expected_cents: 30000 }, "tom")).toMatchObject({ status: 200 });
   });
 });
 
@@ -111,7 +152,7 @@ describe("invoice photo requirement", () => {
 
   it("passes when a photo was on file before the invoice", async () => {
     await db.prepare("UPDATE photos SET taken_at = '2026-10-21T09:00:00Z' WHERE id = 'ph-2'").run();
-    await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-4", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" });
+    await act("work_orders.submit_invoice", "WO-2", { invoice_number: "LSP-4", lines: [{ description: "Labor", amount: 180 }, { description: "Parts", amount: 120 }], total: 300, source: "manual" }, "vendor");
     expect(await act("work_orders.approve_and_pay", "WO-2", { expected_cents: 30000 })).toMatchObject({ status: 200 });
   });
 });

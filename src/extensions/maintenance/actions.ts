@@ -328,7 +328,7 @@ registerAction({
     const { po, photos } = await invoiceInputs(c.db, c.ws, String(r.id));
     const v = validateInvoice(po, { lines, total_cents: total, photos });
     await c.db.batch([
-      await woEvent(c, r, "Submission", { invoice_number: input.invoice_number, lines, total_cents: total, source: input.source, read_confidence: input.read_confidence ?? null }, "Submitted"),
+      await woEvent(c, r, "Submission", { invoice_number: input.invoice_number, vendor_id: r.vendor_id, lines, total_cents: total, source: input.source, read_confidence: input.read_confidence ?? null }, "Submitted"),
       await woEvent(c, r, "Validation", { ...v, source: "rules" }),
     ]);
     return ok(v.issues.length ? `Invoice recorded. ${v.summary}` : `Invoice recorded and matches the PO. Ready to approve.`);
