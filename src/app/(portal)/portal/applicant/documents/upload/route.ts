@@ -6,7 +6,7 @@ import { resolveWorkspace } from "@/server/workspace";
 import { sameOrigin } from "@/lib/https";
 import { handle, json, readCtx } from "@/app/api/e/_lib/http";
 import { resolveAction, runAction } from "@/app/api/e/_lib/actions";
-import { UploadDocument } from "@/extensions/owners/portal-actions";
+import { UPLOAD_ROUTE, UploadDocument } from "@/extensions/owners/portal-actions";
 
 // POST multipart { file, docType, sample? } — an applicant's document. The file is capped at 4 MB
 // and identified by its first bytes (JPEG, PNG, WebP or PDF; anything else is 415), then dropped:
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const nowMs = Date.now();
     const r = await resolveWorkspace(getPlatform().db, request, nowMs, true, !!getPlatform().writeLimiter);
     if (r instanceof Response) return r;
-    const out = await runAction({ ...base, ws: r.ws!, nowMs }, resolveAction("applicants", "upload_document"), me, input.data);
+    const out = await runAction({ ...base, ws: r.ws!, nowMs }, resolveAction("applicants", "upload_document", UPLOAD_ROUTE), me, input.data);
     return json(out.status === 200 ? { ok: true, message: out.message } : { error: "error" in out ? out.error : out.message }, out.status, r.setCookie);
   });
 }

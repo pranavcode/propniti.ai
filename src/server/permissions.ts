@@ -90,5 +90,5 @@ export function actionsForRow(entity: EntityKey, role: Role, row: Record<string,
   const def = getEntity(entity);
   if (!def) return [];
   const keys = new Set([...(def.actions ?? []), ...actionsFor(entity).map((a) => a.key)]);
-  return [...keys].map((k) => getAction(k)).filter((a) => !!a && can(role, a.key, entity) && (!a.when || a.when(row))).map((a) => a!);
+  return [...keys].map((k) => getAction(k)).filter((a) => !!a && !a.route && can(role, a.key, entity) && (!a.when || a.when(row))).map((a) => a!);
 }

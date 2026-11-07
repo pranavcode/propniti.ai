@@ -11,11 +11,12 @@ import { forgetOverlay, getDef, getRow, QueryError, type WriteCtx } from "@/serv
 // allowed (action roles and module access), the row must be in scope and pass `when`. Each run
 // that succeeds is audited here, so handlers don't need to write their own audit row for it.
 
-export function resolveAction(entity: string, actionKey: string): ActionDef {
+// An action with its own `route` resolves only for that route.
+export function resolveAction(entity: string, actionKey: string, route?: string): ActionDef {
   const def = getDef(entity);
   const key = actionKey.includes(".") ? actionKey : `${def.key}.${actionKey}`;
   const a = getAction(key);
-  if (!a || a.entity !== def.key) throw new QueryError(404, `Unknown action "${actionKey}" on ${def.label.many.toLowerCase()}`);
+  if (!a || a.entity !== def.key || a.route !== route) throw new QueryError(404, `Unknown action "${actionKey}" on ${def.label.many.toLowerCase()}`);
   return a;
 }
 

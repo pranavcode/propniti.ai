@@ -286,6 +286,7 @@ export type ActionDef<I = unknown> = {
   bulk?: boolean;
   money?: boolean;                       // handler must go through src/server/money.ts
   ai?: boolean;                          // handler calls a model: the action route also applies the AI rate limit
+  route?: string;                        // runs only from this route (it checks what a JSON body can't, such as a file); the /api/e action routes refuse it
   handler: (ctx: ActionContext, row: Row, input: I) => Promise<ActionResult>;
   help?: HelpMeta;
 };

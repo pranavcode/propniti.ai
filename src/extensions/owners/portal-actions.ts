@@ -429,6 +429,7 @@ const application = (ctx: ActionContext, applicantId: unknown) =>
 
 // The file itself reaches /portal/applicant/documents/upload, which checks its size and signature
 // (JPEG, PNG, WebP or PDF) and passes only these facts on; the bytes are discarded.
+export const UPLOAD_ROUTE = "/portal/applicant/documents/upload";
 export const UploadDocument = z.object({
   docType: z.enum(DOC_TYPES),
   fileName: z.string().trim().min(1).max(120),
@@ -442,6 +443,7 @@ registerAction({
   label: "Upload document",
   entity: "applicants",
   roles: ["applicant"],
+  route: UPLOAD_ROUTE,
   input: UploadDocument,
   handler: async (ctx, row, input) => {
     const app = await application(ctx, row.id);

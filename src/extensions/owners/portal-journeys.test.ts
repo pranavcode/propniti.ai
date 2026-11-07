@@ -12,6 +12,8 @@ import { effective } from "@/server/effective";
 import type { WriteCtx } from "@/server/query";
 import { safeHref } from "@/lib/links";
 import { GET as photo } from "@/app/api/photos/[id]/route";
+import { POST as recordAction } from "@/app/api/e/[entity]/[id]/actions/[action]/route";
+import { POST as bulkAction } from "@/app/api/e/[entity]/actions/[action]/route";
 
 // The photo route reads through getPlatform(); point it at this file's database.
 const held = vi.hoisted(() => ({ db: null as unknown }));
@@ -94,6 +96,15 @@ describe("applicant journey", () => {
     expect((await appRow(ws))?.move_in_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     // No more documents once leased.
     expect((await run(me, "applicants.upload_document", APPLICANT, doc("Bank statement"))).status).toBe(409);
+  });
+
+  it("takes documents only through the upload route, which checks the file", async () => {
+    const ws = await workspace();
+    const headers = { cookie: `pn_ws=${ws}; pn_as=applicant`, origin: "http://localhost", "content-type": "application/json" };
+    const one = await recordAction(new Request(`http://localhost/api/e/applicants/${APPLICANT}/actions/upload_document`, { method: "POST", headers, body: JSON.stringify(doc("Photo ID")) }), { params: Promise.resolve({ entity: "applicants", id: APPLICANT, action: "upload_document" }) });
+    const bulk = await bulkAction(new Request("http://localhost/api/e/applicants/actions/upload_document", { method: "POST", headers, body: JSON.stringify({ ids: [APPLICANT], input: doc("Photo ID") }) }), { params: Promise.resolve({ entity: "applicants", action: "upload_document" }) });
+    expect([one.status, bulk.status]).toEqual([404, 404]);
+    expect(await db.prepare("SELECT count(*) AS n FROM documents WHERE workspace_id = ?1").bind(ws).first<{ n: number }>()).toEqual({ n: 0 });
   });
 
   it("acts only on the applicant's own record", async () => {
