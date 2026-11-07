@@ -132,6 +132,12 @@ test("resident reports a leak with a sample photo, staff fix it and the resident
   await as(context, "tom");
   await go(page, `${BASE}/app/maintenance/work-orders/${wo}`);
   await expect(page.getByText(/leaking under the kitchen sink/).first()).toBeVisible();
+  // The resident's photo loads for staff through its same-site link.
+  await go(page, `${BASE}/app/maintenance/work-orders/${wo}?tab=wo_photos`);
+  const img = page.getByRole("img", { name: "Resident photo 1" });
+  await expect(img).toBeVisible();
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
+  await shot(page, "staff-wo-photos");
   await act(page, "work_orders", wo, "work_orders.dispatch", { vendor_id: null, assignee_id: "t-andre", priority: "Urgent", category: "Plumbing" });
   await act(page, "work_orders", wo, "work_orders.set_status", { status: "Scheduled" });
 
