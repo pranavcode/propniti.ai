@@ -3,11 +3,12 @@ import { getPlatform } from "@/lib/platform";
 import { effective } from "@/server/effective";
 import { getRow, QueryError } from "@/server/query";
 import { readCtx } from "@/app/api/e/_lib/http";
+import { sniff } from "@/lib/upload";
 
 // GET /api/photos/<id>: a photo a resident took on their phone, stored with its work order. Pages
 // link here (a same-site URL) instead of to the data: URL. Staff and the job's vendor see it when
 // the work order is in their scope; a resident sees photos on their own requests; an owner on
-// their own properties. Anyone else gets 404.
+// their own properties. Anyone else gets 404. Not cached: personas switch on the same browser.
 
 const DATA = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/;
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
@@ -33,5 +34,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
   if (!allowed) return notFound();
   const bytes = Uint8Array.from(atob(m[2]), (ch) => ch.charCodeAt(0));
-  return new Response(bytes, { headers: { "Content-Type": `image/${m[1]}`, "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff" } });
+  const type = `image/${m[1]}`;
+  if (sniff(bytes) !== type) return notFound();
+  const ext = m[1] === "jpeg" ? "jpg" : m[1];
+  return new Response(bytes, { headers: { "Content-Type": type, "Content-Disposition": `inline; filename="${id}.${ext}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 }

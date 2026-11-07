@@ -120,10 +120,15 @@ describe("resident photos", () => {
       const res = await get(persona);
       expect(res.status, persona).toBe(200);
       expect(res.headers.get("content-type")).toBe("image/jpeg");
+      expect(res.headers.get("content-disposition")).toBe(`inline; filename="${p!.id}.jpg"`);
+      expect(res.headers.get("cache-control")).toBe("private, no-store");
     }
     // A vendor not on the job, an applicant, and no such photo.
     for (const persona of ["vendor", "applicant"]) expect((await get(persona)).status, persona).toBe(404);
     expect((await photo(new Request("http://localhost/api/photos/x", { headers: { cookie: `pn_ws=${ws}; pn_as=tom` } }), { params: Promise.resolve({ id: "ph-none" }) })).status).toBe(404);
+    // Bytes that aren't the declared image type are never served.
+    await db.prepare("UPDATE photos SET data = ?3 WHERE workspace_id = ?1 AND id = ?2").bind(ws, p!.id, jpeg.replace("image/jpeg", "image/png")).run();
+    expect((await get("tom")).status).toBe(404);
   });
 });
 
