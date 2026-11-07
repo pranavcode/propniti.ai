@@ -131,6 +131,8 @@ Earlier on 2026-11-04, in four batches after the morning PRs (#3–#11):
   - `AS_OF` stays fixed. The app uses one demo clock instead of moving the seed date.
   - The $55 application fee goes into the property's trust account as owner income.
   - Autonomy has two levels: Approve first, Auto within policy.
+- **2026-11-07**
+  - Production Worker answers only on its custom domains: `workersDev: false` in `cloudflare.config.ts` (the workers.dev host skipped the HTTPS redirect and zone rules). Takes effect on the next deploy.
 
 ## Resume here
 

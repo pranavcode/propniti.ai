@@ -146,9 +146,8 @@ From the code and from the post-demo backlog in `research/gate-checklist.md`.
 
 ## Open infrastructure items (need the owner's decision)
 
-These are Cloudflare settings, not code; nothing here has been changed.
+These are Cloudflare settings, not code. `workersDev` is now `false` in `cloudflare.config.ts` (2026-11-07), so production answers only on `propniti.ai` and `www`, not on `property-mgmt-ai-prototype.dnyana.workers.dev`; that takes effect on the next deploy. Nothing else here has been changed.
 
 - **The preview Worker shares the production database.** `propniti-v2-preview.dnyana.workers.dev` uses the same D1 database (`propniti-v2`) as production, so preview builds read and write production's visitor workspaces. Give the preview its own D1 database.
-- **Production is also reachable on workers.dev.** `cloudflare.config.ts` sets `workersDev: true`, so the production Worker answers at `property-mgmt-ai-prototype.dnyana.workers.dev` as well as `propniti.ai`. That host isn't in the HTTPS redirect list and has no zone settings (WAF rules, analytics). Set `workersDev: false` if nothing depends on it.
 - **"Always Use HTTPS" zone setting.** The Worker now redirects plain HTTP on `propniti.ai` and `www`; turning on the zone's "Always Use HTTPS" would do it at the edge as well, including for paths that never reach the Worker.
 - **HSTS preload.** `next.config.ts` sets `Strict-Transport-Security` with `preload`, which only takes effect once the domain is submitted to the browser preload list (hstspreload.org). Preloading makes browsers use https on the first visit too; it is slow to undo, and every subdomain must serve https first.

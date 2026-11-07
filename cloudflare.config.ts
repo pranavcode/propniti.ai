@@ -9,7 +9,8 @@ export default defineConfig({
     // CPU per invocation (paid plan); one agent run per cron tick stays well inside it.
     limits: { cpuMs: 60_000 },
     domains: ["propniti.ai", "www.propniti.ai"],
-    workersDev: true,
+    // Only the custom domains: the workers.dev host would skip the HTTPS redirect and zone rules.
+    workersDev: false,
     // Smart Placement: run near the D1 database rather than the visitor, since most requests make
     // several sequential queries (bulk actions about 0.6 s per record when run far from it).
     placement: { mode: "smart" },
