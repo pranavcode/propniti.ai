@@ -12,7 +12,7 @@ import { companyState } from "@/extensions/onboarding/empty";
 import { effective as paramEffective, isLakeside, LAKESIDE_BASE, LAKESIDE_WS } from "./effective";
 import { actorFor } from "./permissions";
 import { emptyDb, seed, WS } from "./query.fixture";
-import { distinctValues, effective, list, metrics, type WriteCtx } from "./query";
+import { distinctValues, effective, getRow, list, metrics, type WriteCtx } from "./query";
 import { NEEDS_HISTORY } from "@/extensions/core-metrics";
 import { nextMidnight, resolveWorkspace, tenantWs } from "./workspace";
 
@@ -153,6 +153,18 @@ describe("Summit never sees Lakeside", () => {
     expect((await metrics(daniel, "portfolio.noi")).note).toBeUndefined();
     expect(await distinctValues(alex, "properties", "metro")).toEqual(["Austin"]);
     expect((await distinctValues(daniel, "properties", "metro")).sort()).toEqual(["Atlanta", "Austin", "Dallas", "Phoenix"]);
+
+    // The record page agrees with itself: its delinquent figure and unit count are the live ones,
+    // while Summit's properties keep their month-end figures.
+    const [imported] = (await list(alex, "properties")).rows;
+    const rec = (await getRow(alex, "properties", String(imported!.id)))!;
+    const live = await metrics(alex, "receivables.aging_live", { property: String(imported!.id) });
+    expect(rec.units).toBe(2);
+    expect(rec.delinquent).toBe(live.value);
+    expect(Number(rec.delinquent)).toBeGreaterThan(0);
+    const p01 = (await getRow(daniel, "properties", "p01"))!;
+    const month = await n("SELECT aging_0_30_cents + aging_31_60_cents + aging_61_90_cents + aging_90p_cents AS n FROM metrics_monthly WHERE property_id = 'p01' ORDER BY month DESC LIMIT 1");
+    expect(p01.delinquent).toBe(month / 100);
 
     // Undo works inside Lakeside and leaves it empty.
     await undo(alex, done.batch);

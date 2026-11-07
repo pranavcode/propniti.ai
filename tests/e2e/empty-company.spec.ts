@@ -82,6 +82,19 @@ test("an empty company: guided setup imports sample files, invites the property 
   expect(await main.locator("img").evaluateAll((imgs) => imgs.filter((i) => !(i as HTMLImageElement).naturalWidth).length)).toBe(0);
   await expect(page.getByRole("button", { name: /Finish setup/ })).toBeVisible();
 
+  // An imported property's page agrees with itself: 6 units, the live past-due figure in both the
+  // facts row and the KPI, and an address without a made-up distance (it has no coordinates).
+  const cedar = ((await (await page.request.get(`${BASE}/api/e/properties?q=Cedar%20Row`)).json()) as { rows: { id: string }[] }).rows[0]!.id;
+  await go(page, `/app/properties/${cedar}`);
+  await expect(main.getByRole("heading", { name: "Cedar Row Townhomes" })).toBeVisible();
+  const facts = main.locator("dl").filter({ hasText: "Year built" });
+  await expect(facts.locator("div").filter({ has: page.locator("dt", { hasText: /^Units$/ }) }).locator("dd")).toHaveText("6");
+  await expect(main).not.toContainText(/mi [NSEW]{1,2} of downtown/);
+  await expect(main).not.toContainText("Open in maps");
+  await expect(main).toContainText("1200 Cedar Row");
+  await expect(main.getByText("$1,536").first()).toBeVisible();
+  await expect(main).not.toContainText("No balance is past due");
+
   // 5. Switch to Maya: her properties are the two she was invited to.
   await as(context, "maya");
   await go(page, "/app/properties");
