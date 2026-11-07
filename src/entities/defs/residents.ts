@@ -307,8 +307,9 @@ registerEntity({
     starts_on: { type: "date", label: "Starts", required: true, sortable: true },
     expires_on: { type: "date", label: "Expires", required: true, sortable: true, list: { default: true } },
     status: { type: "enum", label: "Status", facet: true, sortable: true, list: { default: true }, enum: [
-      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" }, { value: "Pending verification", tone: "info" },
+      { value: "Active", tone: "success" }, { value: "Expiring", tone: "warning" }, { value: "Lapsed", tone: "danger" }, { value: "Waived", tone: "neutral" }, { value: "Pending verification", tone: "info" }, { value: "Rejected", tone: "danger" },
     ] },
+    review_note: { system: true, type: "text", label: "Reason rejected", editable: [], help: { summary: "Why the office couldn't verify the policy. The resident sees it in their portal.", article: "renters-insurance" } },
   },
   relations: [{ name: "lease", entity: "leases", fk: "lease_id", kind: "one" }, { name: "property", entity: "properties", fk: "property_id", kind: "one" }],
   list: {
@@ -317,7 +318,7 @@ registerEntity({
     savedViews: [{ key: "gaps", label: "Lapsed or expiring", filters: { status: ["Lapsed", "Expiring"] }, sort: ["expires_on", "asc"] }, { key: "to-verify", label: "To verify", filters: { status: "Pending verification" }, sort: ["expires_on", "asc"] }],
     bulkActions: ["renters_insurance.verify"],
   },
-  detail: { facts: ["status", "carrier", "lease_id", "liability", "starts_on", "expires_on"], tabs: [{ key: "overview", label: "Overview", fields: ["policy_number", "carrier", "lease_id", "property_id", "liability", "starts_on", "expires_on", "status"] }], related: ["lease", "property"] },
+  detail: { facts: ["status", "carrier", "lease_id", "liability", "starts_on", "expires_on"], tabs: [{ custom: "residents.insurance_review" }, { key: "overview", label: "Overview", fields: ["policy_number", "carrier", "lease_id", "property_id", "liability", "starts_on", "expires_on", "status", "review_note"] }], related: ["lease", "property"] },
   capabilities: { notes: true, activity: true, documents: true },
   permissions: { read: [...STAFF, "resident"], create: [...OPS, "leasing_agent", "resident"], update: [...OPS, "leasing_agent"], delete: [...OPS] },
   writes: "generic",

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AIBadge, Confidence } from "@/components/app/ai";
 import { StatusBadge } from "@/components/app/display";
 import type { Approval } from "../owner-data";
+import { extraDetail } from "../text";
 import { usePortalAction } from "./usePortalAction";
 
 const usd = (cents: number) => formatMoney(cents / 100);
@@ -19,6 +20,7 @@ const usd = (cents: number) => formatMoney(cents / 100);
 export function ApprovalCard({ a, me }: { a: Approval; me: string }) {
   const { run, busy } = usePortalAction("owners", me);
   const mounted = useMounted();
+  const detail = extraDetail(a.title, a.description);
   const day = (v: string) => (mounted ? formatDate(v) : v.slice(0, 10));
   const [decision, setDecision] = useState<"Approved" | "Declined" | null>(null);
   const [note, setNote] = useState("");
@@ -51,7 +53,7 @@ export function ApprovalCard({ a, me }: { a: Approval; me: string }) {
               <p className="text-[11.5px] text-muted-foreground">estimate</p>
             </div>
           </div>
-          {a.description && <p className="mt-2 text-[13px] text-pretty">{a.description}</p>}
+          {detail && <p className="mt-2 text-[13px] text-pretty">{detail}</p>}
           <div className="mt-3 rounded-lg border border-tone-ai/20 bg-tone-ai/[0.04] p-3">
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
               <Sparkles className="size-3.5 text-tone-ai" />

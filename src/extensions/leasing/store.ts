@@ -6,7 +6,7 @@ import { effective } from "@/server/query";
 // and audited the run; these add the record's activity entry and the event other agents listen to.
 // Table and column names come only from this module's code, never from a request.
 
-export type LeasingTable = "listings" | "listing_price_history" | "prospects" | "showings" | "applications" | "concessions" | "renewal_offers" | "message_threads" | "messages";
+export type LeasingTable = "listings" | "listing_price_history" | "prospects" | "showings" | "applications" | "screening_results" | "concessions" | "renewal_offers" | "message_threads" | "messages";
 
 const id = () => crypto.randomUUID().replace(/-/g, "").slice(0, 16);
 

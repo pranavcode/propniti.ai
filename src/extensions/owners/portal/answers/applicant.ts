@@ -1,7 +1,7 @@
 import "server-only";
 import type { Answer, Lookup } from "../ask";
 import type { PortalCtx } from "../context";
-import { NEXT, application, applicationDocs, checklist } from "../applicant-data";
+import { application, applicationDocs, checklist, journeyOf } from "../applicant-data";
 
 const where = (stage: string) => (stage === "Started" ? "You haven't submitted your application yet." : `Your application is at the ${stage.toLowerCase()} stage.`);
 
@@ -18,7 +18,7 @@ export async function answerApplicant(c: PortalCtx, q: string): Promise<Answer> 
   }
   const docs = await applicationDocs(c, app.id);
   const list = checklist(docs);
-  const missing = list.filter((x) => !x.doc).map((x) => x.type);
+  const missing = list.filter((x) => !x.doc && !x.optional).map((x) => x.type);
   trace.push({ label: "Documents on file", detail: docs.length ? docs.map((d) => d.doc_type ?? d.name).join(", ") : "none yet" });
   const links = [{ label: "Documents", href: "/portal/applicant/documents" }, { label: "Message the leasing team", href: "/portal/applicant/messages" }];
   const facts = { stage: app.stage, submitted: day(app.submitted_at), missing, fee_paid: !!app.fee_paid };
@@ -31,7 +31,7 @@ export async function answerApplicant(c: PortalCtx, q: string): Promise<Answer> 
   }
   if (/when|hear|long|decision|status|approved|next/i.test(q)) {
     const since = app.submitted_at ? ` You submitted it on ${day(app.submitted_at)}.` : "";
-    return { answer: `${where(app.stage)}${since} ${NEXT[app.stage] ?? ""}${missing.length && !["Approved", "Denied", "Leased", "Withdrawn"].includes(app.stage) ? ` Sending the remaining documents (${missing.join(", ")}) helps us finish sooner.` : ""}`.trim(), facts, trace, links };
+    return { answer: `${where(app.stage)}${since} ${journeyOf(app, docs).next.body}${missing.length && !["Approved", "Denied", "Leased", "Withdrawn"].includes(app.stage) ? ` Sending the remaining documents (${missing.join(", ")}) helps us finish sooner.` : ""}`.trim(), facts, trace, links };
   }
   return {
     answer: `${app.property}, unit ${app.unit}: ${where(app.stage)} ${missing.length ? `Still needed: ${missing.join(", ")}.` : "All documents are in."}`,

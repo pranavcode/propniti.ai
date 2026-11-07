@@ -1,17 +1,7 @@
 import { extractCoi, extractInsurance, extractInvoice } from "@/lib/llm";
 import { rateLimit, readBodyLimited } from "@/lib/guard";
 import { sameOrigin } from "@/ai/session";
-
-const MAX_FILE_BYTES = 4 * 1024 * 1024;
-
-// Identify the file by its first bytes, not the client-supplied type or name.
-function sniff(b: Uint8Array): string | null {
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
-  if (String.fromCharCode(...b.slice(0, 4)) === "RIFF" && String.fromCharCode(...b.slice(8, 12)) === "WEBP") return "image/webp";
-  if (String.fromCharCode(...b.slice(0, 5)) === "%PDF-") return "application/pdf";
-  return null;
-}
+import { MAX_UPLOAD_BYTES as MAX_FILE_BYTES, sniff } from "@/lib/upload";
 
 function toBase64(bytes: Uint8Array) {
   let s = "";

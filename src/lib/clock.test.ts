@@ -61,6 +61,7 @@ const REAL_CLOCK_OK = new Set([
   "src/extensions/residents/ai.ts", // run deadline, latency
   "src/extensions/risk/timeline.ts", // as_of fallback (risk lane)
   "src/components/public/writes.ts", // request clock
+  "src/app/(portal)/portal/applicant/documents/upload/route.ts", // request clock
   "src/components/app/recent.ts", // recents order (browser only)
   "src/components/app/record/NotesPanel.tsx", // temporary id
   "src/components/app/record/TasksPanel.tsx", // temporary id

@@ -1,5 +1,5 @@
 import Link from "@/components/Link";
-import { AlertTriangle, CheckCircle2, CircleDashed, Clock, FileText, HelpCircle, ScanSearch, Sparkles, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Clock, FileText, HelpCircle, Sparkles, XCircle } from "lucide-react";
 import type { Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
@@ -99,7 +99,7 @@ registerTab({
     return (
       <Section
         title={<span className="flex items-center gap-2">Photos <span className="font-normal text-muted-foreground tabular-nums">{photos.length}</span>{flagged > 0 && <StatusBadge value={`${flagged} flagged`} tone="warning" />}</span>}
-        aside={canWrite && <div className="flex gap-2">{photos.length > 0 && <ActionButton entity="work_orders" id={id} action="work_orders.check_photos" label="Re-run photo check" icon={ScanSearch} />}<AddPhoto woId={id} photos={SAMPLE_PHOTOS.map((url) => ({ url, label: PHOTO_TAGS[photoTag(url)!].label }))} /></div>}
+        aside={canWrite && <div className="flex gap-2">{photos.length > 0 && <ActionButton entity="work_orders" id={id} action="work_orders.check_photos" label="Re-run photo check" />}<AddPhoto woId={id} photos={SAMPLE_PHOTOS.map((url) => ({ url, label: PHOTO_TAGS[photoTag(url)!].label }))} /></div>}
       >
         {photos.length ? (
           <>
