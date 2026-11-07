@@ -453,13 +453,19 @@ registerAction({
     const sample = input.sample ? SAMPLE_DOCS[input.sample] : null;
     if (sample && sample.docType !== input.docType) return no(400, `That sample is a ${sample.docType.toLowerCase()}, not a ${input.docType.toLowerCase()}.`);
     const at = nowIso(ctx.nowMs);
+    const earlier = await one<{ n: number }>(ctx, `SELECT count(*) AS n FROM ${effective("documents")} AS d WHERE d.entity_type = 'applications' AND d.entity_id = ?2 AND d.doc_type = ?3`, app.id, input.docType);
     await ctx.db.batch([
+      // A new file of a type replaces the earlier one (a base copy is hidden by an overlay tombstone).
+      ctx.db.prepare(`INSERT INTO documents (workspace_id, id, deleted, property_id, entity_type, entity_id, name, url, mime, doc_type, classify_confidence, filed_to, classified_by, extracted, uploaded_by, uploaded_at)
+        SELECT ?1, e.id, 1, e.property_id, e.entity_type, e.entity_id, e.name, e.url, e.mime, e.doc_type, e.classify_confidence, e.filed_to, e.classified_by, e.extracted, e.uploaded_by, e.uploaded_at
+        FROM ${effective("documents")} AS e WHERE e.entity_type = 'applications' AND e.entity_id = ?2 AND e.doc_type = ?3
+        ON CONFLICT (workspace_id, id) DO UPDATE SET deleted = 1`).bind(ctx.ws, app.id, input.docType),
       ctx.db.prepare("INSERT INTO documents (workspace_id, id, property_id, entity_type, entity_id, name, url, mime, doc_type, filed_to, classified_by, extracted, uploaded_by, uploaded_at) VALUES (?1, ?2, ?3, 'applications', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?10, ?12)")
         .bind(ctx.ws, uid("doc"), app.property_id, app.id, input.fileName, sample?.file ?? `/app/leasing/applications/${app.id}`, input.mime, input.docType, `Application ${app.id} › Documents`, row.id, JSON.stringify({ bytes: input.bytes, sample: !!sample }), at),
       eventStmt(ctx.db, ctx.ws, at, "application.document_added", "applications", app.id, app.property_id, { doc_type: input.docType, sample: !!sample }),
       notifyManager(ctx, app.property_id, "Application document received", `${String(row.first_name)} ${String(row.last_name)} uploaded: ${input.docType}${sample ? " (sample file)" : ""}.`, `/app/leasing/applications/${app.id}?tab=documents`, ["applications", app.id]),
     ]);
-    return ok(`${input.docType} received. The leasing team will message you if anything else is needed.`);
+    return ok(`${input.docType} ${earlier?.n ? "replaced" : "received"}. The leasing team will message you if anything else is needed.`);
   },
 });
 

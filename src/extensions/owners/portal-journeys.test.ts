@@ -98,6 +98,17 @@ describe("applicant journey", () => {
     expect((await run(me, "applicants.upload_document", APPLICANT, doc("Bank statement"))).status).toBe(409);
   });
 
+  it("keeps one document per type: a new upload replaces the earlier one, a double click files one", async () => {
+    const ws = await workspace();
+    const me = await ctx("applicant", ws);
+    const live = async (type: string) => (await db.prepare(`SELECT d.name FROM ${effective("documents")} AS d WHERE d.entity_type = 'applications' AND d.entity_id = ?2 AND d.doc_type = ?3`).bind(ws, APP, type).all<{ name: string }>()).results.map((r) => r.name);
+    expect(statuses(await Promise.all([run(me, "applicants.upload_document", APPLICANT, doc("Photo ID")), run(me, "applicants.upload_document", APPLICANT, doc("Photo ID"))]))).toEqual([200, 200]);
+    expect(await live("Photo ID")).toEqual(["Photo ID.pdf"]);
+    const again = await run(me, "applicants.upload_document", APPLICANT, { ...doc("Photo ID"), fileName: "new ID.png", mime: "image/png" });
+    expect(again).toMatchObject({ status: 200, message: expect.stringContaining("Photo ID replaced") });
+    expect(await live("Photo ID")).toEqual(["new ID.png"]);
+  });
+
   it("takes documents only through the upload route, which checks the file", async () => {
     const ws = await workspace();
     const headers = { cookie: `pn_ws=${ws}; pn_as=applicant`, origin: "http://localhost", "content-type": "application/json" };
