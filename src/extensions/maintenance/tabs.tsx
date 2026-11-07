@@ -93,7 +93,7 @@ registerTab({
   entity: "work_orders",
   component: async ({ id, row }) => {
     const { db, ws, role } = await ctx();
-    const photos = await all<Row>(db, `SELECT * FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 40`, [id]);
+    const photos = await all<Row>(db, `SELECT p.id, p.url, p.caption, p.stage, p.taken_at, p.check_result, p.check_confidence, p.check_note FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 40`, [id]);
     const canWrite = WRITERS.has(role);
     const flagged = photos.filter((p) => p.check_result && p.check_result !== "Matches").length;
     return (

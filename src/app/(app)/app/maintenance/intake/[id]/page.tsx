@@ -38,7 +38,7 @@ export default async function TriagePage({ params, searchParams }: Props) {
     rankVendors(db, ws, trade, String(wo.property_id), actor.propertyIds),
     techniciansFor(db, ws, String(wo.property_id)),
     policyFor(db, ws, String(wo.property_id)),
-    all<Row>(db, `SELECT * FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 6`, [id]),
+    all<Row>(db, `SELECT p.id, p.url, p.caption, p.check_result, p.check_confidence, p.check_note FROM ${effective("photos", ws)} p WHERE p.entity_type = 'work_orders' AND p.entity_id = ? ORDER BY p.taken_at LIMIT 6`, [id]),
   ]);
   const pending = ["New", "Triaged"].includes(String(wo.status));
   const dispatchable = ["New", "Triaged", "Assigned", "On hold"].includes(String(wo.status));
