@@ -43,12 +43,14 @@ export const PORTAL_NAV: Record<PortalRole, Item[]> = {
 
 const active = (path: string, href: string, home: string) => (href === home ? path === href : path === href || path.startsWith(href + "/"));
 
-export function PortalNav({ role, badges = {} }: { role: PortalRole; badges?: Record<string, number> }) {
+// `bar`: the section links in the header (desktop), or the phone tab bar. The tab bar is rendered
+// outside the header: the header's backdrop blur would make it the box a fixed bar is placed in,
+// pinning the "bottom" bar over the top of the page.
+export function PortalNav({ role, badges = {}, bar }: { role: PortalRole; badges?: Record<string, number>; bar: "top" | "tabs" }) {
   const path = usePathname();
   const items = PORTAL_NAV[role];
   const home = items[0].href;
-  return (
-    <>
+  if (bar === "top") return (
       <nav aria-label="Portal" data-tour="portal-nav" className="hidden items-center gap-0.5 md:flex">
         {items.map((i) => {
           const on = active(path, i.href, home);
@@ -61,7 +63,9 @@ export function PortalNav({ role, badges = {} }: { role: PortalRole; badges?: Re
           );
         })}
       </nav>
-      {/* Phones: a bottom tab bar, the pattern residents and vendors know from banking apps. */}
+  );
+  return (
+      // Phones: a bottom tab bar, the pattern residents and vendors know from banking apps.
       <nav aria-label="Portal" className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden print:hidden">
         <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
           {items.map((i) => {
@@ -78,6 +82,5 @@ export function PortalNav({ role, badges = {} }: { role: PortalRole; badges?: Re
           })}
         </ul>
       </nav>
-    </>
   );
 }

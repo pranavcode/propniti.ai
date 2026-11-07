@@ -36,7 +36,7 @@ export async function PortalShell({ role, brand, badges, children }: { role: Por
             </span>
           </Link>
           <div className="flex-1" />
-          {c && <PortalNav role={role} badges={badges} />}
+          {c && <PortalNav role={role} badges={badges} bar="top" />}
           <div className="flex items-center gap-2 pl-2">
             <PersonAvatar name={c?.persona.name ?? persona.name} size={30} />
             <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex"><Link href="/login"><ArrowLeftRight />Switch role</Link></Button>
@@ -57,6 +57,7 @@ export async function PortalShell({ role, brand, badges, children }: { role: Por
           </div>
         )}
       </main>
+      {c && <PortalNav role={role} badges={badges} bar="tabs" />}
       {c && <PortalAssistant endpoint={`/portal/${role}/ask`} prompts={c.persona.assistantPrompts} samples={await portalSamples(c)} />}
       {c && <PortalTour tours={toursFor(role)} />}
     </div>
