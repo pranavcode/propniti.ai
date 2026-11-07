@@ -3,6 +3,7 @@ import { z } from "zod";
 import { currentModel } from "@/ai/providers";
 import type { PortalRole } from "@/entities/types";
 import { rateLimit } from "@/lib/guard";
+import { sameOrigin } from "@/app/api/e/_lib/http";
 import { parseBody } from "@/lib/requests";
 import { portalCtx, type PortalCtx } from "./context";
 
@@ -17,15 +18,6 @@ export type Answerer = (c: PortalCtx, question: string) => Promise<Answer>;
 
 const Body = z.object({ question: z.string().trim().min(1).max(500) });
 const figures = (s: string) => [...s.matchAll(/\$[\d,]+(?:\.\d\d)?|\b\d{4}-\d{2}-\d{2}\b|\b\d+(?:\.\d+)?%/g)].map((m) => m[0].replace(/\.00$/, ""));
-
-function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  try {
-    return !!origin && new URL(origin).host === (request.headers.get("host") ?? new URL(request.url).host);
-  } catch {
-    return false;
-  }
-}
 
 async function reword(a: Answer, question: string, audience: string): Promise<AskReply> {
   const model = currentModel();

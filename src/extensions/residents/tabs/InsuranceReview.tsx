@@ -1,12 +1,11 @@
 import { FileText, Sparkles } from "lucide-react";
 import type { TabProps } from "@/extensions/tabs";
 import { StatusBadge } from "@/components/app/display";
+import { safeHref } from "@/lib/links";
 import { one, pageCtx } from "../server";
 import { InsuranceDecision } from "../ui/insurance";
 
 const VERIFIERS = ["principal", "regional_manager", "property_manager", "leasing_agent"];
-// Uploads link only to this site (a sample file or the record), never elsewhere.
-const sameSite = (u: string) => (/^\/(?![/\\])\S*$/.test(u) ? u : null);
 const FIELD: Record<string, string> = { carrier: "Carrier", policyNumber: "Policy number", liability: "Liability", startsOn: "Starts", expiresOn: "Expires" };
 
 // The resident's declarations page next to the values they confirmed, with verify or reject. A
@@ -15,7 +14,7 @@ export async function InsuranceReview({ id, row, actor }: TabProps) {
   const ctx = await pageCtx();
   const doc = await one<{ name: string; url: string; extracted: string | null; uploaded_at: string }>(ctx, "SELECT d.name, d.url, d.extracted, d.uploaded_at FROM {documents} d WHERE d.entity_type = 'renters_insurance' AND d.entity_id = ? ORDER BY d.uploaded_at DESC LIMIT 1", [id]);
   const read = (() => { try { return JSON.parse(doc?.extracted ?? "{}") as { source?: string; read_by_ai?: string[]; sample?: boolean }; } catch { return {}; } })();
-  const href = doc ? sameSite(doc.url) : null;
+  const href = doc ? safeHref(doc.url) : undefined;
   const pending = row.status === "Pending verification";
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">

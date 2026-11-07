@@ -12,9 +12,10 @@ import { fillTemplate } from "@/components/app/data-table/params";
 import { StatusBadge } from "@/components/app/display";
 import { DataHealthBadge, type HealthIssue } from "@/components/app/ai/DataHealthBadge";
 import { EmptyState, ErrorBanner } from "@/components/app/states";
-import { collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
+import { canReadMetric, collab, effective, facetOptions, getRow, list, metrics, parseListQuery, QueryError, relations, withView, type QueryCtx } from "@/server/query";
 import { getPlatform } from "@/lib/platform";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/format";
+import { safeHref } from "@/lib/links";
 import { cn } from "@/lib/utils";
 import { fieldRows, hintsFor, valueText, type FieldHint } from "@/lib/fieldText";
 import { Term } from "@/components/app/Term";
@@ -35,12 +36,10 @@ import { bulkActions, columnKind, formFields, parentValues, refHref, statusTabs,
 const KPI_COLS = ["", "lg:grid-cols-4", "lg:grid-cols-2", "lg:grid-cols-3", "lg:grid-cols-4"];
 const ctxOf = (s: Session): QueryCtx => ({ db: getPlatform().db, ws: s.ws, actor: s.actor });
 const errMsg = (e: unknown) => (e instanceof QueryError ? e.message : "This list couldn't load. Try again, or clear the filters.");
-// Links from stored data: same-site paths and http(s) only, never javascript: or data: URLs.
-const safeHref = (u: unknown) => (typeof u === "string" && /^(\/(?!\/)|https?:\/\/)/i.test(u) ? u : undefined);
 const attempt = <T,>(p: Promise<T>) => p.then((res) => ({ res, error: null as string | null }), (e) => ({ res: null, error: errMsg(e) }));
 
 async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promise<KpiData[]> {
-  return Promise.all(kpis.filter((k) => !k.roles || k.roles.includes(ctx.actor.role)).map(async (k) => {
+  return Promise.all(kpis.filter((k) => (!k.roles || k.roles.includes(ctx.actor.role)) && canReadMetric(ctx.actor.role, k.metric)).map(async (k) => {
     const base = { key: k.key, metric: k.metric, property, label: k.label, format: k.format, goodWhen: k.goodWhen, drill: k.drill && property ? `${k.drill}${k.drill.includes("?") ? "&" : "?"}f.property_id=${property}` : k.drill, help: k.help?.summary };
     try {
       const m = await metrics(ctx, k.metric, { property });
@@ -52,7 +51,7 @@ async function kpiData(ctx: QueryCtx, kpis: KpiDef[], property?: string): Promis
 }
 
 async function chartData(ctx: QueryCtx, charts: ChartDef[], property?: string): Promise<ChartData[]> {
-  return Promise.all(charts.filter((c) => !c.roles || c.roles.includes(ctx.actor.role)).map(async (c) => {
+  return Promise.all(charts.filter((c) => (!c.roles || c.roles.includes(ctx.actor.role)) && canReadMetric(ctx.actor.role, c.metric)).map(async (c) => {
     const base = { key: c.key, title: c.title, kind: c.kind, x: c.x, series: c.series, drill: c.drill };
     try {
       const m = await metrics(ctx, c.metric, { property });

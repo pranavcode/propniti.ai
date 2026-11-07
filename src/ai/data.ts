@@ -10,8 +10,9 @@ import type { Db } from "@/lib/platform/types";
 
 export type DataCtx = { db: Db; ws: string; actor: Actor };
 
-// Tables the AI may read, with the column that scopes them to a property (null = org-level).
-// Identifiers in SQL come only from this map and from column names read back from the database.
+// Tables the AI may read, with the column that scopes them to a property (null = org-level). A
+// table with an entity def is scoped by the def's scopePath instead (see scopeClause).
+// Identifiers in SQL come only from this map, from defs and from column names read back from the database.
 export const TABLES = {
   properties: "id", units: "property_id", unit_types: "property_id", buildings: "property_id", residents: "property_id", households: "property_id",
   leases: "property_id", charges: "property_id", payments: "property_id", credits: "property_id",
@@ -65,11 +66,31 @@ export function eff(table: Table, ws: string): { sql: string; params: unknown[] 
   };
 }
 
-// Tables with no property column of their own, scoped through their parent record.
-const SCOPE_VIA: Partial<Record<Table, (alias: string) => string>> = {
-  messages: (a) => `(SELECT mt.property_id FROM message_threads mt WHERE mt.id = ${a}.thread_id LIMIT 1)`,
-  applicants: (a) => `(SELECT ap.property_id FROM applications ap WHERE ap.applicant_id = ${a}.id LIMIT 1)`,
+// Tables with no entity def and no property column of their own, scoped through their parent record
+// as the visitor's workspace sees it (an overlay row replaces the base one).
+const SCOPE_VIA: Partial<Record<Table, (alias: string, ws: string) => { sql: string; params: unknown[] }>> = {
+  messages: (a, ws) => { const e = eff("message_threads", ws); return { sql: `(SELECT mt.property_id FROM ${e.sql} mt WHERE mt.id = ${a}.thread_id LIMIT 1)`, params: e.params }; },
+  bill_lines: (a, ws) => { const e = eff("bills", ws); return { sql: `(SELECT b.property_id FROM ${e.sql} b WHERE b.id = ${a}.bill_id LIMIT 1)`, params: e.params }; },
 };
+
+// Tables with no def and no property that every staff role may read row by row. Other such tables
+// (AI decisions, summaries, run logs, fix logs) mention records from any property, so only org-wide
+// roles read their rows; internal queries still join them through sql().
+const ANY_SCOPE = new Set<Table>(["help_articles", "data_rules", "agent_definitions"]);
+
+const defOf = (table: Table) => allEntities().find((d) => d.table === table);
+
+// The def's scopePath as SQL over `alias`, with {table} expanded to the effective rows (the same
+// expression src/server/query.ts filters on).
+function defScope(path: string, table: Table, alias: string, ws: string): { sql: string; params: unknown[] } {
+  const params: unknown[] = [];
+  const sql = path.replace(new RegExp(`\\b${table}\\.`, "g"), `${alias}.`).replace(/\{([a-z_][a-z0-9_]*)\}/g, (_, t: string) => {
+    const e = eff(t as Table, ws);
+    params.push(...e.params);
+    return e.sql;
+  });
+  return { sql, params };
+}
 
 // Record types whose Data Health issues a property-scoped role sees whatever their property: types
 // with no property link (vendors) that the role can read, as the role sees those records themselves.
@@ -82,9 +103,19 @@ export function orgIssueTypes(role: Role): { any: string[]; noProperty: string[]
 
 // "property_id IN (…)" for the actor, or nothing for org-wide actors.
 export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: string; params: unknown[] } {
+  // Portal users (self scope) read only their own rows, which the AI layer doesn't model: no rows.
+  if (ctx.actor.scope.kind === "self") return { sql: "0", params: [] };
+  if (ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  const def = defOf(table);
+  if (def?.scopePath) {
+    const e = defScope(def.scopePath, table, alias, ctx.ws);
+    const ids = JSON.stringify(ctx.actor.propertyIds);
+    if (def.scopeNullVisible?.(ctx.actor.role)) return { sql: `((${e.sql}) IS NULL OR (${e.sql}) IN (SELECT value FROM json_each(?)))`, params: [...e.params, ...e.params, ids] };
+    return { sql: `(${e.sql}) IN (SELECT value FROM json_each(?))`, params: [...e.params, ids] };
+  }
   const col = TABLES[table];
   const via = SCOPE_VIA[table];
-  if ((!col && !via) || ctx.actor.propertyIds === "all") return { sql: "1 = 1", params: [] };
+  if (!col && !via) return { sql: "1 = 1", params: [] };
   if (table === "data_issues") {
     const org = orgIssueTypes(ctx.actor.role);
     return {
@@ -103,14 +134,18 @@ export function scopeClause(ctx: DataCtx, table: Table, alias = "t"): { sql: str
       params: [JSON.stringify(ctx.actor.propertyIds), types, ...issues.params, types],
     };
   }
-  return { sql: `${via ? via(alias) : `${alias}.${col}`} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(ctx.actor.propertyIds)] };
+  const v = via ? via(alias, ctx.ws) : { sql: `${alias}.${col}`, params: [] };
+  return { sql: `${v.sql} IN (SELECT value FROM json_each(?))`, params: [...v.params, JSON.stringify(ctx.actor.propertyIds)] };
 }
 
 // The entity def for a table, when one exists: its read permission and hidden fields apply to AI
 // reads too (the same rules the entity API enforces).
 function readRules(ctx: DataCtx, table: Table) {
-  const def = allEntities().find((d) => d.table === table);
-  if (!def) return (r: Row) => r;
+  const def = defOf(table);
+  if (!def) {
+    if (ctx.actor.propertyIds !== "all" && !TABLES[table] && !SCOPE_VIA[table] && !ANY_SCOPE.has(table)) throw new Error(`${ctx.actor.role.replace(/_/g, " ")} can't view ${table.replace(/_/g, " ")}`);
+    return (r: Row) => r;
+  }
   if (!can(ctx.actor.role, "read", def.key)) throw new Error(`${ctx.actor.role.replace(/_/g, " ")} can't view ${def.label.many.toLowerCase()}`);
   const hidden = Object.entries(def.fields).filter(([, f]) => f.hiddenFor?.includes(ctx.actor.role)).map(([k, f]) => f.column ?? k);
   return hidden.length ? (r: Row) => Object.fromEntries(Object.entries(r).filter(([k]) => !hidden.includes(k))) : (r: Row) => r;
@@ -249,7 +284,8 @@ export async function insertGated(db: Db, ws: string, table: Table | "audit", ro
 }
 
 // upsertOverlay as a gated statement (the current row is read now; the write happens in the batch).
-export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string, changes: Row, gate: Gate, opts: { tombstone?: boolean } = {}) {
+// `unlocked` keeps the write from landing on a row whose `field` is now one of `in` (EntityDef.lockedWhen).
+export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string, changes: Row, gate: Gate, opts: { tombstone?: boolean; unlocked?: { field: string; in: string[] } } = {}) {
   const cols = await columns(ctx.db, table);
   for (const k of Object.keys(changes)) if (!cols.has(k) || k === "seq" || k === "workspace_id" || k === "id") throw new Error(`Field ${table}.${k} can't be changed`);
   const e = eff(table, ctx.ws);
@@ -258,9 +294,11 @@ export async function upsertOverlayGated(ctx: DataCtx, table: Table, id: string,
   const next: Row = { ...current, ...changes, workspace_id: ctx.ws, id, deleted: opts.tombstone ? 1 : 0 };
   delete next.seq;
   const keys = Object.keys(next).filter((k) => cols.has(k));
+  const lock = opts.unlocked && cols.has(opts.unlocked.field) ? opts.unlocked : null;
+  const lockSql = lock ? ` AND NOT EXISTS (SELECT 1 FROM ${e.sql} l WHERE l.id = ? AND coalesce(l.${lock.field}, '') IN (SELECT value FROM json_each(?)))` : "";
   const stmt = ctx.db
-    .prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map(() => "?").join(", ")} ${gateSql} ON CONFLICT (workspace_id, id) DO UPDATE SET ${keys.filter((k) => k !== "workspace_id" && k !== "id").map((k) => `${k} = excluded.${k}`).join(", ")}`)
-    .bind(...keys.map((k) => toSql(next[k] ?? null)), ctx.ws, gate.decisionId);
+    .prepare(`INSERT INTO ${table} (${keys.join(", ")}) SELECT ${keys.map(() => "?").join(", ")} ${gateSql}${lockSql} ON CONFLICT (workspace_id, id) DO UPDATE SET ${keys.filter((k) => k !== "workspace_id" && k !== "id").map((k) => `${k} = excluded.${k}`).join(", ")}`)
+    .bind(...keys.map((k) => toSql(next[k] ?? null)), ctx.ws, gate.decisionId, ...(lock ? [...e.params, id, JSON.stringify(lock.in)] : []));
   return { stmt, before: pick(current, Object.keys(changes)), after: pick(next, Object.keys(changes)) };
 }
 

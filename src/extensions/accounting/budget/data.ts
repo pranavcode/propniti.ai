@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Actor } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { currentModel } from "@/ai/providers";
+import { unknownNumbers } from "@/ai/rules";
 import { asOfMonth, effective } from "@/server/query";
 
 // Budget vs actual per property × GL × month. Budget from budget_lines, actuals from the monthly
@@ -128,7 +129,11 @@ export async function explainVariance(ctx: Ctx, data: BvaData, key: string): Pro
         JSON.stringify(facts),
         { timeoutMs: 30_000 },
       );
-      return { title, bullets: value.bullets, facts, source: "live", model: model.info.model };
+      // A bullet with a figure that isn't in the facts means the model made it up: use the rules text.
+      const plain = Object.fromEntries(Object.entries(facts).map(([k, v]) => [k, typeof v === "string" ? v.replace(/(\d),(?=\d{3}\b)/g, "$1") : v]));
+      const bad = value.bullets.flatMap((b) => unknownNumbers(b, plain));
+      if (!bad.length) return { title, bullets: value.bullets, facts, source: "live", model: model.info.model };
+      console.error("[bva] explain model used figures not in the facts, using rules:", bad.join(", "));
     } catch (err) {
       console.error("[bva] explain model failed, using rules:", err instanceof Error ? err.message : err);
     }

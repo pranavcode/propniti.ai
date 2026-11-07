@@ -111,8 +111,10 @@ export const stepOut = (s: Row): StepRow => ({ id: String(s.id), idx: Number(s.i
 // A property-scoped role sees the full trace of runs it started. For other runs it sees only its own
 // proposals: the trace may hold rows from properties outside its scope.
 export async function runDetail(data: DataCtx, id: string, afterIdx = -1) {
-  const run = await get(data, "agent_runs", id);
-  if (!run) return null;
+  // Run rows have no property; the checks below decide what a scoped role sees.
+  const [found] = await sql<Row>(data, "SELECT * FROM {agent_runs} WHERE id = ?", [id], { unscoped: true });
+  if (!found) return null;
+  const run: Row = Object.fromEntries(Object.entries(found).filter(([k]) => k !== "seq" && k !== "workspace_id" && k !== "deleted"));
   const org = data.actor.propertyIds === "all";
   if (!org && run.started_by !== data.actor.personaId) {
     const mine = await sql<Row>(data, "SELECT p.*, d.decision, d.decided_by, d.decided_at FROM {ai_proposals} p LEFT JOIN {ai_decisions} d ON d.proposal_id = p.id WHERE p.run_id = ? ORDER BY p.created_at", [id]);

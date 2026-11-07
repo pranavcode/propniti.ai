@@ -3,7 +3,8 @@ import { readBodyLimited, rateLimit } from "@/lib/guard";
 import { getPlatform } from "@/lib/platform";
 import { MAX_UPLOAD_BYTES, sniff } from "@/lib/upload";
 import { resolveWorkspace } from "@/server/workspace";
-import { handle, json, readCtx, sameOrigin } from "@/app/api/e/_lib/http";
+import { sameOrigin } from "@/lib/https";
+import { handle, json, readCtx } from "@/app/api/e/_lib/http";
 import { resolveAction, runAction } from "@/app/api/e/_lib/actions";
 import { UploadDocument } from "@/extensions/owners/portal-actions";
 

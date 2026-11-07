@@ -6,9 +6,10 @@ import { portalCtx } from "@/extensions/owners/portal/context";
 import { ownerDistributions, ownerDocuments } from "@/extensions/owners/portal/owner-data";
 import { PortalTitle } from "@/extensions/owners/portal/ui/PortalTitle";
 import { monthLabel } from "@/extensions/owners/statements";
+import { safeHref } from "@/lib/links";
 
 // Same-site or https links only, the rule the staff documents panel follows.
-const safe = (u: string) => (u.startsWith("/") && !u.startsWith("//")) || u.startsWith("https://") ? u : "#";
+const safe = (u: string) => safeHref(u) ?? "#";
 
 export default async function OwnerDocuments() {
   const c = await portalCtx("owner");

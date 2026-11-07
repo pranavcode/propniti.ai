@@ -87,6 +87,27 @@ describe("AI suggestions", () => {
   });
 });
 
+describe("AI request limits", () => {
+  it("caps the mapped-field keys", () => {
+    const { req } = setup();
+    const f = req.files[0]!;
+    const many = Object.fromEntries(Array.from({ length: AI_CAPS.columns + 1 }, (_, i) => [`k${i}`, 0]));
+    expect(AiRequest.safeParse({ files: [{ ...f, mapped: many }] }).success).toBe(false);
+    expect(AiRequest.safeParse({ files: [{ ...f, mapped: { ["x".repeat(41)]: 0 } }] }).success).toBe(false);
+  });
+
+  it("refuses a request still over the character budget after trimming, without calling the model", async () => {
+    let called = false;
+    setModelForTests({ ...scripted({ mappings: [], cleanups: [], notes: [] }), structured: async () => { called = true; throw new Error("not expected"); } });
+    const { req } = setup();
+    const wide = Array.from({ length: AI_CAPS.columns }, (_, i) => `${"H".repeat(76)}${String(i).padStart(4, "0")}`);
+    const big = AiRequest.parse({ files: Array.from({ length: AI_CAPS.files }, (_, k) => ({ ...req.files[0]!, id: `f${k}`, headers: wide, unmapped: [], samples: [], flagged: [] })) });
+    expect(userMessage(big).length).toBeGreaterThan(AI_CAPS.totalChars);
+    expect(await suggest(big)).toMatchObject({ live: false, source: "Rules", mappings: [], note: expect.stringMatching(/too large/) });
+    expect(called).toBe(false);
+  });
+});
+
 // A four-file Yardi Voyager import gets a 950-token reply from Workers AI in 17 to 90 s; the old 20 s
 // limit sent it to rules almost every time.
 describe("AI suggestions on Workers AI", () => {

@@ -1,6 +1,7 @@
 import Link from "@/components/Link";
 import { AlertTriangle, ArrowUpRight, Cpu, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { can } from "@/entities";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { EmptyState } from "@/components/app/states";
@@ -27,6 +28,9 @@ const REC: Record<string, string> = { Approve: "text-tone-success", Conditional:
 // what the agents proposed, how each leasing agent is doing, and fair-housing flags to clear.
 export default async function BrokerDesk() {
   const c = await leasingCtx();
+  if (!can(c.actor.role, "read", "prospects")) {
+    return <PageBody><EmptyState title="Leasing isn't part of your role" description="Switch role from your avatar menu to see this page as a leasing agent or broker." action={{ label: "Go to your home", href: "/app" }} /></PageBody>;
+  }
   const [apps, proposals, flags, k, perf, stale, team] = await Promise.all([
     waitingApplications(c, 12),
     leasingProposals(c, { actions: DECIDE_ACTIONS, limit: 6 }),

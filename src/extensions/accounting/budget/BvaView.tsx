@@ -1,17 +1,16 @@
 import Link from "@/components/Link";
-import { Sparkles } from "lucide-react";
-import { AIBadge } from "@/components/app/ai";
 import { ChartCard } from "@/components/app/dashboard";
 import { EmptyState } from "@/components/app/states";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { favourable, type BvaData, type BvaRow, type Explanation } from "./data";
+import { favourable, type BvaData, type BvaRow } from "./data";
+import { ExplainButton, ExplainPanel, ExplainProvider } from "./Explain";
 
 // The budget vs actual grid: rows (properties, or GL accounts for one property) × months, with
 // YTD totals. Each cell shows actual, tinted by variance against budget (green favourable, red
 // unfavourable, stronger the further off), and drills to the journal entries behind it.
 
-type Props = { data: BvaData; explanation: Explanation | null; explainKey: string | null; href: (p: Record<string, string | null>) => string };
+type Props = { data: BvaData };
 
 const MONTH = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
 
@@ -26,7 +25,7 @@ function heat(type: BvaData["type"], budget: number, actual: number | null) {
 
 const varPct = (budget: number, actual: number) => (budget ? (actual - budget) / Math.abs(budget) : null);
 
-export function BvaView({ data, explanation, explainKey, href }: Props) {
+export function BvaView({ data }: Props) {
   if (!data.rows.length) {
     return <EmptyState kind="chart" title={`No ${data.year} ${data.type.toLowerCase()} budget in your scope`} description="Budgets are entered per property, GL account and month. Once one is approved, actuals from the ledger line up against it here." />;
   }
@@ -37,39 +36,17 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
     return `/app/gl/journal?${q}`;
   };
   const chart = data.months.map((m) => ({ month: m, label: MONTH(m), budget: Math.round(data.total.cells[m].budget), actual: data.total.cells[m].actual == null ? null : Math.round(data.total.cells[m].actual!) }));
-  const worst = (r: BvaRow) => data.closed.map((m) => ({ m, v: (r.cells[m].actual ?? 0) - r.cells[m].budget })).sort((a, b) => (data.type === "Expense" ? b.v - a.v : a.v - b.v)).slice(0, 3);
-  const explained = explainKey ? (explainKey.split("@")[0] === "total" ? data.total : data.rows.find((r) => r.id === explainKey.split("@")[0])) : null;
+  const worstOf = (r: BvaRow) => data.closed.map((m) => ({ m, v: (r.cells[m].actual ?? 0) - r.cells[m].budget })).sort((a, b) => (data.type === "Expense" ? b.v - a.v : a.v - b.v)).slice(0, 3).map(({ m }): [string, string] => [m, MONTH(m)]);
+  const worst = Object.fromEntries([...data.rows, data.total].map((r) => [r.id, worstOf(r)]));
 
   return (
+    <ExplainProvider ask={{ year: data.year, type: data.type, property: data.property }}>
     <div className="space-y-4">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
         <ChartCard title={`${data.type}: budget vs actual, ${data.year}`} description={data.propertyName ?? "All properties in your scope"} kind="line" data={chart} x="label"
           series={[{ key: "actual", label: "Actual", format: "money" }, { key: "budget", label: "Budget", format: "money", dashed: true }]}
           drill={`/app/gl/journal?f.period={month}${data.property ? `&f.property_id=${data.property}` : ""}`} height={220} />
-        <section className="rounded-lg border border-tone-ai/25 bg-tone-ai/[0.03] p-3" aria-live="polite">
-          <h2 className="flex items-center gap-1.5 text-[13px] font-semibold"><Sparkles className="size-3.5 text-tone-ai" />Explain a variance</h2>
-          {explanation ? (
-            <>
-              <div className="mt-1 flex items-start justify-between gap-2">
-                <p className="text-[12.5px] font-medium">{explanation.title}</p>
-                <AIBadge source={explanation.source} model={explanation.model} size="xs" />
-              </div>
-              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[12.5px] leading-relaxed">{explanation.bullets.map((b) => <li key={b}>{b}</li>)}</ul>
-              {explained && !explainKey?.includes("@") && (
-                <p className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
-                  Months to look at:
-                  {worst(explained).map(({ m }) => <Link key={m} href={href({ explain: `${explained.id}@${m}` })} scroll={false} className="rounded border bg-card px-1.5 py-0.5 text-foreground hover:border-tone-ai/50">{MONTH(m)}</Link>)}
-                </p>
-              )}
-              <details className="mt-2 text-[11.5px] text-muted-foreground">
-                <summary className="cursor-pointer select-none">Facts used</summary>
-                <dl className="mt-1 space-y-0.5">{Object.entries(explanation.facts).map(([k, v]) => <div key={k} className="flex gap-2"><dt className="shrink-0 text-muted-foreground">{k.replace(/_/g, " ")}</dt><dd className="min-w-0 text-foreground">{String(v)}</dd></div>)}</dl>
-              </details>
-            </>
-          ) : (
-            <p className="mt-1.5 text-[12.5px] text-muted-foreground">Pick ✦ on any row to see why it&apos;s off budget. The figures come from the ledger and the bills behind it; the AI only words them.</p>
-          )}
-        </section>
+        <ExplainPanel worst={worst} />
       </div>
 
       <div className="max-h-[70vh] overflow-auto rounded-lg border">
@@ -91,16 +68,12 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
               const v = r.ytdActual - r.ytdBudget;
               const p = varPct(r.ytdBudget, r.ytdActual);
               const good = favourable(data.type, r.ytdBudget, r.ytdActual);
-              const active = explainKey?.split("@")[0] === r.id;
               return (
                 <tr key={r.key} className={cn("group", isTotal && "font-semibold")}>
-                  <th scope="row" className={cn("sticky left-0 z-[1] max-w-[240px] border-b bg-card px-3 py-1 text-left font-medium group-hover:bg-muted", isTotal && "border-t-2", active && "bg-tone-ai/[0.06]")}>
+                  <th scope="row" className={cn("sticky left-0 z-[1] max-w-[240px] border-b bg-card px-3 py-1 text-left font-medium group-hover:bg-muted", isTotal && "border-t-2")}>
                     <span className="flex items-center gap-1.5">
                       <span className="min-w-0 flex-1 truncate" title={r.label}>{r.label}</span>
-                      <Link href={href({ explain: r.id })} scroll={false} aria-label={`Explain the variance for ${r.label}`} title="Explain this variance"
-                        className={cn("inline-flex size-5 shrink-0 items-center justify-center rounded text-tone-ai opacity-50 hover:bg-tone-ai/10 hover:opacity-100", active && "opacity-100")}>
-                        <Sparkles className="size-3" />
-                      </Link>
+                      <ExplainButton rowId={r.id} label={r.label} />
                     </span>
                   </th>
                   {data.months.map((m) => {
@@ -137,5 +110,6 @@ export function BvaView({ data, explanation, explainKey, href }: Props) {
         <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-tone-danger/20" /> unfavourable (2%, 5%, 10%+)</span>
       </p>
     </div>
+    </ExplainProvider>
   );
 }

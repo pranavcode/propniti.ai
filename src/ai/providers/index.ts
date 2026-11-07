@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { configuredProvider } from "@/lib/llm";
 import { getPlatform } from "@/lib/platform";
 import { anthropicModel } from "./anthropic";
@@ -18,8 +19,13 @@ export function setModelForTests(m: ChatModel | null | undefined) {
 }
 
 export function currentModel(): ChatModel | null {
-  return plain(pick());
+  return noModel.getStore() ? null : plain(pick());
 }
+
+// Runs fn with no model: every currentModel() inside it (and in what it awaits) returns null, so the
+// work uses the rules. For records past the AI rate limit in a bulk action.
+const noModel = new AsyncLocalStorage<true>();
+export const withoutModel = <T>(fn: () => Promise<T>) => noModel.run(true, fn);
 
 function pick(): ChatModel | null {
   if (override !== undefined) return override;

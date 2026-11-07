@@ -1,6 +1,6 @@
 import Link from "@/components/Link";
 import { getEntity, type ChartDef, type KpiDef } from "@/entities";
-import { metrics } from "@/server/query";
+import { canReadMetric, metrics } from "@/server/query";
 import { ChartCard, KpiCard } from "@/components/app/dashboard";
 import { ErrorBanner } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,8 @@ export async function ResidentsDashboard() {
   const ctx = await pageCtx();
   const role = ctx.actor.role;
   const defs = ENTITIES.map((k) => getEntity(k)!).filter(Boolean);
-  const kpis = defs.flatMap((d) => d.kpis ?? []).filter((k) => !k.roles || k.roles.includes(role));
-  const charts = defs.flatMap((d) => d.charts ?? []).filter((c) => !c.roles || c.roles.includes(role));
+  const kpis = defs.flatMap((d) => d.kpis ?? []).filter((k) => (!k.roles || k.roles.includes(role)) && canReadMetric(role, k.metric));
+  const charts = defs.flatMap((d) => d.charts ?? []).filter((c) => (!c.roles || c.roles.includes(role)) && canReadMetric(role, c.metric));
   const [kv, cv] = await Promise.all([
     Promise.all(kpis.map(async (k: KpiDef) => ({ k, m: await metrics(ctx, k.metric).catch(() => null) }))),
     Promise.all(charts.map(async (c: ChartDef) => ({ c, m: await metrics(ctx, c.metric).catch(() => null) }))),

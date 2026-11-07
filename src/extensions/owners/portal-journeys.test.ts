@@ -10,6 +10,7 @@ import { randomId } from "@/server/repo";
 import { resolveWorkspace } from "@/server/workspace";
 import { effective } from "@/server/effective";
 import type { WriteCtx } from "@/server/query";
+import { safeHref } from "@/lib/links";
 import { GET as photo } from "@/app/api/photos/[id]/route";
 
 // The photo route reads through getPlatform(); point it at this file's database.
@@ -111,6 +112,9 @@ describe("resident photos", () => {
     const wo = /WO-\d+/.exec("message" in r ? String(r.message) : "")![0];
     const p = await db.prepare("SELECT id, url, data FROM photos WHERE workspace_id = ?1 AND entity_id = ?2").bind(ws, wo).first<{ id: string; url: string; data: string }>();
     expect(p).toEqual({ id: expect.any(String), url: `/api/photos/${p!.id}`, data: jpeg });
+    // The staff Photos tab links and renders only what passes SAFE_LINK; this does, a data: URL doesn't.
+    expect(safeHref(p!.url)).toBe(p!.url);
+    expect(safeHref(jpeg)).toBeUndefined();
     const get = (persona: string) => photo(new Request(`http://localhost${p!.url}`, { headers: { cookie: `pn_ws=${ws}; pn_as=${persona}` } }), { params: Promise.resolve({ id: p!.id }) });
     for (const persona of ["resident", "tom", "marcus", "owner"]) {
       const res = await get(persona);

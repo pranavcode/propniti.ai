@@ -4,6 +4,7 @@ import type { Row } from "@/entities/types";
 import { currentSession } from "@/auth/session";
 import { getPlatform } from "@/lib/platform";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { safeHref } from "@/lib/links";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/app/display";
 import { EmptyState } from "@/components/app/states";
@@ -103,12 +104,14 @@ registerTab({
         {photos.length ? (
           <>
             <ul className="grid grid-cols-2 gap-3 p-3 md:grid-cols-3">
-              {photos.map((p) => (
+              {photos.map((p) => { const href = safeHref(p.url); return (
                 <li key={String(p.id)} className="overflow-hidden rounded-md border">
-                  <a href={String(p.url)} target="_blank" rel="noreferrer" className="block">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public */}
-                    <img src={String(p.url).replace(/(?<!-400)\.webp$/, "-400.webp")} alt={String(p.caption || "Work order photo")} className="aspect-[4/3] w-full object-cover" loading="lazy" />
-                  </a>
+                  {href ? (
+                    <a href={href} target="_blank" rel="noreferrer" className="block">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- static webp in /public */}
+                      <img src={href.replace(/(?<!-400)\.webp$/, "-400.webp")} alt={String(p.caption || "Work order photo")} className="aspect-[4/3] w-full object-cover" loading="lazy" />
+                    </a>
+                  ) : <div className="aspect-[4/3] w-full bg-muted" />}
                   <div className="flex flex-col gap-1 p-2">
                     <p className="flex items-center justify-between gap-2 text-[12.5px]"><span className="truncate font-medium">{String(p.caption || "Photo")}</span><StatusBadge value={p.stage ?? "Photo"} tone="neutral" dot={false} /></p>
                     <PhotoCheckBadge result={p.check_result as string | null} confidence={p.check_confidence as number | null} note={p.check_note as string | null} />
@@ -116,7 +119,7 @@ registerTab({
                     <p className="text-[11px] text-muted-foreground/80">{p.taken_at ? formatDateTime(String(p.taken_at)) : ""}</p>
                   </div>
                 </li>
-              ))}
+              ); })}
             </ul>
             <p className="flex items-center gap-1.5 border-t px-3 py-2 text-[11.5px] text-muted-foreground"><AIBadge source="rules" size="xs" />Only photos on file before the vendor&apos;s invoice count toward its photo requirement. The photo check compares what each photo shows with the job&apos;s trade and title ({String(row.category)}). Anything below a match goes to a person.</p>
           </>

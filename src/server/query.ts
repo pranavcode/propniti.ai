@@ -3,15 +3,15 @@ import { demoNowIso } from "@/lib/clock";
 import { AS_OF } from "@/seed/constants";
 import { z, type ZodType } from "zod";
 import { can, getEntity } from "@/entities";
-import { getPersona } from "@/auth/personas";
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type Role, type Row } from "@/entities/types";
+import { getPersona, PERMISSIONS } from "@/auth/personas";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type Actor, type EntityDef, type EntityKey, type FieldDef, type ListQuery, type ListResult, type ModuleKey, type Role, type Row } from "@/entities/types";
 import type { Db, DbStatement } from "@/lib/platform/types";
 import { getMetric, type MetricParams, type MetricResult } from "@/extensions/metrics";
 import { forgetInboxCounts } from "@/extensions/inbox/counts";
 import { BULK_MATCH_CAP } from "@/lib/bulk";
 import { LIFE_SAFETY_ROLES, safetyJobs, VENDOR_OFF } from "@/ai/life-safety";
 import { EXPORT_CAP } from "@/lib/export/types";
-import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, TABLES } from "./effective";
+import { APPEND_ONLY, assertTable, effective as baseEffective, NO_WORKSPACE, overlayUpsertSql, TABLES } from "./effective";
 
 // Registry-driven query layer (plan §4). Every SQL identifier comes from an EntityDef or a
 // relation in one; every value is bound. Reads go through effective(): the visitor's overlay
@@ -707,15 +707,46 @@ export async function updateRecord(ctx: WriteCtx, entity: string, id: string, bo
   const after: Row = { ...before, ...changes, workspace_id: ctx.ws, deleted: 0 };
   const changed = diffKeys(before, after).filter((k) => k in changes);
   const summary = `Updated ${changed.map((c) => Object.entries(def.fields).find(([k, f]) => (f.column ?? k) === c)?.[1].label ?? c).join(", ") || "nothing"}`;
+  const fresh = unchangedSince(ctx, def, id, before, Object.keys(changes), Object.keys(body).filter((k) => body[k] !== undefined));
   try {
-    await ctx.db.batch([upsert(ctx.db, def.table, after), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
+    await ctx.db.batch([fresh.guard, writeColumns(ctx, def, id, before, changes), scopeGuard(ctx, def, id), ...trail(ctx, def, id, "updated", pidOf(def, after) ?? (await propertyOf(ctx, def, id)), pick(before, changed), pick(after, changed), summary)]);
     forgetOverlay(ctx.actor);
     forgetInboxCounts(ctx.ws);
   } catch (e) {
-    if (outOfScope(e)) throw new QueryError(403, "That change would move the record outside your scope");
+    if (outOfScope(e)) {
+      if (!(await fresh.check.first())) throw new QueryError(409, `This ${def.label.one.toLowerCase()} changed while you were editing it. Reload and try again.`);
+      throw new QueryError(403, "That change would move the record outside your scope");
+    }
     throw constraintError(e);
   }
   return (await getRow(ctx, entity, id))!;
+}
+
+// Copy-on-write of the changed columns only: the other columns come from the row as it is when the
+// batch runs, so an edit never puts back values another request changed after this one read them.
+function writeColumns(ctx: WriteCtx, def: EntityDef, id: string, before: Row, changes: Record<string, unknown>) {
+  const cols = Object.keys(before).filter((c) => c !== "seq" && c !== "workspace_id").map(ident);
+  const keys = Object.keys(changes);
+  const set = Object.fromEntries(keys.map((k, i) => [ident(k), `?${i + 3}`]));
+  return ctx.db.prepare(overlayUpsertSql(def.table, cols, { ...set, deleted: "0" })).bind(ctx.ws, id, ...keys.map((k) => changes[k]));
+}
+
+// Fails the write batch (like scopeGuard) unless the row still has the values this edit read in the
+// columns it changes, and isn't now in a lockedWhen state that covers the edit. `check` is the same
+// condition as a read, so a refused batch can say "changed" rather than "out of scope".
+function unchangedSince(ctx: WriteCtx, def: EntityDef, id: string, before: Row, columns: string[], fields: string[]) {
+  const sql = [`e.id = ?`, ...columns.map((c) => `e.${ident(c)} IS ?`)];
+  const params: unknown[] = [id, ...columns.map((c) => before[c] ?? null)];
+  const lock = def.lockedWhen;
+  if (lock && (!lock.fields || fields.some((k) => lock.fields!.includes(k)))) {
+    sql.push(`coalesce(e.${ident(def.fields[lock.field]?.column ?? lock.field)}, '') NOT IN (SELECT value FROM json_each(?))`);
+    params.push(JSON.stringify(lock.in));
+  }
+  const cond = `EXISTS (SELECT 1 FROM ${effective(def.table, ctx.ws)} AS e WHERE ${sql.join(" AND ")})`;
+  return {
+    guard: ctx.db.prepare(`INSERT INTO meta (key, value) SELECT '${SCOPE_GUARD}', NULL WHERE NOT ${cond}`).bind(...params),
+    check: ctx.db.prepare(`SELECT 1 AS ok WHERE ${cond}`).bind(...params),
+  };
 }
 
 const pick = (r: Row, keys: string[]) => Object.fromEntries(keys.map((k) => [k, r[k]]));
@@ -750,11 +781,19 @@ export type Collab = "notes" | "tasks" | "activity" | "documents";
 const COLLAB_ORDER: Record<Collab, string> = { notes: "pinned DESC, created_at DESC", tasks: "CASE status WHEN 'Done' THEN 1 WHEN 'Cancelled' THEN 2 ELSE 0 END, due_on IS NULL, due_on", activity: "at DESC", documents: "uploaded_at DESC" };
 const COLLAB_TABLE: Record<Collab, string> = { notes: "notes", tasks: "tasks", activity: "activity_events", documents: "documents" };
 
+// Notes, tasks and the activity trail are staff working material, even on a portal user's own
+// records (a collections note on a resident's charge). Nothing marks one as shared with a portal, so
+// portal users (scope "self") can neither read nor add them. Documents stay readable.
+function assertStaffCollab(actor: Actor, kind: Collab) {
+  if (actor.scope.kind === "self" && kind !== "documents") throw new QueryError(403, `Only staff can see or add ${kind}`);
+}
+
 export async function collab(ctx: QueryCtx, kind: Collab, entity: string, id: string, page = 1, size = 50): Promise<ListResult> {
   const def = getDef(entity);
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const s = Math.max(1, Math.min(PAGE_SIZE_CAP, size));
   const p = Math.max(1, page);
+  assertStaffCollab(ctx.actor, kind);
   const rws = await readWs(ctx);
   const from = ` FROM ${effective(COLLAB_TABLE[kind], rws)} WHERE entity_type = ? AND entity_id = ?`;
   const [rows, count] = await Promise.all([
@@ -797,15 +836,17 @@ export const taskSchema = z.strictObject({
   due_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   priority: z.enum(["High", "Normal", "Low"]).optional(),
   assignee_id: z.string().max(80).optional(),
-  status: z.enum(["Open", "In progress", "Done", "Cancelled"]).optional(),
 });
 
 // Notes and tasks are collaboration, not record edits: anyone who can read the record may add them.
 export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: string, id: string, body: z.infer<typeof noteSchema> | z.infer<typeof taskSchema>): Promise<Row> {
   const def = getDef(entity);
+  assertStaffCollab(ctx.actor, kind);
   if (!(await getRow(ctx, entity, id))) throw new QueryError(404, `${def.label.one} not found`);
   const at = demoNowIso(ctx.nowMs);
   const pid = await propertyOf(ctx, def, id);
+  const assignee = kind === "tasks" ? (body as z.infer<typeof taskSchema>).assignee_id : undefined;
+  if (assignee && !(await staffCovers(ctx, assignee, pid == null ? null : String(pid)))) throw new QueryError(400, "Assign the task to an active staff member who works on this record's property");
   const rid = crypto.randomUUID();
   const { db, ws, actor } = ctx;
   let insert: DbStatement;
@@ -819,7 +860,7 @@ export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: 
   } else {
     const b = body as z.infer<typeof taskSchema>;
     insert = db.prepare("INSERT INTO tasks (workspace_id, id, title, detail, entity_type, entity_id, property_id, assignee_id, created_by, due_on, priority, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(ws, rid, b.title, b.detail ?? "", def.key, id, pid == null ? null : String(pid), b.assignee_id ?? null, actor.personaId, b.due_on ?? null, b.priority ?? "Normal", b.status ?? "Open", at);
+      .bind(ws, rid, b.title, b.detail ?? "", def.key, id, pid == null ? null : String(pid), b.assignee_id ?? null, actor.personaId, b.due_on ?? null, b.priority ?? "Normal", "Open", at);
     summary = `${actor.name} added task "${b.title}"`;
   }
   forgetOverlay(ctx.actor);
@@ -830,6 +871,14 @@ export async function addCollab(ctx: WriteCtx, kind: "notes" | "tasks", entity: 
   ]);
   const row = await db.prepare(`SELECT * FROM ${kind} WHERE workspace_id = ? AND id = ?`).bind(ws, rid).first<Row>();
   return row!;
+}
+
+// An active staff member whose role assignment covers the property (org-wide, its region or the
+// property itself); for a record with no property, any active staff member.
+async function staffCovers(ctx: QueryCtx, staffId: string, propertyId: string | null) {
+  const covers = `EXISTS (SELECT 1 FROM ${effective("role_assignments", ctx.ws)} AS ra WHERE ra.staff_id = s.id AND (ra.scope_kind = 'org' OR (ra.scope_kind = 'property' AND ra.scope_id = ?2)
+    OR (ra.scope_kind = 'region' AND ra.scope_id = (SELECT p.region_id FROM ${effective("properties", ctx.ws)} AS p WHERE p.id = ?2))))`;
+  return !!(await ctx.db.prepare(`SELECT 1 AS ok FROM ${effective("staff", ctx.ws)} AS s WHERE s.id = ?1 AND s.active = 1 AND (?2 IS NULL OR ${covers})`).bind(staffId, propertyId).first());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -848,6 +897,8 @@ export const viewSchema = z.strictObject({
   }),
 });
 
+const MAX_VIEWS = 200;
+
 export async function listViews(ctx: QueryCtx, entity: string) {
   const def = getDef(entity);
   assertRead(def, ctx.actor.role);
@@ -863,8 +914,16 @@ export async function saveView(ctx: WriteCtx, body: z.infer<typeof viewSchema>) 
   for (const k of Object.keys(body.state.filters ?? {})) field(def, k.split(".")[0], ctx.actor.role);
   if (body.state.sort) field(def, body.state.sort[0], ctx.actor.role);
   const id = `view-${crypto.randomUUID().slice(0, 12)}`;
-  await ctx.db.prepare("INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state, position) VALUES (?, ?, ?, ?, ?, ?, 100)")
-    .bind(ctx.ws, id, def.key, body.name, body.shared ? null : ctx.actor.personaId, JSON.stringify(body.state)).run();
+  // Shared views have no owner, so the creator is recorded in the audit log (deleteView reads it).
+  const [r] = await ctx.db.batch([
+    ctx.db.prepare(`INSERT INTO saved_views (workspace_id, id, entity_type, name, owner_id, state, position) SELECT ?1, ?2, ?3, ?4, ?5, ?6, 100
+      WHERE (SELECT count(*) FROM saved_views WHERE workspace_id = ?1 AND deleted = 0) < ${MAX_VIEWS}`)
+      .bind(ctx.ws, id, def.key, body.name, body.shared ? null : ctx.actor.personaId, JSON.stringify(body.state)),
+    ctx.db.prepare(`INSERT INTO audit (workspace_id, id, at, actor, actor_id, role, action, entity_type, entity_id, detail)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'saved_views.created', 'saved_views', ?7, ?8 WHERE EXISTS (SELECT 1 FROM saved_views WHERE workspace_id = ?1 AND id = ?7)`)
+      .bind(ctx.ws, crypto.randomUUID(), demoNowIso(ctx.nowMs), ctx.actor.name, ctx.actor.personaId, ctx.actor.role, id, `Saved view "${body.name}" on ${def.label.many.toLowerCase()}`),
+  ]);
+  if (!r.meta.changes) throw new QueryError(409, `This workspace has ${MAX_VIEWS} saved views. Delete some before saving more.`);
   forgetOverlay(ctx.actor);
   return { key: id, label: body.name, shared: !!body.shared, mine: !body.shared, ...body.state };
 }
@@ -873,6 +932,10 @@ export async function deleteView(ctx: WriteCtx, id: string) {
   const v = await rawRow(ctx.db, "saved_views", ctx.ws, id);
   if (!v) throw new QueryError(404, "View not found");
   if (v.owner_id != null && v.owner_id !== ctx.actor.personaId) throw new QueryError(403, "That view belongs to someone else");
+  if (v.owner_id == null && ctx.actor.role !== "admin") {
+    const made = await ctx.db.prepare("SELECT 1 AS ok FROM audit WHERE workspace_id = ? AND action = 'saved_views.created' AND entity_id = ? AND actor_id = ?").bind(ctx.ws, id, ctx.actor.personaId).first();
+    if (!made) throw new QueryError(403, "Only the person who shared this view, or an administrator, can delete it");
+  }
   await upsert(ctx.db, "saved_views", { ...v, workspace_id: ctx.ws, deleted: 1 }).run();
   forgetOverlay(ctx.actor);
 }
@@ -934,13 +997,23 @@ export async function asOfMonth(db: Db): Promise<string> {
   return m?.m ?? AS_OF.slice(0, 7);
 }
 
+// Metrics are portfolio figures: staff and owners see them by default; residents, vendors and
+// applicants only when the metric names their role (their scope is per row, not per property). Either
+// way the role needs access to the metric's module, the key's prefix (payables.open_ap → payables).
+export const canReadModuleOf = (role: Role, key: string) => (PERMISSIONS[role]?.[key.split(".")[0] as ModuleKey] ?? "none") !== "none";
+
+export function canReadMetric(role: Role, key: string) {
+  const m = getMetric(key);
+  if (!m) return false;
+  const portal = role === "resident" || role === "vendor" || role === "applicant";
+  if (m.roles ? !m.roles.includes(role) : portal) return false;
+  return canReadModuleOf(role, key);
+}
+
 export async function metrics(ctx: QueryCtx, key: string, params: MetricParams = {}): Promise<MetricResult> {
   const m = getMetric(key);
   if (!m) throw new QueryError(404, `Unknown metric "${key}"`);
-  // Metrics are portfolio figures: staff and owners see them by default; residents, vendors and
-  // applicants only when the metric names their role (their scope is per row, not per property).
-  const portal = ctx.actor.role === "resident" || ctx.actor.role === "vendor" || ctx.actor.role === "applicant";
-  if (m.roles ? !m.roles.includes(ctx.actor.role) : portal) throw new QueryError(403, "You can't view this metric");
+  if (!canReadMetric(ctx.actor.role, key)) throw new QueryError(403, "You can't view this metric");
   if (params.property && ctx.actor.propertyIds !== "all" && !ctx.actor.propertyIds.includes(params.property)) throw new QueryError(403, "That property is outside your scope");
   if (params.month && !/^\d{4}-\d{2}$/.test(params.month)) throw new QueryError(400, "month must be YYYY-MM");
   // A row-scoped portal user ("self" with no property list) never gets portfolio-wide figures.
