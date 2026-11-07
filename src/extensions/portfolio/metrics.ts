@@ -1,4 +1,5 @@
 import { effective } from "@/server/query";
+import { baseOf } from "@/server/effective";
 import { byProperty } from "../core-metrics";
 import { registerMetric } from "../metrics";
 
@@ -22,11 +23,11 @@ registerMetric({
   label: "NOI by region",
   run: async (ctx, params) => {
     const scoped = ctx.propertyIds !== "all";
-    const month = params.month ?? (await ctx.db.prepare("SELECT max(month) AS m FROM metrics_monthly WHERE workspace_id = 'base' AND month < substr(?, 1, 7)").bind(ctx.asOf).first<{ m: string }>())?.m;
+    const month = params.month ?? (await ctx.db.prepare(`SELECT max(month) AS m FROM metrics_monthly WHERE workspace_id = '${baseOf(ctx.ws)}' AND month < substr(?, 1, 7)`).bind(ctx.asOf).first<{ m: string }>())?.m;
     const res = await ctx.db.prepare(
       `SELECT r.id AS region_id, r.name, sum(m.noi_cents) AS noi, sum(m.units) AS units, sum(m.occupied) AS occupied
        FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id JOIN ${effective("regions", ctx.ws)} r ON r.id = p.region_id
-       WHERE m.workspace_id = 'base' AND m.month = ?${scoped ? " AND m.property_id IN (SELECT value FROM json_each(?))" : ""}
+       WHERE m.workspace_id = '${baseOf(ctx.ws)}' AND m.month = ?${scoped ? " AND m.property_id IN (SELECT value FROM json_each(?))" : ""}
        GROUP BY r.id, r.name ORDER BY noi DESC`,
     ).bind(month, ...(scoped ? [JSON.stringify(ctx.propertyIds)] : [])).all<{ region_id: string; name: string; noi: number; units: number; occupied: number }>();
     return { points: res.results.map((r) => ({ region_id: r.region_id, name: r.name, noi: dollars(r.noi), occupancy: ratio(r.occupied, r.units) })), asOf: month, source: "metrics_monthly" };
@@ -53,12 +54,12 @@ registerMetric({
   key: "portfolio.by_metro",
   label: "NOI by metro",
   run: async (ctx, params) => {
-    const month = params.month ?? (await ctx.db.prepare("SELECT max(month) AS m FROM metrics_monthly WHERE workspace_id = 'base' AND month < substr(?, 1, 7)").bind(ctx.asOf).first<{ m: string }>())?.m;
+    const month = params.month ?? (await ctx.db.prepare(`SELECT max(month) AS m FROM metrics_monthly WHERE workspace_id = '${baseOf(ctx.ws)}' AND month < substr(?, 1, 7)`).bind(ctx.asOf).first<{ m: string }>())?.m;
     const scoped = ctx.propertyIds !== "all";
     const res = await ctx.db.prepare(
       `SELECT p.metro, sum(m.noi_cents) AS noi, sum(m.budget_noi_cents) AS budget, sum(m.units) AS units, sum(m.occupied) AS occupied
        FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id
-       WHERE m.workspace_id = 'base' AND m.month = ?${scoped ? " AND m.property_id IN (SELECT value FROM json_each(?))" : ""} GROUP BY p.metro ORDER BY noi DESC`,
+       WHERE m.workspace_id = '${baseOf(ctx.ws)}' AND m.month = ?${scoped ? " AND m.property_id IN (SELECT value FROM json_each(?))" : ""} GROUP BY p.metro ORDER BY noi DESC`,
     ).bind(month, ...(scoped ? [JSON.stringify(ctx.propertyIds)] : [])).all<{ metro: string; noi: number; budget: number | null; units: number; occupied: number }>();
     return { points: res.results.map((r) => ({ metro: r.metro, noi: dollars(r.noi), budget: r.budget == null ? null : dollars(r.budget), occupancy: ratio(r.occupied, r.units), units: r.units })), asOf: month, source: "metrics_monthly" };
   },

@@ -1,7 +1,7 @@
 import type { Db } from "@/lib/platform/types";
 import { AS_OF, CURRENT_PERIOD } from "@/seed/constants";
 import { MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE } from "@/entities/types";
-import { NO_WORKSPACE, assertTable, effective } from "./effective";
+import { ANY_BASE, NO_WORKSPACE, assertTable, baseSql, effective } from "./effective";
 
 // Low-level typed reads over base + overlay for the query layer (src/server/query.ts), the AI
 // tools and custom pages. Identifiers are checked (table whitelist, column pattern); values are
@@ -108,12 +108,12 @@ function deltaSql(owner: "lease_id" | "household_id", ref: string) {
   return LEDGER.map(({ table, sign, extra }) => {
     // credits carry lease_id only; a household's credits are those on its leases.
     const match = table === "credits" && owner === "household_id" ? `x.lease_id IN (SELECT l.id FROM {leases} AS l WHERE l.household_id = ${ref})` : `x.${owner} = ${ref}`;
-    return `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${table}} AS x WHERE x.workspace_id <> 'base' AND ${match}${extra}), 0)
-      ${neg(sign)} coalesce((SELECT sum(x.amount_cents) FROM ${table} AS x WHERE x.workspace_id = 'base' AND ${match}${extra} AND x.id IN (SELECT o.id FROM {${table}} AS o WHERE o.workspace_id <> 'base')), 0)`;
+    return `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${table}} AS x WHERE x.workspace_id NOT IN ${ANY_BASE} AND ${match}${extra}), 0)
+      ${neg(sign)} coalesce((SELECT sum(x.amount_cents) FROM ${table} AS x WHERE x.workspace_id IN ${ANY_BASE} AND ${match}${extra} AND x.id IN (SELECT o.id FROM {${table}} AS o WHERE o.workspace_id NOT IN ${ANY_BASE})), 0)`;
   }).join(" ");
 }
 const lastPaymentSql = (owner: "lease_id" | "household_id", alias: string) =>
-  `nullif(max(coalesce(${alias}.last_payment_at, ''), coalesce((SELECT max(x.received_on) FROM {payments} AS x WHERE x.workspace_id <> 'base' AND x.${owner} = ${alias}.id AND x.nsf = 0), '')), '')`;
+  `nullif(max(coalesce(${alias}.last_payment_at, ''), coalesce((SELECT max(x.received_on) FROM {payments} AS x WHERE x.workspace_id NOT IN ${ANY_BASE} AND x.${owner} = ${alias}.id AND x.nsf = 0), '')), '')`;
 
 export const leaseBalanceSql = (alias = "leases") => `(${alias}.balance_cents ${deltaSql("lease_id", `${alias}.id`)})`;
 export const householdBalanceSql = (alias = "households") => `(${alias}.balance_cents ${deltaSql("household_id", `${alias}.id`)})`;
@@ -141,9 +141,9 @@ export async function trustBalances(ctx: DataCtx, ownerEntityId?: string) {
 
 // Owner statement open items: trust transfers after the entity's latest owner payout (seq cutoff).
 // Statement corrections (key owner-adj:<distribution>) are payouts too, but don't close a statement.
-export const OPEN_ITEMS_WHERE = (entity: string, ws = "?1") => `t.workspace_id IN ('base', ${ws}) AND t.owner_entity_id = ${entity} AND t.status <> 'Returned'
+export const OPEN_ITEMS_WHERE = (entity: string, ws = "?1") => `t.workspace_id IN (${baseSql(ws)}, ${ws}) AND t.owner_entity_id = ${entity} AND t.status <> 'Returned'
   AND t.bank_account_id = 'ba-' || ${entity} || '-trust' AND t.kind <> 'Owner payout'
-  AND t.seq > coalesce((SELECT max(seq) FROM transfers WHERE workspace_id IN ('base', ${ws}) AND owner_entity_id = ${entity} AND kind = 'Owner payout' AND status <> 'Returned' AND key NOT LIKE 'owner-adj:%'), 0)`;
+  AND t.seq > coalesce((SELECT max(seq) FROM transfers WHERE workspace_id IN (${baseSql(ws)}, ${ws}) AND owner_entity_id = ${entity} AND kind = 'Owner payout' AND status <> 'Returned' AND key NOT LIKE 'owner-adj:%'), 0)`;
 // Net owed to the owner from open items: cleared receipts − bounced payments − fees − vendor payouts
 // (pending ones too).
 export const OPEN_NET_SQL = (entity: string, ws = "?1") => `(SELECT coalesce(sum(CASE

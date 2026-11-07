@@ -12,12 +12,12 @@ const OWNER_PORTAL: Role[] = ["owner"];
 
 // Latest precomputed month for the property (metrics_monthly), for list columns that would be
 // too costly to aggregate from 150k ledger rows per page.
-const latest = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id ORDER BY mm.month DESC LIMIT 1)`;
+const latest = (expr: string) => `(SELECT ${expr} FROM {metrics_monthly} mm WHERE mm.property_id = properties.id ORDER BY mm.month DESC LIMIT 1)`;
 // A property with no monthly history yet (just imported): what is past due today, from its open
 // charges, as the live aging (receivables.aging_live) counts it.
 const LIVE_PAST_DUE = `(SELECT coalesce(sum(c.amount_cents - c.paid_cents - c.pending_cents), 0) FROM {charges} c WHERE c.property_id = properties.id AND c.paid_cents + c.pending_cents < c.amount_cents AND c.due_on < ${AS_OF})`;
 // The last closed month: the month in progress has a full month of rent against a few days of expenses.
-const lastClosed = (expr: string) => `(SELECT ${expr} FROM metrics_monthly mm WHERE mm.workspace_id = 'base' AND mm.property_id = properties.id AND mm.month < substr(${AS_OF}, 1, 7) ORDER BY mm.month DESC LIMIT 1)`;
+const lastClosed = (expr: string) => `(SELECT ${expr} FROM {metrics_monthly} mm WHERE mm.property_id = properties.id AND mm.month < substr(${AS_OF}, 1, 7) ORDER BY mm.month DESC LIMIT 1)`;
 
 function monthName(period: string) {
   return new Date(`${period}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -301,7 +301,7 @@ const ORG_WIDE: Role[] = ["platform_admin", "principal", "admin", "accountant", 
 const propsWhere = (cond: string) => `(SELECT count(*) FROM {properties} p WHERE ${cond})`;
 const unitsWhere = (cond: string) => `(SELECT count(*) FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE ${cond})`;
 const occWhere = (cond: string) => `(SELECT CASE WHEN count(*) = 0 THEN NULL ELSE 1.0 * sum(u.status IN ('Occupied', 'Notice')) / count(*) END FROM {units} u JOIN {properties} p ON p.id = u.property_id WHERE u.status <> 'Model' AND ${cond})`;
-const noiWhere = (cond: string) => `(SELECT sum(mm.noi_cents) FROM metrics_monthly mm JOIN {properties} p ON p.id = mm.property_id WHERE mm.workspace_id = 'base' AND ${cond} AND mm.month = (SELECT max(month) FROM metrics_monthly WHERE workspace_id = 'base' AND month < substr(${AS_OF}, 1, 7)))`;
+const noiWhere = (cond: string) => `(SELECT sum(mm.noi_cents) FROM {metrics_monthly} mm JOIN {properties} p ON p.id = mm.property_id WHERE ${cond} AND mm.month = (SELECT max(month) FROM {metrics_monthly} WHERE month < substr(${AS_OF}, 1, 7)))`;
 
 registerEntity({
   key: "regions",

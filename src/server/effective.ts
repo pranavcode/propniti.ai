@@ -36,6 +36,11 @@ export const LAKESIDE_BASE = "base-lakeside";
 export const isLakeside = (ws: string | null | undefined) => !!ws && ws.endsWith(LAKESIDE_WS);
 // The base workspace a workspace's overlay sits on.
 export const baseOf = (ws: string | null | undefined) => (isLakeside(ws) ? LAKESIDE_BASE : "base");
+// The same choice in SQL, for statements that bind the workspace id as a parameter (`ws` is SQL).
+// Both orgs' base workspaces. Code with no workspace at hand (ledger deltas over {table} rows,
+// which already hold only one org's base and overlay) tells base rows from overlay rows with it.
+export const ANY_BASE = `('base', '${LAKESIDE_BASE}')`;
+export const baseSql = (ws = "?1") => `(CASE WHEN substr(${ws}, -${LAKESIDE_WS.length}) = '${LAKESIDE_WS}' THEN '${LAKESIDE_BASE}' ELSE 'base' END)`;
 // Reference data both orgs read from 'base': product help, data and state rules, message templates,
 // the chart of accounts, agent definitions and the org-default approval and late-fee policies.
 export const SHARED: Partial<Record<Table, string>> = {
@@ -49,7 +54,7 @@ export const SHARED: Partial<Record<Table, string>> = {
 export function seen(table: string, ws = "?1") {
   const lakeside = `substr(${ws}, -${LAKESIDE_WS.length}) = '${LAKESIDE_WS}'`;
   const shared = SHARED[table as Table];
-  return `(workspace_id IN ((CASE WHEN ${lakeside} THEN '${LAKESIDE_BASE}' ELSE 'base' END), ${ws})${shared ? ` OR (workspace_id = 'base' AND ${lakeside} AND ${shared})` : ""})`;
+  return `(workspace_id IN (${baseSql(ws)}, ${ws})${shared ? ` OR (workspace_id = 'base' AND ${lakeside} AND ${shared})` : ""})`;
 }
 
 // A parenthesised subquery to use in FROM. `ws` is the SQL for the visitor's workspace id: a
@@ -59,7 +64,7 @@ export function effective(table: string, ws = "?1") {
   assertTable(table);
   if (APPEND_ONLY.has(table)) return `(SELECT * FROM ${table} WHERE ${seen(table, ws)})`;
   if (table === "metrics_monthly")
-    return `(SELECT * FROM metrics_monthly WHERE workspace_id = ${ws} UNION ALL SELECT * FROM metrics_monthly AS b WHERE b.workspace_id = (CASE WHEN substr(${ws}, -${LAKESIDE_WS.length}) = '${LAKESIDE_WS}' THEN '${LAKESIDE_BASE}' ELSE 'base' END) AND NOT EXISTS (SELECT 1 FROM metrics_monthly AS o WHERE o.workspace_id = ${ws} AND o.property_id = b.property_id AND o.month = b.month))`;
+    return `(SELECT * FROM metrics_monthly WHERE workspace_id = ${ws} UNION ALL SELECT * FROM metrics_monthly AS b WHERE b.workspace_id = ${baseSql(ws)} AND NOT EXISTS (SELECT 1 FROM metrics_monthly AS o WHERE o.workspace_id = ${ws} AND o.property_id = b.property_id AND o.month = b.month))`;
   // One SELECT, not a UNION ALL: SQLite flattens it into the outer query, so a join on id uses the
   // (workspace_id, id) index instead of scanning a materialised copy for every outer row.
   return `(SELECT * FROM ${table} WHERE ${seen(table, ws)} AND deleted = 0 AND (workspace_id = ${ws} OR NOT EXISTS (SELECT 1 FROM ${table} AS o WHERE o.workspace_id = ${ws} AND o.id = ${table}.id)))`;

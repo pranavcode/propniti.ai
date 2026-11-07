@@ -7,6 +7,7 @@ import { abstractLease, draftAnnouncement, suggestReply } from "./ai";
 import { MERGE_FIELDS, normalizeContact, type Contact } from "./lib";
 import { insertRow, newId, one, overlayWrite, sql } from "./server";
 import { formatDate } from "@/lib/format";
+import { baseOf } from "@/server/effective";
 
 // Named actions for the residents lane. runAction (src/app/api/e/_lib/actions.ts) has already
 // checked role, scope and `when`, and writes the audit row after a 200.
@@ -50,7 +51,7 @@ registerAction({
       await insertRow(ctx.db, ctx.ws, "messages", { id: newId("msg"), thread_id: row.id, channel: input.channel, direction: "out", sender_kind: "staff", sender_id: ctx.actor.personaId, body: input.body, template_id: input.template_id ?? null, drafted_by_agent: proposal ? proposal.agent : null, sent_at: at }),
     ];
     // Guarded like executeProposal: a double click can't decide the same suggestion twice.
-    if (proposal) statements.push(ctx.db.prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, '', ?, ? WHERE NOT EXISTS (SELECT 1 FROM ai_decisions WHERE proposal_id = ? AND workspace_id IN (?, 'base'))`)
+    if (proposal) statements.push(ctx.db.prepare(`INSERT INTO ai_decisions (workspace_id, id, proposal_id, decision, decided_by, note, edited_payload, decided_at) SELECT ?, ?, ?, ?, ?, '', ?, ? WHERE NOT EXISTS (SELECT 1 FROM ai_decisions WHERE proposal_id = ? AND workspace_id IN (?, '${baseOf(ctx.ws)}'))`)
       .bind(ctx.ws, newId("dec"), proposal.id, input.edited ? "Edited" : "Approved", ctx.actor.personaId, input.edited ? JSON.stringify({ message: { body: input.body } }) : null, at, proposal.id, ctx.ws));
     await ctx.db.batch(statements);
     await overlayWrite(ctx.db, ctx.ws, "message_threads", String(row.id), { status: input.close ? "Closed" : "Waiting", unread: 0, last_message_at: at });

@@ -1,6 +1,7 @@
 import "server-only";
 import { AS_OF } from "@/seed/constants";
 import { effective } from "@/server/query";
+import { baseOf } from "@/server/effective";
 import type { Ctx } from "./run";
 
 // The standard finance reports. All reads go through effective() and the actor's property scope.
@@ -109,7 +110,7 @@ export async function noiByProperty(ctx: Ctx, from: string, to: string) {
   const s = scope(ctx, "m.property_id");
   const r = await ctx.db.prepare(`SELECT m.property_id, p.name AS property, p.metro, sum(m.noi_cents) AS noi, sum(m.budget_noi_cents) AS budget, count(m.budget_noi_cents) AS budgeted
       FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id
-      WHERE m.workspace_id = 'base' AND m.month BETWEEN ? AND ?${s.sql} GROUP BY m.property_id ORDER BY noi DESC`)
+      WHERE m.workspace_id = '${baseOf(ctx.ws)}' AND m.month BETWEEN ? AND ?${s.sql} GROUP BY m.property_id ORDER BY noi DESC`)
     .bind(from, to, ...s.binds).all<{ property_id: string; property: string; metro: string; noi: number; budget: number | null; budgeted: number }>();
   const rows: NoiRow[] = r.results.map((x) => {
     const noi = x.noi / 100;

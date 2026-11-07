@@ -1,7 +1,7 @@
 import type { ActionKey, Actor, AgentKey } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { getAction } from "@/extensions";
-import { asOf, parseJson, type DataCtx } from "../data";
+import { asOf, eff, parseJson, type DataCtx } from "../data";
 import { getAgent } from "../agents/registry";
 import { agentConfigs, loadAgents, startRun } from "../orchestrator";
 import type { Autonomy } from "../types";
@@ -75,7 +75,8 @@ async function analyze(s: ImproveSession, key: ImproveKey, property: string | nu
 }
 
 async function propertyName(data: DataCtx, id: string) {
-  const r = await data.db.prepare("SELECT name FROM properties WHERE workspace_id = 'base' AND id = ?").bind(id).first<{ name: string }>();
+  const p = eff("properties", data.ws);
+  const r = await data.db.prepare(`SELECT p.name FROM ${p.sql} p WHERE p.id = ?`).bind(...p.params, id).first<{ name: string }>();
   return r?.name ?? id;
 }
 

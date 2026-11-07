@@ -6,6 +6,7 @@ import { AS_OF, FINANCE, issuesField, LEADERS, OPS, STAFF } from "../common";
 import { registerEntity } from "../registry";
 import { leaseSentence, residentSentence } from "@/ai/rules-sentences";
 import { formatDate } from "@/lib/format";
+import { ANY_BASE } from "@/server/effective";
 
 // Stored balance (generator) plus the visitor's overlay ledger delta. Not sortable or filterable:
 // that would compute it for every row in scope (seconds on D1 for the whole portfolio). Every ledger read goes through
@@ -14,7 +15,7 @@ import { formatDate } from "@/lib/format";
 const LEDGER_DELTA = [["charges", "+", "-", ""], ["payments", "-", "+", " AND x.nsf = 0"], ["credits", "-", "+", ""]] as const;
 function balanceSql(stored: string, leases: string) {
   return `(${stored} ${LEDGER_DELTA.map(([t, sign, back, extra]) =>
-    `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${t}} AS x WHERE x.workspace_id <> 'base' AND x.lease_id IN ${leases}${extra}), 0) ${back} coalesce((SELECT sum(x.amount_cents) FROM ${t} AS x WHERE x.workspace_id = 'base' AND x.lease_id IN ${leases}${extra} AND EXISTS (SELECT 1 FROM {${t}} AS o WHERE o.workspace_id <> 'base' AND o.id = x.id)), 0)`).join(" ")})`;
+    `${sign} coalesce((SELECT sum(x.amount_cents) FROM {${t}} AS x WHERE x.workspace_id NOT IN ${ANY_BASE} AND x.lease_id IN ${leases}${extra}), 0) ${back} coalesce((SELECT sum(x.amount_cents) FROM ${t} AS x WHERE x.workspace_id IN ${ANY_BASE} AND x.lease_id IN ${leases}${extra} AND EXISTS (SELECT 1 FROM {${t}} AS o WHERE o.workspace_id NOT IN ${ANY_BASE} AND o.id = x.id)), 0)`).join(" ")})`;
 }
 const leaseBalance = (alias: string) => balanceSql(`${alias}.balance_cents`, `(${alias}.id)`);
 const householdBalance = (alias: string) => balanceSql(`${alias}.balance_cents`, `(SELECT hl.id FROM {leases} AS hl WHERE hl.household_id = ${alias}.id)`);

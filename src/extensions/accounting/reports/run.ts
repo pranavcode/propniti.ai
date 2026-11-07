@@ -2,6 +2,7 @@ import "server-only";
 import type { Actor } from "@/entities/types";
 import type { Db } from "@/lib/platform/types";
 import { effective } from "@/server/query";
+import { baseOf } from "@/server/effective";
 import { addMonths, measureOf, type GroupBy, type Measure, type QuerySpec, type ScopeProperty } from "./spec";
 
 // Runs a validated QuerySpec. Every identifier below comes from this file or the registry in
@@ -72,7 +73,7 @@ async function series(ctx: Ctx, m: Measure, spec: QuerySpec, from: string, to: s
     // Month-end balances add up across properties, not across months: use the last month unless by month.
     const range = m.stock && spec.groupBy !== "month" ? "mm.month = ?" : "mm.month BETWEEN ? AND ?";
     sql = `SELECT ${d.key} AS k, ${d.label} AS label, sum(${m.column}) AS cents FROM metrics_monthly mm JOIN ${effective("properties", ws)} p ON p.id = mm.property_id
-      WHERE mm.workspace_id = 'base' AND ${range}${f.sql} GROUP BY k`;
+      WHERE mm.workspace_id = '${baseOf(ws)}' AND ${range}${f.sql} GROUP BY k`;
     binds = [...(m.stock && spec.groupBy !== "month" ? [to] : [from, to]), ...f.binds];
   } else {
     const monthCol = "substr(coalesce(t.cleared, t.created), 1, 7)";

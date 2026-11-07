@@ -36,9 +36,9 @@ function scopeSql(ctx: MetricCtx, params: MetricParams, col = "property_id") {
 async function liveDelta(ctx: MetricCtx, params: MetricParams, month: string): Promise<Partial<MonthSums>> {
   if (!ctx.ws) return {};
   const s = scopeSql(ctx, params);
-  const newRows = (t: string) => `workspace_id = ? AND deleted = 0 AND id NOT IN (SELECT id FROM ${t} WHERE workspace_id = 'base')`;
+  const newRows = (t: string) => `workspace_id = ? AND deleted = 0 AND id NOT IN (SELECT id FROM ${t} WHERE workspace_id = '${baseOf(ctx.ws)}')`;
   const [pay, wo] = await Promise.all([
-    ctx.db.prepare(`SELECT coalesce(sum(amount_cents), 0) AS c FROM payments WHERE ${newRows("payments")} AND nsf = 0 AND charge_id IN (SELECT id FROM charges WHERE workspace_id IN ('base', ?) AND deleted = 0 AND period = ?)${s.sql}`).bind(ctx.ws, ctx.ws, month, ...s.binds).first<{ c: number }>(),
+    ctx.db.prepare(`SELECT coalesce(sum(amount_cents), 0) AS c FROM payments WHERE ${newRows("payments")} AND nsf = 0 AND charge_id IN (SELECT id FROM charges WHERE workspace_id IN ('${baseOf(ctx.ws)}', ?) AND deleted = 0 AND period = ?)${s.sql}`).bind(ctx.ws, ctx.ws, month, ...s.binds).first<{ c: number }>(),
     ctx.db.prepare(`SELECT count(*) AS n, sum(substr(opened_at, 1, 7) = ?) AS opened FROM work_orders WHERE ${newRows("work_orders")} AND status NOT IN ('Completed', 'Paid', 'Cancelled')${s.sql}`).bind(month, ctx.ws, ...s.binds).first<{ n: number; opened: number | null }>(),
   ]);
   return { collected_cents: Number(pay?.c ?? 0), wo_open: Number(wo?.n ?? 0), wo_opened: Number(wo?.opened ?? 0) };
@@ -103,7 +103,7 @@ export function byProperty(key: MetricKey, label: string, cols: Record<string, (
       // NOI and collections need a whole month: compare properties on the last closed one.
       const month = params.month ?? addMonths(ctx.asOf, -1);
       const s = scopeSql(ctx, params, "m.property_id");
-      const res = await ctx.db.prepare(`SELECT m.property_id, p.name, p.metro, m.month, ${SUMS.map((c) => `coalesce(m.${c}, 0) AS ${c}`).join(", ")}, m.occupancy_econ * m.gpr_cents AS econ_weighted FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id WHERE m.workspace_id = 'base' AND m.month = ?${s.sql}`).bind(month, ...s.binds).all<MonthSums & { property_id: string; name: string; metro: string }>();
+      const res = await ctx.db.prepare(`SELECT m.property_id, p.name, p.metro, m.month, ${SUMS.map((c) => `coalesce(m.${c}, 0) AS ${c}`).join(", ")}, m.occupancy_econ * m.gpr_cents AS econ_weighted FROM metrics_monthly m JOIN ${effective("properties", ctx.ws)} p ON p.id = m.property_id WHERE m.workspace_id = '${baseOf(ctx.ws)}' AND m.month = ?${s.sql}`).bind(month, ...s.binds).all<MonthSums & { property_id: string; name: string; metro: string }>();
       const points = res.results.map((r) => {
         const p: Row = { property_id: r.property_id, name: r.name, metro: r.metro };
         for (const [k, fn] of Object.entries(cols)) p[k] = fn(r);

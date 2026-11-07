@@ -2,7 +2,7 @@ import { z } from "zod";
 import { BadgeCheck, BadgeX, BellRing, CircleCheck } from "lucide-react";
 import type { ActionContext, ActionResult, Role, Row } from "@/entities/types";
 import { AS_OF } from "@/seed/constants";
-import { overlayUpsertSql } from "@/server/effective";
+import { baseSql, overlayUpsertSql } from "@/server/effective";
 import { demoNowIso } from "@/lib/clock";
 import { registerAction } from "../actions";
 import { formatAsOf, formatDate } from "@/lib/format";
@@ -27,7 +27,7 @@ const LAPSING = ["Expiring", "Expired", "Missing", "Rejected"];
 async function requestCertificate(ctx: ActionContext, vendor: string, company: string, when: string, coiId: string | null): Promise<ActionResult> {
   const at = demoNowIso(ctx.nowMs);
   const since = new Date(Date.parse(at) - REQUEST_DAYS * 86_400_000).toISOString();
-  const recent = "SELECT max(n.at) AS at FROM notifications n WHERE n.workspace_id IN (?1, 'base') AND n.user_id = ?2 AND n.title = ?3 AND n.at >= ?4";
+  const recent = `SELECT max(n.at) AS at FROM notifications n WHERE n.workspace_id IN (?1, ${baseSql()}) AND n.user_id = ?2 AND n.title = ?3 AND n.at >= ?4`;
   const gate = rid();
   // Activity rows run only if this request's notification landed.
   const after = (entity: string, id: string, summary: string) => ({

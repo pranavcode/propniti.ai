@@ -268,7 +268,7 @@ export async function PropertyFinancials({ id, actor }: TabProps) {
   const [noi, ie, occ, coll, months] = await Promise.all([
     chart(ctx, "portfolio.noi", id), chart(ctx, "portfolio.income_expense", id), chart(ctx, "portfolio.occupancy", id), chart(ctx, "receivables.collections_rate", id),
     rows<{ month: string; gpr_cents: number; collected_cents: number; opex_cents: number; noi_cents: number; budget_noi_cents: number | null; occupancy_phys: number; vacancy_loss_cents: number }>(ctx,
-      "SELECT month, gpr_cents, collected_cents, opex_cents, noi_cents, budget_noi_cents, occupancy_phys, vacancy_loss_cents FROM metrics_monthly WHERE workspace_id = 'base' AND property_id = ? AND month < ? ORDER BY month DESC LIMIT 12",
+      "SELECT month, gpr_cents, collected_cents, opex_cents, noi_cents, budget_noi_cents, occupancy_phys, vacancy_loss_cents FROM {metrics_monthly} WHERE property_id = ? AND month < ? ORDER BY month DESC LIMIT 12",
       id, today.slice(0, 7)),
   ]);
   const label = monthTick;

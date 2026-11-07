@@ -580,7 +580,7 @@ async function newId(ctx: WriteCtx, def: EntityDef): Promise<string> {
     const lo = 10 ** (f.digits - 1), span = 9 * lo;
     for (let i = 0; i < 12; i++) {
       const id = `${f.prefix}-${lo + (crypto.getRandomValues(new Uint32Array(1))[0] % span)}`;
-      const taken = await ctx.db.prepare(`SELECT 1 FROM ${ident(def.table)} WHERE workspace_id IN ('base', ?) AND id = ? LIMIT 1`).bind(ctx.ws, id).first();
+      const taken = await ctx.db.prepare(`SELECT 1 FROM ${ident(def.table)} WHERE workspace_id IN ('${baseOf(ctx.ws)}', ?) AND id = ? LIMIT 1`).bind(ctx.ws, id).first();
       if (!taken) return id;
     }
   }
