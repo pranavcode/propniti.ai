@@ -1,7 +1,9 @@
 import Link from "@/components/Link";
 import { ArrowRight, ArrowUpRight, CalendarDays, Cpu, KanbanSquare, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { can } from "@/entities";
 import { PageBody, PageHeader, Section } from "@/components/app/page";
+import { EmptyState } from "@/components/app/states";
 import { CollapseBody, CollapseButton, Collapsible, WhenCollapsed, WhenExpanded } from "@/components/app/collapsible/Collapsible";
 import { KpiTile, type KpiData } from "@/components/entity/Metrics";
 import { AGENT_NAME, followUps, kpis, localTime, sourceOf, leasingCtx, leasingProposals, overnight, todaysTours } from "@/extensions/leasing/data";
@@ -28,6 +30,9 @@ const greeting = () => {
 // proposals for her to approve, today's tours, follow-ups, and the numbers she is measured on.
 export default async function LeasingToday() {
   const c = await leasingCtx();
+  if (!can(c.actor.role, "read", "prospects")) {
+    return <PageBody><EmptyState title="Leasing isn't part of your role" description="Switch role from your avatar menu to see this page as a leasing agent or broker." action={{ label: "Go to your home", href: "/app" }} /></PageBody>;
+  }
   const [tours, follow, proposals, night, k] = await Promise.all([
     todaysTours(c, c.actor.role === "leasing_agent" ? c.actor.personaId : undefined),
     followUps(c, 8),
