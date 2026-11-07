@@ -2,7 +2,7 @@ import { demoIsoIn, demoNowIso } from "@/lib/clock";
 import { decidableSql } from "./decide";
 import { formatDate } from "@/lib/format";
 import { z } from "zod";
-import { getEntity } from "@/entities";
+import { can, getEntity } from "@/entities";
 import type { Facts, Row } from "@/entities/types";
 import { getRow, relations } from "@/server/query";
 import { eff, insert, type DataCtx } from "./data";
@@ -138,21 +138,26 @@ async function briefingFacts(data: DataCtx): Promise<{ facts: Facts; today: stri
   const { delinquency } = await import("./facts");
   const { asOf, sql } = await import("./data");
   const today = await asOf(data.db);
+  // Rent owed comes from charges; roles that can't read them get a briefing without it.
+  const rent = can(data.actor.role, "read", "charges");
   const [late, needs, issues, runs] = await Promise.all([
-    delinquency(data, today, { minDays: 1, limit: 1 }),
+    rent ? delinquency(data, today, { minDays: 1, limit: 1 }) : null,
     sql<{ n: number }>(data, `SELECT count(*) AS n FROM {ai_proposals} p WHERE p.queue_state = 'needs_you' AND NOT EXISTS (SELECT 1 FROM {ai_decisions} d WHERE d.proposal_id = p.id) AND ${decidableSql(data.actor.role).sql}`, decidableSql(data.actor.role).params),
     sql<{ n: number; critical: number }>(data, "SELECT count(*) AS n, sum(severity = 'critical') AS critical FROM {data_issues} WHERE status = 'open'"),
     sql<{ n: number; auto: number }>(data, "SELECT count(*) AS n, (SELECT count(*) FROM {ai_proposals} WHERE queue_state = 'auto_handled' AND created_at >= ?) AS auto FROM {agent_runs} WHERE started_at >= ?", [demoIsoIn(-86_400_000), demoIsoIn(-86_400_000)], { unscoped: true }),
   ]);
   const facts: Facts = {
-    residents_late: late.total, late_balance: Math.round(late.total_balance_cents / 100), approvals_waiting: needs[0]?.n ?? 0,
+    ...(late && { residents_late: late.total, late_balance: Math.round(late.total_balance_cents / 100) }), approvals_waiting: needs[0]?.n ?? 0,
     data_issues_open: issues[0]?.n ?? 0, data_issues_critical: Number(issues[0]?.critical ?? 0), agent_runs_24h: runs[0]?.n ?? 0, auto_applied_24h: runs[0]?.auto ?? 0,
   };
   return { facts, today };
 }
 
-const rulesBriefing = (f: Facts) =>
-  `In the last day the agents ran ${f.agent_runs_24h} times and handled ${f.auto_applied_24h} items on their own. ${f.approvals_waiting} proposals wait for you. ${f.residents_late} residents owe $${Number(f.late_balance).toLocaleString("en-US")} in rent, and ${f.data_issues_open} data issues are open (${f.data_issues_critical} critical).`;
+const rulesBriefing = (f: Facts) => {
+  const issues = `${f.data_issues_open} data issues are open (${f.data_issues_critical} critical).`;
+  const rent = f.residents_late == null ? issues : `${f.residents_late} residents owe $${Number(f.late_balance).toLocaleString("en-US")} in rent, and ${issues}`;
+  return `In the last day the agents ran ${f.agent_runs_24h} times and handled ${f.auto_applied_24h} items on their own. ${f.approvals_waiting} proposals wait for you. ${rent}`;
+};
 
 // The home briefing ("Good morning, here's your portfolio") for a persona: computed counts in,
 // two or three sentences out. Stored as ai_summaries (entity_type "briefing", entity_id = persona).
